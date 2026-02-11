@@ -25,6 +25,7 @@ class AlarmSignal(models.Model):
     ], string='Tipo de Señal', required=True)
     
     device_id = fields.Many2one('sentinela.monitoring.device', string='Dispositivo', required=True)
+    account_number = fields.Char(string='Cuenta', related='device_id.account_number', store=True)
     partner_id = fields.Many2one('res.partner', string='Cliente', related='device_id.partner_id', store=True)
     subscription_id = fields.Many2one('sentinela.subscription', string='Suscripción', related='device_id.subscription_id', store=True)
     

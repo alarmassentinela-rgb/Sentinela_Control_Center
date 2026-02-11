@@ -41,76 +41,147 @@
             </div>
             
             <!-- CONTENIDO -->
-            <div class="o_monitoring_content flex-grow-1 overflow-auto bg-white">
+            <div class="o_monitoring_content flex-grow-1 d-flex flex-column bg-white">
                 
-                <!-- Empty State -->
-                <div t-if="state.events.length === 0" class="d-flex flex-column align-items-center justify-content-center h-100 text-muted">
-                    <div class="bg-light p-5 rounded-circle shadow-sm mb-4">
-                        <i class="fa fa-check fa-4x text-success"></i>
-                    </div>
-                    <h3 class="fw-light">Sin Novedades</h3>
-                    <p>El sistema está monitoreando...</p>
-                </div>
+                <!-- TAB NAVIGATION -->
+                <ul class="nav nav-tabs px-3 pt-2 bg-light border-bottom">
+                    <li class="nav-item">
+                        <a t-att-class="'nav-link ' + (state.currentTab === 'alarms' ? 'active fw-bold' : '')" 
+                           href="#" t-on-click.prevent="() => this.setTab('alarms')">
+                            <i class="fa fa-bell me-1"></i> ALARMAS
+                            <span t-if="state.events.filter(e => e.status === 'active').length > 0" class="badge rounded-pill bg-danger ms-1">
+                                <t t-esc="state.events.filter(e => e.status === 'active').length"/>
+                            </span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a t-att-class="'nav-link ' + (state.currentTab === 'traffic' ? 'active fw-bold' : '')" 
+                           href="#" t-on-click.prevent="() => this.setTab('traffic')">
+                            <i class="fa fa-list me-1"></i> TRÁFICO EN VIVO
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a t-att-class="'nav-link ' + (state.currentTab === 'pending' ? 'active fw-bold' : '')" 
+                           href="#" t-on-click.prevent="() => this.setTab('pending')">
+                            <i class="fa fa-clock-o me-1"></i> EVENTOS PENDIENTES
+                            <span t-if="state.events.filter(e => e.status !== 'active').length > 0" class="badge rounded-pill bg-warning ms-1">
+                                <t t-esc="state.events.filter(e => e.status !== 'active').length"/>
+                            </span>
+                        </a>
+                    </li>
+                </ul>
 
-                <!-- Events Table -->
-                <table t-else="" class="table table-hover m-0 dashboard-table">
-                    <thead class="bg-light sticky-top" style="z-index: 5;">
-                        <tr>
-                            <th class="ps-3">ID</th>
-                            <th>CUENTA</th>
-                            <th>NOMBRE DE LA CUENTA</th>
-                            <th>FECHA / HORA</th>
-                            <th>ZONA</th>
-                            <th>CÓDIGO DE ALARMA</th>
-                            <th class="text-center">TIEMPO</th>
-                            <th class="text-end pe-3">ACCIONES</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <t t-foreach="state.events" t-as="event" t-key="event.id">
-                            <tr t-att-class="'event-row align-middle ' + (event.priority_class === 'critical' ? 'table-danger' : (event.priority_class === 'high' ? 'table-warning' : ''))"
-                                t-on-dblclick="() => this.handleAlarm(event.id)"
-                                style="cursor: pointer; height: 50px;">
-                                
-                                <td class="ps-3 fw-bold"><t t-esc="event.id"/></td>
-                                <td>
-                                    <span class="badge bg-dark text-white"><t t-esc="event.account"/></span>
-                                </td>
-                                <td>
-                                    <div class="fw-bold text-dark"><t t-esc="event.device_name"/></div>
-                                    <small class="text-muted"><i class="fa fa-map-marker me-1"></i><t t-esc="event.location"/></small>
-                                </td>
-                                <td>
-                                    <t t-esc="event.time_formatted"/>
-                                </td>
-                                <td>
-                                    <span class="badge bg-secondary text-white"><t t-esc="event.zone or '000'"/></span>
-                                </td>
-                                <td>
-                                    <div t-att-class="'fw-bold ' + (event.priority_class === 'critical' ? 'text-danger' : 'text-dark')">
-                                        <t t-esc="event.code_display"/>
-                                    </div>
-                                    <small class="text-muted"><t t-esc="event.description"/></small>
-                                </td>
-                                <td class="text-center">
-                                    <div t-att-class="'fw-bold ' + (this.isOverdue(event.time) ? 'text-danger fa-beat' : 'text-muted')">
-                                        <t t-esc="this.getRelativeTime(event.time)"/>
-                                    </div>
-                                </td>
-                                <td class="text-end pe-3">
-                                    <div class="btn-group">
-                                        <button class="btn btn-sm btn-primary" t-on-click="() => this.handleAlarm(event.id)">
-                                            <i class="fa fa-headphones me-1"></i> ATENDER
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-secondary" t-on-click="() => this.viewHistory(event.account)" title="Ver Historial">
-                                            <i class="fa fa-history"></i>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        </t>
-                    </tbody>
-                </table>
+                <div class="flex-grow-1 overflow-auto">
+                    <!-- Tab: ALARMS / PENDING -->
+                    <t t-if="state.currentTab === 'alarms' or state.currentTab === 'pending'">
+                        <!-- Empty State -->
+                        <div t-if="state.events.length === 0" class="d-flex flex-column align-items-center justify-content-center h-100 text-muted">
+                            <div class="bg-light p-5 rounded-circle shadow-sm mb-4">
+                                <i class="fa fa-check fa-4x text-success"></i>
+                            </div>
+                            <h3 class="fw-light">Sin Novedades</h3>
+                            <p t-if="state.currentTab === 'alarms'">No hay alarmas activas en este momento.</p>
+                            <p t-else="">No hay eventos pendientes de gestión.</p>
+                        </div>
+
+                        <!-- Events Table -->
+                        <table t-else="" class="table table-hover m-0 dashboard-table">
+                            <thead class="bg-light sticky-top" style="z-index: 5;">
+                                <tr>
+                                    <th class="ps-3">ID</th>
+                                    <th>CUENTA</th>
+                                    <th>NOMBRE DE LA CUENTA</th>
+                                    <th>FECHA / HORA</th>
+                                    <th>ZONA</th>
+                                    <th>CÓDIGO DE ALARMA</th>
+                                    <th class="text-center">TIEMPO</th>
+                                    <th class="text-end pe-3">ACCIONES</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="state.events" t-as="event" t-key="event.id">
+                                    <tr t-att-class="'event-row align-middle ' + (event.priority_class === 'critical' ? 'table-danger' : (event.priority_class === 'high' ? 'table-warning' : (event.status === 'paused' ? 'table-light text-muted' : '')))"
+                                        t-on-dblclick="() => this.handleAlarm(event.id)"
+                                        style="cursor: pointer; height: 50px;">
+                                        
+                                        <td class="ps-3 fw-bold"><t t-esc="event.id"/></td>
+                                        <td>
+                                            <span class="badge bg-dark text-white"><t t-esc="event.account"/></span>
+                                        </td>
+                                        <td>
+                                            <div class="fw-bold text-dark"><t t-esc="event.device_name"/></div>
+                                            <small class="text-muted"><i class="fa fa-map-marker me-1"></i><t t-esc="event.location"/></small>
+                                        </td>
+                                        <td>
+                                            <t t-esc="event.time_formatted"/>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-secondary text-white"><t t-esc="event.zone or '000'"/></span>
+                                        </td>
+                                        <td>
+                                            <div t-att-class="'fw-bold ' + (event.priority_class === 'critical' ? 'text-danger' : 'text-dark')">
+                                                <t t-esc="event.code_display"/>
+                                            </div>
+                                            <small class="text-muted"><t t-esc="event.description"/></small>
+                                        </td>
+                                        <td class="text-center">
+                                            <div t-att-class="'fw-bold ' + (this.isOverdue(event.time) ? 'text-danger fa-beat' : 'text-muted')">
+                                                <t t-esc="this.getRelativeTime(event.time)"/>
+                                            </div>
+                                        </td>
+                                        <td class="text-end pe-3">
+                                            <div class="btn-group">
+                                                <button t-if="event.status === 'active'" class="btn btn-sm btn-primary" t-on-click="() => this.handleAlarm(event.id)">
+                                                    <i class="fa fa-headphones me-1"></i> ATENDER
+                                                </button>
+                                                <button t-else="" class="btn btn-sm btn-info" t-on-click="() => this.handleAlarm(event.id)">
+                                                    <i class="fa fa-edit me-1"></i> GESTIONAR
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-secondary" t-on-click="() => this.viewHistory(event.account)" title="Ver Historial">
+                                                    <i class="fa fa-history"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                        </table>
+                    </t>
+
+                    <!-- Tab: TRAFFIC -->
+                    <t t-if="state.currentTab === 'traffic'">
+                        <table class="table table-sm table-hover m-0">
+                            <thead class="bg-light sticky-top" style="z-index: 5;">
+                                <tr>
+                                    <th class="ps-3">FECHA / HORA</th>
+                                    <th>CUENTA</th>
+                                    <th>CLIENTE / DISPOSITIVO</th>
+                                    <th>TIPO</th>
+                                    <th>DESCRIPCIÓN</th>
+                                    <th class="text-end pe-3">ID SEÑAL</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="state.signals" t-as="signal" t-key="signal.id">
+                                    <tr class="align-middle">
+                                        <td class="ps-3 text-muted"><t t-esc="signal.time"/></td>
+                                        <td><span class="badge bg-secondary"><t t-esc="signal.account"/></span></td>
+                                        <td>
+                                            <div class="fw-bold"><t t-esc="signal.device_name"/></div>
+                                        </td>
+                                        <td>
+                                            <span t-att-class="'badge ' + (signal.type === 'alarm' ? 'bg-danger' : 'bg-info')">
+                                                <t t-esc="signal.type.toUpperCase()"/>
+                                            </span>
+                                        </td>
+                                        <td><t t-esc="signal.description"/></td>
+                                        <td class="text-end pe-3 text-muted small"><t t-esc="signal.id"/></td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                        </table>
+                    </t>
+                </div>
             </div>
         </div>
     </t>

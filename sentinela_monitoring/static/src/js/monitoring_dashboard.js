@@ -8,7 +8,9 @@ export class MonitoringDashboard extends Component {
     setup() {
         this.luxon = window.luxon || luxon;
         this.state = useState({
+            currentTab: 'alarms', // 'alarms', 'traffic', 'pending'
             events: [],
+            signals: [],
             receiverStatus: 'offline', 
             lastHeartbeat: 'Nunca',
             now: this.luxon.DateTime.now(),
@@ -31,13 +33,13 @@ export class MonitoringDashboard extends Component {
         this.timerInterval = null;
 
         onWillStart(async () => {
-            await this.loadActiveEvents();
+            await this.loadData();
         });
 
         onMounted(() => {
             this.busService.addEventListener("notification", this.onNotification.bind(this));
             this.busService.addChannel("broadcast");
-            this.refreshInterval = setInterval(() => { this.loadActiveEvents(); this.checkReceiverStatus(); }, 5000);
+            this.refreshInterval = setInterval(() => { this.loadData(); this.checkReceiverStatus(); }, 5000);
             this.timerInterval = setInterval(() => { this.state.now = this.luxon.DateTime.now(); }, 1000);
         });
 
@@ -46,6 +48,18 @@ export class MonitoringDashboard extends Component {
             if (this.refreshInterval) clearInterval(this.refreshInterval);
             if (this.timerInterval) clearInterval(this.timerInterval);
         });
+    }
+
+    async setTab(tab) {
+        this.state.currentTab = tab;
+        await this.loadData();
+    }
+
+    async loadData() {
+        await this.loadActiveEvents();
+        if (this.state.currentTab === 'traffic') {
+            await this.loadSignals();
+        }
     }
 
     // --- AUDIO CONTROL ---
@@ -84,27 +98,28 @@ export class MonitoringDashboard extends Component {
 
     async loadActiveEvents() {
         try {
-            const fields = ["id", "status", "priority_id", "name", "device_id", "account_number", "alarm_code_id", "description", "start_date", "location"];
+            const fields = ["id", "status", "priority_id", "name", "device_id", "account_number", "alarm_code_id", "description", "start_date", "location", "zone"];
+            
+            // Determinar dominio según pestaña o cargar todos para lógica de sonido
+            const domain = [["status", "in", ["active", "in_progress", "paused", "escalated"]]];
+            
             const events = await this.orm.searchRead(
                 "sentinela.alarm.event",
-                [["status", "in", ["active", "in_progress", "paused", "escalated"]]],
+                domain,
                 fields,
                 { order: "priority_id desc, start_date desc", limit: 100 }
             );
             
-            // --- LOGICA DE SONIDO INTELIGENTE ---
+            // --- LOGICA DE SONIDO INTELIGENTE (Siempre corre basándose en todos los eventos) ---
             const inProgress = events.some(e => e.status === 'in_progress');
             const activeAlarms = events.filter(e => e.status === 'active');
             const pausedAlarms = events.filter(e => e.status === 'paused');
 
             if (inProgress) {
-                // REGLA 1: SI ESTAMOS ATENDIENDO, SILENCIO TOTAL
                 this.stopAllSounds();
             } else if (activeAlarms.length > 0) {
-                // REGLA 2: SI HAY ACTIVAS Y NADIE ATIENDE, SIRENA
                 this.playSiren(activeAlarms[0].priority_id[0]);
             } else if (pausedAlarms.length > 0) {
-                // REGLA 3: SOLO HAY PAUSADAS, SONIDO SUAVE DE RECORDATORIO
                 this.audioPlayer.pause();
                 this.state.isSounding = false;
                 this.playSoftReminder();
@@ -112,7 +127,15 @@ export class MonitoringDashboard extends Component {
                 this.stopAllSounds();
             }
 
-            this.state.events = events.map(e => {
+            // --- FILTRADO PARA LA VISTA ---
+            let filteredEvents = events;
+            if (this.state.currentTab === 'alarms') {
+                filteredEvents = events.filter(e => e.status === 'active');
+            } else if (this.state.currentTab === 'pending') {
+                filteredEvents = events.filter(e => ['in_progress', 'paused', 'escalated'].includes(e.status));
+            }
+
+            this.state.events = filteredEvents.map(e => {
                 let urgency = 'normal';
                 let pName = e.priority_id ? e.priority_id[1].toLowerCase() : '';
                 if (pName.includes('critica') || pName.includes('p1')) urgency = 'critical';
@@ -135,6 +158,25 @@ export class MonitoringDashboard extends Component {
         } catch (e) { console.error(e); }
     }
 
+    async loadSignals() {
+        try {
+            const signals = await this.orm.searchRead(
+                "sentinela.alarm.signal",
+                [],
+                ["id", "name", "account_number", "device_id", "received_date", "signal_type", "description"],
+                { order: "received_date desc", limit: 50 }
+            );
+            this.state.signals = signals.map(s => ({
+                id: s.id,
+                account: s.account_number || '???',
+                device_name: s.device_id ? s.device_id[1] : 'Desconocido',
+                time: s.received_date,
+                type: s.signal_type,
+                description: s.description || ''
+            }));
+        } catch (e) { console.error(e); }
+    }
+
     async checkReceiverStatus() {
         try {
             const status = await this.orm.call("sentinela.receiver.status", "get_status", []);
@@ -143,7 +185,7 @@ export class MonitoringDashboard extends Component {
         } catch (e) {}
     }
 
-    onNotification(notifications) { this.loadActiveEvents(); }
+    onNotification(notifications) { this.loadData(); }
 
     async handleAlarm(eventId) {
         this.stopAllSounds();

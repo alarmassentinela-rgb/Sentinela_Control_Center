@@ -1,0 +1,3 @@
+Archivo creado por Gemini para verificar sincronizacion de carpetas.
+Fecha: 11 de Febrero 2026.
+Si ves este archivo, Gemini esta editando la carpeta correcta.

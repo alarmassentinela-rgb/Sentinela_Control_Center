@@ -4,7 +4,8 @@ He revisado la documentación proporcionada. Aquí tienes un resumen de lo que h
 El objetivo principal es mejorar las ventas, centralizar la información de la empresa, fomentar la lealtad del cliente mediante marketing estratégico y optimizar el control del servicio técnico. El proyecto utiliza un enfoque impulsado por IA (CEO-IA) y se ejecuta en etapas: Centralización, Conexión con Clientes/Marketing, Excelencia Operativa/Servicio Técnico, y Análisis/Expansión.
 
 **Estado Actual (a 11 de febrero de 2026):**
-- **Persistencia y Orquestación:** ✅ COMPLETADA. Repositorio GitHub configurado y sincronizado. Protocolo `session-closer` activo.
+- **Persistencia y Orquestación:** ✅ COMPLETADA. Repositorio GitHub configurado y sincronizado.
+- **Motor de Cobranza Profesional:** ✅ COMPLETADO. Implementada lógica flexible de facturación, periodos y cortes automáticos configurables por cliente.
 - **Sistema de Monitoreo Sentinela (Odoo 18):** Operativo y estabilizado.
 - **Receptor Universal (V6):** Desplegado en `/home/egarza/receiver_v6.py`. Ahora cuenta con persistencia mediante un servicio de **systemd** (`sentinela-receptor.service`) y se ejecuta dentro de una sesión de **tmux** llamada `monitor1` para monitoreo en vivo.
 - **Dashboard en Vivo:** Reparado y optimizado para Odoo 18. Se corrigieron errores de carga relacionados con funciones de tiempo (Luxon) y se unificó la lógica OWL con la plantilla XML.

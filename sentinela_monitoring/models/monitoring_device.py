@@ -5,7 +5,7 @@ class MonitoringDevice(models.Model):
     _description = 'Dispositivo de Monitoreo'
     _rec_name = 'device_id'
 
-    device_id = fields.Char(string='ID Interno', required=True, unique=True, default='New')
+    device_id = fields.Char(string='ID Interno', required=True, default='New')
     account_number = fields.Char(string='Número de Cuenta (Panel)', required=True, help="El código HEX de 4-6 dígitos que envía el panel (Ej. 1234, B52F)")
     
     name = fields.Char(string='Nombre del Dispositivo', compute='_compute_name', store=True)

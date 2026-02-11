@@ -126,15 +126,26 @@
                         </group>
                         <group string="Contrato y Fechas">
                             <field name="is_contract_locked" invisible="1"/>
-                            <field name="start_date" readonly="is_contract_locked"/>
-                            <field name="next_billing_date" readonly="is_contract_locked"/>
-                            <field name="is_forced_contract" readonly="is_contract_locked" force_save="1"/>
-                            <label for="commitment_period" string="Plazo Forzoso" invisible="not is_forced_contract"/>
-                            <div class="o_row" invisible="not is_forced_contract">
-                                <field name="commitment_period" readonly="is_contract_locked"/> Meses
+                            <field name="start_date" string="Fecha Contratación" readonly="is_contract_locked"/>
+                            <label for="current_period_start" string="Periodo Actual"/>
+                            <div class="o_row">
+                                <field name="current_period_start" readonly="is_contract_locked"/> 
+                                <span> al </span>
+                                <field name="current_period_end" readonly="is_contract_locked"/>
                             </div>
-                            <field name="commitment_end_date" invisible="not is_forced_contract"/>
-                            <field name="penalty_amount" invisible="not is_forced_contract or equipment_ownership == 'customer'" readonly="is_contract_locked" placeholder="0.00"/>
+                            <field name="next_billing_date" string="Próximo Inicio" readonly="is_contract_locked"/>
+                            <field name="is_forced_contract" readonly="is_contract_locked" force_save="1"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Motor de Cobranza Personalizado">
+                            <field name="invoice_gen_type"/>
+                            <field name="payment_due_type"/>
+                            <field name="service_cut_type"/>
+                        </group>
+                        <group string="Fechas Calculadas (Sistema)">
+                            <field name="payment_due_date" readonly="1"/>
+                            <field name="service_cut_date" readonly="1"/>
                         </group>
                     </group>
                     <notebook>

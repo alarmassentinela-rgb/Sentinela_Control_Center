@@ -183,9 +183,25 @@ class SentinelaSubscription(models.Model):
     equipment_serial = fields.Char(string='Número de Serie')
     monitoring_account_number = fields.Char(string='Número de Cuenta (Monitoreo)', help="Código de cuenta para la Central de Monitoreo")
     
-    # --- Billing Cycle ---
-    start_date = fields.Date(string='Fecha de Inicio', default=fields.Date.today, required=True)
-    next_billing_date = fields.Date(string='Próxima Factura', required=True, tracking=True)
+    # --- Nuevo Motor de Cobranza Flexible ---
+    current_period_start = fields.Date(string='Inicio del Periodo', help="Fecha de inicio del periodo actual de servicio")
+    current_period_end = fields.Date(string='Fin del Periodo', help="Fecha de fin del periodo actual de servicio")
+
+    invoice_gen_type = fields.Selection([
+        (str(i), f'{i} días antes' if i > 0 else 'Mismo día del pago') for i in range(31)
+    ], string='Crear Factura', default='5', help="Días de anticipación para generar la factura antes del inicio del periodo")
+
+    payment_due_type = fields.Selection([
+        (str(i), f'{i} días después' if i > 0 else 'Mismo día') for i in range(16)
+    ], string='Fecha de Pago', default='0', help="Días de gracia después del fin del periodo para realizar el pago")
+
+    service_cut_type = fields.Selection([
+        (str(i), f'{i} días después' if i > 0 else 'Mismo día') for i in range(16)
+    ], string='Corte del Servicio', default='3', help="Días después del vencimiento del pago para suspender el servicio")
+
+    # --- Billing Cycle (Mantenemos next_billing_date como la fecha en que DEBE iniciar el siguiente ciclo) ---
+    start_date = fields.Date(string='Fecha de Contratación', default=fields.Date.today, required=True)
+    next_billing_date = fields.Date(string='Próximo Inicio de Periodo', required=True, tracking=True)
     recurring_interval = fields.Selection([
         ('1', 'Mensual'),
         ('2', 'Bimestral'),
@@ -295,6 +311,16 @@ class SentinelaSubscription(models.Model):
         for vals in vals_list:
             if vals.get('name', 'New') == 'New':
                 vals['name'] = self.env['ir.sequence'].next_by_code('sentinela.subscription') or 'New'
+            
+            # Inicializar periodos si no vienen (Importante para Miriam y nuevos registros)
+            if vals.get('next_billing_date') and vals.get('recurring_interval'):
+                next_date = fields.Date.from_string(vals['next_billing_date'])
+                interval = int(vals['recurring_interval'])
+                if not vals.get('current_period_end'):
+                    vals['current_period_end'] = next_date - timedelta(days=1)
+                if not vals.get('current_period_start'):
+                    vals['current_period_start'] = vals['current_period_end'] - relativedelta(months=interval) + timedelta(days=1)
+
             if vals.get('router_id') and vals.get('pppoe_user'):
                 router = self.env['sentinela.router'].browse(vals['router_id'])
                 expected_user = f"{router.pppoe_prefix}{router.next_pppoe_sequence}"
@@ -369,10 +395,32 @@ class SentinelaSubscription(models.Model):
     currency_id = fields.Many2one('res.currency', default=lambda self: self.env.company.currency_id)
     
     # --- Computed Fields ---
-    @api.onchange('start_date', 'recurring_interval')
+    payment_due_date = fields.Date(string='Fecha Límite de Pago', compute='_compute_flexible_dates', store=True)
+    service_cut_date = fields.Date(string='Fecha de Corte', compute='_compute_flexible_dates', store=True)
+
+    @api.depends('current_period_end', 'payment_due_type', 'service_cut_type')
+    def _compute_flexible_dates(self):
+        for sub in self:
+            if sub.current_period_end:
+                # Fecha de Pago: X días después del FIN del periodo
+                due_days = int(sub.payment_due_type or 0)
+                sub.payment_due_date = sub.current_period_end + timedelta(days=due_days)
+                
+                # Fecha de Corte: X días después de la Fecha de Pago
+                cut_days = int(sub.service_cut_type or 0)
+                sub.service_cut_date = sub.payment_due_date + timedelta(days=cut_days)
+            else:
+                sub.payment_due_date = False
+                sub.service_cut_date = False
+
+    @api.onchange('start_date', 'next_billing_date', 'recurring_interval')
     def _onchange_billing_dates(self):
-        if self.start_date and self.recurring_interval:
-            self.next_billing_date = self.start_date + relativedelta(months=int(self.recurring_interval))
+        if self.next_billing_date and self.recurring_interval:
+            interval = int(self.recurring_interval)
+            # El periodo actual termina un día antes del siguiente inicio de facturación
+            self.current_period_end = self.next_billing_date - timedelta(days=1)
+            # El inicio del periodo actual es el fin menos el intervalo (aprox)
+            self.current_period_start = self.current_period_end - relativedelta(months=interval) + timedelta(days=1)
 
     @api.depends('start_date', 'commitment_period', 'is_forced_contract')
     def _compute_commitment_end(self):
@@ -672,50 +720,57 @@ class SentinelaSubscription(models.Model):
 
     # --- Cron 1: Pre-Generate Sale Orders (5 days before) ---
     def _cron_generate_pre_invoices(self):
-        """ Generates Sale Orders (Quotes) 5 days before due date, respecting grouping preferences """
+        """ Genera cotizaciones basadas en la configuración personalizada de cada suscripción """
         today = fields.Date.today()
-        target_date = today + timedelta(days=5)
         
-        # Find active subscriptions due in exactly 5 days
-        subs_to_notify = self.search([
-            ('state', '=', 'active'),
-            ('next_billing_date', '=', target_date)
-        ])
+        # 1. Buscar todas las suscripciones activas (Ya no filtramos por fecha fija aquí)
+        active_subs = self.search([('state', '=', 'active')])
         
+        subs_to_bill = []
+        for sub in active_subs:
+            if not sub.current_period_start:
+                continue
+                
+            # Calcular cuándo le toca factura a esta suscripción específica
+            lead_days = int(sub.invoice_gen_type or 0)
+            gen_date = sub.current_period_start - timedelta(days=lead_days)
+            
+            # Si hoy es el día de generación o ya pasó (y no tiene SO reciente)
+            if today >= gen_date:
+                # Verificar si ya existe una SO reciente para este periodo para evitar duplicados
+                # Buscamos por origen o por relación directa
+                existing = sub.sale_order_ids.filtered(
+                    lambda s: s.state in ['draft', 'sent'] and s.date_order.date() >= (today - timedelta(days=20))
+                )
+                if not existing:
+                    subs_to_bill.append(sub)
+        
+        if not subs_to_bill:
+            return
+
         SaleOrder = self.env['sale.order']
-        
-        # 1. Grouping Logic
-        # Map Structure: { (partner_id, grouping_key): [sub1, sub2, ...] }
         grouped_subs = {}
         
-        for sub in subs_to_notify:
-            # Check duplicates per sub first
-            existing = sub.sale_order_ids.filtered(lambda s: s.date_order.date() == today and s.state in ['draft', 'sent'])
-            if existing:
-                continue
-
+        # 2. Agrupación según preferencia del cliente
+        for sub in subs_to_bill:
             method = sub.partner_id.invoice_grouping_method or 'individual'
-            
             if method == 'global':
-                # Group by Partner only (Key must be hashable)
                 key = (sub.partner_id.id, 'global') 
             elif method == 'by_branch':
-                # Group by Partner + Service Address
                 addr_id = sub.service_address_id.id if sub.service_address_id else False
                 key = (sub.partner_id.id, addr_id)
             else:
-                # Individual: Unique key per subscription
                 key = (sub.partner_id.id, sub.id)
             
             if key not in grouped_subs:
                 grouped_subs[key] = []
             grouped_subs[key].append(sub)
             
-        # 2. Order Generation
+        # 3. Generación de las Órdenes
         for key, subs_list in grouped_subs.items():
             try:
                 partner_id = key[0]
-                first_sub = subs_list[0] # Use first sub for shared data (like pricelist if we had one)
+                first_sub = subs_list[0]
                 
                 origin_names = ", ".join([s.name for s in subs_list])
                 so_vals = {
@@ -724,46 +779,35 @@ class SentinelaSubscription(models.Model):
                     'order_line': []
                 }
                 
-                # If grouping by branch, set shipping address
                 if first_sub.partner_id.invoice_grouping_method == 'by_branch' and first_sub.service_address_id:
                     so_vals['partner_shipping_id'] = first_sub.service_address_id.id
                 
-                # Create lines for ALL subs in this group
                 for sub in subs_list:
-                    period_end = sub.next_billing_date + relativedelta(months=int(sub.recurring_interval)) - timedelta(days=1)
-                    desc = f"Servicio: {sub.product_id.name} | Contrato: {sub.name} | Periodo: {sub.next_billing_date} al {period_end}"
+                    # Usamos las fechas reales del periodo configurado
+                    desc = f"Servicio: {sub.product_id.name} | Contrato: {sub.name} | Periodo: {sub.current_period_start} al {sub.current_period_end}"
                     if sub.service_address_id and sub.partner_id.invoice_grouping_method == 'global':
                          desc += f" | Sucursal: {sub.service_address_id.name}"
 
-                    line_vals = {
+                    so_vals['order_line'].append((0, 0, {
                         'product_id': sub.product_id.id,
                         'name': desc,
                         'product_uom_qty': 1,
                         'price_unit': sub.price_unit,
-                        # Link line to subscription if we extend SaleOrderLine (Optional but recommended)
-                    }
-                    so_vals['order_line'].append((0, 0, line_vals))
+                    }))
                 
-                # Create the Order
                 so = SaleOrder.create(so_vals)
-                
-                # Link Order to ALL Subscriptions
                 for sub in subs_list:
-                    sub.write({'sale_order_ids': [(4, so.id)]}) # Link M2M/O2M
+                    sub.write({'sale_order_ids': [(4, so.id)]})
                 
-                # Send Email
+                # Intentar enviar correo si hay plantilla
                 template = self.env.ref('sale.email_template_edi_sale', raise_if_not_found=False)
                 if template:
-                    so.message_post_with_source(
-                        template,
-                        email_layout_xmlid='mail.mail_notification_layout_with_responsible_signature',
-                    )
+                    so.message_post_with_source(template, email_layout_xmlid='mail.mail_notification_layout_with_responsible_signature')
                     so.state = 'sent'
                 
-                _logger.info(f"PRE-INVOICE: Generated SO {so.name} for {len(subs_list)} subscriptions (Group: {first_sub.partner_id.invoice_grouping_method})")
-
+                _logger.info(f"FLEX-BILLING: Generada {so.name} para {len(subs_list)} suscripciones")
             except Exception as e:
-                _logger.error(f"Failed to generate pre-invoice group {key}: {str(e)}")
+                _logger.error(f"Error en facturación flexible para {key}: {str(e)}")
 
     # --- Cron 2: Process Leasing Expiration ---
     def _cron_process_leasing_expiration(self):
@@ -798,16 +842,49 @@ class SentinelaSubscription(models.Model):
             except Exception as e:
                 _logger.error(f"Failed to process leasing expiration for {sub.name}: {str(e)}")
 
-    # --- Cron 3: Fallback / Day-Of Logic (Existing but modified) ---
+    # --- Cron 3: Gestión de Suspensión Automática ---
     def _cron_generate_recurring_invoices(self):
+        """ Revisa suscripciones vencidas para suspender el servicio según sus días de gracia """
         today = fields.Date.today()
-        subs_to_check = self.search([
+        # Buscamos activas que ya pasaron su fecha de corte
+        subs_to_suspend = self.search([
             ('state', '=', 'active'),
-            ('next_billing_date', '<=', today)
+            ('technical_state', '=', 'active'),
+            ('service_cut_date', '<', today)
         ])
-        for sub in subs_to_check:
-            # TODO: Add Auto-Suspend logic here
-            pass
+        for sub in subs_to_suspend:
+            # Solo suspender si NO hay pagos o prórrogas activas
+            # (La lógica de prórroga ya limpia extension_end_date al vencer)
+            sub.action_suspend()
+            sub.message_post(body="SUSPENSIÓN AUTOMÁTICA: Se alcanzó la fecha límite de corte sin detectar pago.")
+
+    def action_renew_service(self):
+        for sub in self:
+            today = fields.Date.today()
+            interval = int(sub.recurring_interval)
+            
+            # Limpiar prórroga si existe
+            if sub.extension_end_date:
+                sub.extension_end_date = False
+                
+            # Calcular Nuevo Periodo
+            # Si el next_billing_date es futuro, sumamos a ese. Si es pasado, sumamos a hoy.
+            base_date = sub.next_billing_date if sub.next_billing_date and sub.next_billing_date >= today else today
+            
+            new_next_billing = base_date + relativedelta(months=interval)
+            
+            sub.write({
+                'current_period_start': base_date,
+                'current_period_end': new_next_billing - timedelta(days=1),
+                'next_billing_date': new_next_billing
+            })
+            
+            sub.message_post(body=f"SERVICIO RENOVADO: Nuevo periodo del {sub.current_period_start} al {sub.current_period_end}")
+            
+            # Reactivación si estaba suspendido
+            if sub.technical_state in ['suspended', 'cut']:
+                sub.action_activate()
+                sub.message_post(body="Servicio reactivado automáticamente por renovación.")
 
     def _create_recurring_invoice(self):
         # Legacy method
