@@ -9,6 +9,7 @@ Este índice centraliza el control de operaciones locales y la conexión con el 
 ---
 
 ## 📂 Estructura Local (`/mnt/c/Users/dell/DellCli/`)
+**Estado Git:** ✅ Sincronizado (GitHub: [Sentinela_Control_Center](https://github.com/alarmassentinela-rgb/Sentinela_Control_Center))
 
 ### 🛠️ Scripts de Diagnóstico y Red
 Scripts Python para gestión de red Mikrotik y diagnósticos.
