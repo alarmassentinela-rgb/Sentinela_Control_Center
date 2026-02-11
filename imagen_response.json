@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": 400,
+    "message": "Imagen API is only accessible to billed users at this time.",
+    "status": "INVALID_ARGUMENT"
+  }
+}

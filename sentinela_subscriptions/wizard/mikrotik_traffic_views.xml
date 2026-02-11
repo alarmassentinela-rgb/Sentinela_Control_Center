@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_sentinela_mikrotik_traffic_form" model="ir.ui.view">
+        <field name="name">sentinela.mikrotik.traffic.form</field>
+        <field name="model">sentinela.mikrotik.traffic</field>
+        <field name="arch" type="xml">
+            <form string="Tráfico en Vivo">
+                <sheet>
+                    <group>
+                        <field name="user"/>
+                        <field name="current_ip" decoration-bf="1"/>
+                        <field name="status"/>
+                    </group>
+                    
+                    <!-- JS Widget for Real-time Graph -->
+                    <field name="graph_data" widget="traffic_graph" nolabel="1"/>
+
+                    <footer>
+                        <button name="action_refresh" string="Actualizar Ahora" type="object" class="btn-primary" icon="fa-refresh"/>
+                        <button string="Cerrar" class="btn-secondary" special="cancel"/>
+                    </footer>
+                </sheet>
+            </form>
+        </field>
+    </record>
+</odoo>

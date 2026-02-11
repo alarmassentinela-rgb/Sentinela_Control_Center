@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="portal_my_document_view" name="Documento a Firmar">
+        <t t-call="portal.portal_layout">
+            <t t-set="wrapwrap_classes" t-value="'o_portal_bg_dark'"/>
+            
+            <div class="row mt16 o_portal_sidebar">
+                <!-- Sidebar (Estado) -->
+                <div class="col-lg-3 col-xl-2 d-none d-lg-block">
+                    <div class="o_portal_sidebar_content">
+                        <div class="card mb-4" t-if="doc.state == 'sent'">
+                            <div class="card-body text-center">
+                                <button type="button" class="btn btn-primary btn-block mb8" data-bs-toggle="modal" data-bs-target="#modalaccept">
+                                    <i class="fa fa-pencil"/> Firmar Documento
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card mb-4" t-if="doc.state == 'signed'">
+                            <div class="card-body text-center text-success">
+                                <i class="fa fa-check-circle fa-2x"/> <br/>
+                                <strong>Firmado el <span t-field="doc.signed_on"/></strong>
+                            </div>
+                            <div class="card-footer text-center">
+                                <a class="btn btn-secondary btn-block" t-att-href="doc.get_portal_url(suffix='/download')" target="_blank">
+                                    <i class="fa fa-download"/> Descargar
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contenido Principal (PDF) -->
+                <div class="col-12 col-lg-9 col-xl-10">
+                    <div class="card">
+                        <div class="card-header bg-white pb-0">
+                            <h3><span t-field="doc.name"/></h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-info" t-if="doc.state == 'sent'">
+                                Por favor revise el documento y presione "Firmar" para aceptarlo.
+                            </div>
+                            <!-- Visor PDF (Embed) -->
+                            <t t-if="doc.state == 'signed' and doc.file_signed">
+                                <iframe t-att-src="doc.get_portal_url(suffix='/download')" width="100%" height="800px" style="border:none;"></iframe>
+                            </t>
+                            <t t-else="">
+                                <iframe t-att-src="'/web/content/sentinela.sign.document/%s/file' % doc.id" width="100%" height="800px" style="border:none;"></iframe>
+                            </t>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal de Firma (Usando el estándar de Odoo) -->
+            <div role="dialog" class="modal fade" id="modalaccept">
+                <div class="modal-dialog">
+                    <form id="accept" method="POST" t-att-data-order-id="doc.id" t-att-data-token="doc.access_token" class="js_accept_json_modal modal-content js_website_submit_form">
+                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                        <header class="modal-header">
+                            <h4 class="modal-title">Firmar Documento</h4>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </header>
+                        <main class="modal-body" id="sign-dialog">
+                            <p>
+                                Acepto los términos y condiciones de este documento.
+                            </p>
+                            <t t-call="portal.signature_form">
+                                <t t-set="call_url" t-value="doc.get_portal_url(suffix='/sign')"/>
+                                <t t-set="default_name" t-value="doc.partner_id.name"/>
+                            </t>
+                        </main>
+                    </form>
+                </div>
+            </div>
+        </t>
+    </template>
+</odoo>

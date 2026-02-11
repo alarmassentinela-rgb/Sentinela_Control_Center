@@ -1,0 +1,37 @@
+CONTRATO DE PRESTACIÓN DE SERVICIOS DE INTERNET INALÁMBRICO
+
+Que celebran por una parte SENTINELA SEGURIDAD E INTERNET, con domicilio fiscal en Río Álamo 329, Col. San Francisco, Matamoros, Tamaulipas, C.P. 87350, representada por Enrique Garza Cantú con RFC GACE680421P37, en lo sucesivo EL PROVEEDOR, y por la otra {{ object.partner_id.name }}, con domicilio en {{ object.address_street }} y RFC {{ object.partner_id.vat or 'N/A' }}, en lo sucesivo EL SUSCRIPTOR, sujetándose al tenor de las siguientes:
+
+CLÁUSULAS
+
+PRIMERA. OBJETO DEL CONTRATO.
+EL PROVEEDOR se obliga a suministrar a EL SUSCRIPTOR el servicio de acceso a Internet Inalámbrico (WISP) en el domicilio de instalación especificado en este documento, conforme a las características del Plan Contratado.
+
+SEGUNDA. CARACTERÍSTICAS DEL SERVICIO.
+El servicio se entrega mediante enlace inalámbrico (microondas) o fibra óptica según factibilidad.
+- Velocidad Contratada: La especificada en el Plan ({{ object.product_id.name }}).
+
+TERCERA. EQUIPO.
+Para la recepción del servicio, EL PROVEEDOR instala equipos (Antena CPE, Router, Mástil) en el domicilio.
+En caso de daño por negligencia o no devolución, deberá cubrir un costo de reposición de ${{ object.equipment_replacement_cost }} MXN.
+
+CUARTA. PRECIO Y FORMA DE PAGO.
+EL SUSCRIPTOR pagará la renta mensual de ${{ object.price_total }} (IVA Incluido) de forma anticipada. El incumplimiento de pago en la fecha de corte generará la suspensión automática del servicio.
+
+QUINTA. VIGENCIA Y PENALIZACIÓN.
+Para los casos de equipos en comodato o en renta, el contrato tiene una vigencia indefinida con un plazo forzoso de {{ object.commitment_period }} meses. La cancelación anticipada generará una penalización de ${{ object.penalty_amount or '0.00' }} MXN.
+
+SEXTA. LÍMITES DE RESPONSABILIDAD.
+EL PROVEEDOR no será responsable por fallas derivadas de cortes eléctricos, fenómenos meteorológicos severos, o manipulación indebida de la red interna del cliente.
+
+SÉPTIMA. PROHIBICIÓN DE REVENTA.
+Queda estrictamente prohibido a EL SUSCRIPTOR revender o distribuir la señal de internet a terceros. Esta práctica es causal de rescisión inmediata.
+
+OCTAVA. SOPORTE TÉCNICO.
+El soporte se brinda vía telefónica o WhatsApp. Las visitas por fallas imputables a EL PROVEEDOR son gratuitas.
+
+RESUMEN TÉCNICO
+Plan: {{ object.product_id.name }}
+Dirección de Instalación: {{ object.address_street }}
+Usuario PPPoE: {{ object.pppoe_user or 'N/A' }}
+IP Asignada: {{ object.ip_address or 'Dinámica/NAT' }}

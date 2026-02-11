@@ -1,0 +1,4 @@
+partner_id,product_id,service_type,start_date,next_billing_date,price_unit,pppoe_user,pppoe_password,equipment_ownership,technical_state
+"Juan Perez","Internet 50MB","internet","2025-01-01","2026-02-01","500.00","juanperez","123456","company","active"
+"Maria Lopez","Internet 20MB","internet","2024-06-15","2026-01-15","350.00","marialopez","abcdef","customer","active"
+"Empresa SA","Internet Empresarial","internet","2023-01-01","2026-01-30","1200.00","empresasa","secret123","leasing","active"

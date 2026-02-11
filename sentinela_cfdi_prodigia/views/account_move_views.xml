@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_move_form_inherit_prodigia" model="ir.ui.view">
+        <field name="name">account.move.form.prodigia</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="arch" type="xml">
+            <!-- Agregar botón de timbrado -->
+            <xpath expr="//header" position="inside">
+                <button name="action_cfdi_stamp_prodigia" 
+                        string="Timbrar con Prodigia" 
+                        type="object" 
+                        class="btn-primary" 
+                        invisible="state != 'posted' or cfdi_status == 'valid'"/>
+            </xpath>
+
+            <!-- Agregar panel de información CFDI al final de la pestaña principal -->
+            <xpath expr="//sheet" position="inside">
+                <notebook>
+                    <page string="Facturación Electrónica (CFDI)" name="cfdi_info">
+                        <group>
+                            <group string="Estado del Timbrado">
+                                <field name="cfdi_status" widget="badge" 
+                                       decoration-success="cfdi_status == 'valid'" 
+                                       decoration-danger="cfdi_status == 'error'" 
+                                       decoration-info="cfdi_status == 'pending'"/>
+                                <field name="cfdi_uuid" readonly="1"/>
+                                <field name="cfdi_xml" filename="cfdi_xml_filename" readonly="1"/>
+                                <field name="cfdi_xml_filename" invisible="1"/>
+                            </group>
+                            <group string="Mensajes del PAC">
+                                <field name="cfdi_message" nolabel="1" readonly="1"/>
+                            </group>
+                        </group>
+                    </page>
+                </notebook>
+            </xpath>
+        </field>
+    </record>
+</odoo>

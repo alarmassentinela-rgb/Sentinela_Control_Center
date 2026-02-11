@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ROUTER FORM -->
+    <record id="view_sentinela_router_form" model="ir.ui.view">
+        <field name="name">sentinela.router.form</field>
+        <field name="model">sentinela.router</field>
+        <field name="arch" type="xml">
+            <form string="Mikrotik Router">
+                <header>
+                    <button name="action_test_connection" type="object" string="Probar Conexión" class="btn-primary"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="Ej: Torre Norte"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group string="Conexión API">
+                            <field name="ip_address"/>
+                            <field name="api_port"/>
+                            <field name="sync_active" widget="boolean_toggle"/>
+                        </group>
+                        <group string="Generación Usuarios PPPoE">
+                            <field name="pppoe_prefix"/>
+                            <field name="next_pppoe_sequence"/>
+                        </group>
+                        <group string="Credenciales">
+                            <field name="api_user"/>
+                            <field name="api_password" password="True"/>
+                            <field name="active"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- ACTION -->
+    <record id="action_sentinela_router" model="ir.actions.act_window">
+        <field name="name">Routers Mikrotik</field>
+        <field name="res_model">sentinela.router</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- MENU -->
+    <menuitem id="menu_sentinela_router"
+        name="Routers"
+        parent="menu_sentinela_subscription_config"
+        action="action_sentinela_router"
+        sequence="20"/>
+</odoo>

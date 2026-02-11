@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Productos de ejemplo para uso en órdenes de servicio -->
+        <record id="product_fsm_material_1" model="product.product">
+            <field name="name">Cable de Red Cat6 1m</field>
+            <field name="type">consu</field>
+            <field name="categ_id" ref="product.product_category_all"/>
+            <field name="standard_price">50.0</field>
+            <field name="list_price">75.0</field>
+        </record>
+        
+        <record id="product_fsm_material_2" model="product.product">
+            <field name="name">Conector RJ45</field>
+            <field name="type">consu</field>
+            <field name="categ_id" ref="product.product_category_all"/>
+            <field name="standard_price">5.0</field>
+            <field name="list_price">8.0</field>
+        </record>
+        
+        <record id="product_fsm_material_3" model="product.product">
+            <field name="name">Soporte para Antena</field>
+            <field name="type">consu</field>
+            <field name="categ_id" ref="product.product_category_all"/>
+            <field name="standard_price">150.0</field>
+            <field name="list_price">200.0</field>
+        </record>
+    </data>
+</odoo>

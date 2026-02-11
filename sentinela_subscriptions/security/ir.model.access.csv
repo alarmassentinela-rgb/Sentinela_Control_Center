@@ -1,0 +1,12 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_sentinela_subscription_user,sentinela.subscription.user,model_sentinela_subscription,base.group_user,1,1,1,1
+access_sentinela_subscription_manager,sentinela.subscription.manager,model_sentinela_subscription,base.group_system,1,1,1,1
+access_sentinela_mikrotik_traffic,sentinela.mikrotik.traffic,model_sentinela_mikrotik_traffic,base.group_user,1,1,1,1
+access_sentinela_subscription_transfer,sentinela.subscription.transfer,model_sentinela_subscription_transfer,base.group_user,1,1,1,1
+access_sentinela_subscription_extension,sentinela.subscription.extension,model_sentinela_subscription_extension_wizard,base.group_user,1,1,1,1
+access_sentinela_router,sentinela.router,model_sentinela_router,base.group_user,1,1,1,1
+access_sentinela_mikrotik_profile,sentinela.mikrotik.profile,model_sentinela_mikrotik_profile,base.group_user,1,1,1,1
+access_sentinela_contract_template_user,sentinela.contract.template.user,model_sentinela_contract_template,base.group_user,1,1,1,1
+access_sentinela_contract_template_manager,sentinela.contract.template.manager,model_sentinela_contract_template,sentinela_subscriptions.group_subscription_manager,1,1,1,1
+access_sentinela_contract_template,sentinela.contract.template,model_sentinela_contract_template,base.group_user,1,1,1,1
+access_sentinela_contract_template_preview,sentinela.contract.template.preview,model_sentinela_contract_template_preview,base.group_user,1,1,1,1

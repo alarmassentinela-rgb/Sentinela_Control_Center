@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_partner_form_subscription" model="ir.ui.view">
+        <field name="name">res.partner.form.subscription</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <div name="button_box" position="inside">
+                <button class="oe_stat_button" type="object" name="action_view_subscriptions" 
+                    icon="fa-refresh">
+                    <field string="Suscripciones" name="subscription_count" widget="statinfo"/>
+                </button>
+            </div>
+            <group name="sale" position="inside">
+                <group string="Configuración Sentinela" name="sentinela_config">
+                    <field name="invoice_grouping_method" string="Preferencia de Facturación"/>
+                </group>
+            </group>
+            
+            <!-- Force translations for standard fields if missing -->
+            <xpath expr="//field[@name='user_id']" position="attributes">
+                <attribute name="string">Vendedor</attribute>
+            </xpath>
+            <xpath expr="//field[@name='property_payment_term_id']" position="attributes">
+                <attribute name="string">Plazos de Pago (Venta)</attribute>
+            </xpath>
+            <xpath expr="//field[@name='property_supplier_payment_term_id']" position="attributes">
+                <attribute name="string">Plazos de Pago (Compra)</attribute>
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -1,0 +1,277 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* sentinela_subscriptions
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 18.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-01-02 00:00+0000\n"
+"PO-Revision-Date: 2026-01-02 00:00+0000\n"
+"Last-Translator: Sentinela IT <admin@sentinela.mx>\n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. module: sentinela_subscriptions
+#: model:ir.actions.act_window,name:sentinela_subscriptions.action_sentinela_subscription
+#: model:ir.ui.menu,name:sentinela_subscriptions.menu_sentinela_subscription_main
+#: model:ir.ui.menu,name:sentinela_subscriptions.menu_sentinela_subscription_root
+msgid "Subscriptions"
+msgstr "Suscripciones"
+
+#. module: sentinela_subscriptions
+#: model:ir.ui.menu,name:sentinela_subscriptions.menu_sentinela_subscription_root
+msgid "Sentinela Services"
+msgstr "Servicios Sentinela"
+
+#. module: sentinela_subscriptions
+#: model:ir.ui.menu,name:sentinela_subscriptions.menu_sentinela_subscription_list
+msgid "Contracts"
+msgstr "Contratos"
+
+#. module: sentinela_subscriptions
+#: model:ir.ui.menu,name:sentinela_subscriptions.menu_sentinela_subscription_config
+msgid "Configuration"
+msgstr "Configuración"
+
+#. module: sentinela_subscriptions
+#: model:ir.ui.menu,name:sentinela_subscriptions.menu_sentinela_subscription_products
+msgid "Service Plans"
+msgstr "Planes de Servicio"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,field_description:sentinela_subscriptions.field_sentinela_subscription__name
+msgid "Reference"
+msgstr "Referencia"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,field_description:sentinela_subscriptions.field_sentinela_subscription__partner_id
+msgid "Customer"
+msgstr "Cliente"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,field_description:sentinela_subscriptions.field_sentinela_subscription__service_address_id
+msgid "Service Address (Branch)"
+msgstr "Dirección de Servicio (Sucursal)"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,field_description:sentinela_subscriptions.field_sentinela_subscription__invoice_grouping_method
+msgid "Invoice Grouping"
+msgstr "Agrupación de Facturas"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,field_description:sentinela_subscriptions.field_sentinela_subscription__product_id
+msgid "Service Plan"
+msgstr "Plan Contratado"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,field_description:sentinela_subscriptions.field_sentinela_subscription__price_unit
+msgid "Monthly Fee"
+msgstr "Cuota Mensual"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,field_description:sentinela_subscriptions.field_sentinela_subscription__service_type
+msgid "Service Type"
+msgstr "Tipo de Servicio"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,field_description:sentinela_subscriptions.field_sentinela_subscription__ip_address
+msgid "IP Address"
+msgstr "Dirección IP"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,field_description:sentinela_subscriptions.field_sentinela_subscription__start_date
+msgid "Start Date"
+msgstr "Fecha de Inicio"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,field_description:sentinela_subscriptions.field_sentinela_subscription__next_billing_date
+msgid "Next Invoice"
+msgstr "Próxima Factura"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,field_description:sentinela_subscriptions.field_sentinela_subscription__recurring_interval
+msgid "Billing Cycle"
+msgstr "Ciclo de Facturación"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,field_description:sentinela_subscriptions.field_sentinela_subscription__commitment_period
+msgid "Commitment (Months)"
+msgstr "Plazo Forzoso (Meses)"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,field_description:sentinela_subscriptions.field_sentinela_subscription__commitment_end_date
+msgid "Commitment End"
+msgstr "Fin del Plazo"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,field_description:sentinela_subscriptions.field_sentinela_subscription__equipment_ownership
+msgid "Equipment Ownership"
+msgstr "Propiedad del Equipo"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,field_description:sentinela_subscriptions.field_sentinela_subscription__serial_number_id
+msgid "Equipment Serial"
+msgstr "Serie del Equipo"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,field_description:sentinela_subscriptions.field_sentinela_subscription__state
+msgid "Contract Status"
+msgstr "Estado del Contrato"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,field_description:sentinela_subscriptions.field_sentinela_subscription__technical_state
+msgid "Technical Status"
+msgstr "Estado Técnico"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,field_description:sentinela_subscriptions.field_sentinela_subscription__invoice_ids
+msgid "Invoices"
+msgstr "Facturas"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,field_description:sentinela_subscriptions.field_sentinela_subscription__description
+msgid "Internal Notes"
+msgstr "Notas Internas"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,selection:sentinela_subscriptions.selection__sentinela_subscription__service_type__internet
+msgid "Internet WISP"
+msgstr "Internet WISP"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,selection:sentinela_subscriptions.selection__sentinela_subscription__service_type__alarm
+msgid "Monitoring Alarm"
+msgstr "Monitoreo de Alarma"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,selection:sentinela_subscriptions.selection__sentinela_subscription__service_type__gps
+msgid "GPS Tracking"
+msgstr "Rastreo GPS"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,selection:sentinela_subscriptions.selection__sentinela_subscription__service_type__maintenance
+msgid "Maintenance Poliza"
+msgstr "Póliza de Mantenimiento"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,selection:sentinela_subscriptions.selection__sentinela_subscription__state__draft
+msgid "Draft"
+msgstr "Borrador"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,selection:sentinela_subscriptions.selection__sentinela_subscription__state__active
+#: model:ir.model.fields,selection:sentinela_subscriptions.selection__sentinela_subscription__technical_state__active
+msgid "Active"
+msgstr "Activo"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,selection:sentinela_subscriptions.selection__sentinela_subscription__state__closed
+msgid "Closed"
+msgstr "Cerrado"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,selection:sentinela_subscriptions.selection__sentinela_subscription__state__cancelled
+msgid "Cancelled"
+msgstr "Cancelado"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,selection:sentinela_subscriptions.selection__sentinela_subscription__technical_state__suspended
+msgid "Suspended (Non-Payment)"
+msgstr "Suspendido (Falta de Pago)"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,selection:sentinela_subscriptions.selection__sentinela_subscription__technical_state__cut
+msgid "Hard Cut / Retrieved"
+msgstr "Corte Total / Retirado"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,selection:sentinela_subscriptions.selection__sentinela_subscription__equipment_ownership__company
+msgid "Company Property (Comodato)"
+msgstr "Propiedad Empresa (Comodato)"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,selection:sentinela_subscriptions.selection__sentinela_subscription__equipment_ownership__customer
+msgid "Customer Owned"
+msgstr "Propiedad del Cliente"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,selection:sentinela_subscriptions.selection__sentinela_subscription__equipment_ownership__leasing
+msgid "Leasing (Rent-to-Own)"
+msgstr "Arrendamiento (Leasing)"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,selection:sentinela_subscriptions.selection__sentinela_subscription__recurring_interval__1
+msgid "Monthly"
+msgstr "Mensual"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,selection:sentinela_subscriptions.selection__sentinela_subscription__recurring_interval__2
+msgid "Bimonthly"
+msgstr "Bimestral"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,selection:sentinela_subscriptions.selection__sentinela_subscription__recurring_interval__3
+msgid "Quarterly"
+msgstr "Trimestral"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,selection:sentinela_subscriptions.selection__sentinela_subscription__recurring_interval__6
+msgid "Semiannually"
+msgstr "Semestral"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,selection:sentinela_subscriptions.selection__sentinela_subscription__recurring_interval__12
+msgid "Yearly"
+msgstr "Anual"
+
+#. module: sentinela_subscriptions
+#: model:ir.ui.view,arch_db:sentinela_subscriptions.view_sentinela_subscription_form
+msgid "Technical Location"
+msgstr "Ubicación Técnica"
+
+#. module: sentinela_subscriptions
+#: model:ir.ui.view,arch_db:sentinela_subscriptions.view_sentinela_subscription_form
+msgid "GPS Coordinates"
+msgstr "Coordenadas GPS"
+
+#. module: sentinela_subscriptions
+#: model:ir.ui.view,arch_db:sentinela_subscriptions.view_sentinela_subscription_form
+msgid "Installation References"
+msgstr "Referencias de Instalación"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,field_description:sentinela_subscriptions.field_sentinela_subscription__location_notes
+msgid "Location References (Croquis)"
+msgstr "Croquis / Referencias"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,field_description:sentinela_subscriptions.field_sentinela_subscription__latitude
+msgid "Latitude"
+msgstr "Latitud"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,field_description:sentinela_subscriptions.field_sentinela_subscription__longitude
+msgid "Longitude"
+msgstr "Longitud"
+
+#. module: sentinela_subscriptions
+#: model:ir.actions.act_window,name:sentinela_subscriptions.action_open_google_maps
+msgid "Open in Google Maps"
+msgstr "Abrir en Google Maps"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,field_description:sentinela_subscriptions.field_product_template__service_type
+msgid "Service Category"
+msgstr "Categoría de Servicio"
+
+#. module: sentinela_subscriptions
+#: model:ir.model.fields,field_description:sentinela_subscriptions.field_product_template__mikrotik_profile_id
+msgid "Mikrotik Profile Link"
+msgstr "Enlace Perfil Mikrotik"
+
+
+

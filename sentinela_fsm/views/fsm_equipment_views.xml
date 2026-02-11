@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- FORM VIEW -->
+    <record id="view_fsm_equipment_form" model="ir.ui.view">
+        <field name="name">sentinela.fsm.equipment.form</field>
+        <field name="model">sentinela.fsm.equipment</field>
+        <field name="arch" type="xml">
+            <form string="Equipo/Material">
+                <group>
+                    <field name="order_id"/>
+                    <field name="product_id"/>
+                    <field name="quantity"/>
+                    <field name="unit_price"/>
+                    <field name="total_price"/>
+                    <field name="notes"/>
+                </group>
+            </form>
+        </field>
+    </record>
+
+    <!-- TREE/LIST VIEW -->
+    <record id="view_fsm_equipment_tree" model="ir.ui.view">
+        <field name="name">sentinela.fsm.equipment.tree</field>
+        <field name="model">sentinela.fsm.equipment</field>
+        <field name="arch" type="xml">
+            <list string="Equipos/Materiales">
+                <field name="order_id"/>
+                <field name="product_id"/>
+                <field name="quantity"/>
+                <field name="unit_price"/>
+                <field name="total_price"/>
+                <field name="notes"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- SEARCH VIEW -->
+    <record id="view_fsm_equipment_search" model="ir.ui.view">
+        <field name="name">sentinela.fsm.equipment.search</field>
+        <field name="model">sentinela.fsm.equipment</field>
+        <field name="arch" type="xml">
+            <search string="Buscar Equipos/Materiales">
+                <field name="order_id"/>
+                <field name="product_id"/>
+                <field name="notes"/>
+            </search>
+        </field>
+    </record>
+</odoo>

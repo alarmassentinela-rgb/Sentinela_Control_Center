@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_sign_document_user,sentinela.sign.document.user,model_sentinela_sign_document,base.group_user,1,1,1,1
+access_sign_document_portal,sentinela.sign.document.portal,model_sentinela_sign_document,base.group_portal,1,0,0,0

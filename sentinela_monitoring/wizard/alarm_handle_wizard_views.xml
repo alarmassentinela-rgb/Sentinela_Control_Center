@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_sentinela_alarm_handle_wizard_form" model="ir.ui.view">
+        <field name="name">sentinela.alarm.handle.wizard.form</field>
+        <field name="model">sentinela.alarm.handle.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Centro de Control de Alarma">
+                <sheet>
+                    <div class="oe_title mb-3">
+                        <h1 class="d-flex align-items-center gap-2">
+                            <span class="badge bg-dark text-white"><field name="account_number"/></span>
+                            <field name="partner_id" readonly="1"/>
+                        </h1>
+                        <h3 class="text-danger fw-bold"><field name="alarm_event_id" readonly="1"/></h3>
+                    </div>
+
+                    <div class="row">
+                        <!-- COLUMNA IZQUIERDA: INFORMACION -->
+                        <div class="col-7 border-end">
+                            <group string="📍 Datos del Lugar">
+                                <field name="address_display" readonly="1" nolabel="1"/>
+                                <field name="site_phone" readonly="1" widget="phone" string="📞 Teléfono Lugar"/>
+                                <button name="action_open_maps" type="object" string="🗺️ Ver Ruta en Google Maps" 
+                                    class="btn-link" invisible="not google_maps_link"/>
+                                <field name="google_maps_link" invisible="1"/>
+                            </group>
+
+                            <group string="👥 Contactos del Cliente">
+                                <field name="contact_ids" readonly="1" nolabel="1">
+                                    <list>
+                                        <field name="name" string="Nombre"/>
+                                        <field name="phone" widget="phone"/>
+                                        <field name="mobile" widget="phone"/>
+                                    </list>
+                                </field>
+                            </group>
+
+                            <group string="🚨 Números de Emergencia Locales">
+                                <div class="d-flex flex-wrap gap-2">
+                                    <span class="badge bg-danger p-2 fs-6">🚒 Bomberos: 911</span>
+                                    <span class="badge bg-primary p-2 fs-6">👮 Policía: 911</span>
+                                    <span class="badge bg-success p-2 fs-6">🚑 Cruz Roja: 065</span>
+                                </div>
+                            </group>
+                        </div>
+
+                        <!-- COLUMNA DERECHA: ACCION Y BITACORA -->
+                        <div class="col-5">
+                            <group string="✍️ Bitácora de Atención">
+                                <field name="notes" nolabel="1" widget="text" class="bg-light fw-bold" 
+                                    placeholder="REGISTRE CADA PASO AQUÍ... Ej: Llamada realizada, patrulla despachada."
+                                    style="min-height: 200px; border: 2px solid #ccc;"/>
+                            </group>
+                            
+                            <group string="⏱️ Rastro Reciente">
+                                <field name="recent_signal_ids" readonly="1" nolabel="1">
+                                    <list limit="3">
+                                        <field name="received_date" string="Hora"/>
+                                        <field name="description" string="Señal"/>
+                                    </list>
+                                </field>
+                            </group>
+                        </div>
+                    </div>
+                </sheet>
+                <footer>
+                    <button name="action_dispatch_patrol" string="🚨 DESPACHAR PATRULLA" type="object" class="btn-danger" icon="fa-shield"/>
+                    <button name="action_create_technical_ticket" string="🔧 FALLA TECNICA" type="object" class="btn-warning" icon="fa-wrench"/>
+                    <button name="action_pause_event" string="⏸️ PONER EN PAUSA" type="object" class="btn-secondary" icon="fa-pause"/>
+                    <button name="action_close_event" string="✅ FINALIZAR Y CERRAR" type="object" class="btn-primary" icon="fa-check-circle"/>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_sentinela_alarm_handle_wizard" model="ir.actions.act_window">
+        <field name="name">Atender Alarma</field>
+        <field name="res_model">sentinela.alarm.handle.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>

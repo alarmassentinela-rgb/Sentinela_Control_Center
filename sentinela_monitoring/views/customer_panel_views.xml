@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- CUSTOMER PANEL VIEWS -->
+    <template id="customer_alarm_panel" name="Panel de Alarma para Clientes">
+        <t t-call="portal.portal_layout">
+            <div class="container mt-4">
+                <div class="row">
+                    <div class="col-12">
+                        <h3 class="mb-4">Panel de Seguridad</h3>
+                        
+                        <div class="row mb-4">
+                            <div class="col-md-3">
+                                <div class="card text-center bg-primary text-white">
+                                    <div class="card-body">
+                                        <h5>Total Dispositivos</h5>
+                                        <h3><t t-esc="devices_count"/></h3>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card text-center bg-success text-white">
+                                    <div class="card-body">
+                                        <h5>Activos</h5>
+                                        <h3><t t-esc="active_devices"/></h3>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card text-center bg-warning text-white">
+                                    <div class="card-body">
+                                        <h5>Con Alertas</h5>
+                                        <h3><t t-esc="alert_devices"/></h3>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card text-center bg-info text-white">
+                                    <div class="card-body">
+                                        <h5>Último Evento</h5>
+                                        <h3><t t-esc="last_event_date"/></h3>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card">
+                            <div class="card-header">
+                                <h5>Dispositivos de Seguridad</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>ID Dispositivo</th>
+                                                <th>Tipo</th>
+                                                <th>Ubicación</th>
+                                                <th>Estado</th>
+                                                <th>Última Comunicación</th>
+                                                <th>Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <t t-foreach="devices" t-as="device">
+                                                <tr>
+                                                    <td><t t-esc="device.device_id"/></td>
+                                                    <td><t t-esc="device.device_type"/></td>
+                                                    <td><t t-esc="device.location"/></td>
+                                                    <td>
+                                                        <span t-att-class="'badge badge-' + ('success' if device.status == 'active' else 'danger' if device.status in ['faulty', 'offline'] else 'warning')">
+                                                            <t t-esc="device.status"/>
+                                                        </span>
+                                                    </td>
+                                                    <td><t t-esc="device.last_communication"/></td>
+                                                    <td>
+                                                        <button class="btn btn-sm btn-primary">Detalles</button>
+                                                    </td>
+                                                </tr>
+                                            </t>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <h5>Historial de Eventos</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Fecha</th>
+                                                <th>Tipo de Evento</th>
+                                                <th>Descripción</th>
+                                                <th>Estado</th>
+                                                <th>Resolución</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <t t-foreach="events" t-as="event">
+                                                <tr>
+                                                    <td><t t-esc="event.start_date"/></td>
+                                                    <td><t t-esc="event.event_type"/></td>
+                                                    <td><t t-esc="event.description"/></td>
+                                                    <td>
+                                                        <span t-att-class="'badge badge-' + ('success' if event.status == 'resolved' else 'primary' if event.status == 'active' else 'warning')">
+                                                            <t t-esc="event.status"/>
+                                                        </span>
+                                                    </td>
+                                                    <td><t t-esc="event.resolution_notes"/></td>
+                                                </tr>
+                                            </t>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <h5>Botón de Pánico</h5>
+                            </div>
+                            <div class="card-body text-center">
+                                <button class="btn btn-danger btn-lg" style="font-size: 2rem; padding: 2rem 4rem;" id="panic-button">
+                                    <i class="fa fa-exclamation-triangle"></i> PÁNICO
+                                </button>
+                                <p class="mt-3">Presione este botón en caso de emergencia para alertar inmediatamente a la central de monitoreo</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <script>
+                $(document).ready(function() {
+                    $('#panic-button').click(function() {
+                        if(confirm('¿Está seguro que desea activar la alerta de pánico?')) {
+                            // Enviar señal de pánico
+                            $.ajax({
+                                url: '/api/alarm/signals',
+                                type: 'POST',
+                                contentType: 'application/json',
+                                headers: {
+                                    'Authorization': 'Bearer YOUR_TOKEN_HERE'
+                                },
+                                data: JSON.stringify({
+                                    device_id: 'PANIC_BUTTON_001',
+                                    signal_type: 'panic',
+                                    priority: 'critical',
+                                    description: 'Alerta de pánico activada desde panel de cliente',
+                                    create_event: true
+                                }),
+                                success: function(response) {
+                                    alert('Alerta de pánico enviada exitosamente');
+                                },
+                                error: function(xhr, status, error) {
+                                    alert('Error al enviar alerta de pánico: ' + error);
+                                }
+                            });
+                        }
+                    });
+                });
+            </script>
+        </t>
+    </template>
+</odoo>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <menuitem id="menu_sign_root"
+              name="Firma Digital"
+              web_icon="sentinela_digital_sign,static/description/icon.png"
+              sequence="20"/>
+
+    <menuitem id="menu_sign_document"
+              name="Documentos"
+              parent="menu_sign_root"
+              action="action_sign_document"
+              sequence="10"/>
+</odoo>

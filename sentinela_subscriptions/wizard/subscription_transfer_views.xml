@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_sentinela_subscription_transfer_form" model="ir.ui.view">
+        <field name="name">sentinela.subscription.transfer.form</field>
+        <field name="model">sentinela.subscription.transfer</field>
+        <field name="arch" type="xml">
+            <form string="Solicitar Cambio de Domicilio">
+                <group>
+                    <field name="partner_id" readonly="1"/>
+                    <field name="current_address_id" readonly="1"/>
+                    <field name="mode" widget="radio" options="{'horizontal': true}"/>
+                    
+                    <!-- Existing Mode -->
+                    <field name="new_address_id" 
+                           placeholder="Seleccione la sucursal..." 
+                           invisible="mode != 'existing'"
+                           required="mode == 'existing'"/>
+                    
+                    <!-- New Mode -->
+                    <label for="street" string="Dirección" invisible="mode != 'new'"/>
+                    <div class="o_address_format" invisible="mode != 'new'">
+                        <field name="street" placeholder="Calle y Número..." class="o_address_street" required="mode == 'new'"/>
+                        <field name="street2" placeholder="Colonia / Interior..." class="o_address_street"/>
+                        <field name="city" placeholder="Ciudad" class="o_address_city" required="mode == 'new'"/>
+                        <field name="state_id" placeholder="Estado" class="o_address_state"/>
+                        <field name="zip_code" placeholder="CP" class="o_address_zip"/>
+                    </div>
+
+                    <field name="transfer_price"/>
+                    <field name="subscription_id" invisible="1"/>
+                </group>
+                <footer>
+                    <button name="action_create_transfer_quote" string="Generar Cotización" type="object" class="btn-primary"/>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_sentinela_subscription_transfer" model="ir.actions.act_window">
+        <field name="name">Cambio de Domicilio</field>
+        <field name="res_model">sentinela.subscription.transfer</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>

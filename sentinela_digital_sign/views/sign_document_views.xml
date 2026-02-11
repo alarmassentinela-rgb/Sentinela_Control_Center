@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_sign_document_form" model="ir.ui.view">
+        <field name="name">sentinela.sign.document.form</field>
+        <field name="model">sentinela.sign.document</field>
+        <field name="arch" type="xml">
+            <form string="Documento para Firma">
+                <header>
+                    <button name="action_send_email" string="Enviar al Cliente" type="object" class="btn-primary" invisible="state != 'draft'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,sent,signed"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="partner_id"/>
+                            <field name="file" filename="filename" widget="binary" invisible="state != 'draft'"/>
+                            <field name="filename" invisible="1"/>
+                        </group>
+                        <group>
+                            <field name="signed_by" readonly="1"/>
+                            <field name="signed_on" readonly="1"/>
+                        </group>
+                    </group>
+                    
+                    <!-- Vista Previa: Borrador / Enviado -->
+                    <group string="Vista Previa del Documento" invisible="not file or state == 'signed'">
+                        <field name="file" widget="pdf_viewer" nolabel="1" filename="filename" readonly="1"/>
+                    </group>
+
+                    <!-- Vista Previa: Firmado -->
+                    <group string="Documento Firmado" invisible="state != 'signed'">
+                        <field name="file_signed" filename="filename_signed" widget="pdf_viewer" nolabel="1"/>
+                        <field name="filename_signed" invisible="1"/>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_sign_document_tree" model="ir.ui.view">
+        <field name="name">sentinela.sign.document.tree</field>
+        <field name="model">sentinela.sign.document</field>
+        <field name="arch" type="xml">
+            <list string="Documentos">
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="create_date"/>
+                <field name="state" widget="badge" decoration-info="state == 'sent'" decoration-success="state == 'signed'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_sign_document" model="ir.actions.act_window">
+        <field name="name">Documentos de Firma</field>
+        <field name="res_model">sentinela.sign.document</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>

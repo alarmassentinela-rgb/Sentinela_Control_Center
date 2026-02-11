@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Top Level Menu -->
+    <menuitem id="menu_sentinela_subscription_root"
+        name="Servicios Sentinela"
+        web_icon="sentinela_subscriptions,static/description/icon.png"
+        sequence="5"/>
+
+    <!-- Sub Menus -->
+    <menuitem id="menu_sentinela_subscription_main"
+        name="Suscripciones"
+        parent="menu_sentinela_subscription_root"
+        sequence="10"/>
+
+    <menuitem id="menu_sentinela_subscription_list"
+        name="Contratos"
+        parent="menu_sentinela_subscription_main"
+        action="action_sentinela_subscription"
+        sequence="10"/>
+
+    <!-- Configuration -->
+    <menuitem id="menu_sentinela_subscription_config"
+        name="Configuración"
+        parent="menu_sentinela_subscription_root"
+        sequence="100"/>
+        
+    <menuitem id="menu_sentinela_subscription_products"
+        name="Planes de Servicio"
+        parent="menu_sentinela_subscription_config"
+        action="product.product_normal_action_sell"
+        sequence="10"/>
+
+    <menuitem id="menu_sentinela_router"
+        name="Routers MikroTik"
+        parent="menu_sentinela_subscription_config"
+        action="action_sentinela_router"
+        sequence="20"/>
+
+    <menuitem id="menu_sentinela_mikrotik_profile"
+        name="Perfiles MikroTik"
+        parent="menu_sentinela_subscription_config"
+        action="action_sentinela_mikrotik_profile"
+        sequence="30"/>
+
+    <menuitem id="menu_sentinela_contract_template"
+        name="Plantillas de Contratos"
+        parent="menu_sentinela_subscription_config"
+        action="action_sentinela_contract_template"
+        sequence="40"/>
+</odoo>

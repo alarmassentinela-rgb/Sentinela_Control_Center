@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- FORM VIEW -->
+    <record id="view_fsm_notification_form" model="ir.ui.view">
+        <field name="name">sentinela.fsm.notification.form</field>
+        <field name="model">sentinela.fsm.notification</field>
+        <field name="arch" type="xml">
+            <form string="Notificación FSM">
+                <header>
+                    <button name="mark_as_read" string="Marcar como Leída" type="object" class="btn-success" invisible="is_read"/>
+                    <button name="mark_as_unread" string="Marcar como No Leída" type="object" class="btn-default" invisible="not is_read"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="title"/></h1>
+                    </div>
+                    <group>
+                        <group string="Información de la Notificación">
+                            <field name="order_id"/>
+                            <field name="recipient_user_id"/>
+                            <field name="notification_type"/>
+                            <field name="sent_date"/>
+                            <field name="is_read"/>
+                        </group>
+                    </group>
+                    <group string="Mensaje">
+                        <field name="message" nolabel="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- TREE/LIST VIEW -->
+    <record id="view_fsm_notification_tree" model="ir.ui.view">
+        <field name="name">sentinela.fsm.notification.tree</field>
+        <field name="model">sentinela.fsm.notification</field>
+        <field name="arch" type="xml">
+            <list string="Notificaciones FSM" decoration-success="is_read==False" decoration-muted="is_read==True">
+                <field name="title"/>
+                <field name="order_id"/>
+                <field name="recipient_user_id"/>
+                <field name="notification_type"/>
+                <field name="sent_date"/>
+                <field name="is_read"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- SEARCH VIEW -->
+    <record id="view_fsm_notification_search" model="ir.ui.view">
+        <field name="name">sentinela.fsm.notification.search</field>
+        <field name="model">sentinela.fsm.notification</field>
+        <field name="arch" type="xml">
+            <search string="Buscar Notificaciones">
+                <field name="title"/>
+                <field name="order_id"/>
+                <field name="recipient_user_id"/>
+                <field name="notification_type"/>
+                <field name="is_read"/>
+                <separator/>
+                <filter name="unread" string="No Leídas" domain="[('is_read', '=', False)]"/>
+                <filter name="read" string="Leídas" domain="[('is_read', '=', True)]"/>
+                <filter name="today" string="Hoy" domain="[('sent_date', '&gt;=', time.strftime('%%Y-%%m-%%d 00:00:00')), ('sent_date', '&lt;=', time.strftime('%%Y-%%m-%%d 23:59:59'))]"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- ACTION -->
+    <record id="action_fsm_notification" model="ir.actions.act_window">
+        <field name="name">Notificaciones</field>
+        <field name="res_model">sentinela.fsm.notification</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_unread': 1}</field>
+    </record>
+</odoo>

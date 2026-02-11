@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="mail_template_fsm_assigned" model="mail.template">
+            <field name="name">FSM: Orden Asignada</field>
+            <field name="model_id" ref="model_sentinela_fsm_order"/>
+            <field name="subject">Visita Técnica Programada - {{ object.name }}</field>
+            <field name="email_from">{{ (user.email_formatted or user.company_id.email) }}</field>
+            <field name="partner_to">{{ object.partner_id.id }}</field>
+            <field name="body_html" type="html">
+                <div style="margin: 0px; padding: 0px;">
+                    <p style="margin: 0px; padding: 0px; font-size: 13px;">
+                        Hola <t t-out="object.partner_id.name or ''"/>,
+                        <br/><br/>
+                        Le informamos que se ha programado una visita técnica para atender su solicitud.
+                        <br/><br/>
+                        <strong>Detalles de la Orden:</strong>
+                        <ul>
+                            <li><strong>Folio:</strong> <t t-out="object.name"/></li>
+                            <li><strong>Tipo:</strong> <t t-out="object.service_type"/></li>
+                            <li><strong>Fecha Programada:</strong> <t t-out="object.scheduled_date or 'Por confirmar'"/></li>
+                            <li><strong>Técnico:</strong> <t t-out="object.technician_id.name or 'Por asignar'"/></li>
+                        </ul>
+                        <br/>
+                        Puede consultar el estatus de su orden en nuestro portal:
+                        <a t-att-href="object.get_portal_url()" style="background-color: #875A7B; padding: 8px 16px 8px 16px; text-decoration: none; color: #fff; border-radius: 5px; font-size:13px;">
+                            Ver Orden
+                        </a>
+                        <br/><br/>
+                        Atentamente,
+                        <br/>
+                        El equipo de Sentinela
+                    </p>
+                </div>
+            </field>
+        </record>
+    </data>
+</odoo>

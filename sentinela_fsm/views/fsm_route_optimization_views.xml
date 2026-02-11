@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- FORM VIEW -->
+    <record id="view_fsm_route_optimization_form" model="ir.ui.view">
+        <field name="name">sentinela.fsm.route.optimization.form</field>
+        <field name="model">sentinela.fsm.route.optimization</field>
+        <field name="arch" type="xml">
+            <form string="Optimización de Ruta FSM">
+                <header>
+                    <button name="action_start_route" string="Iniciar Ruta" type="object" class="btn-primary" invisible="status != 'optimized'"/>
+                    <button name="action_complete_route" string="Completar Ruta" type="object" class="btn-success" invisible="status != 'in_progress'"/>
+                    <field name="status" widget="statusbar" statusbar_visible="draft,optimized,in_progress,completed"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <group>
+                        <group string="Información de la Ruta">
+                            <field name="technician_id"/>
+                            <field name="date"/>
+                            <field name="total_distance"/>
+                            <field name="total_duration"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Líneas de Ruta">
+                            <field name="route_line_ids">
+                                <list editable="top">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="order_id"/>
+                                    <field name="partner_id"/>
+                                    <field name="service_address_id"/>
+                                    <field name="estimated_duration"/>
+                                    <field name="distance_from_previous"/>
+                                    <field name="status"/>
+                                    <field name="actual_start_time"/>
+                                    <field name="actual_end_time"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Órdenes Asociadas">
+                            <field name="order_ids" nolabel="1">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="partner_id"/>
+                                    <field name="service_address_id"/>
+                                    <field name="scheduled_date"/>
+                                    <field name="stage"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- TREE/LIST VIEW -->
+    <record id="view_fsm_route_optimization_tree" model="ir.ui.view">
+        <field name="name">sentinela.fsm.route.optimization.tree</field>
+        <field name="model">sentinela.fsm.route.optimization</field>
+        <field name="arch" type="xml">
+            <list string="Rutas FSM">
+                <field name="name"/>
+                <field name="technician_id"/>
+                <field name="date"/>
+                <field name="total_distance"/>
+                <field name="total_duration"/>
+                <field name="status"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- CALENDAR VIEW -->
+    <record id="view_fsm_route_optimization_calendar" model="ir.ui.view">
+        <field name="name">sentinela.fsm.route.optimization.calendar</field>
+        <field name="model">sentinela.fsm.route.optimization</field>
+        <field name="arch" type="xml">
+            <calendar string="Calendario de Rutas" date_start="date" color="technician_id">
+                <field name="name"/>
+                <field name="technician_id"/>
+            </calendar>
+        </field>
+    </record>
+
+    <!-- SEARCH VIEW -->
+    <record id="view_fsm_route_optimization_search" model="ir.ui.view">
+        <field name="name">sentinela.fsm.route.optimization.search</field>
+        <field name="model">sentinela.fsm.route.optimization</field>
+        <field name="arch" type="xml">
+            <search string="Buscar Rutas">
+                <field name="name"/>
+                <field name="technician_id"/>
+                <field name="date"/>
+                <field name="status"/>
+                <separator/>
+                <filter name="draft" string="Borrador" domain="[('status', '=', 'draft')]"/>
+                <filter name="optimized" string="Optimizada" domain="[('status', '=', 'optimized')]"/>
+                <filter name="in_progress" string="En Progreso" domain="[('status', '=', 'in_progress')]"/>
+                <filter name="completed" string="Completada" domain="[('status', '=', 'completed')]"/>
+                <filter name="today" string="Hoy" domain="[('date', '=', time.strftime('%%Y-%%m-%%d'))]"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- ACTION -->
+    <record id="action_fsm_route_optimization" model="ir.actions.act_window">
+        <field name="name">Rutas Optimizadas</field>
+        <field name="res_model">sentinela.fsm.route.optimization</field>
+        <field name="view_mode">list,form,calendar</field>
+    </record>
+</odoo>

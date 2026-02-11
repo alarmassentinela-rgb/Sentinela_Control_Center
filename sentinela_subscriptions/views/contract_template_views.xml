@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_sentinela_contract_template_tree" model="ir.ui.view">
+        <field name="name">sentinela.contract.template.tree</field>
+        <field name="model">sentinela.contract.template</field>
+        <field name="arch" type="xml">
+            <list string="Plantillas de Contrato">
+                <field name="name"/>
+                <field name="create_date"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_sentinela_contract_template_form" model="ir.ui.view">
+        <field name="name">sentinela.contract.template.form</field>
+        <field name="model">sentinela.contract.template</field>
+        <field name="arch" type="xml">
+            <form string="Plantilla de Contrato">
+                <header>
+                    <button name="action_preview" string="Vista Previa" type="object" class="oe_highlight" icon="fa-eye"/>
+                </header>
+                <sheet>
+                    <!-- Título fuera de la hoja -->
+                    <div class="oe_title">
+                        <label for="name" string="Nombre del Diseño" class="oe_edit_only"/>
+                        <h1>
+                            <field name="name" placeholder="Ej. Contrato Maestro de Monitoreo"/>
+                        </h1>
+                    </div>
+
+                    <!-- Contenedor Principal con Ayuda Lateral -->
+                    <div class="row mt-4">
+                        <!-- HOJA DE WORD (IZQUIERDA) -->
+                        <div class="col-9" style="background-color: #e8ecef; padding: 40px 20px; border-radius: 8px; border: 1px solid #ccc;">
+                            <div style="background-color: white; width: 100%; max-width: 800px; margin: 0 auto; padding: 60px 50px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); min-height: 1100px;">
+                                
+                                <!-- Indicador de Encabezado Automático -->
+                                <div style="border-bottom: 1px dashed #ccc; color: #aaa; text-align: center; margin-bottom: 40px; font-size: 12px;">
+                                    [ El logo de Sentinela aparecerá aquí automáticamente en el PDF ]
+                                </div>
+
+                                <field name="content" widget="html" nolabel="1" 
+                                       options="{'style-inline': True, 'min_height': 900}"/>
+                                
+                                <!-- Indicador de Pie de Página -->
+                                <div style="border-top: 1px dashed #ccc; color: #aaa; text-align: center; margin-top: 40px; font-size: 12px;">
+                                    [ Fin de Página / Pie de Página ]
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- PANEL DE AYUDA (DERECHA) -->
+                        <div class="col-3">
+                            <div class="card shadow-sm sticky-top" style="top: 20px;">
+                                <div class="card-header bg-primary text-white">
+                                    <i class="fa fa-code me-2"></i> Variables Disponibles
+                                </div>
+                                <div class="card-body p-2" style="font-size: 12px;">
+                                    <p class="text-muted mb-3">Copie y pegue estos códigos en el contrato donde desee que aparezca el dato real:</p>
+                                    
+                                    <div class="mb-3">
+                                        <strong class="text-dark">DATOS DEL CLIENTE</strong>
+                                        <div class="input-group mb-1">
+                                            <input type="text" class="form-control form-control-sm" readonly="1" value="{{ object.partner_id.name }}"/>
+                                        </div>
+                                        <div class="input-group mb-1">
+                                            <input type="text" class="form-control form-control-sm" readonly="1" value="{{ object.partner_id.vat }}"/>
+                                        </div>
+                                        <small class="text-muted">Nombre y RFC del cliente</small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <strong class="text-dark">UBICACIÓN</strong>
+                                        <div class="input-group mb-1">
+                                            <input type="text" class="form-control form-control-sm" readonly="1" value="{{ object.address_street }}"/>
+                                        </div>
+                                        <small class="text-muted">Dirección de servicio (Calle y N°)</small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <strong class="text-dark">PLAN Y COSTO</strong>
+                                        <div class="input-group mb-1">
+                                            <input type="text" class="form-control form-control-sm" readonly="1" value="{{ object.product_id.name }}"/>
+                                        </div>
+                                        <div class="input-group mb-1">
+                                            <input type="text" class="form-control form-control-sm" readonly="1" value="{{ object.price_total }}"/>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <strong class="text-dark">MONITOREO</strong>
+                                        <div class="input-group mb-1">
+                                            <input type="text" class="form-control form-control-sm" readonly="1" value="{{ object.monitoring_account_number }}"/>
+                                        </div>
+                                        <small class="text-muted">Número de cuenta</small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <strong class="text-dark">INTERNET WISP</strong>
+                                        <div class="input-group mb-1">
+                                            <input type="text" class="form-control form-control-sm" readonly="1" value="{{ object.pppoe_user }}"/>
+                                        </div>
+                                        <small class="text-muted">Usuario PPPoE</small>
+                                    </div>
+
+                                    <div class="alert alert-warning p-2">
+                                        <i class="fa fa-info-circle me-1"></i>
+                                        Para forzar un <strong>salto de página</strong>, ponga el cursor y use la opción de "Salto de página" en el editor o inserte: <code>&lt;div class="page-break-before"&gt;&lt;/div&gt;</code>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Wizard Preview View -->
+    <record id="view_sentinela_contract_template_preview_form" model="ir.ui.view">
+        <field name="name">sentinela.contract.template.preview.form</field>
+        <field name="model">sentinela.contract.template.preview</field>
+        <field name="arch" type="xml">
+            <form string="Vista Previa">
+                <field name="html_preview" widget="html" readonly="1" nolabel="1"/>
+                <footer>
+                    <button string="Cerrar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_sentinela_contract_template" model="ir.actions.act_window">
+        <field name="name">Diseño de Contratos</field>
+        <field name="res_model">sentinela.contract.template</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Cree su primer diseño de contrato.
+            </p>
+        </field>
+    </record>
+</odoo>

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_fsm_order_pause_wizard_form" model="ir.ui.view">
+        <field name="name">fsm.order.pause.wizard.form</field>
+        <field name="model">sentinela.fsm.order.pause.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Justificar Pausa">
+                <group>
+                    <field name="reason_id"/>
+                    <field name="notes" placeholder="Agregue detalles adicionales aquí..."/>
+                </group>
+                <footer>
+                    <button name="action_pause" string="Confirmar Pausa" type="object" class="btn-primary"/>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_fsm_order_pause_wizard" model="ir.actions.act_window">
+        <field name="name">Justificar Pausa</field>
+        <field name="res_model">sentinela.fsm.order.pause.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>

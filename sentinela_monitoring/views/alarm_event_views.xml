@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- FORM VIEW -->
+    <record id="view_alarm_event_form" model="ir.ui.view">
+        <field name="name">sentinela.alarm.event.form</field>
+        <field name="model">sentinela.alarm.event</field>
+        <field name="arch" type="xml">
+            <form string="Evento de Alarma">
+                <header>
+                    <button name="action_acknowledge" string="Reconocer" type="object" class="btn-primary" invisible="status != 'active'"/>
+                    <button name="action_escalate" string="Escalar" type="object" class="btn-warning" invisible="status != 'active'"/>
+                    <button name="action_assign_technician" string="Asignar Técnico" type="object" class="btn-info" invisible="status != 'acknowledged'"/>
+                    <button name="create_fsm_order" string="Crear Orden FSM" type="object" class="btn-success" invisible="status != 'in_progress'"/>
+                    <button name="action_resolve" string="Resolver" type="object" class="btn-success" invisible="status != 'in_progress'"/>
+                    <button name="action_close" string="Cerrar" type="object" class="btn-default" invisible="status != 'resolved'"/>
+                    <field name="status" widget="statusbar" statusbar_visible="active,acknowledged,in_progress,escalated,resolved,closed"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <group>
+                                    <group string="Información del Evento">
+                                        <field name="event_type"/>
+                                        <field name="priority_id" widget="badge"/>
+                                        <field name="start_date"/>
+                                        <field name="end_date"/>
+                                        <field name="duration"/>
+                                    </group>                        <group string="Dispositivo y Cliente">
+                            <field name="device_id"/>
+                            <field name="partner_id"/>
+                            <field name="subscription_id"/>
+                        </group>
+                    </group>
+                    <group string="Ubicación">
+                        <field name="location"/>
+                        <field name="latitude"/>
+                        <field name="longitude"/>
+                    </group>
+                    <group string="Operadores y Técnicos">
+                        <field name="assigned_operator_id"/>
+                        <field name="assigned_technician_id"/>
+                    </group>
+                    <group string="Descripción">
+                        <field name="description" nolabel="1"/>
+                    </group>
+                    <group string="Resolución">
+                        <field name="resolution_notes" nolabel="1"/>
+                    </group>
+                    <notebook>
+                        <page string="Señales Relacionadas">
+                            <field name="alarm_signal_ids">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="signal_type"/>
+                                    <field name="received_date"/>
+                                    <field name="status"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Órdenes de Servicio">
+                            <field name="fsm_order_ids">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="stage"/>
+                                    <field name="scheduled_date"/>
+                                    <field name="technician_id"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- TREE/LIST VIEW -->
+    <record id="view_alarm_event_list" model="ir.ui.view">
+        <field name="name">sentinela.alarm.event.list</field>
+        <field name="model">sentinela.alarm.event</field>
+        <field name="arch" type="xml">
+            <list string="Eventos de Alarma">
+                <field name="name"/>
+                <field name="event_type"/>
+                <field name="priority_id" widget="badge"/>
+                <field name="device_id"/>
+                <field name="partner_id"/>
+                <field name="start_date"/>
+                <field name="status"/>
+                <field name="duration"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- KANBAN VIEW -->
+    <record id="view_alarm_event_kanban" model="ir.ui.view">
+        <field name="name">sentinela.alarm.event.kanban</field>
+        <field name="model">sentinela.alarm.event</field>
+        <field name="arch" type="xml">
+            <kanban default_group_by="status" class="o_kanban_small_column" sample="1">
+                <field name="status"/>
+                <field name="priority_id"/>
+                <field name="assigned_technician_id"/>
+                <templates>
+                    <t t-name="kanban-box">
+                        <div class="oe_kanban_global_click">
+                            <div class="oe_kanban_content">
+                                <div class="o_kanban_record_top">
+                                    <strong class="o_kanban_record_title">
+                                        <field name="name"/>
+                                    </strong>
+                                    <span class="float-end text-right">
+                                        <field name="priority_id" widget="badge"/>
+                                    </span>
+                                </div>
+                                <div class="text-muted">
+                                    <field name="event_type"/>
+                                </div>
+                                <div>
+                                    <field name="device_id"/>
+                                </div>
+                                <div class="o_kanban_record_bottom">
+                                    <div class="oe_kanban_bottom_left">
+                                        <field name="start_date"/>
+                                    </div>
+                                    <div class="oe_kanban_bottom_right">
+                                        <field name="assigned_technician_id" widget="many2one_avatar_user"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <!-- SEARCH VIEW -->
+    <record id="view_alarm_event_search" model="ir.ui.view">
+        <field name="name">sentinela.alarm.event.search</field>
+        <field name="model">sentinela.alarm.event</field>
+        <field name="arch" type="xml">
+            <search string="Buscar Eventos">
+                <field name="name"/>
+                <field name="account_number" string="Número de Cuenta"/>
+                <field name="alarm_code_id" string="Código de Alarma"/>
+                <field name="event_type"/>
+                <field name="priority_id"/>
+                <field name="device_id"/>
+                <field name="partner_id"/>
+                <field name="status"/>
+                <field name="start_date"/>
+                <separator/>
+                <filter name="priority_high" string="Prioridad Alta" domain="[('priority_id.level', '&gt;=', 8)]"/>
+                <filter name="active" string="Activos" domain="[('status', '=', 'active')]"/>
+                <filter name="in_progress" string="En Progreso" domain="[('status', '=', 'in_progress')]"/>
+                <filter name="today" string="Hoy" domain="[('start_date', '&gt;=', time.strftime('%%Y-%%m-%%d 00:00:00')), ('start_date', '&lt;=', time.strftime('%%Y-%%m-%%d 23:59:59'))]"/>
+                <group expand="0" string="Agrupar por">
+                    <filter name="group_by_account" string="Cuenta" context="{'group_by': 'account_number'}"/>
+                    <filter name="group_by_code" string="Código de Alarma" context="{'group_by': 'alarm_code_id'}"/>
+                    <filter name="group_by_priority" string="Prioridad" context="{'group_by': 'priority_id'}"/>
+                    <filter name="group_by_device" string="Panel" context="{'group_by': 'device_id'}"/>
+                    <filter name="group_by_status" string="Estado" context="{'group_by': 'status'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- TREE/LIST VIEW FOR PENDING -->
+    <record id="view_alarm_event_pending_list" model="ir.ui.view">
+        <field name="name">sentinela.alarm.event.pending.list</field>
+        <field name="model">sentinela.alarm.event</field>
+        <field name="arch" type="xml">
+            <list string="Eventos Pendientes" create="false" decoration-warning="status=='paused'" decoration-info="status=='in_progress'">
+                <field name="account_number" string="Cuenta"/>
+                <field name="priority_id" widget="badge"/>
+                <field name="start_date" string="Fecha Inicio"/>
+                <field name="device_id" string="Panel"/>
+                <field name="description" string="Evento"/>
+                <field name="status" widget="badge" decoration-warning="status == 'paused'" decoration-info="status == 'in_progress'"/>
+                <field name="assigned_operator_id" widget="many2one_avatar_user" string="Operador"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ACTION FOR PENDING -->
+    <record id="action_alarm_event_pending" model="ir.actions.act_window">
+        <field name="name">Eventos Pendientes / Pausados</field>
+        <field name="res_model">sentinela.alarm.event</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('status', 'in', ['in_progress', 'paused', 'escalated'])]</field>
+        <field name="view_id" ref="view_alarm_event_pending_list"/>
+        <field name="context">{'search_default_group_by_status': 1}</field>
+    </record>
+
+    <!-- TREE/LIST VIEW FOR HISTORY -->
+    <record id="view_alarm_event_history_list" model="ir.ui.view">
+        <field name="name">sentinela.alarm.event.history.list</field>
+        <field name="model">sentinela.alarm.event</field>
+        <field name="arch" type="xml">
+            <list string="Historial de Eventos" create="false" edit="false">
+                <field name="account_number" string="Cuenta"/>
+                <field name="priority_id" widget="badge"/>
+                <field name="start_date" string="Fecha Inicio"/>
+                <field name="end_date" string="Fecha Fin"/>
+                <field name="device_id" string="Panel"/>
+                <field name="alarm_code_id" string="Código"/>
+                <field name="description" string="Evento"/>
+                <field name="resolution_notes" string="Comentarios del Operador"/>
+                <field name="assigned_operator_id" widget="many2one_avatar_user" string="Atendió"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ACTION FOR HISTORY -->
+    <record id="action_alarm_event_history" model="ir.actions.act_window">
+        <field name="name">Historial de Eventos Finalizados</field>
+        <field name="res_model">sentinela.alarm.event</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('status', '=', 'resolved')]</field>
+        <field name="view_id" ref="view_alarm_event_history_list"/>
+        <field name="context">{'search_default_group_by_account': 1}</field>
+    </record>
+
+    <!-- ACTION -->
+    <record id="action_alarm_event" model="ir.actions.act_window">
+        <field name="name">Eventos de Alarma</field>
+        <field name="res_model">sentinela.alarm.event</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="context">{'search_default_active': 1}</field>
+    </record>
+</odoo>

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_sentinela_subscription_form_monitoring_inherit" model="ir.ui.view">
+        <field name="name">sentinela.subscription.form.monitoring.inherit</field>
+        <field name="model">sentinela.subscription</field>
+        <field name="inherit_id" ref="sentinela_subscriptions.view_sentinela_subscription_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='notes']" position="after">
+                <page string="Dispositivos de Monitoreo" name="monitoring_devices" invisible="service_type != 'alarm'">
+                    <field name="monitoring_device_ids">
+                        <list editable="bottom">
+                            <field name="name"/>
+                            <field name="account_number"/>
+                            <field name="device_id"/>
+                            <field name="status" widget="badge" decoration-success="status == 'active'"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

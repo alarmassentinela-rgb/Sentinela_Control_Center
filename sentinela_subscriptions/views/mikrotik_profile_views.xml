@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_sentinela_mikrotik_profile_form" model="ir.ui.view">
+        <field name="name">sentinela.mikrotik.profile.form</field>
+        <field name="model">sentinela.mikrotik.profile</field>
+        <field name="arch" type="xml">
+            <form string="Perfil Mikrotik">
+                <header>
+                    <button name="action_sync_to_routers" string="Sincronizar con Routers" type="object" class="btn-primary"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="Ej: Plan 20 Megas"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group string="Velocidades">
+                            <field name="download_speed"/>
+                            <field name="upload_speed"/>
+                        </group>
+                        <group string="Red">
+                            <field name="local_address"/>
+                            <field name="remote_address"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Routers">
+                            <field name="router_ids"/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_sentinela_mikrotik_profile" model="ir.actions.act_window">
+        <field name="name">Perfiles de Velocidad</field>
+        <field name="res_model">sentinela.mikrotik.profile</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem id="menu_sentinela_mikrotik_profile"
+        name="Perfiles de Velocidad"
+        parent="menu_sentinela_subscription_config"
+        action="action_sentinela_mikrotik_profile"
+        sequence="30"/>
+</odoo>

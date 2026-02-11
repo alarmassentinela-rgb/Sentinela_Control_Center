@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_sentinela_subscription_form_fsm" model="ir.ui.view">
+        <field name="name">sentinela.subscription.form.fsm</field>
+        <field name="model">sentinela.subscription</field>
+        <field name="inherit_id" ref="sentinela_subscriptions.view_sentinela_subscription_form"/>
+        <field name="arch" type="xml">
+            <div name="button_box" position="inside">
+                <button name="action_view_fsm_orders" type="object" class="oe_stat_button" icon="fa-wrench">
+                    <field name="fsm_order_count" widget="statinfo" string="Tickets"/>
+                </button>
+            </div>
+        </field>
+    </record>
+</odoo>

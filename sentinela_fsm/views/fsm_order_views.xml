@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- KANBAN VIEW -->
+    <record id="view_fsm_order_kanban" model="ir.ui.view">
+        <field name="name">sentinela.fsm.order.kanban</field>
+        <field name="model">sentinela.fsm.order</field>
+        <field name="arch" type="xml">
+            <kanban default_group_by="stage" class="o_kanban_small_column" sample="1">
+                <field name="stage"/>
+                <field name="priority"/>
+                <field name="technician_id"/>
+                <templates>
+                    <t t-name="kanban-box">
+                        <div class="oe_kanban_global_click">
+                            <div class="oe_kanban_content">
+                                <div class="o_kanban_record_top">
+                                    <strong class="o_kanban_record_title">
+                                        <field name="name"/>
+                                    </strong>
+                                    <span class="float-end text-right">
+                                        <field name="priority" widget="priority"/>
+                                    </span>
+                                </div>
+                                <div class="text-muted">
+                                    <field name="partner_id"/>
+                                </div>
+                                <div>
+                                    <span class="fa fa-clock-o"/> <field name="scheduled_date"/>
+                                </div>
+                                <div class="o_kanban_record_bottom">
+                                    <div class="oe_kanban_bottom_left">
+                                        <field name="activity_ids" widget="kanban_activity"/>
+                                    </div>
+                                    <div class="oe_kanban_bottom_right">
+                                        <field name="technician_id" widget="many2one_avatar_user"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <!-- CALENDAR VIEW -->
+    <record id="view_fsm_order_calendar" model="ir.ui.view">
+        <field name="name">sentinela.fsm.order.calendar</field>
+        <field name="model">sentinela.fsm.order</field>
+        <field name="arch" type="xml">
+            <calendar string="Agenda Técnica" date_start="scheduled_date" color="technician_id" mode="week">
+                <field name="partner_id"/>
+                <field name="description"/>
+            </calendar>
+        </field>
+    </record>
+
+    <!-- FORM VIEW -->
+    <record id="view_fsm_order_form" model="ir.ui.view">
+        <field name="name">sentinela.fsm.order.form</field>
+        <field name="model">sentinela.fsm.order</field>
+        <field name="arch" type="xml">
+            <form string="Orden de Servicio">
+                <header>
+                    <button name="action_open_map" string="Navegar (Maps)" type="object" class="btn-secondary" icon="fa-map-marker"/>
+                    <button name="action_assign" string="Programar / Asignar" type="object" class="btn-primary" invisible="stage != 'new'"/>
+                    <button name="action_start" string="Iniciar Trabajo" type="object" class="oe_highlight" invisible="stage != 'assigned'"/>
+                    <button name="%(action_fsm_order_pause_wizard)d" string="Pausar" type="action" class="btn-warning" invisible="stage != 'in_progress'"/>
+                    <button name="action_resume" string="Reanudar" type="object" class="oe_highlight" invisible="stage != 'paused'"/>
+                    <button name="action_finish" string="Finalizar" type="object" class="btn-success" invisible="stage != 'in_progress'"/>
+                    <field name="stage" widget="statusbar" options="{'clickable': '1'}" statusbar_visible="new,assigned,in_progress,paused,done"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <group invisible="stage != 'paused'" class="alert alert-warning" role="alert">
+                        <field name="pause_reason_id" options="{'no_open': True}"/>
+                        <field name="pause_notes"/>
+                    </group>
+                    <field name="is_fsm_manager" invisible="1"/>
+                    <group>
+                        <group string="Cliente">
+                            <field name="partner_id" readonly="not is_fsm_manager and stage != 'new'"/>
+                            <field name="phone"/>
+                            <field name="service_address_id" context="{'default_parent_id': partner_id}" readonly="not is_fsm_manager and stage != 'new'"/>
+                            <field name="subscription_id" readonly="not is_fsm_manager and stage != 'new'"/>
+                            <field name="description" placeholder="Detalle del reporte..."/>
+                        </group>
+                        <group string="Programación">
+                            <field name="service_type" readonly="not is_fsm_manager"/>
+                            <field name="technician_id" readonly="not is_fsm_manager"/>
+                            <field name="scheduled_date" readonly="not is_fsm_manager"/>
+                            <field name="priority" widget="priority" readonly="not is_fsm_manager"/>
+                            <field name="duration_expected" readonly="not is_fsm_manager"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Evidencias (Fotos)" name="evidence">
+                            <field name="evidence_ids" mode="kanban">
+                                <kanban>
+                                    <field name="id"/>
+                                    <field name="image"/>
+                                    <field name="name"/>
+                                    <field name="evidence_type"/>
+                                    <templates>
+                                        <t t-name="card">
+                                            <div class="row g-0">
+                                                <div class="col-4">
+                                                    <field name="image" widget="image" class="img-thumbnail" style="max-height: 80px;"/>
+                                                </div>
+                                                <div class="col-8 ps-2">
+                                                    <strong class="d-block"><field name="evidence_type"/></strong>
+                                                    <span class="text-muted"><field name="name"/></span>
+                                                </div>
+                                            </div>
+                                        </t>
+                                    </templates>
+                                </kanban>
+                                <form>
+                                    <group>
+                                        <field name="evidence_type"/>
+                                        <field name="name"/>
+                                        <field name="image" widget="image"/>
+                                    </group>
+                                </form>
+                            </field>
+                        </page>
+                        <page string="Checklist" name="checklist">
+                            <field name="checklist_ids">
+                                <list editable="bottom">
+                                    <field name="is_done"/>
+                                    <field name="name"/>
+                                    <field name="notes"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Resolución" invisible="stage in ['new', 'assigned']">
+                            <group>
+                                <group>
+                                    <field name="check_in_date" readonly="1"/>
+                                    <field name="check_out_date" readonly="1"/>
+                                    <field name="actual_start_time"/>
+                                    <field name="actual_end_time"/>
+                                    <field name="planned_duration"/>
+                                    <field name="actual_duration" readonly="1"/>
+                                    <field name="travel_time"/>
+                                    <field name="work_time" readonly="1"/>
+                                    <field name="equipment_cost" readonly="1"/>
+                                </group>
+                            </group>
+                            <field name="resolution_notes" placeholder="Describa el trabajo realizado..."/>
+                            <group>
+                                <field name="customer_signature" widget="signature"/>
+                                <field name="customer_rating" widget="int_rate" options="{'size': 5}"/>
+                                <field name="customer_feedback" placeholder="Comentarios del cliente..."/>
+                            </group>
+                        </page>
+                        <page string="Equipos y Materiales" name="equipment">
+                            <field name="equipment_ids">
+                                <list editable="bottom">
+                                    <field name="product_id"/>
+                                    <field name="quantity"/>
+                                    <field name="unit_price"/>
+                                    <field name="total_price" readonly="1"/>
+                                    <field name="notes"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Localización" name="location">
+                            <group>
+                                <group string="Ubicación Check-In">
+                                    <field name="check_in_lat"/>
+                                    <field name="check_in_lon"/>
+                                </group>
+                                <group string="Ubicación Check-Out">
+                                    <field name="check_out_lat"/>
+                                    <field name="check_out_lon"/>
+                                </group>
+                                <group string="Distancia">
+                                    <field name="distance_traveled"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Comunicación" name="communication">
+                            <header>
+                                <button name="%(action_fsm_chat_send_message_wizard)d" string="Enviar Mensaje" type="action" class="btn-primary"/>
+                            </header>
+                            <group>
+                                <field name="chat_message_ids" nolabel="1" colspan="2"/>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- ACTION -->
+    <record id="action_fsm_order" model="ir.actions.act_window">
+        <field name="name">Órdenes de Servicio</field>
+        <field name="res_model">sentinela.fsm.order</field>
+        <field name="view_mode">kanban,calendar,list,form</field>
+        <field name="help" type="html">
+          <p class="o_view_nocontent_smiling_face">
+            Crear la primera Orden de Servicio
+          </p>
+        </field>
+    </record>
+
+    <!-- SERVER ACTION FOR EMERGENCY ORDERS -->
+    <!--
+    <record id="server_action_create_emergency_order" model="ir.actions.server">
+        <field name="name">Crear Orden de Emergencia</field>
+        <field name="model_id" ref="model_sentinela_fsm_order"/>
+        <field name="binding_model_id" ref="model_sentinela_alarm_event"/>
+        <field name="state">code</field>
+        <field name="usage">client_action_multi</field>
+        <field name="type">ir.actions.server</field>
+        <field name="code">
+records.ensure_one()
+action = {
+    'type': 'ir.actions.act_window',
+    'name': 'Crear Orden de Emergencia',
+    'res_model': 'sentinela.fsm.order',
+    'view_mode': 'form',
+    'target': 'new',
+    'context': {
+        'default_alarm_event_id': active_id,
+        'default_partner_id': env['sentinela.alarm.event'].browse(active_id).partner_id.id,
+        'default_service_address_id': env['sentinela.alarm.event'].browse(active_id).partner_id.id,
+        'default_subscription_id': env['sentinela.alarm.event'].browse(active_id).subscription_id.id,
+        'default_description': f'Orden de emergencia para evento de alarma: {env["sentinela.alarm.event"].browse(active_id).name}',
+        'default_priority': '3',  # Crítica
+        'default_service_type': 'repair',
+    }
+}
+        </field>
+    </record>
+    -->
+
+    <!-- SERVER ACTION FOR ROUTE CREATION -->
+    <record id="server_action_create_route_from_orders" model="ir.actions.server">
+        <field name="name">Crear Ruta Optimizada</field>
+        <field name="model_id" ref="model_sentinela_fsm_order"/>
+        <field name="binding_model_id" ref="model_sentinela_fsm_order"/>
+        <field name="state">code</field>
+        <field name="type">ir.actions.server</field>
+        <field name="code">
+action = {
+    'type': 'ir.actions.act_window',
+    'name': 'Crear Ruta Optimizada',
+    'res_model': 'sentinela.fsm.create.route.wizard',
+    'view_mode': 'form',
+    'target': 'new',
+    'context': {
+        'default_order_ids': env.context.get('active_ids', []),
+    }
+}
+        </field>
+    </record>
+</odoo>

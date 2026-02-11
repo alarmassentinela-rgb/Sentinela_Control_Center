@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- DASHBOARD CLIENT ACTION -->
+    <record id="action_monitoring_dashboard_client" model="ir.actions.client">
+        <field name="name">Dashboard en Vivo</field>
+        <field name="tag">sentinela_monitoring.dashboard_client_action</field>
+    </record>
+
+    <!-- Menu Dashboard -->
+    <menuitem id="menu_monitoring_dashboard" 
+              name="Dashboard en Vivo" 
+              parent="menu_sentinela_monitoring_root" 
+              sequence="1" 
+              action="action_monitoring_dashboard_client"/>
+
+    <menuitem id="menu_alarm_event_pending"
+              name="Eventos Pendientes"
+              parent="menu_sentinela_monitoring_root"
+              action="action_alarm_event_pending"
+              sequence="15"/>
+
+    <menuitem id="menu_alarm_event_history"
+              name="Historial de Eventos"
+              parent="menu_sentinela_monitoring_root"
+              action="action_alarm_event_history"
+              sequence="20"/>
+</odoo>

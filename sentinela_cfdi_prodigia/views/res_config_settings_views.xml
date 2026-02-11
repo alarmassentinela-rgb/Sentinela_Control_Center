@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.sentinela_cfdi_prodigia</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="account.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//block[@id='invoicing_settings']" position="inside">
+                <div class="app_settings_block" data-string="Facturación Electrónica Prodigia" string="Facturación Electrónica Prodigia" data-key="sentinela_cfdi_prodigia">
+                    <h2>Prodigia CFDI</h2>
+                    <div class="row mt16 o_settings_container">
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_right_pane">
+                                <span class="o_form_label">Configuración de la API de Prodigia</span>
+                                <div class="text-muted">
+                                    Credenciales y URL para la conexión al PAC Prodigia.
+                                </div>
+                                <div class="content-group">
+                                    <div class="row mt16">
+                                        <label for="prodigia_api_url" class="col-lg-3 o_light_label">URL de la API</label>
+                                        <field name="prodigia_api_url" class="o_field_text" required="1"/>
+                                    </div>
+                                    <div class="row mt16">
+                                        <label for="prodigia_user" class="col-lg-3 o_light_label">Usuario</label>
+                                        <field name="prodigia_user" class="o_field_text" required="1"/>
+                                    </div>
+                                    <div class="row mt16">
+                                        <label for="prodigia_password" class="col-lg-3 o_light_label">Contraseña</label>
+                                        <field name="prodigia_password" class="o_field_text" password="True" required="1"/>
+                                    </div>
+                                    <div class="row mt16">
+                                        <label for="prodigia_rfc" class="col-lg-3 o_light_label">RFC Emisor</label>
+                                        <field name="prodigia_rfc" class="o_field_text" required="1"/>
+                                    </div>
+                                    <div class="row mt16">
+                                        <label for="prodigia_contract" class="col-lg-3 o_light_label">Contrato Prodigia</label>
+                                        <field name="prodigia_contract" class="o_field_text"/>
+                                    </div>
+                                    <div class="row mt16">
+                                        <label for="prodigia_client_code" class="col-lg-3 o_light_label">Código de Cliente</label>
+                                        <field name="prodigia_client_code" class="o_field_text"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>

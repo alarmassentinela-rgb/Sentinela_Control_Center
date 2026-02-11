@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Generic Subscription Service -->
+        <record id="product_product_subscription_generic" model="product.product">
+            <field name="name">Generic Subscription</field>
+            <field name="is_subscription">True</field>
+            <field name="type">service</field>
+            <field name="list_price">100.0</field>
+            <field name="default_recurring_interval">1</field>
+        </record>
+
+        <!-- Late Fee Product -->
+        <record id="product_product_late_fee" model="product.product">
+            <field name="name">Late Payment Fee</field>
+            <field name="type">service</field>
+            <field name="list_price">50.0</field>
+            <field name="description">Automatic charge for late payment.</field>
+        </record>
+
+        <!-- Reconnection Fee Product -->
+        <record id="product_product_reconnection_fee" model="product.product">
+            <field name="name">Reconnection Fee</field>
+            <field name="type">service</field>
+            <field name="list_price">150.0</field>
+            <field name="description">Charge for service reactivation.</field>
+        </record>
+        <record id="product_service_reconnection" model="product.product">
+            <field name="name">Costo de Reconexión</field>
+            <field name="list_price">200.00</field>
+            <field name="type">service</field>
+            <field name="is_subscription" eval="False"/>
+            <field name="service_type">maintenance</field>
+        </record>
+        <record id="product_service_transfer" model="product.product">
+            <field name="name">Costo por Cambio de Domicilio</field>
+            <field name="list_price">350.00</field>
+            <field name="type">service</field>
+            <field name="is_subscription" eval="False"/>
+            <field name="service_type">maintenance</field>
+        </record>
+    </data>
+</odoo>

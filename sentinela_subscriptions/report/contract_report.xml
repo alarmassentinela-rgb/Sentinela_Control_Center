@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="paperformat_subscription_contract" model="report.paperformat">
+        <field name="name">Subscription Contract Format</field>
+        <field name="default" eval="True"/>
+        <field name="format">Letter</field>
+        <field name="orientation">Portrait</field>
+        <field name="margin_top">5</field>
+        <field name="margin_bottom">10</field>
+        <field name="margin_left">15</field>
+        <field name="margin_right">15</field>
+        <field name="header_line" eval="False"/>
+        <field name="header_spacing">0</field>
+        <field name="dpi">90</field>
+    </record>
+
+    <record id="action_report_subscription_contract" model="ir.actions.report">
+        <field name="name">Contrato de Servicio</field>
+        <field name="model">sentinela.subscription</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">sentinela_subscriptions.report_subscription_contract</field>
+        <field name="report_file">sentinela_subscriptions.report_subscription_contract</field>
+        <field name="binding_model_id" ref="model_sentinela_subscription"/>
+        <field name="binding_type">report</field>
+        <field name="paperformat_id" ref="paperformat_subscription_contract"/>
+    </record>
+
+    <template id="report_subscription_contract">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="doc">
+                <t t-call="web.basic_layout">
+                    <div class="page">
+                        <style>
+                            .contract-body { 
+                                text-align: justify; 
+                                font-size: 13px; 
+                                line-height: 1.5;
+                                font-family: Arial, sans-serif;
+                                margin: 0 20px;
+                            }
+                            /* Logo en cada página */
+                            .contract-header {
+                                text-align: center;
+                                margin-bottom: 30px;
+                            }
+                            .page-break-before { 
+                                page-break-before: always; 
+                                display: block;
+                                margin-top: 20px;
+                            }
+                        </style>
+                        
+                        <!-- Logo manual para control total -->
+                        <div class="contract-header">
+                            <img t-if="res_company.logo" t-att-src="image_data_uri(res_company.logo)" style="max-height: 80px;"/>
+                        </div>
+
+                        <div class="contract-body">
+                            <t t-out="doc.contract_content"/>
+                        </div>
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>

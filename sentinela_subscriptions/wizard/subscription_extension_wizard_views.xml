@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_subscription_extension_wizard_form" model="ir.ui.view">
+        <field name="name">sentinela.subscription.extension.wizard.form</field>
+        <field name="model">sentinela.subscription.extension.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Otorgar Prórroga de Servicio">
+                <group>
+                    <field name="subscription_id" invisible="1"/>
+                    <field name="days"/>
+                    <field name="reason" placeholder="Ej. Cliente promete pago para el viernes..."/>
+                </group>
+                <div class="alert alert-info" role="alert">
+                    El servicio se reactivará temporalmente por el número de días indicado. 
+                    Si no se registra el pago antes de que termine el plazo, el sistema suspenderá el servicio automáticamente.
+                    <strong>La fecha de facturación NO cambiará.</strong>
+                </div>
+                <footer>
+                    <button name="action_apply_extension" string="Aplicar Prórroga" type="object" class="btn-primary"/>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_subscription_extension_wizard" model="ir.actions.act_window">
+        <field name="name">Otorgar Prórroga</field>
+        <field name="res_model">sentinela.subscription.extension.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>

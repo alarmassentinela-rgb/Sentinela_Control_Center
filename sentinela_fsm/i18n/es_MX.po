@@ -1,0 +1,54 @@
+# Translation for Sentinela FSM
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-01-21 12:00+0000\n"
+"PO-Revision-Date: 2026-01-21 12:00+0000\n"
+"Last-Translator: Gemini\n"
+"Language: es_MX\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+
+#. module: sales_team
+#: model:ir.module.category,name:sales_team.module_category_sales
+msgid "Sales"
+msgstr "Ventas"
+
+#. module: stock
+#: model:ir.module.category,name:stock.module_category_inventory
+msgid "Inventory"
+msgstr "Inventario"
+
+#. module: account
+#: model:ir.module.category,name:account.module_category_accounting
+msgid "Accounting"
+msgstr "Contabilidad"
+
+#. module: project
+#: model:ir.module.category,name:project.module_category_project_management
+msgid "Productivity"
+msgstr "Productividad"
+
+#. module: base
+#: model:ir.module.category,name:base.module_category_administration
+msgid "Administration"
+msgstr "Administración"
+
+#. module: base
+#: model:ir.module.category,name:base.module_category_technical
+msgid "Technical"
+msgstr "Técnico"
+
+#. module: base
+#: model:ir.module.category,name:base.module_category_extra
+msgid "Extra Rights"
+msgstr "Derechos Adicionales"
+
+#. module: base
+#: model:ir.module.category,name:base.module_category_user_type
+msgid "User type"
+msgstr "Tipo de usuario"
+

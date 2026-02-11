@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Tareas Generales -->
+        <record id="task_check_cabling" model="sentinela.fsm.task.template">
+            <field name="name">Verificar estado del cableado</field>
+            <field name="service_type">all</field>
+            <field name="sequence">10</field>
+        </record>
+
+        <!-- Tareas Instalación -->
+        <record id="task_install_mount" model="sentinela.fsm.task.template">
+            <field name="name">Instalar y fijar antena/mástil</field>
+            <field name="service_type">install</field>
+            <field name="sequence">20</field>
+        </record>
+        <record id="task_install_signal" model="sentinela.fsm.task.template">
+            <field name="name">Alineación y niveles de señal óptimos</field>
+            <field name="service_type">install</field>
+            <field name="sequence">30</field>
+        </record>
+        <record id="task_install_router" model="sentinela.fsm.task.template">
+            <field name="name">Configurar Router (PPPoE)</field>
+            <field name="service_type">install</field>
+            <field name="sequence">40</field>
+        </record>
+
+        <!-- Tareas Reparación -->
+        <record id="task_repair_diagnosis" model="sentinela.fsm.task.template">
+            <field name="name">Diagnóstico de falla</field>
+            <field name="service_type">repair</field>
+            <field name="sequence">20</field>
+        </record>
+        <record id="task_repair_speedtest" model="sentinela.fsm.task.template">
+            <field name="name">Prueba de velocidad (Speedtest)</field>
+            <field name="service_type">repair</field>
+            <field name="sequence">50</field>
+        </record>
+
+        <!-- Tareas Traslado -->
+        <record id="task_transfer_dismount" model="sentinela.fsm.task.template">
+            <field name="name">Desmontar equipo dirección anterior</field>
+            <field name="service_type">transfer</field>
+            <field name="sequence">10</field>
+        </record>
+
+        <!-- Razones de pausa comunes -->
+        <record id="pause_reason_waiting_parts" model="sentinela.fsm.pause.reason">
+            <field name="name">Esperando repuestos</field>
+            <field name="description">El servicio está en pausa esperando la llegada de repuestos o materiales</field>
+            <field name="is_quote_reason">True</field>
+            <field name="sequence">10</field>
+        </record>
+        <record id="pause_reason_customer_not_home" model="sentinela.fsm.pause.reason">
+            <field name="name">Cliente no se encontraba</field>
+            <field name="description">El cliente no se encontraba en el lugar para permitir el acceso al servicio</field>
+            <field name="is_quote_reason">False</field>
+            <field name="sequence">20</field>
+        </record>
+        <record id="pause_reason_weather" model="sentinela.fsm.pause.reason">
+            <field name="name">Condiciones climáticas adversas</field>
+            <field name="description">El servicio está en pausa debido a condiciones climáticas que impiden su realización segura</field>
+            <field name="is_quote_reason">False</field>
+            <field name="sequence">30</field>
+        </record>
+    </data>
+</odoo>

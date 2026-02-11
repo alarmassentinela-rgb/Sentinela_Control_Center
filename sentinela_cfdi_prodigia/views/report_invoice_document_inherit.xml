@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="report_invoice_document_cfdi_inherit" inherit_id="account.report_invoice_document">
+        <xpath expr="//div[@id='informations']" position="after">
+            <div class="row" name="cfdi_data">
+                <div class="col-12">
+                    <h5>Información Fiscal (CFDI)</h5>
+                    <div class="row">
+                        <div class="col-8">
+                            <p>
+                                <strong>Folio Fiscal (UUID):</strong>
+                                <span t-field="o.cfdi_uuid"/>
+                            </p>
+                            <p>
+                                <strong>No. de Serie del Certificado del SAT:</strong>
+                                <span t-field="o.l10n_mx_edi_cfdi_certificate_serial_number"/>
+                            </p>
+                            <p>
+                                <strong>Fecha y Hora de Timbrado:</strong>
+                                <span t-field="o.l10n_mx_edi_cfdi_timestamp"/>
+                            </p>
+                            <p>
+                                <strong>Sello Digital del CFDI:</strong>
+                                <span t-field="o.l10n_mx_edi_cfdi_seal" style="word-break: break-all;"/>
+                            </p>
+                            <p>
+                                <strong>Sello Digital del SAT:</strong>
+                                <span t-field="o.l10n_mx_edi_cfdi_sat_seal" style="word-break: break-all;"/>
+                            </p>
+                            <p>
+                                <strong>Cadena Original del Timbre:</strong>
+                                <span t-field="o.l10n_mx_edi_cfdi_original_chain" style="word-break: break-all;"/>
+                            </p>
+                        </div>
+                        <div class="col-4 text-center">
+                            <img t-if="o.l10n_mx_edi_cfdi_qr" t-att-src="'data:image/png;base64,%s' % to_text(o.l10n_mx_edi_cfdi_qr)" style="max-width: 200px;"/>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </xpath>
+    </template>
+</odoo>

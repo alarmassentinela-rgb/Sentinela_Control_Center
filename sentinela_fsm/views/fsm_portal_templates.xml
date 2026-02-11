@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Stable FSM Portal Templates (No XPaths to avoid version conflicts) -->
+
+    <!-- List View -->
+    <template id="portal_my_services" name="Mis Solicitudes">
+        <t t-call="portal.portal_layout">
+            <div class="container mt-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3>Mis Solicitudes de Soporte</h3>
+                    <a href="/my/services/new" class="btn btn-primary">Levantar Nuevo Ticket</a>
+                </div>
+                <t t-if="not fsm_orders">
+                    <div class="alert alert-info shadow-sm">No tienes tickets registrados.</div>
+                </t>
+                <div t-if="fsm_orders" class="table-responsive bg-white shadow-sm rounded">
+                    <table class="table table-hover mb-0">
+                        <thead class="bg-light">
+                            <tr>
+                                <th>Folio</th>
+                                <th>Fecha</th>
+                                <th>Problema</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="fsm_orders" t-as="ticket">
+                                <td><t t-esc="ticket.name"/></td>
+                                <td><span t-field="ticket.create_date" t-options='{"widget": "date"}'/></td>
+                                <td><t t-out="ticket.description"/></td>
+                                <td>
+                                    <span t-if="ticket.stage == 'new'" class="badge rounded-pill bg-info text-dark">Recibido</span>
+                                    <span t-if="ticket.stage == 'assigned'" class="badge rounded-pill bg-primary">Asignado</span>
+                                    <span t-if="ticket.stage == 'done'" class="badge rounded-pill bg-success">Resuelto</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <!-- Form View -->
+    <template id="portal_create_service" name="Nuevo Ticket">
+        <t t-call="portal.portal_layout">
+            <div class="col-md-8 offset-md-2 mt-4">
+                <div class="card shadow border-0">
+                    <div class="card-header bg-primary text-white py-3">
+                        <h5 class="mb-0"><i class="fa fa-ticket me-2"/> Reportar una Falla Técnica</h5>
+                    </div>
+                    <div class="card-body p-4">
+                        <form action="/my/services/submit" method="post">
+                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                            
+                            <div class="mb-3" t-if="subscriptions">
+                                <label class="form-label fw-bold">Contrato Afectado (Opcional):</label>
+                                <select name="subscription_id" class="form-select">
+                                    <option value="">-- Seleccionar Servicio --</option>
+                                    <t t-foreach="subscriptions" t-as="sub">
+                                        <option t-att-value="sub.id"><t t-esc="sub.name"/> - <t t-esc="sub.product_id.name"/></option>
+                                    </t>
+                                </select>
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="form-label fw-bold">Describa el problema:</label>
+                                <textarea class="form-control" name="description" rows="5" required="required" placeholder="Ej: No tengo internet..."></textarea>
+                            </div>
+                            <div class="mb-4 form-check bg-light p-3 rounded border">
+                                <input type="checkbox" class="form-check-input ms-0" name="urgent" id="urgent"/>
+                                <label class="form-check-label text-danger fw-bold ms-2" for="urgent">¡URGENTE! Sitio sin servicio</label>
+                            </div>
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary btn-lg">Enviar Reporte</button>
+                                <a href="/my/services" class="btn btn-link mt-2 text-muted">Cancelar y volver</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </t>
+    </template>
+</odoo>

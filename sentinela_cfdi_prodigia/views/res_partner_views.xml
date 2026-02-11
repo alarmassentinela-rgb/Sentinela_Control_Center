@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_partner_form_mexico" model="ir.ui.view">
+        <field name="name">res.partner.form.mexico</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <page name="sales_purchases" position="after">
+                <page string="Facturación México" name="mexico_tax">
+                    <group>
+                        <group string="Datos CFDI 4.0">
+                            <field name="l10n_mx_edi_fiscal_regime"/>
+                            <field name="l10n_mx_edi_usage"/>
+                        </group>
+                    </group>
+                </page>
+            </page>
+        </field>
+    </record>
+</odoo>

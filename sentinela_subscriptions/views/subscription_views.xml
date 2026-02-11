@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- SEARCH VIEW -->
+    <record id="view_sentinela_subscription_search" model="ir.ui.view">
+        <field name="name">sentinela.subscription.search</field>
+        <field name="model">sentinela.subscription</field>
+        <field name="arch" type="xml">
+            <search string="Buscar Suscripciones">
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="ip_address"/>
+                <filter string="Contratos Activos" name="active" domain="[('state', '=', 'active')]"/>
+                <filter string="Suspendido (Técnico)" name="suspended" domain="[('technical_state', '=', 'suspended')]"/>
+                <filter string="Vence Hoy" name="due_today" domain="[('next_billing_date', '=', context_today().strftime('%Y-%m-%d'))]"/>
+                <group expand="0" string="Agrupar por">
+                    <filter string="Tipo de Servicio" name="group_service_type" context="{'group_by': 'service_type'}"/>
+                    <filter string="Estado" name="group_state" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- LIST VIEW -->
+    <record id="view_sentinela_subscription_tree" model="ir.ui.view">
+        <field name="name">sentinela.subscription.tree</field>
+        <field name="model">sentinela.subscription</field>
+        <field name="arch" type="xml">
+            <list string="Suscripciones" decoration-danger="technical_state=='suspended'" decoration-info="state=='draft'" decoration-muted="state=='cancelled'">
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="service_address_id" optional="show"/>
+                <field name="product_id"/>
+                <field name="service_type"/>
+                <field name="price_unit" sum="Total Monthly Revenue"/>
+                <field name="next_billing_date"/>
+                <field name="state" widget="badge" decoration-success="state == 'active'" decoration-info="state == 'draft'"/>
+                <field name="technical_state" widget="badge" decoration-success="technical_state == 'active'" decoration-danger="technical_state == 'suspended'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- FORM VIEW -->
+    <record id="view_sentinela_subscription_form" model="ir.ui.view">
+        <field name="name">sentinela.subscription.form</field>
+        <field name="model">sentinela.subscription</field>
+        <field name="arch" type="xml">
+            <form string="Suscripción">
+                <header>
+                    <button name="action_generate_contract" string="Generar Contrato" type="object" class="btn-primary" invisible="state == 'draft'"/>
+                    <button name="action_activate" string="Activar" type="object" class="oe_highlight" invisible="state != 'draft'"/>
+                    <button name="action_suspend" string="Suspender Servicio" type="object" class="btn-warning" invisible="technical_state != 'active'"/>
+                    <button name="action_activate" string="Reactivar Servicio" type="object" class="btn-success" invisible="technical_state == 'active'"/>
+                    <button name="%(sentinela_subscriptions.action_subscription_extension_wizard)d" string="Prórroga" type="action" class="btn-info" invisible="service_type != 'internet' or extension_end_date"/>
+                    <button name="action_request_transfer" string="Cambio de Domicilio" type="object"/>
+                    <button name="action_cancel" string="Cancelar Contrato" type="object" class="btn-danger" invisible="state == 'cancelled'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,active,closed"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_sale_orders" type="object" class="oe_stat_button" icon="fa-usd">
+                            <field name="sale_order_ids" widget="statinfo" string="Cotizaciones"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group string="Información del Cliente">
+                            <field name="partner_id"/>
+                                    <field name="service_address_id" 
+                                           domain="[('parent_id', '=', partner_id)]" 
+                                           context="{'default_parent_id': partner_id, 'default_type': 'other', 'show_only_name': True}"
+                                           options="{'no_create': True}"/>
+                            
+                            <!-- Address Detail Preview -->
+                            <div class="o_address_format" colspan="2" invisible="not service_address_id">
+                                <field name="address_street" placeholder="Calle..."/>
+                                <field name="address_street2" placeholder="Colonia..."/>
+                                <div class="o_row">
+                                    <field name="address_city" placeholder="Ciudad"/>
+                                    <field name="address_state_id" placeholder="Estado"/>
+                                    <field name="address_zip" placeholder="CP"/>
+                                </div>
+                            </div>
+
+                            <field name="invoice_grouping_method" invisible="1"/>
+                        </group>
+                        <group string="Plan de Servicio">
+                            <label for="service_type"/>
+                            <div class="o_row">
+                                <field name="service_type" readonly="not is_new_record and edit_plan_locked"/>
+                                <button name="toggle_plan_lock" type="object" icon="fa-lock" 
+                                    groups="sentinela_subscriptions.group_subscription_manager" invisible="is_new_record or not edit_plan_locked" 
+                                    help="Desbloquear edición"/>
+                                <button name="toggle_plan_lock" type="object" icon="fa-unlock" 
+                                    groups="sentinela_subscriptions.group_subscription_manager" invisible="is_new_record or edit_plan_locked" 
+                                    class="text-danger" help="Bloquear edición"/>
+                            </div>
+                            <field name="edit_plan_locked" invisible="1"/>
+                            <field name="is_new_record" invisible="1"/>
+                            <field name="product_id" domain="[('is_subscription', '=', True), ('service_type', '=', service_type)]" 
+                                readonly="not is_new_record and edit_plan_locked"/>
+                            <field name="price_unit"/>
+                            <field name="price_total" decoration-bf="1"/>
+                            <field name="recurring_interval"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Detalles Técnicos Principales">
+                            <!-- Si es Internet -->
+                            <field name="ip_address" invisible="service_type != 'internet'"/>
+                            
+                            <field name="equipment_ownership"/>
+                            <field name="equipment_replacement_cost" invisible="equipment_ownership == 'customer'"/>
+                            <field name="plan_after_leasing_id" invisible="equipment_ownership != 'leasing'" required="equipment_ownership == 'leasing'"/>
+                            
+                            <label for="technical_state" string="Estado Técnico"/>
+                            <div class="o_row">
+                                <field name="technical_state" readonly="1"/>
+                                <span class="text-muted" invisible="not technical_state_date"> desde </span>
+                                <field name="technical_state_date" readonly="1" invisible="not technical_state_date"/>
+                            </div>
+                            <field name="extension_end_date" invisible="not extension_end_date" decoration-danger="1"/>
+                        </group>
+                        <group string="Contrato y Fechas">
+                            <field name="is_contract_locked" invisible="1"/>
+                            <field name="start_date" readonly="is_contract_locked"/>
+                            <field name="next_billing_date" readonly="is_contract_locked"/>
+                            <field name="is_forced_contract" readonly="is_contract_locked" force_save="1"/>
+                            <label for="commitment_period" string="Plazo Forzoso" invisible="not is_forced_contract"/>
+                            <div class="o_row" invisible="not is_forced_contract">
+                                <field name="commitment_period" readonly="is_contract_locked"/> Meses
+                            </div>
+                            <field name="commitment_end_date" invisible="not is_forced_contract"/>
+                            <field name="penalty_amount" invisible="not is_forced_contract or equipment_ownership == 'customer'" readonly="is_contract_locked" placeholder="0.00"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Facturas" name="invoices">
+                            <field name="invoice_ids" readonly="1"/>
+                        </page>
+                        <page string="Ubicación Técnica" name="location">
+                            <group>
+                                <group string="Coordenadas GPS">
+                                    <field name="latitude" placeholder="e.g. 25.8694"/>
+                                    <field name="longitude" placeholder="e.g. -97.5027"/>
+                                    <button name="action_open_google_maps" string="Ver en Google Maps" type="object" icon="fa-map-marker" class="btn-primary"/>
+                                </group>
+                                <group string="Referencias de Instalación">
+                                    <field name="location_notes" placeholder="Notas detalladas de cómo llegar..."/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Notas Internas" name="notes">
+                            <group>
+                                <field name="description" placeholder="Notas internas..."/>
+                            </group>
+                        </page>
+                        <page string="Información Técnica" name="technical_info">
+                            <!-- Sección para Internet WISP -->
+                            <group string="Detalles de Conexión (WISP)" invisible="service_type != 'internet'">
+                                <group>
+                                    <field name="router_id" readonly="not is_new_record and edit_pppoe_locked"/>
+                                    <field name="pppoe_user" readonly="not is_new_record and edit_pppoe_locked"/>
+                                    <field name="pppoe_password" password="True"/>
+                                    <button name="toggle_pppoe_lock" type="object" icon="fa-lock" 
+                                        groups="sentinela_subscriptions.group_subscription_manager" invisible="is_new_record or not edit_pppoe_locked"/>
+                                    <button name="toggle_pppoe_lock" type="object" icon="fa-unlock" 
+                                        groups="sentinela_subscriptions.group_subscription_manager" invisible="is_new_record or edit_pppoe_locked" class="text-danger"/>
+                                </group>
+                                <group>
+                                    <field name="ip_address" readonly="not is_new_record and edit_pppoe_locked"/>
+                                    <button name="action_monitor_traffic" type="object" string="Ver Tráfico en Vivo" 
+                                        icon="fa-area-chart" class="btn-info"/>
+                                </group>
+                            </group>
+
+                            <!-- Sección para Alarmas / Equipos -->
+                            <group string="Detalles del Equipo" invisible="service_type not in ['alarm', 'gps']">
+                                <group>
+                                    <field name="equipment_brand"/>
+                                    <field name="equipment_model"/>
+                                    <field name="monitoring_account_number"/>
+                                </group>
+                                <group>
+                                    <field name="equipment_serial"/>
+                                    <field name="serial_number_id" string="Lote/Serie de Inventario"/>
+                                </group>
+                            </group>
+
+                            <group string="Localización y Coordenadas">
+                                <group>
+                                    <field name="latitude"/>
+                                    <field name="longitude"/>
+                                    <button name="action_open_google_maps" string="Ver en Mapa" type="object" icon="fa-map-marker" class="btn-secondary"/>
+                                </group>
+                                <group>
+                                    <field name="location_notes"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Documentos / Contratos" name="documents">
+                            <group invisible="not last_contract_pdf">
+                                <field name="last_contract_pdf" widget="pdf_viewer" nolabel="1"/>
+                                <field name="last_contract_name" invisible="1"/>
+                            </group>
+                            <group>
+                                <label for="contract_content" string="Contenido del Contrato"/>
+                                <div>
+                                    <button name="action_reset_contract_template" string="Recargar Plantilla Original" type="object" class="btn-link btn-sm" icon="fa-refresh" confirm="¿Seguro que desea sobrescribir el contenido actual con la plantilla original?"/>
+                                    <field name="contract_content" placeholder="Aquí puedes personalizar el contrato antes de generarlo..."/>
+                                </div>
+                            </group>
+                            <field name="sign_document_ids">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="state"/>
+                                    <field name="create_date"/>
+                                    <button name="action_send_email" string="Enviar Correo" type="object" icon="fa-envelope"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- ACTION -->
+    <record id="action_sentinela_subscription" model="ir.actions.act_window">
+        <field name="name">Suscripciones</field>
+        <field name="res_model">sentinela.subscription</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_active': 1}</field>
+        <field name="help" type="html">
+          <p class="o_view_nocontent_smiling_face">
+            Crea tu primer contrato de suscripción
+          </p>
+        </field>
+    </record>
+</odoo>

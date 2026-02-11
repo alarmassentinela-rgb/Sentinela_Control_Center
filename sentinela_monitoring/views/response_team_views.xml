@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- FORM VIEW -->
+    <record id="view_response_team_form" model="ir.ui.view">
+        <field name="name">sentinela.response.team.form</field>
+        <field name="model">sentinela.response.team</field>
+        <field name="arch" type="xml">
+            <form string="Equipo de Respuesta">
+                <header>
+                    <button name="action_go_available" string="Disponible" type="object" class="btn-success" invisible="status == 'available'"/>
+                    <button name="action_go_busy" string="Ocupado" type="object" class="btn-warning" invisible="status == 'busy'"/>
+                    <button name="action_go_offline" string="Fuera de Servicio" type="object" class="btn-default" invisible="status == 'offline'"/>
+                    <button name="action_on_call" string="De Guardia" type="object" class="btn-info" invisible="status == 'on_call'"/>
+                    <field name="status" widget="statusbar" statusbar_visible="available,busy,offline,on_call"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <group>
+                        <group string="Información del Equipo">
+                            <field name="team_leader_id"/>
+                            <field name="capacity"/>
+                            <field name="average_response_time"/>
+                        </group>
+                        <group string="Estado">
+                            <field name="status"/>
+                            <field name="active_incidents"/>
+                        </group>
+                    </group>
+                    <group string="Miembros del Equipo">
+                        <field name="member_ids" widget="many2many_tags" options="{'color_field': 'color'}"/>
+                    </group>
+                    <group string="Áreas de Respuesta">
+                        <field name="response_area_ids" widget="many2many_tags"/>
+                    </group>
+                    <group string="Ubicación Actual">
+                        <field name="current_location_lat"/>
+                        <field name="current_location_lon"/>
+                        <field name="last_update"/>
+                    </group>
+                    <group string="Descripción">
+                        <field name="description" nolabel="1"/>
+                    </group>
+                    <notebook>
+                        <page string="Eventos Asignados">
+                            <field name="alarm_event_ids">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="start_date"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- TREE/LIST VIEW -->
+    <record id="view_response_team_list" model="ir.ui.view">
+        <field name="name">sentinela.response.team.list</field>
+        <field name="model">sentinela.response.team</field>
+        <field name="arch" type="xml">
+            <list string="Equipos de Respuesta" decoration-success="status=='available'" decoration-warning="status=='busy'" decoration-muted="status=='offline'" decoration-info="status=='on_call'">
+                <field name="name"/>
+                <field name="team_leader_id"/>
+                <field name="capacity"/>
+                <field name="status"/>
+                <field name="active_incidents"/>
+                <field name="average_response_time"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- SEARCH VIEW -->
+    <record id="view_response_team_search" model="ir.ui.view">
+        <field name="name">sentinela.response.team.search</field>
+        <field name="model">sentinela.response.team</field>
+        <field name="arch" type="xml">
+            <search string="Buscar Equipos">
+                <field name="name"/>
+                <field name="team_leader_id"/>
+                <field name="status"/>
+                <field name="member_ids"/>
+                <separator/>
+                <filter name="available" string="Disponibles" domain="[('status', '=', 'available')]"/>
+                <filter name="busy" string="Ocupados" domain="[('status', '=', 'busy')]"/>
+                <filter name="on_call" string="De Guardia" domain="[('status', '=', 'on_call')]"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- ACTION -->
+    <record id="action_response_team" model="ir.actions.act_window">
+        <field name="name">Equipos de Respuesta</field>
+        <field name="res_model">sentinela.response.team</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>

@@ -1,0 +1,25 @@
+{
+    'name': 'Sentinela CFDI Prodigia',
+    'summary': 'Integración de Facturación Electrónica CFDI 4.0 con API de Prodigia',
+    'version': '18.0.1.1.0',
+    'category': 'Accounting/Localizations/EDI',
+    'author': 'Sentinela IT',
+    'license': 'LGPL-3',
+    'depends': [
+        'account',
+        'l10n_mx',
+        'base_setup',
+    ],
+    'data': [
+        'security/ir.model.access.csv',
+        'views/res_config_settings_views.xml',
+        'views/account_move_views.xml',
+        'views/res_partner_views.xml',
+        'views/product_views.xml',
+        'views/res_company_views.xml',
+        'views/report_invoice_document_inherit.xml',
+    ],
+    'installable': True,
+    'application': True,
+    'auto_install': False,
+}

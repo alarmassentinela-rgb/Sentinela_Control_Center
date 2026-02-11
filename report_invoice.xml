@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="report_invoice_document_cfdi" inherit_id="account.report_invoice_document">
+        <!-- Add CFDI QR Code and Fiscal Data at the end of the report -->
+        <xpath expr="//div[@id='qrcode']" position="after">
+            <div class="row mt-4" t-if="o.cfdi_uuid">
+                <div class="col-8">
+                    <h5>Datos Fiscales del CFDI</h5>
+                    <p>
+                        <strong>UUID (Folio Fiscal):</strong> <span t-field="o.cfdi_uuid"/><br/>
+                        <!-- We will add more fiscal data here later -->
+                    </p>
+                </div>
+                <div class="col-4 text-center">
+                    <img t-if="o.cfdi_qr_code" t-att-src="'data:image/png;base64,%s' % to_text(o.cfdi_qr_code)" style="width: 140px; height: 140px;"/>
+                    <p t-else="">QR Code no disponible</p>
+                </div>
+            </div>
+        </xpath>
+    </template>
+</odoo>

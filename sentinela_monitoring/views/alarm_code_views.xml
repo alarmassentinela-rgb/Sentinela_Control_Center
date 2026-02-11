@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Alarm Code Views -->
+    <record id="view_sentinela_alarm_code_list" model="ir.ui.view">
+        <field name="name">sentinela.alarm.code.list</field>
+        <field name="model">sentinela.alarm.code</field>
+        <field name="arch" type="xml">
+            <list string="Códigos de Alarma">
+                <field name="code"/>
+                <field name="name"/>
+                <field name="event_category"/>
+                <field name="priority_id" widget="badge"/>
+                <field name="requires_attention"/>
+                <field name="play_sound"/>
+                <field name="protocol_type"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_sentinela_alarm_code_form" model="ir.ui.view">
+        <field name="name">sentinela.alarm.code.form</field>
+        <field name="model">sentinela.alarm.code</field>
+        <field name="arch" type="xml">
+            <form string="Configuración de Código de Alarma">
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="code" placeholder="Ej. 130"/>
+                        </h1>
+                        <h3>
+                            <field name="name" placeholder="Ej. Robo Interior"/>
+                        </h3>
+                    </div>
+                    <group>
+                        <group string="Clasificación">
+                            <field name="event_category"/>
+                            <field name="priority_id"/>
+                            <field name="protocol_type"/>
+                        </group>
+                        <group string="Inteligencia de Central">
+                            <field name="requires_attention"/>
+                            <field name="play_sound"/>
+                            <field name="color_hex" widget="color"/>
+                            <field name="is_billable"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_sentinela_alarm_code_search" model="ir.ui.view">
+        <field name="name">sentinela.alarm.code.search</field>
+        <field name="model">sentinela.alarm.code</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="code"/>
+                <field name="name"/>
+                <filter string="Alarmas" name="category_alarm" domain="[('event_category', '=', 'alarm')]"/>
+                <group expand="0" string="Agrupar Por">
+                    <filter string="Protocolo" name="group_protocol" context="{'group_by': 'protocol_type'}"/>
+                    <filter string="Categoría" name="group_category" context="{'group_by': 'event_category'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_sentinela_alarm_code" model="ir.actions.act_window">
+        <field name="name">Códigos de Alarma (Contact ID)</field>
+        <field name="res_model">sentinela.alarm.code</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>

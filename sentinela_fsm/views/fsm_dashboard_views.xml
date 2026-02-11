@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- FORM VIEW -->
+    <record id="view_fsm_dashboard_form" model="ir.ui.view">
+        <field name="name">sentinela.fsm.dashboard.form</field>
+        <field name="model">sentinela.fsm.dashboard</field>
+        <field name="arch" type="xml">
+            <form string="Dashboard de Desempeño FSM">
+                <header>
+                    <button name="action_refresh" string="Actualizar Métricas" type="object" class="btn-primary"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <group>
+                        <group string="Configuración del Periodo">
+                            <field name="technician_id"/>
+                            <field name="period_start"/>
+                            <field name="period_end"/>
+                        </group>
+                        <group string="Métricas Principales">
+                            <field name="total_orders"/>
+                            <field name="completed_orders"/>
+                            <field name="completion_rate"/>
+                            <field name="avg_resolution_time"/>
+                            <field name="avg_customer_rating" widget="float_time"/>
+                        </group>
+                    </group>
+                    <group string="Métricas de Eficiencia">
+                        <group>
+                            <field name="on_time_completion_rate"/>
+                        </group>
+                        <group>
+                            <field name="avg_travel_time" widget="float_time"/>
+                            <field name="avg_work_time" widget="float_time"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- TREE/LIST VIEW -->
+    <record id="view_fsm_dashboard_tree" model="ir.ui.view">
+        <field name="name">sentinela.fsm.dashboard.tree</field>
+        <field name="model">sentinela.fsm.dashboard</field>
+        <field name="arch" type="xml">
+            <list string="Dashboards de Desempeño">
+                <field name="name"/>
+                <field name="technician_id"/>
+                <field name="period_start"/>
+                <field name="period_end"/>
+                <field name="total_orders"/>
+                <field name="completed_orders"/>
+                <field name="completion_rate"/>
+                <field name="avg_customer_rating"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- GRAPH VIEW -->
+    <record id="view_fsm_dashboard_graph" model="ir.ui.view">
+        <field name="name">sentinela.fsm.dashboard.graph</field>
+        <field name="model">sentinela.fsm.dashboard</field>
+        <field name="arch" type="xml">
+            <graph string="Gráfica de Desempeño">
+                <field name="name"/>
+                <field name="completion_rate" type="measure"/>
+            </graph>
+        </field>
+    </record>
+
+    <!-- PIVOT VIEW -->
+    <record id="view_fsm_dashboard_pivot" model="ir.ui.view">
+        <field name="name">sentinela.fsm.dashboard.pivot</field>
+        <field name="model">sentinela.fsm.dashboard</field>
+        <field name="arch" type="xml">
+            <pivot string="Análisis de Desempeño">
+                <field name="technician_id" type="row"/>
+                <field name="completion_rate" type="measure"/>
+                <field name="avg_customer_rating" type="measure"/>
+                <field name="avg_resolution_time" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+
+    <!-- SEARCH VIEW -->
+    <record id="view_fsm_dashboard_search" model="ir.ui.view">
+        <field name="name">sentinela.fsm.dashboard.search</field>
+        <field name="model">sentinela.fsm.dashboard</field>
+        <field name="arch" type="xml">
+            <search string="Buscar Dashboards">
+                <field name="name"/>
+                <field name="technician_id"/>
+                <field name="period_start"/>
+                <field name="period_end"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- ACTION -->
+    <record id="action_fsm_dashboard" model="ir.actions.act_window">
+        <field name="name">Dashboards de Desempeño</field>
+        <field name="res_model">sentinela.fsm.dashboard</field>
+        <field name="view_mode">pivot,graph,list,form</field>
+    </record>
+</odoo>

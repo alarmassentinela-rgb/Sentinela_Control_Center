@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="sentinela_monitoring.MonitoringDashboard" owl="1">
+        <div class="o_monitoring_dashboard h-100 d-flex flex-column">
+            <!-- HEADER -->
+            <div class="o_monitoring_header p-3 bg-white border-bottom d-flex justify-content-between align-items-center shadow-sm" style="z-index: 10;">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="bg-primary text-white rounded p-2">
+                        <i class="fa fa-shield fa-lg"></i>
+                    </div>
+                    <div>
+                        <h4 class="m-0 fw-bold text-dark">SENTINELA COMMAND CENTER</h4>
+                        <small class="text-muted">Monitoreo en Tiempo Real</small>
+                    </div>
+                    <button class="btn btn-sm btn-light border ms-3" t-on-click="loadActiveEvents" title="Actualizar">
+                        <i class="fa fa-refresh"></i>
+                    </button>
+                    <button t-if="state.isSounding" class="btn btn-sm btn-danger ms-2" t-on-click="stopAllSounds" title="Silenciar Alarma">
+                        <i class="fa fa-volume-off"></i> Silenciar
+                    </button>
+                    <button class="btn btn-sm btn-outline-info ms-2" t-on-click="unlockAudio" title="Activar Sonido de Alarma">
+                        <i t-att-class="'fa ' + (state.audioUnlocked ? 'fa-volume-up text-success' : 'fa-volume-off text-danger')"></i>
+                        <span class="ms-1" t-esc="state.audioUnlocked ? 'Audio Activo' : 'Activar Audio'"/>
+                    </button>
+                </div>
+                <!-- Reproductor Oculto -->
+                <audio id="siren_player" src="/sentinela_monitoring/static/src/audio/siren_high.mp3" preload="auto"></audio>
+                <div class="d-flex gap-4 align-items-center">
+                    <div class="text-end">
+                        <div t-if="state.receiverStatus === 'online'" class="text-success fw-bold">
+                            <i class="fa fa-circle me-1 fa-beat"></i>ONLINE
+                        </div>
+                        <div t-else="" class="text-danger fw-bold">
+                            <i class="fa fa-exclamation-triangle me-1"></i>OFFLINE
+                        </div>
+                        <small class="text-muted" style="font-size: 0.75rem;">
+                            <t t-if="state.lastHeartbeat">Ult. latido: <t t-esc="state.lastHeartbeat"/></t>
+                        </small>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- CONTENIDO -->
+            <div class="o_monitoring_content flex-grow-1 overflow-auto bg-white">
+                
+                <!-- Empty State -->
+                <div t-if="state.events.length === 0" class="d-flex flex-column align-items-center justify-content-center h-100 text-muted">
+                    <div class="bg-light p-5 rounded-circle shadow-sm mb-4">
+                        <i class="fa fa-check fa-4x text-success"></i>
+                    </div>
+                    <h3 class="fw-light">Sin Novedades</h3>
+                    <p>El sistema está monitoreando...</p>
+                </div>
+
+                <!-- Events Table -->
+                <table t-else="" class="table table-hover m-0 dashboard-table">
+                    <thead class="bg-light sticky-top" style="z-index: 5;">
+                        <tr>
+                            <th class="ps-3">ID</th>
+                            <th>CUENTA</th>
+                            <th>NOMBRE DE LA CUENTA</th>
+                            <th>FECHA / HORA</th>
+                            <th>ZONA</th>
+                            <th>CÓDIGO DE ALARMA</th>
+                            <th class="text-center">TIEMPO</th>
+                            <th class="text-end pe-3">ACCIONES</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <t t-foreach="state.events" t-as="event" t-key="event.id">
+                            <tr t-att-class="'event-row align-middle ' + (event.priority_class === 'critical' ? 'table-danger' : (event.priority_class === 'high' ? 'table-warning' : ''))"
+                                t-on-dblclick="() => this.handleAlarm(event.id)"
+                                style="cursor: pointer; height: 50px;">
+                                
+                                <td class="ps-3 fw-bold"><t t-esc="event.id"/></td>
+                                <td>
+                                    <span class="badge bg-dark text-white"><t t-esc="event.account"/></span>
+                                </td>
+                                <td>
+                                    <div class="fw-bold text-dark"><t t-esc="event.device_name"/></div>
+                                    <small class="text-muted"><i class="fa fa-map-marker me-1"></i><t t-esc="event.location"/></small>
+                                </td>
+                                <td>
+                                    <t t-esc="event.time_formatted"/>
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary text-white"><t t-esc="event.zone or '000'"/></span>
+                                </td>
+                                <td>
+                                    <div t-att-class="'fw-bold ' + (event.priority_class === 'critical' ? 'text-danger' : 'text-dark')">
+                                        <t t-esc="event.code_display"/>
+                                    </div>
+                                    <small class="text-muted"><t t-esc="event.description"/></small>
+                                </td>
+                                <td class="text-center">
+                                    <div t-att-class="'fw-bold ' + (this.isOverdue(event.time) ? 'text-danger fa-beat' : 'text-muted')">
+                                        <t t-esc="this.getRelativeTime(event.time)"/>
+                                    </div>
+                                </td>
+                                <td class="text-end pe-3">
+                                    <div class="btn-group">
+                                        <button class="btn btn-sm btn-primary" t-on-click="() => this.handleAlarm(event.id)">
+                                            <i class="fa fa-headphones me-1"></i> ATENDER
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-secondary" t-on-click="() => this.viewHistory(event.account)" title="Ver Historial">
+                                            <i class="fa fa-history"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </t>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </t>
+</templates>

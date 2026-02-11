@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Códigos de ALARMA -->
+        <record id="code_100" model="sentinela.alarm.code">
+            <field name="code">100</field>
+            <field name="name">Emergencia Médica</field>
+            <field name="protocol_type">contact_id</field>
+            <field name="event_category">alarm</field>
+            <field name="priority">3</field>
+        </record>
+
+        <record id="code_110" model="sentinela.alarm.code">
+            <field name="code">110</field>
+            <field name="name">Fuego / Incendio</field>
+            <field name="protocol_type">contact_id</field>
+            <field name="event_category">alarm</field>
+            <field name="priority">3</field>
+        </record>
+
+        <record id="code_120" model="sentinela.alarm.code">
+            <field name="code">120</field>
+            <field name="name">Pánico / Asalto</field>
+            <field name="protocol_type">contact_id</field>
+            <field name="event_category">alarm</field>
+            <field name="priority">3</field>
+        </record>
+
+        <record id="code_130" model="sentinela.alarm.code">
+            <field name="code">130</field>
+            <field name="name">Robo / Intrusión</field>
+            <field name="protocol_type">contact_id</field>
+            <field name="event_category">alarm</field>
+            <field name="priority">2</field>
+        </record>
+
+        <record id="code_137" model="sentinela.alarm.code">
+            <field name="code">137</field>
+            <field name="name">Sabotaje (Tamper)</field>
+            <field name="protocol_type">contact_id</field>
+            <field name="event_category">alarm</field>
+            <field name="priority">2</field>
+        </record>
+
+        <!-- Fallas Técnicas -->
+        <record id="code_301" model="sentinela.alarm.code">
+            <field name="code">301</field>
+            <field name="name">Falla de AC (Corte Eléctrico)</field>
+            <field name="protocol_type">contact_id</field>
+            <field name="event_category">trouble</field>
+            <field name="priority">1</field>
+        </record>
+
+        <record id="code_302" model="sentinela.alarm.code">
+            <field name="code">302</field>
+            <field name="name">Batería Baja Sistema</field>
+            <field name="protocol_type">contact_id</field>
+            <field name="event_category">trouble</field>
+            <field name="priority">1</field>
+        </record>
+
+        <record id="code_350" model="sentinela.alarm.code">
+            <field name="code">350</field>
+            <field name="name">Falla de Comunicación</field>
+            <field name="protocol_type">contact_id</field>
+            <field name="event_category">trouble</field>
+            <field name="priority">1</field>
+        </record>
+
+        <!-- Apertura / Cierre -->
+        <record id="code_401" model="sentinela.alarm.code">
+            <field name="code">401</field>
+            <field name="name">Desarmado (Apertura) por Usuario</field>
+            <field name="protocol_type">contact_id</field>
+            <field name="event_category">open_close</field>
+            <field name="priority">0</field>
+        </record>
+
+        <record id="code_402" model="sentinela.alarm.code">
+            <field name="code">402</field>
+            <field name="name">Armado (Cierre) por Usuario</field>
+            <field name="protocol_type">contact_id</field>
+            <field name="event_category">open_close</field>
+            <field name="priority">0</field>
+        </record>
+
+        <!-- Pruebas -->
+        <record id="code_602" model="sentinela.alarm.code">
+            <field name="code">602</field>
+            <field name="name">Test Periódico (Keep Alive)</field>
+            <field name="protocol_type">contact_id</field>
+            <field name="event_category">test</field>
+            <field name="priority">0</field>
+        </record>
+    </data>
+</odoo>

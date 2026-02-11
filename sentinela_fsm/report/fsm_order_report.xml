@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_report_fsm_order" model="ir.actions.report">
+        <field name="name">Reporte de Servicio en Campo</field>
+        <field name="model">sentinela.fsm.order</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">sentinela_fsm.report_fsm_order_template</field>
+        <field name="report_file">sentinela_fsm.report_fsm_order_template</field>
+        <field name="print_report_name">'Reporte_%s_%s' % (object.name, object.partner_id.name)</field>
+        <field name="binding_model_id" ref="model_sentinela_fsm_order"/>
+        <field name="binding_type">report</field>
+    </record>
+
+    <template id="report_fsm_order_template">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.external_layout">
+                    <div class="page">
+                        <div class="oe_structure"/>
+                        
+                        <div class="row">
+                            <div class="col-6">
+                                <h2 t-if="o.service_type == 'patrol'">Reporte de Patrullaje</h2>
+                                <h2 t-else="">Reporte de Servicio Técnico</h2>
+                                <h3>Folio: <span t-field="o.name"/></h3>
+                            </div>
+                            <div class="col-6 text-end">
+                                <p>
+                                    <strong>Fecha:</strong> <span t-field="o.check_out_date" t-options='{"widget": "datetime"}'/><br/>
+                                    <strong>Prioridad:</strong> <span t-field="o.priority"/>
+                                </p>
+                            </div>
+                        </div>
+
+                        <hr/>
+
+                        <div class="row mt32 mb32">
+                            <div class="col-6">
+                                <strong>Cliente:</strong><br/>
+                                <span t-field="o.partner_id.name"/><br/>
+                                <span t-field="o.service_address_id.street"/><br/>
+                                <span t-field="o.service_address_id.city"/>, <span t-field="o.service_address_id.state_id.name"/>
+                            </div>
+                            <div class="col-6">
+                                <strong>Detalles del Sitio:</strong><br/>
+                                <strong>Cuenta:</strong> <span t-field="o.subscription_id.monitoring_account_number"/><br/>
+                                <strong>Teléfono:</strong> <span t-field="o.phone"/>
+                            </div>
+                        </div>
+
+                        <div class="mt32">
+                            <h4>Resumen de la Atención</h4>
+                            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; border: 1px solid #dee2e6;">
+                                <span t-field="o.description"/>
+                            </div>
+                        </div>
+
+                        <div class="mt32" t-if="o.resolution_notes">
+                            <h4>Notas de Resolución</h4>
+                            <p t-field="o.resolution_notes"/>
+                        </div>
+
+                        <div class="mt32" t-if="o.evidence_ids">
+                            <h4>Evidencia Fotográfica</h4>
+                            <div class="row">
+                                <t t-foreach="o.evidence_ids" t-as="ev">
+                                    <div class="col-4 mb-3 text-center">
+                                        <img t-if="ev.image" t-att-src="image_data_uri(ev.image)" style="max-height: 250px; max-width: 100%; border: 1px solid #ddd; padding: 5px;"/>
+                                        <p class="small text-muted"><span t-field="ev.name"/></p>
+                                    </div>
+                                </t>
+                            </div>
+                        </div>
+
+                        <div class="row mt64" t-if="o.customer_signature">
+                            <div class="col-6 offset-6 text-center">
+                                <p><strong>Firma de Conformidad</strong></p>
+                                <img t-att-src="image_data_uri(o.customer_signature)" style="max-height: 100px; max-width: 200px;"/><br/>
+                                <span t-field="o.partner_id.name"/>
+                            </div>
+                        </div>
+
+                        <div class="oe_structure"/>
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>

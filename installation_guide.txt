@@ -1,0 +1,64 @@
+# Script de Instalación para el Módulo de Monitoreo de Alarmas de Sentinela
+
+## Requisitos Previos:
+- Acceso SSH al servidor 192.168.3.2 (puerto 2222)
+- Acceso a Docker en el servidor
+- Credenciales de administrador para Odoo
+
+## Paso 1: Transferir los archivos al servidor
+scp -P 2222 sentinela_monitoring_package.tar.gz egarza@192.168.3.2:/tmp/
+
+## Paso 2: Conectarse al servidor
+ssh -p 2222 egarza@192.168.3.2
+
+## Paso 3: Instalar en el contenedor de Odoo
+# Una vez conectado al servidor, ejecutar:
+
+# 1. Verificar el nombre del contenedor de Odoo
+docker ps | grep odoo
+
+# 2. Copiar el archivo al contenedor (reemplazar 'CONTAINER_NAME' con el nombre real del contenedor)
+docker cp /tmp/sentinela_monitoring_package.tar.gz CONTAINER_NAME:/opt/odoo/custom_addons/
+
+# 3. Entrar al contenedor
+docker exec -it CONTAINER_NAME bash
+
+# 4. Extraer los archivos en el directorio de addons
+cd /opt/odoo/custom_addons/
+tar -xzf sentinela_monitoring_package.tar.gz
+rm sentinela_monitoring_package.tar.gz
+
+# 5. Salir del contenedor
+exit
+
+# 6. Reiniciar el contenedor de Odoo para que reconozca el nuevo módulo
+docker restart CONTAINER_NAME
+
+## Paso 4: Instalar el módulo desde la interfaz web
+# 1. Ir a http://192.168.3.2:8070
+# 2. Iniciar sesión como administrador
+# 3. Ir a Aplicaciones
+# 4. Click en el engrane (arriba a la derecha) y seleccionar "Actualizar lista de aplicaciones"
+# 5. Buscar "Sentinela Monitoring System" y hacer click en "Instalar"
+
+## Verificación Post-Instalación:
+# Después de la instalación, verificar que:
+# - Aparece un nuevo menú "Monitoreo de Alarmas"
+# - Se pueden crear dispositivos de monitoreo
+# - Funciona la API en /api/alarm/signals
+# - Hay integración con el módulo FSM
+
+## Solución de Problemas Comunes:
+
+# Si el módulo no aparece en la lista de aplicaciones:
+# 1. Verificar que los archivos estén en el directorio correcto dentro del contenedor
+# 2. Asegurarse de que el contenedor ha sido reiniciado
+# 3. Verificar permisos de archivos
+
+# Si hay errores de dependencias:
+# 1. Asegurarse de que sentinela_subscriptions y sentinela_fsm estén instalados
+# 2. Verificar que las dependencias en __manifest__.py sean correctas
+
+# Para verificar que el módulo está correctamente instalado:
+# 1. Ir a Configuración > Técnico > Modelos
+# 2. Buscar modelos como sentinela.monitoring.device, sentinela.alarm.signal, etc.
