@@ -74,11 +74,10 @@ class AlarmEvent(models.Model):
             priority_level = event.priority_id.level if event.priority_id else 0
             play_sound = (event.alarm_code_id.play_sound if event.alarm_code_id else False) or (priority_level >= 7)
             
-            # Notificar al bus para tiempo real usando el tipo que el JS ya escucha
-            self.env['bus.bus']._sendone('broadcast', 'refresh_alarm_events', {
+            # Notificar al bus para tiempo real
+            self.env['bus.bus']._sendone('sentinela_monitoring', 'refresh', {
                 'title': "ALERTA SENTINELA",
                 'message': f"NUEVO EVENTO: {event.name}",
-                'play_sound': play_sound,
                 'priority_level': priority_level,
                 'event_id': event.id
             })

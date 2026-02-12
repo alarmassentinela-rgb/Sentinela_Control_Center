@@ -24,7 +24,7 @@
             <form string="Prioridad">
                 <sheet>
                     <div class="alert alert-info" role="alert">
-                        <strong>Tip de Audio:</strong> Cargue un archivo MP3 corto. El Dashboard lo reproducirá automáticamente cuando llegue una alarma de esta prioridad.
+                        <strong>Tip de Audio:</strong> Cargue un archivo MP3 o WAV corto. El Dashboard lo reproducirá automáticamente cuando llegue una alarma de esta prioridad.
                     </div>
                     <group>
                         <group>

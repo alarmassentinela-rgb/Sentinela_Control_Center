@@ -45,6 +45,7 @@ Características principales:
     'assets': {
         'web.assets_backend': [
             'sentinela_monitoring/static/src/xml/monitoring_dashboard.xml',
+            'sentinela_monitoring/static/src/js/alarm_service.js',
             'sentinela_monitoring/static/src/js/monitoring_dashboard.js',
         ],
     },

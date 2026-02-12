@@ -1,28 +1,27 @@
-He revisado la documentación proporcionada. Aquí tienes un resumen de lo que he aprendido:
+# Vision Estratégica & Plan de Transformación Digital - Proyecto Sentinela
 
-**Visión General del Proyecto:**
-El objetivo principal es mejorar las ventas, centralizar la información de la empresa, fomentar la lealtad del cliente mediante marketing estratégico y optimizar el control del servicio técnico. El proyecto utiliza un enfoque impulsado por IA (CEO-IA) y se ejecuta en etapas: Centralización, Conexión con Clientes/Marketing, Excelencia Operativa/Servicio Técnico, y Análisis/Expansión.
+**Host Local:** DellCli (WSL/Windows) | **Servidor:** MasAdmin (192.168.3.2)
+**Estado Global:** ✅ Fase de Estabilización Completada.
+
+---
 
 **Estado Actual (a 11 de febrero de 2026):**
-- **Persistencia y Orquestación:** ✅ COMPLETADA. Repositorio GitHub configurado y sincronizado.
-- **Motor de Cobranza Profesional:** ✅ COMPLETADO. Implementada lógica flexible de facturación, periodos y cortes automáticos configurables por cliente.
-- **Sistema de Monitoreo Sentinela (Odoo 18):** Operativo y estabilizado.
-- **Receptor Universal (V6):** Desplegado en `/home/egarza/receiver_v6.py`. Ahora cuenta con persistencia mediante un servicio de **systemd** (`sentinela-receptor.service`) y se ejecuta dentro de una sesión de **tmux** llamada `monitor1` para monitoreo en vivo.
-- **Dashboard en Vivo:** Reparado y optimizado para Odoo 18. Se corrigieron errores de carga relacionados con funciones de tiempo (Luxon) y se unificó la lógica OWL con la plantilla XML.
-- **Importación Masiva de Clientes:** **COMPLETADA**. Se han importado la totalidad de las cuentas (incluyendo el lote final de 260) y están vinculadas correctamente a sus suscripciones.
-- **Modelos Clave de Odoo:** Estructura confirmada y funcional con `monitoring_account_number` y gestión de dispositivos.
+- **Persistencia y Orquestación:** ✅ COMPLETADA. Repositorio GitHub `Sentinela_Control_Center` configurado y sincronizado.
+- **Motor de Cobranza Profesional:** ✅ COMPLETADO. Lógica flexible de periodos, facturación anticipada y cortes automáticos MikroTik/Alarma.
+- **Sistema de Monitoreo Sentinela (Odoo 18):** Dashboard v3.0 operativo con integración de eventos pendientes y columna de cliente real.
+- **Sistema de Alerta Global:** ✅ COMPLETADO. Audio omnipresente en Odoo y sonidos configurables por prioridad (MP3/WAV).
+- **Receptor Inteligente (V6):** ✅ ACTUALIZADO. Identificación automática de dueños de cuenta y corrección de campos obligatorios.
+- **Importación Masiva de Clientes:** ✅ COMPLETADA al 100%.
 
 **Tareas Pendientes:**
-1.  **Habilitar One2many de Dispositivos:** Pendiente descomentar `monitoring_device_ids` en `subscription.py` para visualización directa.
-2.  **Pruebas de Campo Finales:** Simular alarmas críticas para validar el flujo de notificaciones push y respuesta FSM.
-3.  **App Móvil (FSM):** Iniciar la integración profunda con la aplicación para patrulleros.
+1.  **Pruebas de Campo Finales:** Validar el flujo de notificaciones push y respuesta FSM ante alarmas críticas.
+2.  **App Móvil (FSM):** Iniciar la integración profunda con la aplicación para patrulleros.
+3.  **Refinamiento UI:** Ajustar anchos de columna en el dashboard según feedback del operador.
 
-**Mi Comprensión del "Mapeo":**
-El "mapeo" se refiere a la visión arquitectónica del ecosistema Sentinela, incluyendo el receptor, los modelos centrales de Odoo, el dashboard de monitoreo y la base de datos externa. También implica el mapeo de datos, particularmente cómo se utiliza `monitoring_account_number` en `sentinela.subscription` y cómo se gestionan las direcciones de servicio.
+---
 
-Tengo una buena comprensión del estado actual del proyecto, la arquitectura y los próximos pasos inmediatos.
-
-¿Qué te gustaría que hiciera ahora, dado este entendimiento? Por ejemplo, ¿quieres que:
-1.  Ayude con las tareas pendientes?
-2.  Investigue más a fondo alguna parte específica del código o la documentación?
-3.  Ayude con una nueva tarea relacionada con este proyecto?
+## 🛠️ Arquitectura del Sistema
+1.  **Núcleo:** Odoo 18 Community (Docker).
+2.  **Receptor:** Python XML-RPC (Puerto 10001 TCP).
+3.  **Persistencia:** Git + GitHub + Bitácora de Sesiones.
+4.  **Dashboard:** OWL JavaScript + XML + Bus de Tiempo Real.

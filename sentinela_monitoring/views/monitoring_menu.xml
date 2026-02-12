@@ -13,12 +13,6 @@
               sequence="1" 
               action="action_monitoring_dashboard_client"/>
 
-    <menuitem id="menu_alarm_event_pending"
-              name="Eventos Pendientes"
-              parent="menu_sentinela_monitoring_root"
-              action="action_alarm_event_pending"
-              sequence="15"/>
-
     <menuitem id="menu_alarm_event_history"
               name="Historial de Eventos"
               parent="menu_sentinela_monitoring_root"
