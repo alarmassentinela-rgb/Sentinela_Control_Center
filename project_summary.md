@@ -5,9 +5,10 @@
 
 ---
 
-**Estado Actual (a 12 de febrero de 2026):**
+**Estado Actual (a 13 de febrero de 2026):**
 - **Sincronización Syscom:** ✅ COMPLETADA. Robot diario (8:00 AM) con TC dinámico y auto-vínculo de productos.
-- **Márgenes de Utilidad:** ✅ AUTOMATIZADOS. 30% de utilidad sobre costo real de Syscom para hardware.
+- **FSM & Datos de Campo:** ✅ INTEGRADOS. Sincronización de coordenadas, IMEI y datos técnicos desde tickets a contratos.
+- **Módulos GPS:** ✅ EXPANDIDOS. Soporte para IMEI, SIM ICCID (TNF) y gestión de unidades/económicos.
 - **Motor de Cobranza:** ✅ REFINADO. Vistas para Irma con radar de mora y filtros de cortes próximos.
 - **Seguridad:** ✅ IMPLEMENTADA. Candados administrativos y motivos de baja obligatorios.
 - **Logística:** ✅ CONFIGURADA. Gestión de cable por metro y categorías de producto raíz.

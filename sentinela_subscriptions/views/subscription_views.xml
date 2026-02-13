@@ -96,6 +96,7 @@
                                            domain="['|', ('id', '=', partner_id), ('parent_id', '=', partner_id)]" 
                                            context="{'default_parent_id': partner_id, 'default_type': 'other', 'show_only_name': True}"
                                            options="{'no_create': True}"/>
+                            <field name="invoice_fiscal_type" widget="radio" options="{'horizontal': true}"/>
                             
                             <!-- Address Detail Preview -->
                             <div class="o_address_format" colspan="2" invisible="not service_address_id">
@@ -216,11 +217,29 @@
                                 <group>
                                     <field name="equipment_brand"/>
                                     <field name="equipment_model"/>
-                                    <field name="monitoring_account_number" readonly="not is_new_record and edit_plan_locked"/>
+                                    <field name="monitoring_account_number" readonly="not is_new_record and edit_plan_locked" invisible="service_type != 'alarm'"/>
                                 </group>
                                 <group>
                                     <field name="equipment_serial"/>
                                     <field name="serial_number_id" string="Lote/Serie de Inventario"/>
+                                </group>
+                            </group>
+
+                            <!-- Sección para Rastreo GPS -->
+                            <group string="Detalles de Rastreo GPS" invisible="service_type != 'gps'">
+                                <group string="Conectividad y Hardware">
+                                    <button name="action_pull_from_sale_order" type="object" string="Importar desde Venta" 
+                                            icon="fa-download" class="btn-link" help="Traer marca, modelo y serie desde la cotización"/>
+                                    <field name="gps_imei" required="service_type == 'gps'"/>
+                                    <field name="sim_iccid" required="service_type == 'gps'"/>
+                                    <field name="sim_phone"/>
+                                    <field name="gps_platform_id" options="{'no_create_edit': False, 'no_quick_create': False}"/>
+                                </group>
+                                <group string="Información de la Unidad">
+                                    <field name="vehicle_name" placeholder="Ej. Camioneta 01"/>
+                                    <field name="vehicle_plate"/>
+                                    <field name="vehicle_brand_model"/>
+                                    <field name="vehicle_color"/>
                                 </group>
                             </group>
 
@@ -272,6 +291,29 @@
         <field name="help" type="html">
           <p class="o_view_nocontent_smiling_face">
             Crea tu primer contrato de suscripción
+          </p>
+        </field>
+    </record>
+
+    <!-- GPS PLATFORM VIEWS -->
+    <record id="view_sentinela_gps_platform_tree" model="ir.ui.view">
+        <field name="name">sentinela.gps.platform.tree</field>
+        <field name="model">sentinela.gps.platform</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="name"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_sentinela_gps_platform" model="ir.actions.act_window">
+        <field name="name">Plataformas GPS</field>
+        <field name="res_model">sentinela.gps.platform</field>
+        <field name="view_mode">list</field>
+        <field name="help" type="html">
+          <p class="o_view_nocontent_smiling_face">
+            Configura las plataformas de rastreo (Ej. RedGPS, Traccar, etc.)
           </p>
         </field>
     </record>

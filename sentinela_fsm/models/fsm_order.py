@@ -61,6 +61,29 @@ class FsmOrder(models.Model):
         ('other', 'Otro')
     ], string='Tipo de Servicio', default='other')
 
+    # Datos Técnicos capturados en campo (Instalaciones GPS)
+    vehicle_brand = fields.Char(string='Marca del Vehículo')
+    vehicle_model = fields.Char(string='Modelo del Vehículo')
+    vehicle_color = fields.Char(string='Color de la Unidad')
+    vehicle_plate = fields.Char(string='Placas')
+    sim_iccid = fields.Char(string='ICCID de la SIM (TNF)')
+
+    # Datos Técnicos capturados en campo (Instalaciones Alarma)
+    alarm_panel_brand = fields.Char(string='Marca del Panel')
+    alarm_panel_model = fields.Char(string='Modelo del Panel')
+    alarm_zones = fields.Text(string='Listado de Zonas', help="Ej. Zona 1: Puerta, Zona 2: Cocina...")
+    monitoring_account_number = fields.Char(string='Núm. Cuenta Monitoreo')
+
+    # Datos Técnicos capturados en campo (Instalaciones Internet)
+    internet_antenna_mac = fields.Char(string='MAC de Antena')
+    internet_router_serial = fields.Char(string='Serie del Router')
+    internet_signal_dbm = fields.Char(string='Potencia Señal (dBm)')
+    internet_pppoe_user = fields.Char(string='Usuario PPPoE Asignado')
+
+    # Coordenadas Reales de Instalación
+    install_lat = fields.Float(string='Latitud Instalación', digits=(10, 7))
+    install_lon = fields.Float(string='Longitud Instalación', digits=(10, 7))
+
     # Checklist & Evidence
     checklist_ids = fields.One2many('sentinela.fsm.order.line', 'order_id', string='Checklist de Tareas')
     evidence_ids = fields.One2many('sentinela.fsm.evidence', 'order_id', string='Evidencias')
@@ -184,6 +207,42 @@ class FsmOrder(models.Model):
         # Generar movimientos de inventario antes de cerrar
         if self.equipment_ids:
             self._create_stock_moves()
+
+        # Sincronizar datos técnicos al contrato si existe
+        if self.subscription_id:
+            sub_vals = {}
+            
+            # Sincronizar Ubicación GPS Real
+            if self.install_lat and self.install_lon:
+                sub_vals['latitude'] = str(self.install_lat)
+                sub_vals['longitude'] = str(self.install_lon)
+            elif self.check_in_lat and self.check_in_lon:
+                # Si no se capturó lat de instalación, usar la del check-in
+                sub_vals['latitude'] = str(self.check_in_lat)
+                sub_vals['longitude'] = str(self.check_in_lon)
+
+            # Datos Vehículo (GPS)
+            if self.vehicle_brand or self.vehicle_model:
+                sub_vals['vehicle_brand_model'] = f"{self.vehicle_brand or ''} {self.vehicle_model or ''}".strip()
+            if self.vehicle_plate: sub_vals['vehicle_plate'] = self.vehicle_plate
+            if self.vehicle_color: sub_vals['vehicle_color'] = self.vehicle_color
+            if self.sim_iccid: sub_vals['sim_iccid'] = self.sim_iccid
+            
+            # Datos Alarma
+            if self.alarm_panel_brand: sub_vals['equipment_brand'] = self.alarm_panel_brand
+            if self.alarm_panel_model: sub_vals['equipment_model'] = self.alarm_panel_model
+            if self.monitoring_account_number: sub_vals['monitoring_account_number'] = self.monitoring_account_number
+            if self.alarm_zones:
+                current_notes = self.subscription_id.description or ""
+                sub_vals['description'] = current_notes + f"<br/><b>Zonas (Instalación):</b><br/>{self.alarm_zones}"
+
+            # Datos Internet
+            if self.internet_antenna_mac: sub_vals['location_notes'] = (self.subscription_id.location_notes or "") + f"\nMAC Antena: {self.internet_antenna_mac}"
+            if self.internet_pppoe_user: sub_vals['pppoe_user'] = self.internet_pppoe_user
+            
+            if sub_vals:
+                self.subscription_id.write(sub_vals)
+                self.message_post(body="✅ Geolocalización y datos técnicos sincronizados al contrato.")
 
         self.stage = 'done'
         self.check_out_date = fields.Datetime.now()
@@ -351,45 +410,6 @@ class FsmOrder(models.Model):
     @api.model
     def _read_group_stage_ids(self, stages, domain, order):
         return ['new', 'assigned', 'in_progress', 'paused', 'done', 'cancel']
-
-    def action_assign(self):
-        self.stage = 'assigned'
-        # Send Notification Email
-        template = self.env.ref('sentinela_fsm.mail_template_fsm_assigned', raise_if_not_found=False)
-        if template:
-            self.message_post_with_source(
-                template,
-                email_layout_xmlid='mail.mail_notification_layout_with_responsible_signature',
-            )
-
-    def action_start(self):
-        self.stage = 'in_progress'
-        self.check_in_date = fields.Datetime.now()
-        # Aquí se podría obtener la ubicación real del técnico si se integra con GPS
-        # Por ahora, se puede usar la ubicación del cliente como referencia
-        if self.service_address_id:
-            self.check_in_lat = self.service_address_id.partner_latitude
-            self.check_in_lon = self.service_address_id.partner_longitude
-
-    def action_finish(self):
-        self.stage = 'done'
-        self.check_out_date = fields.Datetime.now()
-        # Registrar la ubicación de salida si está disponible
-        if self.service_address_id:
-            self.check_out_lat = self.service_address_id.partner_latitude
-            self.check_out_lon = self.service_address_id.partner_longitude
-            # Calcular distancia aproximada si ambas ubicaciones están disponibles
-            if self.check_in_lat and self.check_in_lon and self.check_out_lat and self.check_out_lon:
-                from math import radians, cos, sin, asin, sqrt
-                lat1, lon1, lat2, lon2 = map(radians, [self.check_in_lat, self.check_in_lon, self.check_out_lat, self.check_out_lon])
-
-                dlon = lon2 - lon1
-                dlat = lat2 - lat1
-                a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
-                c = 2 * asin(sqrt(a))
-                r = 6371  # Radio de la Tierra en kilómetros
-
-                self.distance_traveled = round(c * r, 2)
 
     def action_resume(self):
         self.ensure_one()

@@ -10,6 +10,19 @@
                     <field name="fsm_order_count" widget="statinfo" string="Tickets"/>
                 </button>
             </div>
+            <xpath expr="//notebook" position="inside">
+                <page string="Historial Técnico (FSM)" name="fsm_history">
+                    <field name="fsm_order_ids" readonly="1">
+                        <list>
+                            <field name="name"/>
+                            <field name="technician_id"/>
+                            <field name="scheduled_date"/>
+                            <field name="service_type"/>
+                            <field name="stage" widget="badge"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
         </field>
     </record>
 </odoo>

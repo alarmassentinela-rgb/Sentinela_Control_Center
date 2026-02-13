@@ -135,6 +135,41 @@
                                 </list>
                             </field>
                         </page>
+                        <page string="Instalación / Unidad" name="vehicle_info" invisible="service_type not in ['install', 'repair', 'transfer']">
+                            <group string="📍 Ubicación Real de la Instalación">
+                                <group>
+                                    <field name="install_lat"/>
+                                    <field name="install_lon"/>
+                                </group>
+                                <group>
+                                    <p class="text-muted">Captura las coordenadas donde se instaló físicamente el equipo para referencia futura en Google Maps.</p>
+                                </group>
+                            </group>
+                            <group>
+                                <!-- Campos para GPS -->
+                                <group string="Datos del Vehículo (GPS)" invisible="subscription_id and service_type != 'gps'">
+                                    <field name="vehicle_brand" placeholder="Ej. Nissan"/>
+                                    <field name="vehicle_model" placeholder="Ej. NP300"/>
+                                    <field name="vehicle_color" placeholder="Ej. Blanco"/>
+                                    <field name="vehicle_plate" placeholder="Ej. ABC-1234"/>
+                                    <field name="sim_iccid" placeholder="ICCID de la SIM instalada"/>
+                                </group>
+                                <!-- Campos para Alarma -->
+                                <group string="Datos del Panel (Alarma)" invisible="service_type != 'install' and not alarm_panel_brand and not monitoring_account_number">
+                                    <field name="alarm_panel_brand" placeholder="Ej. Honeywell / DSC"/>
+                                    <field name="alarm_panel_model" placeholder="Ej. Vista 48"/>
+                                    <field name="monitoring_account_number" placeholder="Ej. 1234"/>
+                                    <field name="alarm_zones" placeholder="Zona 1: Puerta..."/>
+                                </group>
+                                <!-- Campos para Internet -->
+                                <group string="Datos de Conexión (Internet)" invisible="service_type != 'install' and not internet_antenna_mac">
+                                    <field name="internet_antenna_mac" placeholder="Ej. AA:BB:CC..."/>
+                                    <field name="internet_router_serial"/>
+                                    <field name="internet_signal_dbm" placeholder="Ej. -65 dBm"/>
+                                    <field name="internet_pppoe_user"/>
+                                </group>
+                            </group>
+                        </page>
                         <page string="Resolución" invisible="stage in ['new', 'assigned']">
                             <group>
                                 <group>

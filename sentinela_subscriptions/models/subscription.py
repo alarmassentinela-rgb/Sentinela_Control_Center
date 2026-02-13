@@ -7,6 +7,12 @@ import base64
 
 _logger = logging.getLogger(__name__)
 
+class SentinelaGpsPlatform(models.Model):
+    _name = 'sentinela.gps.platform'
+    _description = 'Plataforma de Rastreo GPS'
+    name = fields.Char(string='Nombre de la Plataforma', required=True)
+    active = fields.Boolean(default=True)
+
 class SentinelaSubscription(models.Model):
     _name = 'sentinela.subscription'
     _description = 'Subscription Contract'
@@ -175,6 +181,11 @@ class SentinelaSubscription(models.Model):
         ('maintenance', 'Póliza de Mantenimiento')
     ], string='Tipo de Servicio', required=True)
     
+    invoice_fiscal_type = fields.Selection([
+        ('fiscal', 'Factura Fiscal (CFDI)'),
+        ('remision', 'Remisión / Nota de Venta')
+    ], string='Tipo de Facturación', default='fiscal', help="Define si el robot genera un documento fiscal o una nota de venta interna.")
+
     ip_address = fields.Char(string='Dirección IP', help="IP estática para integración MikroTik")
 
     # --- Alarm / Equipment Details ---
@@ -183,6 +194,97 @@ class SentinelaSubscription(models.Model):
     equipment_serial = fields.Char(string='Número de Serie')
     monitoring_account_number = fields.Char(string='Número de Cuenta (Monitoreo)', help="Código de cuenta para la Central de Monitoreo")
     
+    # --- GPS / Telemetría Details ---
+    gps_imei = fields.Char(string='IMEI del GPS', help="Número de serie único del equipo GPS")
+    sim_iccid = fields.Char(string='ICCID de la SIM', help="Número de serie de la tarjeta SIM (TNF Solutions)")
+    sim_phone = fields.Char(string='Número de Teléfono SIM')
+    gps_platform_id = fields.Many2one('sentinela.gps.platform', string='Plataforma GPS')
+    
+    vehicle_plate = fields.Char(string='Placas del Vehículo')
+    vehicle_name = fields.Char(string='Económico / Nombre', help="Ej. Unidad 01 o Camioneta Reparto")
+    vehicle_brand_model = fields.Char(string='Marca/Modelo Vehículo')
+    vehicle_color = fields.Char(string='Color de la Unidad')
+
+    @api.onchange('serial_number_id')
+    def _onchange_serial_number_id(self):
+        if self.serial_number_id:
+            # Traer marca del fabricante (brand) si existe en el producto, o usar el nombre
+            product = self.serial_number_id.product_id
+            self.equipment_brand = product.brand_id.name if hasattr(product, 'brand_id') else 'Genérico'
+            self.equipment_model = product.name
+            self.equipment_serial = self.serial_number_id.name
+            if not self.gps_imei:
+                self.gps_imei = self.serial_number_id.name # Usualmente el IMEI es el serial en GPS
+
+    def action_pull_from_sale_order(self):
+        self.ensure_one()
+        # 1. Intentar por vinculo directo
+        last_so = self.sale_order_ids.sorted('date_order', reverse=True)[:1]
+        
+        # 2. Si no hay vinculo, buscar la ultima venta confirmada del partner
+        if not last_so:
+            last_so = self.env['sale.order'].search([
+                ('partner_id', '=', self.partner_id.id),
+                ('state', 'in', ['sale', 'done'])
+            ], order='date_order desc', limit=1)
+
+        if not last_so:
+            raise UserError(f"No se encontraron ventas confirmadas para el cliente {self.partner_id.name}.")
+        
+        # 3. Importar equipos físicos (Hardware)
+        equipment_lines = last_so.order_line.filtered(lambda l: l.product_id.type in ['consu', 'product'])
+        
+        # 4. Importar planes de servicio (Suscripciones)
+        service_lines = last_so.order_line.filtered(lambda l: l.product_id.is_subscription and l.product_id.service_type == self.service_type)
+        
+        if not equipment_lines and not service_lines:
+            raise UserError(f"La venta {last_so.name} no contiene ni equipos ni planes de servicio compatibles con {self.service_type}.")
+
+        # Auto-Llenado del Plan si existe
+        if service_lines:
+            plan = service_lines[0]
+            self.write({
+                'product_id': plan.product_id.id,
+                'price_unit': plan.price_unit,
+                'recurring_interval': plan.product_id.default_recurring_interval or '1'
+            })
+
+        if len(equipment_lines) > 1:
+            # Abrir Wizard de selección para el Hardware
+            return {
+                'type': 'ir.actions.act_window',
+                'name': 'Seleccionar Equipo de Venta',
+                'res_model': 'sentinela.subscription.selection.wizard',
+                'view_mode': 'form',
+                'target': 'new',
+                'context': {
+                    'default_subscription_id': self.id,
+                    'default_sale_order_id': last_so.id,
+                    'default_line_ids': [(6, 0, equipment_lines.ids)]
+                }
+            }
+        
+        # Caso: Solo hay un equipo, importar directo
+        if equipment_lines:
+            line = equipment_lines[0]
+            product = line.product_id
+            self.write({
+                'equipment_brand': product.brand_id.name if hasattr(product, 'brand_id') else 'Genérico',
+                'equipment_model': product.name,
+                'serial_number_id': line.lot_id.id if hasattr(line, 'lot_id') and line.lot_id else False,
+                'equipment_serial': line.lot_id.name if hasattr(line, 'lot_id') and line.lot_id else product.default_code
+            })
+            if self.service_type == 'gps' and self.equipment_serial:
+                self.gps_imei = self.equipment_serial
+
+        return {
+            'effect': {
+                'fadeout': 'slow',
+                'message': 'Plan y Equipo importados con éxito',
+                'type': 'rainbow_man',
+            }
+        }
+
     # --- Nuevo Motor de Cobranza Flexible ---
     current_period_start = fields.Date(string='Inicio del Periodo', help="Fecha de inicio del periodo actual de servicio")
     current_period_end = fields.Date(string='Fin del Periodo', help="Fecha de fin del periodo actual de servicio")

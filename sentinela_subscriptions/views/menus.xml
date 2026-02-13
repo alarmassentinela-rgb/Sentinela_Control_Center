@@ -47,4 +47,10 @@
         parent="menu_sentinela_subscription_config"
         action="action_sentinela_contract_template"
         sequence="40"/>
+
+    <menuitem id="menu_sentinela_gps_platform"
+        name="Plataformas GPS"
+        parent="menu_sentinela_subscription_config"
+        action="action_sentinela_gps_platform"
+        sequence="50"/>
 </odoo>
