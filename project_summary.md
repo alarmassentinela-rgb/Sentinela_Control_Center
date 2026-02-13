@@ -1,26 +1,26 @@
 # Vision Estratégica & Plan de Transformación Digital - Proyecto Sentinela
 
 **Host Local:** DellCli (WSL/Windows) | **Servidor:** MasAdmin (192.168.3.2)
-**Estado Global:** ✅ Refinamiento y Seguridad Completados. Listo para Operación Real.
+**Estado Global:** ✅ Fase de Inteligencia y Automatización Completada.
 
 ---
 
 **Estado Actual (a 12 de febrero de 2026):**
-- **Persistencia y Orquestación:** ✅ COMPLETADA. Repositorio GitHub sincronizado y Bitácora de Sesiones al día.
-- **Motor de Cobranza Profesional:** ✅ REFINADO. Vistas de lista mejoradas para Irma, filtros de radar de deuda y auditoría masiva de 264 contratos completada.
-- **Seguridad y Auditoría:** ✅ IMPLEMENTADO. Candados de administrador en campos sensibles y ventana obligatoria de motivos para cancelaciones/cortes.
-- **Centro de Comando v3.5:** ✅ ACTUALIZADO. Nombre oficial "SENTINELA CENTRO DE COMANDO", columna de Cliente real y audio global reparado.
-- **Logística de Inventario:** ✅ CONFIGURADO. Conversión de bobina a metros para cables de red.
+- **Sincronización Syscom:** ✅ COMPLETADA. Robot diario (8:00 AM) con TC dinámico y auto-vínculo de productos.
+- **Márgenes de Utilidad:** ✅ AUTOMATIZADOS. 30% de utilidad sobre costo real de Syscom para hardware.
+- **Motor de Cobranza:** ✅ REFINADO. Vistas para Irma con radar de mora y filtros de cortes próximos.
+- **Seguridad:** ✅ IMPLEMENTADA. Candados administrativos y motivos de baja obligatorios.
+- **Logística:** ✅ CONFIGURADA. Gestión de cable por metro y categorías de producto raíz.
 
 **Tareas Pendientes:**
-1.  **Día 15 de Febrero:** Monitorear el primer ciclo real de facturación y cortes automáticos masivos.
-2.  **App Móvil (FSM):** Iniciar la integración profunda con la aplicación para patrulleros.
-3.  **Refinamiento UI:** Feedback continuo de Irma sobre la facilidad de uso del nuevo motor de cobranza.
+1.  **Día 15 de Febrero:** Supervisar la transición total a Odoo para facturación y cobranza.
+2.  **App Móvil (FSM):** Iniciar fase de campo para patrulleros.
+3.  **Compras API:** Evaluar envío de Órdenes de Compra automáticas a Syscom.
 
 ---
 
 ## 🛠️ Arquitectura del Sistema
-1.  **Núcleo:** Odoo 18 Community (Docker).
-2.  **Receptor:** Python XML-RPC (Puerto 10001 TCP) con identificador de dueños.
-3.  **Persistencia:** Git + GitHub (Sentinela_Control_Center).
-4.  **Dashboard:** OWL JavaScript + XML + Servicio Global de Alerta.
+1.  **Núcleo:** Odoo 18 Community.
+2.  **Inteligencia:** API Syscom (Precios, TC, Stock).
+3.  **Persistencia:** Git/GitHub + Bitácora de Sesiones.
+4.  **Dashboard:** Alertas globales y monitoreo OWL.

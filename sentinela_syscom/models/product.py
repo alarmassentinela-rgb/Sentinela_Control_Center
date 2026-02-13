@@ -22,78 +22,85 @@ class ProductTemplate(models.Model):
     syscom_suggested_price_usd = fields.Float(string='Precio Sugerido USD', readonly=True)
 
     def _cron_update_syscom_products(self):
-        """ Automated task to update stock and price from Syscom """
-        # Get Token
+        """ Automated task to update stock and price from Syscom with Auto-Linking and Dynamic TC """
+        import requests
+        import time
+        
+        # 1. Credenciales y Configuración
         config = self.env['ir.config_parameter'].sudo()
         client_id = config.get_param('sentinela_syscom.client_id')
         client_secret = config.get_param('sentinela_syscom.client_secret')
         api_url = config.get_param('sentinela_syscom.api_url', 'https://developers.syscom.mx/api/v1')
         
         if not client_id or not client_secret:
-            return # No credentials, skip
+            return
 
-        import requests
+        # 2. Obtener Token
         try:
-            token_url = "https://developers.syscom.mx/oauth/token"
-            token_res = requests.post(token_url, data={
+            token_res = requests.post("https://developers.syscom.mx/oauth/token", data={
                 'client_id': client_id, 
                 'client_secret': client_secret, 
                 'grant_type': 'client_credentials'
-            })
-            if token_res.status_code != 200:
-                return # Auth failed
+            }, timeout=20)
             token = token_res.json().get('access_token')
             headers = {'Authorization': f'Bearer {token}'}
         except:
             return
 
-        # Find products linked to Syscom
-        products = self.search([('syscom_id', '!=', False)])
+        # 3. Obtener Tipo de Cambio de Syscom
+        try:
+            res_tc = requests.get(f"{api_url}/tipocambio", headers=headers, timeout=10)
+            tc = float(res_tc.json().get('normal', 17.26))
+        except:
+            tc = 17.26 # Fallback preventivo
+
+        # 4. Procesar todos los productos físicos que tengan modelo
+        products = self.search([
+            ('default_code', '!=', False),
+            ('detailed_type', 'in', ['product', 'consu'])
+        ])
         
-        for prod in products:
+        for count, prod in enumerate(products, 1):
             try:
-                # Get Product Detail
-                res = requests.get(f"{api_url}/productos/{prod.syscom_id}", headers=headers, timeout=5)
+                sys_id = prod.syscom_id
+                
+                # Auto-Vinculación si no tiene ID
+                if not sys_id:
+                    search_res = requests.get(f"{api_url}/productos?busqueda={prod.default_code}", headers=headers, timeout=10)
+                    if search_res.status_code == 200:
+                        results = search_res.json().get('productos', [])
+                        if results:
+                            sys_id = str(results[0].get('producto_id'))
+                        else:
+                            continue
+                    else:
+                        continue
+
+                # Sincronización de Detalles
+                res = requests.get(f"{api_url}/productos/{sys_id}", headers=headers, timeout=10)
                 if res.status_code == 200:
                     data = res.json()
-                    
-                    # Get Price
                     precios = data.get('precios', {})
-                    if not isinstance(precios, dict):
-                        precios = {}
+                    if not isinstance(precios, dict): precios = {}
                         
                     price_usd = float(precios.get('precio_descuento') or precios.get('precio_1') or 0.0)
                     list_price_usd = float(precios.get('precio_lista') or 0.0)
                     special_price_usd = float(precios.get('precio_especial') or 0.0)
                     
-                    # Convert to Company Currency
-                    usd = self.env.ref('base.USD', raise_if_not_found=False)
-                    company_currency = self.env.company.currency_id
-                    new_cost = price_usd
-                    
-                    if usd and company_currency and usd != company_currency:
-                        rate = usd.rate
-                        if rate < 1.0:
-                            new_cost = price_usd / rate
-                        else:
-                            new_cost = price_usd * rate
-                    
-                    # Get Stock
-                    new_stock = int(data.get('total_existencia', 0))
-                    
-                    # Update
                     prod.write({
-                        'standard_price': new_cost,
-                        'syscom_stock': new_stock,
+                        'syscom_id': sys_id,
+                        'standard_price': price_usd * tc,
                         'syscom_price_usd': price_usd,
                         'syscom_list_price_usd': list_price_usd,
                         'syscom_suggested_price_usd': special_price_usd,
-                        'l10n_mx_edi_code_sat': data.get('sat_key'),
+                        'syscom_stock': int(data.get('total_existencia', 0)),
                         'syscom_last_update': fields.Datetime.now()
                     })
-                    # Commit every 10 records to save progress
-                    if prod.id % 10 == 0:
+                    
+                    # Commit cada 20 para no perder avance y pausas para la API
+                    if count % 20 == 0:
                         self.env.cr.commit()
+                        time.sleep(0.5)
                         
-            except Exception as e:
-                continue # Skip error on single product
+            except Exception:
+                continue
