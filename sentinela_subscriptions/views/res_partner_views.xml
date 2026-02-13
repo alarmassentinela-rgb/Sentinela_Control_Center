@@ -11,11 +11,25 @@
                     <field string="Suscripciones" name="subscription_count" widget="statinfo"/>
                 </button>
             </div>
-            <group name="sale" position="inside">
-                <group string="Configuración Sentinela" name="sentinela_config">
-                    <field name="invoice_grouping_method" string="Preferencia de Facturación"/>
+            <page name="sales_purchases" position="inside">
+                <group string="Configuración Sentinela" name="sentinela_config_global">
+                    <group string="Especificaciones de Condiciones de Venta">
+                        <field name="invoice_grouping_method"/>
+                        <label for="invoice_payment_condition"/>
+                        <div class="o_row">
+                            <field name="invoice_payment_condition"/>
+                            <field name="invoice_payment_condition_text" invisible="invoice_payment_condition != 'otro'" placeholder="Indique condición..."/>
+                        </div>
+                        <field name="invoice_payment_form"/>
+                        <field name="invoice_bank_account"/>
+                        <field name="invoice_payment_method"/>
+                        <field name="invoice_zip"/>
+                    </group>
+                    <group string="Condiciones para el CFDI">
+                        <field name="invoice_cfdi_usage"/>
+                    </group>
                 </group>
-            </group>
+            </page>
             
             <!-- Force translations for standard fields if missing -->
             <xpath expr="//field[@name='user_id']" position="attributes">

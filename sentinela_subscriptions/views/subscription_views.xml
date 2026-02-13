@@ -8,9 +8,14 @@
             <search string="Buscar Suscripciones">
                 <field name="name"/>
                 <field name="partner_id"/>
+                <field name="monitoring_account_number"/>
                 <field name="ip_address"/>
                 <filter string="Contratos Activos" name="active" domain="[('state', '=', 'active')]"/>
                 <filter string="Suspendido (Técnico)" name="suspended" domain="[('technical_state', '=', 'suspended')]"/>
+                <separator/>
+                <filter string="🔴 En Mora (Vencidos)" name="in_debt" domain="[('state', '=', 'active'), ('payment_due_date', '&lt;', context_today().strftime('%Y-%m-%d'))]"/>
+                <filter string="⚠️ Próximos Cortes (Hoy/Mañana)" name="upcoming_cuts" domain="[('state', '=', 'active'), ('technical_state', '=', 'active'), ('service_cut_date', '&lt;=', (context_today() + relativedelta(days=1)).strftime('%Y-%m-%d'))]"/>
+                <separator/>
                 <filter string="Vence Hoy" name="due_today" domain="[('next_billing_date', '=', context_today().strftime('%Y-%m-%d'))]"/>
                 <group expand="0" string="Agrupar por">
                     <filter string="Tipo de Servicio" name="group_service_type" context="{'group_by': 'service_type'}"/>
@@ -25,14 +30,19 @@
         <field name="name">sentinela.subscription.tree</field>
         <field name="model">sentinela.subscription</field>
         <field name="arch" type="xml">
-            <list string="Suscripciones" decoration-danger="technical_state=='suspended'" decoration-info="state=='draft'" decoration-muted="state=='cancelled'">
+            <list string="Suscripciones" 
+                  decoration-danger="technical_state=='suspended'" 
+                  decoration-warning="state=='active' and payment_due_date and payment_due_date &lt; context_today().strftime('%Y-%m-%d')"
+                  decoration-info="state=='draft'" 
+                  decoration-muted="state=='cancelled'">
                 <field name="name"/>
+                <field name="monitoring_account_number" optional="show" string="Cuenta"/>
                 <field name="partner_id"/>
-                <field name="service_address_id" optional="show"/>
                 <field name="product_id"/>
-                <field name="service_type"/>
-                <field name="price_unit" sum="Total Monthly Revenue"/>
-                <field name="next_billing_date"/>
+                <field name="price_unit" sum="Ingreso Mensual" widget="monetary"/>
+                <field name="next_billing_date" string="Próxima Factura"/>
+                <field name="payment_due_date" widget="remaining_days" optional="show"/>
+                <field name="service_cut_date" widget="badge" decoration-danger="1" optional="show"/>
                 <field name="state" widget="badge" decoration-success="state == 'active'" decoration-info="state == 'draft'"/>
                 <field name="technical_state" widget="badge" decoration-success="technical_state == 'active'" decoration-danger="technical_state == 'suspended'"/>
             </list>
@@ -46,13 +56,22 @@
         <field name="arch" type="xml">
             <form string="Suscripción">
                 <header>
-                    <button name="action_generate_contract" string="Generar Contrato" type="object" class="btn-primary" invisible="state == 'draft'"/>
-                    <button name="action_activate" string="Activar" type="object" class="oe_highlight" invisible="state != 'draft'"/>
-                    <button name="action_suspend" string="Suspender Servicio" type="object" class="btn-warning" invisible="technical_state != 'active'"/>
-                    <button name="action_activate" string="Reactivar Servicio" type="object" class="btn-success" invisible="technical_state == 'active'"/>
-                    <button name="%(sentinela_subscriptions.action_subscription_extension_wizard)d" string="Prórroga" type="action" class="btn-info" invisible="service_type != 'internet' or extension_end_date"/>
-                    <button name="action_request_transfer" string="Cambio de Domicilio" type="object"/>
-                    <button name="action_cancel" string="Cancelar Contrato" type="object" class="btn-danger" invisible="state == 'cancelled'"/>
+                    <!-- Flujo Principal -->
+                    <button name="action_activate" string="Activar Suscripción" type="object" class="oe_highlight" invisible="state != 'draft'"/>
+                    <button name="action_generate_contract" string="📄 Generar Contrato" type="object" class="btn-primary" invisible="state != 'active'"/>
+                    
+                    <!-- Gestiones de Servicio -->
+                    <button name="%(sentinela_subscriptions.action_subscription_extension_wizard)d" string="⏳ Prórroga" type="action" class="btn-info" invisible="service_type != 'internet' or extension_end_date or state != 'active'"/>
+                    <button name="action_request_transfer" string="📍 Cambio de Domicilio" type="object" invisible="state != 'active'"/>
+                    
+                    <!-- Control Técnico -->
+                    <button name="action_activate" string="✅ Reactivar Servicio" type="object" class="btn-success" invisible="technical_state != 'suspended' or state != 'active'"/>
+                    <button name="action_suspend_wizard" string="🚫 Suspender Servicio" type="object" class="btn-warning" invisible="technical_state != 'active' or state != 'active'"/>
+                    
+                    <!-- Administración y Cierre -->
+                    <button name="action_recalculate_dates" string="⚙️ Recalcular Fechas" type="object" groups="base.group_system" help="Sincroniza periodos basados en la fecha de factura"/>
+                    <button name="action_cancel_wizard" string="❌ Cancelar Contrato" type="object" class="btn-danger" invisible="state == 'cancelled'"/>
+                    
                     <field name="state" widget="statusbar" statusbar_visible="draft,active,closed"/>
                 </header>
                 <sheet>
@@ -62,15 +81,19 @@
                         </button>
                     </div>
                     <div class="oe_title">
+                        <label for="name" class="oe_edit_only"/>
                         <h1>
-                            <field name="name"/>
+                            <field name="name" class="oe_inline"/>
                         </h1>
+                        <h2 class="mt-2 text-primary">
+                            <field name="partner_id" readonly="1" options="{'no_open': True}"/>
+                        </h2>
                     </div>
                     <group>
                         <group string="Información del Cliente">
                             <field name="partner_id"/>
                                     <field name="service_address_id" 
-                                           domain="[('parent_id', '=', partner_id)]" 
+                                           domain="['|', ('id', '=', partner_id), ('parent_id', '=', partner_id)]" 
                                            context="{'default_parent_id': partner_id, 'default_type': 'other', 'show_only_name': True}"
                                            options="{'no_create': True}"/>
                             
@@ -92,19 +115,19 @@
                             <div class="o_row">
                                 <field name="service_type" readonly="not is_new_record and edit_plan_locked"/>
                                 <button name="toggle_plan_lock" type="object" icon="fa-lock" 
-                                    groups="sentinela_subscriptions.group_subscription_manager" invisible="is_new_record or not edit_plan_locked" 
+                                    invisible="is_new_record or not edit_plan_locked" 
                                     help="Desbloquear edición"/>
                                 <button name="toggle_plan_lock" type="object" icon="fa-unlock" 
-                                    groups="sentinela_subscriptions.group_subscription_manager" invisible="is_new_record or edit_plan_locked" 
+                                    invisible="is_new_record or edit_plan_locked" 
                                     class="text-danger" help="Bloquear edición"/>
                             </div>
                             <field name="edit_plan_locked" invisible="1"/>
                             <field name="is_new_record" invisible="1"/>
                             <field name="product_id" domain="[('is_subscription', '=', True), ('service_type', '=', service_type)]" 
                                 readonly="not is_new_record and edit_plan_locked"/>
-                            <field name="price_unit"/>
+                            <field name="price_unit" readonly="not is_new_record and edit_plan_locked"/>
                             <field name="price_total" decoration-bf="1"/>
-                            <field name="recurring_interval"/>
+                            <field name="recurring_interval" readonly="not is_new_record and edit_plan_locked"/>
                         </group>
                     </group>
                     <group>
@@ -133,7 +156,7 @@
                                 <span> al </span>
                                 <field name="current_period_end" readonly="is_contract_locked"/>
                             </div>
-                            <field name="next_billing_date" string="Próximo Inicio" readonly="is_contract_locked"/>
+                            <field name="next_billing_date" string="Próximo Inicio" readonly="not is_new_record and edit_plan_locked"/>
                             <field name="is_forced_contract" readonly="is_contract_locked" force_save="1"/>
                         </group>
                     </group>
@@ -193,7 +216,7 @@
                                 <group>
                                     <field name="equipment_brand"/>
                                     <field name="equipment_model"/>
-                                    <field name="monitoring_account_number"/>
+                                    <field name="monitoring_account_number" readonly="not is_new_record and edit_plan_locked"/>
                                 </group>
                                 <group>
                                     <field name="equipment_serial"/>

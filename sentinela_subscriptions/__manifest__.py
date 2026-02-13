@@ -38,6 +38,7 @@
                 'wizard/mikrotik_traffic_views.xml',
                 'wizard/subscription_transfer_views.xml',
                 'wizard/subscription_extension_wizard_views.xml',
+                'wizard/subscription_close_wizard_views.xml',
                 'views/subscription_views.xml',
                 'views/contract_template_views.xml',
                 'views/res_partner_views.xml',

@@ -9,7 +9,7 @@
                         <i class="fa fa-shield fa-lg"></i>
                     </div>
                     <div>
-                        <h4 class="m-0 fw-bold text-dark">SENTINELA COMMAND CENTER</h4>
+                        <h4 class="m-0 fw-bold text-dark">SENTINELA CENTRO DE COMANDO</h4>
                         <small class="text-muted">Monitoreo en Tiempo Real</small>
                     </div>
                     <button class="btn btn-sm btn-light border ms-3" t-on-click="loadActiveEvents" title="Actualizar">

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_sentinela_subscription_close_wizard_form" model="ir.ui.view">
+        <field name="name">sentinela.subscription.close.wizard.form</field>
+        <field name="model">sentinela.subscription.close.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Confirmar Acción de Servicio">
+                <sheet>
+                    <div class="alert alert-warning" role="alert">
+                        Está a punto de <strong><field name="action_type" readonly="1" class="oe_inline"/></strong>. 
+                        Por favor, indique el motivo para fines de auditoría.
+                    </div>
+                    <group>
+                        <field name="subscription_id" invisible="1"/>
+                        <field name="reason_type"/>
+                        <field name="notes" placeholder="Explique brevemente el motivo..."/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_confirm" string="Confirmar y Aplicar" type="object" class="btn-danger"/>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_subscription_close_wizard" model="ir.actions.act_window">
+        <field name="name">Confirmar Motivo</field>
+        <field name="res_model">sentinela.subscription.close.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>

@@ -188,7 +188,7 @@ class SentinelaSubscription(models.Model):
     current_period_end = fields.Date(string='Fin del Periodo', help="Fecha de fin del periodo actual de servicio")
 
     invoice_gen_type = fields.Selection([
-        (str(i), f'{i} días antes' if i > 0 else 'Mismo día del pago') for i in range(31)
+        (str(i), f'{i} días antes' if i > 0 else 'Inicio del periodo') for i in range(31)
     ], string='Crear Factura', default='5', help="Días de anticipación para generar la factura antes del inicio del periodo")
 
     payment_due_type = fields.Selection([
@@ -290,6 +290,25 @@ class SentinelaSubscription(models.Model):
     # --- Monitoring Devices (Alarm) ---
 
     # --- Automations ---
+    def action_recalculate_dates(self):
+        """ Re-calcula periodos y fechas de gracia para registros migrados """
+        for sub in self:
+            if not sub.next_billing_date:
+                continue
+            
+            interval = int(sub.recurring_interval or 1)
+            # Si no hay fin de periodo, es el dia antes de la proxima factura
+            if not sub.current_period_end:
+                sub.current_period_end = sub.next_billing_date - timedelta(days=1)
+            
+            # Si no hay inicio de periodo, es el fin menos el intervalo
+            if not sub.current_period_start:
+                sub.current_period_start = sub.current_period_end - relativedelta(months=interval) + timedelta(days=1)
+            
+            # Forzar el calculo de fechas de gracia
+            sub._compute_flexible_dates()
+            sub.message_post(body="AUDITORÍA: Fechas de periodo y cobranza sincronizadas automáticamente.")
+
     def toggle_pppoe_lock(self):
         for rec in self:
             rec.edit_pppoe_locked = not rec.edit_pppoe_locked
@@ -518,6 +537,34 @@ class SentinelaSubscription(models.Model):
             'context': {'default_subscription_id': self.id}
         }
 
+    def action_suspend_wizard(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Confirmar Motivo de Suspensión',
+            'res_model': 'sentinela.subscription.close.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_subscription_id': self.id,
+                'default_action_type': 'suspend'
+            }
+        }
+
+    def action_cancel_wizard(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Confirmar Motivo de Cancelación',
+            'res_model': 'sentinela.subscription.close.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_subscription_id': self.id,
+                'default_action_type': 'cancel'
+            }
+        }
+
     def action_activate(self):
         self.write({
             'state': 'active', 
@@ -728,19 +775,20 @@ class SentinelaSubscription(models.Model):
         
         subs_to_bill = []
         for sub in active_subs:
-            if not sub.current_period_start:
+            if not sub.next_billing_date:
                 continue
                 
-            # Calcular cuándo le toca factura a esta suscripción específica
+            # Calcular cuándo le toca factura a esta suscripción específica (Basado en el PRÓXIMO inicio)
             lead_days = int(sub.invoice_gen_type or 0)
-            gen_date = sub.current_period_start - timedelta(days=lead_days)
+            gen_date = sub.next_billing_date - timedelta(days=lead_days)
             
-            # Si hoy es el día de generación o ya pasó (y no tiene SO reciente)
+            # Si hoy es el día de generación o ya pasó
             if today >= gen_date:
-                # Verificar si ya existe una SO reciente para este periodo para evitar duplicados
-                # Buscamos por origen o por relación directa
+                # Verificar si ya existe una SO para el periodo que vamos a facturar
+                # (Para evitar duplicados si el cron corre varias veces)
+                period_desc = f"Periodo: {sub.next_billing_date}"
                 existing = sub.sale_order_ids.filtered(
-                    lambda s: s.state in ['draft', 'sent'] and s.date_order.date() >= (today - timedelta(days=20))
+                    lambda s: s.state in ['draft', 'sent'] and period_desc in (s.order_line.mapped('name')[0] if s.order_line else '')
                 )
                 if not existing:
                     subs_to_bill.append(sub)
