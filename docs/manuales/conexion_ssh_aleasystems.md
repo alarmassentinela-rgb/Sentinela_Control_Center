@@ -1,7 +1,7 @@
-# Manual Técnico: Conexión SSH al Servidor Odoo (MasAdmin)
+# Manual Técnico: Conexión SSH al Servidor Odoo (AleaSystems)
 
 **Fecha de Creación:** 15 de Enero, 2026
-**Servidor Objetivo:** MasAdmin (Odoo)
+**Servidor Objetivo:** AleaSystems (Odoo)
 **Dirección IP:** 192.168.3.2
 **Puerto SSH:** 2222
 **Usuario:** egarza
@@ -49,8 +49,9 @@ Una vez conectado, puede verificar su identidad y el host con:
 ```bash
 whoami
 hostname
-# Debería retornar: egarza / masadmin
+# Debería retornar: egarza / AleaSystems
 ```
 
 ## 6. Historial de Cambios
 - **15/01/2026:** Documentación inicial creada tras resolver conflicto de permisos "UNPROTECTED PRIVATE KEY FILE" moviendo las llaves a `/tmp`.
+- **18/02/2026:** Actualización de nombre de servidor de MasAdmin a AleaSystems.

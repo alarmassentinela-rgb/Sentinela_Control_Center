@@ -56,13 +56,48 @@ class MonitoringDevice(models.Model):
     alarm_event_ids = fields.One2many('sentinela.alarm.event', 'device_id', string='Eventos de Alarma')
     alarm_signal_ids = fields.One2many('sentinela.alarm.signal', 'device_id', string='Señales de Alarma')
     zone_ids = fields.One2many('sentinela.monitoring.zone', 'device_id', string='Zonas Configuradas')
+    contact_ids = fields.One2many('sentinela.monitoring.contact', 'device_id', string='Contactos de Emergencia')
     
     # NUEVO: Configuracion personalizada de codigos por cuenta
+    template_id = fields.Many2one('sentinela.alarm.code.template', string='Plantilla de Reacción')
     alarm_config_ids = fields.One2many('sentinela.device.alarm.config', 'device_id', string='Configuración de Eventos')
 
     _sql_constraints = [
         ('account_number_uniq', 'unique(account_number)', 'El número de cuenta del panel debe ser único.')
     ]
+
+    def action_apply_template(self):
+        """Copia la configuración de la plantilla a la cuenta del cliente"""
+        self.ensure_one()
+        if not self.template_id:
+            return
+        
+        # 1. Borrar configuración actual
+        self.alarm_config_ids.unlink()
+        
+        # 2. Clonar líneas de la plantilla
+        vals_list = []
+        for line in self.template_id.line_ids:
+            vals_list.append({
+                'device_id': self.id,
+                'alarm_code_id': line.alarm_code_id.id,
+                'priority_id': line.priority_id.id if line.priority_id else False,
+                'notify_email': line.notify_email,
+                'notify_telegram': line.notify_telegram,
+            })
+        
+        if vals_list:
+            self.env['sentinela.device.alarm.config'].create(vals_list)
+        
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Plantilla Aplicada',
+                'message': f'Se han cargado {len(vals_list)} códigos desde la plantilla {self.template_id.name}',
+                'sticky': False,
+            }
+        }
     
     @api.depends('device_id', 'partner_id.name')
     def _compute_name(self):

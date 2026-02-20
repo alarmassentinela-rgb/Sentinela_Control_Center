@@ -51,6 +51,7 @@
         'views/fsm_pause_reason_views.xml',
         'views/fsm_menus.xml',
         'views/fsm_portal_templates.xml',
+        'views/tech_portal_templates.xml',
         'report/fsm_order_report.xml',
     ],
     'application': True,

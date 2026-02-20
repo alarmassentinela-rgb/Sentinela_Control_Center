@@ -1,0 +1,28 @@
+<?xml version='1.0' encoding='utf-8'?>
+<odoo>
+    <record id='view_partner_form_gps_inherit' model='ir.ui.view'>
+        <field name='name'>res.partner.form.gps.inherit</field>
+        <field name='model'>res.partner</field>
+        <field name='inherit_id' ref='base.view_partner_form'/>
+        <field name='arch' type='xml'>
+            <notebook position='inside'>
+                <page string='Configuración GPS' invisible='not is_patrol'>
+                    <group>
+                        <group string='Vinculación Traccar'>
+                            <field name='is_patrol'/>
+                            <field name='traccar_device_id'/>
+                        </group>
+                        <group string='Última Ubicación'>
+                            <field name='last_gps_lat'/>
+                            <field name='last_gps_lng'/>
+                            <field name='last_gps_update'/>
+                        </group>
+                    </group>
+                </page>
+            </notebook>
+            <xpath expr="//field[@name='category_id']" position='after'>
+                <field name='is_patrol' widget='boolean_toggle'/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

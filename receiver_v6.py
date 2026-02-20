@@ -127,15 +127,21 @@ def process_signal(cid, raw_data):
     
     # 2. Definir Prioridad y Estado Base
     p_normal_id = get_priority_id(models, uid, 'NORMAL', 'Normal', 3)
-    p_high_id = get_priority_id(models, uid, 'CRITICA', 'Crítica', 9)
     
-    priority_id = code_data['priority_id'][0] if code_data and code_data['priority_id'] else p_normal_id
-    status = 'active'
-    requires_attention = code_data['requires_attention'] if code_data else True
-
-    if not requires_attention:
-        status = 'resolved'
-        logging.info(f"[INTELIGENCIA] Código {cid['code']} no requiere atención. Archivando.")
+    # Valores por defecto seguros
+    priority_id = p_normal_id
+    status = 'active' # Por defecto siempre activo para seguridad
+    
+    if code_data:
+        if code_data['priority_id']:
+            priority_id = code_data['priority_id'][0]
+        
+        # Solo marcar como resuelto si Odoo dice explícitamente que NO requiere atención
+        if not code_data.get('requires_attention', True):
+            status = 'resolved'
+            logging.info(f"[INTELIGENCIA] Código {cid['code']} configurado como informativo. Archivando.")
+    else:
+        logging.warning(f"[RECEPTOR] Código {cid['code']} no existe en Odoo. Usando valores por defecto (ACTIVO/NORMAL).")
 
     # 3. Buscar Dispositivo
     device_ids = models.execute_kw(ODOO_DB, uid, ODOO_PASS, 'sentinela.monitoring.device', 'search', [[['account_number', '=', cid['account']]]])

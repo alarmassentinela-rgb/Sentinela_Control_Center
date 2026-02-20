@@ -57,6 +57,7 @@ class FsmOrder(models.Model):
         ('install', 'Instalación'),
         ('repair', 'Reparación'),
         ('transfer', 'Traslado'),
+        ('removal', 'Retiro de Equipo / Desinstalación'),
         ('patrol', 'Patrullaje / Respuesta'),
         ('other', 'Otro')
     ], string='Tipo de Servicio', default='other')
@@ -212,14 +213,30 @@ class FsmOrder(models.Model):
         if self.subscription_id:
             sub_vals = {}
             
-            # Sincronizar Ubicación GPS Real
-            if self.install_lat and self.install_lon:
-                sub_vals['latitude'] = str(self.install_lat)
-                sub_vals['longitude'] = str(self.install_lon)
-            elif self.check_in_lat and self.check_in_lon:
-                # Si no se capturó lat de instalación, usar la del check-in
-                sub_vals['latitude'] = str(self.check_in_lat)
-                sub_vals['longitude'] = str(self.check_in_lon)
+            # Sincronizar Ubicación GPS Real (Desde Instalación o Check-In)
+            final_lat = self.install_lat or self.check_in_lat
+            final_lon = self.install_lon or self.check_in_lon
+
+            if final_lat and final_lon:
+                sub_vals['latitude'] = str(final_lat)
+                sub_vals['longitude'] = str(final_lon)
+                
+                # 1. Propagar a la Dirección de Servicio (Contacto)
+                if self.service_address_id:
+                    self.service_address_id.write({
+                        'partner_latitude': final_lat,
+                        'partner_longitude': final_lon
+                    })
+                
+                # 2. Propagar a Dispositivos de Monitoreo vinculados a la suscripción
+                monitoring_devices = self.env['sentinela.monitoring.device'].search([
+                    ('subscription_id', '=', self.subscription_id.id)
+                ])
+                if monitoring_devices:
+                    monitoring_devices.write({
+                        'latitude': final_lat,
+                        'longitude': final_lon
+                    })
 
             # Datos Vehículo (GPS)
             if self.vehicle_brand or self.vehicle_model:
@@ -240,9 +257,29 @@ class FsmOrder(models.Model):
             if self.internet_antenna_mac: sub_vals['location_notes'] = (self.subscription_id.location_notes or "") + f"\nMAC Antena: {self.internet_antenna_mac}"
             if self.internet_pppoe_user: sub_vals['pppoe_user'] = self.internet_pppoe_user
             
+            # Sincronización de Números de Serie desde Equipos usados
+            main_equipment = self.equipment_ids.filtered(lambda e: e.lot_id and (e.product_id.is_subscription or e.product_id == self.subscription_id.product_id))
+            if not main_equipment and self.equipment_ids:
+                # Fallback: Usar el primer equipo que tenga serie si no se detectó por tipo
+                main_equipment = self.equipment_ids.filtered(lambda e: e.lot_id)[:1]
+            
+            if main_equipment:
+                sub_vals['serial_number_id'] = main_equipment[0].lot_id.id
+                sub_vals['equipment_serial'] = main_equipment[0].lot_id.name
+            
+            # Actualizar Fecha de Último Mantenimiento si es un servicio técnico
+            if self.service_type in ['install', 'repair', 'other']:
+                sub_vals['last_maintenance_date'] = fields.Date.today()
+            
+            # Punto 4: Cierre automático por Retiro de Equipo
+            if self.service_type == 'removal':
+                sub_vals['state'] = 'closed'
+                sub_vals['technical_state'] = 'cut'
+                self.subscription_id.message_post(body=f"CONTRATO CERRADO AUTOMÁTICAMENTE: Se finalizó la orden de retiro/desinstalación {self.name}.")
+
             if sub_vals:
                 self.subscription_id.write(sub_vals)
-                self.message_post(body="✅ Geolocalización y datos técnicos sincronizados al contrato.")
+                self.message_post(body="✅ Geolocalización, números de serie y datos técnicos sincronizados al contrato.")
 
         self.stage = 'done'
         self.check_out_date = fields.Datetime.now()

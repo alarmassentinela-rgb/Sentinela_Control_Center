@@ -19,6 +19,120 @@ class SentinelaSubscription(models.Model):
     _inherit = ['mail.thread', 'mail.activity.mixin', 'mail.render.mixin']
     _order = 'id desc'
 
+    # --- API Connecta / floLIVE ---
+    sim_status = fields.Selection([
+        ('active', 'Activa / Online'),
+        ('suspended', 'Suspendida'),
+        ('offline', 'Offline'),
+        ('unknown', 'Desconocido')
+    ], string='Estado Real SIM', default='unknown', readonly=True)
+    
+    sim_data_usage = fields.Float(string='Consumo Mes (MB)', readonly=True)
+    sim_last_sync = fields.Datetime(string='Última Sincro SIM', readonly=True)
+
+    @api.model
+    def get_connecta_credentials(self):
+        get_param = self.env['ir.config_parameter'].sudo().get_param
+        return {
+            'client_id': get_param('sentinela.connecta_client_id'),
+            'access_token': get_param('sentinela.connecta_access_token'),
+        }
+
+    def action_sync_connecta_data(self):
+        """
+        Llamada REAL a la API de floLIVE para traer consumo y estado
+        """
+        self.ensure_one()
+        import requests
+        import json
+        
+        if not self.sim_iccid:
+            raise UserError("Debe registrar el ICCID de la SIM para sincronizar.")
+
+        creds = self.get_connecta_credentials()
+        if not creds['client_id'] or not creds['access_token']:
+            raise UserError("Debe configurar las credenciales de Connecta en Ajustes.")
+
+        # Endpoint real descubierto en el Swagger
+        auth_url = "https://floportal.flolive.net/api/v2/auth/token"
+        
+        auth_success = False
+        token = False
+        error_details = ""
+        
+        try:
+            auth_res = requests.post(
+                auth_url,
+                json={
+                    "username": creds['client_id'],
+                    "password": creds['access_token']
+                },
+                headers={"Content-Type": "application/json"},
+                timeout=10
+            )
+            
+            if auth_res.status_code == 200:
+                data = auth_res.json()
+                # En floLIVE auth/token, el token suele venir en 'token' o 'accessToken' o dentro de 'content'
+                token = data.get('token') or data.get('accessToken') or (data.get('content') and data.get('content').get('token'))
+                if token:
+                    auth_success = True
+                    current_base_url = "https://floportal.flolive.net/api/v2"
+            else:
+                error_details = f"Error {auth_res.status_code}: {auth_res.text[:100]}"
+        except Exception as e:
+            error_details = f"Fallo de conexión: {str(e)}"
+
+        if not auth_success:
+            raise UserError(f"No se pudo conectar a Connecta (Auth Token). Detalles:\n{error_details}")
+
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        
+        try:
+            # Consultar información del Suscriptor
+            sub_res = requests.get(
+                f"{current_base_url}/subscribers/iccid/{self.sim_iccid}",
+                headers=headers,
+                timeout=10
+            )
+            
+            if sub_res.status_code == 404:
+                raise UserError(f"La SIM con ICCID {self.sim_iccid} no fue encontrada en floLIVE.")
+            
+            if sub_res.status_code != 200:
+                raise UserError(f"Error al consultar SIM: {sub_res.text}")
+
+            data = sub_res.json()
+            
+            # 3. Mapear datos recibidos
+            # Los nombres de los campos pueden variar según la versión de la API de floLIVE
+            status_map = {
+                'ACTIVE': 'active',
+                'SUSPENDED': 'suspended',
+                'DEACTIVATED': 'offline'
+            }
+            
+            # El consumo suele venir en bytes o KB, lo convertimos a MB
+            raw_usage = data.get('dataUsage', 0) 
+            mb_usage = raw_usage / 1024 # Ajustar según si la API entrega KB o Bytes
+            
+            self.write({
+                'sim_status': status_map.get(data.get('status'), 'unknown'),
+                'sim_data_usage': mb_usage,
+                'sim_last_sync': fields.Datetime.now()
+            })
+
+            return {
+                'effect': {
+                    'fadeout': 'slow',
+                    'message': f'SIM Sincronizada: {mb_usage:.2f} MB consumidos',
+                    'type': 'rainbow_man',
+                }
+            }
+
+        except requests.exceptions.RequestException as e:
+            raise UserError(f"Error de conexión con el servidor de Connecta: {str(e)}")
+
     # --- Digital Contracts ---
     contract_content = fields.Html(string='Contenido del Contrato', copy=False, help="Contenido HTML renderizado del contrato específico para este cliente.")
     sign_document_ids = fields.One2many('sentinela.sign.document', 'res_id', string='Documentos de Firma', domain=[('res_model', '=', 'sentinela.subscription')])
@@ -185,6 +299,8 @@ class SentinelaSubscription(models.Model):
         ('fiscal', 'Factura Fiscal (CFDI)'),
         ('remision', 'Remisión / Nota de Venta')
     ], string='Tipo de Facturación', default='fiscal', help="Define si el robot genera un documento fiscal o una nota de venta interna.")
+    
+    auto_bill = fields.Boolean(string='Auto-Facturar', default=False, help="Si está activo, el sistema confirmará la venta y generará la factura/remisión automáticamente el día del vencimiento.")
 
     ip_address = fields.Char(string='Dirección IP', help="IP estática para integración MikroTik")
 
@@ -365,6 +481,28 @@ class SentinelaSubscription(models.Model):
     technical_state_date = fields.Datetime(string='Estado Técnico Desde', default=fields.Datetime.now, readonly=True)
     extension_end_date = fields.Datetime(string='Fin de Prórroga', readonly=True, help="Fecha y hora en que termina la prórroga temporal.")
 
+    # --- Maintenance Tracking ---
+    maintenance_frequency = fields.Selection([
+        ('0', 'Sin Mantenimiento Programado'),
+        ('3', 'Trimestral (Cada 3 meses)'),
+        ('6', 'Semestral (Cada 6 meses)'),
+        ('12', 'Anual (Cada 12 meses)')
+    ], string='Frecuencia de Mantenimiento', default='0')
+    last_maintenance_date = fields.Date(string='Último Mantenimiento', help="Fecha del último servicio preventivo realizado.")
+    next_maintenance_date = fields.Date(string='Próximo Mantenimiento', compute='_compute_next_maintenance', store=True)
+
+    @api.depends('last_maintenance_date', 'maintenance_frequency', 'start_date')
+    def _compute_next_maintenance(self):
+        for sub in self:
+            if sub.maintenance_frequency and sub.maintenance_frequency != '0':
+                base_date = sub.last_maintenance_date or sub.start_date
+                if base_date:
+                    sub.next_maintenance_date = base_date + relativedelta(months=int(sub.maintenance_frequency))
+                else:
+                    sub.next_maintenance_date = False
+            else:
+                sub.next_maintenance_date = False
+
     description = fields.Html(string='Internal Notes')
     
     # --- Technical Location ---
@@ -382,6 +520,16 @@ class SentinelaSubscription(models.Model):
     
     is_new_record = fields.Boolean(compute='_compute_is_new_record')
 
+    is_overdue = fields.Boolean(compute='_compute_overdue_flags', string='Is Overdue', store=True)
+    is_maintenance_overdue = fields.Boolean(compute='_compute_overdue_flags', string='Is Maintenance Overdue', store=True)
+
+    @api.depends('payment_due_date', 'next_maintenance_date')
+    def _compute_overdue_flags(self):
+        today = fields.Date.today()
+        for sub in self:
+            sub.is_overdue = sub.payment_due_date and sub.payment_due_date < today
+            sub.is_maintenance_overdue = sub.next_maintenance_date and sub.next_maintenance_date < today
+
     @api.depends('name') # Algún campo que cambie
     def _compute_is_new_record(self):
         for rec in self:
@@ -393,23 +541,27 @@ class SentinelaSubscription(models.Model):
 
     # --- Automations ---
     def action_recalculate_dates(self):
-        """ Re-calcula periodos y fechas de gracia para registros migrados """
+        """ Re-calcula periodos y fechas de gracia basándose en la jerarquía: Fin -> Próximo Inicio """
         for sub in self:
-            if not sub.next_billing_date:
+            if not sub.current_period_end and not sub.next_billing_date:
                 continue
             
             interval = int(sub.recurring_interval or 1)
-            # Si no hay fin de periodo, es el dia antes de la proxima factura
-            if not sub.current_period_end:
+            
+            # 1. Jerarquía: Si hay Fin, manda sobre Próximo Inicio
+            if sub.current_period_end:
+                sub.next_billing_date = sub.current_period_end + timedelta(days=1)
+            # 2. Si no hay Fin pero hay Próximo Inicio, calculamos el Fin
+            elif sub.next_billing_date:
                 sub.current_period_end = sub.next_billing_date - timedelta(days=1)
             
-            # Si no hay inicio de periodo, es el fin menos el intervalo
-            if not sub.current_period_start:
+            # 3. Calcular Inicio basado en el Fin (independientemente de cómo llegamos al Fin)
+            if sub.current_period_end:
                 sub.current_period_start = sub.current_period_end - relativedelta(months=interval) + timedelta(days=1)
             
             # Forzar el calculo de fechas de gracia
             sub._compute_flexible_dates()
-            sub.message_post(body="AUDITORÍA: Fechas de periodo y cobranza sincronizadas automáticamente.")
+            sub.message_post(body="AUDITORÍA: Fechas de periodo sincronizadas (Fin manda sobre Inicio).")
 
     def toggle_pppoe_lock(self):
         for rec in self:
@@ -459,12 +611,19 @@ class SentinelaSubscription(models.Model):
     def write(self, vals):
         # Campos críticos que invalidan el contrato
         critical_fields = ['product_id', 'price_unit', 'start_date', 'service_address_id', 'recurring_interval']
-        if any(field in vals for field in critical_fields):
-            for sub in self:
-                # 1. Limpiar visualización actual
-                vals['contract_content'] = False
+        
+        # Detectar cambios en geolocalización para propagación manual (Irma)
+        geo_changed = 'latitude' in vals or 'longitude' in vals
+
+        res = super(SentinelaSubscription, self).write(vals)
+
+        for sub in self:
+            # 1. Lógica de invalidación de contrato (Plantilla)
+            if any(field in vals for field in critical_fields):
+                # Limpiar visualización actual
+                sub.sudo().contract_content = False
                 
-                # 2. Gestionar documentos existentes
+                # Gestionar documentos existentes
                 docs = sub.sign_document_ids
                 draft_docs = docs.filtered(lambda d: d.state in ['draft', 'sent'])
                 signed_docs = docs.filtered(lambda d: d.state == 'signed')
@@ -476,9 +635,38 @@ class SentinelaSubscription(models.Model):
                 
                 # Advertir si hay firmados
                 if signed_docs:
-                    sub.message_post(body=_("⚠️ ATENCIÓN: Se han modificado condiciones críticas (Plan/Precio) pero existe un contrato firmado vigente. Se recomienda generar un nuevo contrato y solicitar firma."))
+                    sub.message_post(body=_("⚠️ ATENCIÓN: Se han modificado condiciones críticas (Plan/Precio) pero existe un contrato firmado vigente."))
 
-        return super(SentinelaSubscription, self).write(vals)
+            # 2. Propagación de Geolocalización Manual
+            if geo_changed and sub.latitude and sub.longitude:
+                try:
+                    lat_float = float(sub.latitude)
+                    lon_float = float(sub.longitude)
+                    
+                    # Propagar a la Dirección de Servicio (Contacto)
+                    if sub.service_address_id:
+                        sub.service_address_id.write({
+                            'partner_latitude': lat_float,
+                            'partner_longitude': lon_float
+                        })
+                    
+                    # Propagar a Dispositivos de Monitoreo
+                    # Usamos sudo por si el usuario no tiene permisos en el módulo de monitoreo
+                    devices = self.env['sentinela.monitoring.device'].sudo().search([
+                        ('subscription_id', '=', sub.id)
+                    ])
+                    if devices:
+                        devices.write({
+                            'latitude': lat_float,
+                            'longitude': lon_float
+                        })
+                    
+                    sub.message_post(body="📍 Geolocalización actualizada y propagada a contactos y dispositivos.")
+                except (ValueError, TypeError):
+                    # En caso de que metan texto no numérico, ignoramos para no romper el guardado
+                    pass
+
+        return res
 
     @api.onchange('pppoe_user')
     def _onchange_pppoe_user(self):
@@ -534,13 +722,23 @@ class SentinelaSubscription(models.Model):
                 sub.payment_due_date = False
                 sub.service_cut_date = False
 
-    @api.onchange('start_date', 'next_billing_date', 'recurring_interval')
+    @api.onchange('current_period_end', 'next_billing_date', 'recurring_interval')
     def _onchange_billing_dates(self):
-        if self.next_billing_date and self.recurring_interval:
-            interval = int(self.recurring_interval)
-            # El periodo actual termina un día antes del siguiente inicio de facturación
+        # Evitar recursión infinita simple con contexto o chequeo de disparador
+        # Odoo onchange maneja esto relativamente bien si no hay loops directos.
+        
+        interval = int(self.recurring_interval or 1)
+        
+        # Si el usuario cambia el FIN del periodo actual
+        if self.current_period_end:
+            # El próximo inicio es siempre el día siguiente al fin
+            self.next_billing_date = self.current_period_end + timedelta(days=1)
+            # El inicio del periodo actual se recalcula hacia atrás
+            self.current_period_start = self.current_period_end - relativedelta(months=interval) + timedelta(days=1)
+            
+        # Si el usuario cambia el PRÓXIMO INICIO (y no el fin directamente)
+        elif self.next_billing_date:
             self.current_period_end = self.next_billing_date - timedelta(days=1)
-            # El inicio del periodo actual es el fin menos el intervalo (aprox)
             self.current_period_start = self.current_period_end - relativedelta(months=interval) + timedelta(days=1)
 
     @api.depends('start_date', 'commitment_period', 'is_forced_contract')
@@ -949,11 +1147,23 @@ class SentinelaSubscription(models.Model):
                 for sub in subs_list:
                     sub.write({'sale_order_ids': [(4, so.id)]})
                 
-                # Intentar enviar correo si hay plantilla
-                template = self.env.ref('sale.email_template_edi_sale', raise_if_not_found=False)
-                if template:
-                    so.message_post_with_source(template, email_layout_xmlid='mail.mail_notification_layout_with_responsible_signature')
-                    so.state = 'sent'
+                # --- NUEVA LÓGICA AUTO-FACTURAR ---
+                # Si todas las suscripciones en este grupo son auto_bill, procesamos flujo completo
+                if all(s.auto_bill for s in subs_list):
+                    _logger.info(f"AUTO-BILL: Confirmando y Facturando automáticamente {so.name}")
+                    so.action_confirm() # Esto genera la Remisión (Picking)
+                    
+                    # Generar la Factura en Borrador
+                    invoice = so._create_invoices()
+                    if invoice:
+                        invoice.action_post() # Publicar la factura/remisión
+                        _logger.info(f"AUTO-BILL: Factura {invoice.name} publicada para {so.name}")
+                else:
+                    # Flujo tradicional: Solo enviar cotización por correo
+                    template = self.env.ref('sale.email_template_edi_sale', raise_if_not_found=False)
+                    if template:
+                        so.message_post_with_source(template, email_layout_xmlid='mail.mail_notification_layout_with_responsible_signature')
+                        so.state = 'sent'
                 
                 _logger.info(f"FLEX-BILLING: Generada {so.name} para {len(subs_list)} suscripciones")
             except Exception as e:
@@ -1102,15 +1312,16 @@ class SaleOrder(models.Model):
     
     def _create_invoices(self, grouped=False, final=False, date=None):
         moves = super(SaleOrder, self)._create_invoices(grouped=grouped, final=final, date=date)
-        # Propagate subscription_id to invoices
+        # Propagate subscription_id and fiscal type to invoices
         for move in moves:
-            # Find which subscription this invoice came from (via sale orders)
-            # A move can be related to multiple orders, but usually one sub per order
+            # Find which subscription this invoice came from
             orders = move.line_ids.sale_line_ids.order_id
             for order in orders:
-                if order.subscription_id:
-                    move.subscription_id = order.subscription_id
-                    # If SO already triggered renewal, mark Invoice as processed to avoid double renewal
+                # Buscar suscripciones vinculadas a este pedido
+                subs = self.env['sentinela.subscription'].search([('sale_order_ids', 'in', order.id)], limit=1)
+                if subs:
+                    move.subscription_id = subs[0].id
+                    move.invoice_fiscal_type = subs[0].invoice_fiscal_type
                     if order.is_renewal_processed:
                         move.is_renewal_processed = True 
                     break 
@@ -1120,6 +1331,11 @@ class AccountMove(models.Model):
     _inherit = 'account.move'
     subscription_id = fields.Many2one('sentinela.subscription', string='Related Subscription')
     is_renewal_processed = fields.Boolean(default=False, copy=False, help="Technical flag to prevent double renewal processing.")
+    
+    invoice_fiscal_type = fields.Selection([
+        ('fiscal', 'Factura Fiscal (CFDI)'),
+        ('remision', 'Remisión / Nota de Venta')
+    ], string='Tipo de Facturación', readonly=True)
 
     def _post(self, soft=True):
         res = super(AccountMove, self)._post(soft=soft)

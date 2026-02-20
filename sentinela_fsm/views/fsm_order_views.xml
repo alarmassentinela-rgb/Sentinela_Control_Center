@@ -10,7 +10,7 @@
                 <field name="priority"/>
                 <field name="technician_id"/>
                 <templates>
-                    <t t-name="kanban-box">
+                    <t t-name="card">
                         <div class="oe_kanban_global_click">
                             <div class="oe_kanban_content">
                                 <div class="o_kanban_record_top">
@@ -25,7 +25,7 @@
                                     <field name="partner_id"/>
                                 </div>
                                 <div>
-                                    <span class="fa fa-clock-o"/> <field name="scheduled_date"/>
+                                    <span class="fa fa-clock" title="Scheduled Date"/> <field name="scheduled_date"/>
                                 </div>
                                 <div class="o_kanban_record_bottom">
                                     <div class="oe_kanban_bottom_left">

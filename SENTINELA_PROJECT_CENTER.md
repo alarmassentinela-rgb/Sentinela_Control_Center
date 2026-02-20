@@ -45,7 +45,11 @@ Interfaz de alta densidad para operadores con 3 pestañas críticas:
 
 ## 5. Infraestructura y Entorno de Trabajo
 - **Ruta Oficial:** `/mnt/c/Users/dell/DellCli` (Sincronizado vía OneDrive para persistencia local/laptop).
-- **Servidor Local:** 192.168.3.2 (n8n, Evolution API, Odoo).
+- **Servidor Local:** 192.168.3.2 (AleaSystems)
+    *   **SSH:** Puerto `2222`, Usuario `egarza`.
+    *   **Acceso WSL:** Requiere habilitar el rango `172.19.0.0/16` en UFW y verificar Fail2Ban.
+    *   **Odoo:** Puerto `8070` (Port 8069 legacy desactivado).
+    *   **n8n:** Puerto `5678`.
 - **Respaldo:** Repositorio GitHub `Sentinela_Control_Center`.
 
 ---

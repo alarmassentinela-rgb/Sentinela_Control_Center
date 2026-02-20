@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_alarm_code_template_form" model="ir.ui.view">
+        <field name="name">sentinela.alarm.code.template.form</field>
+        <field name="model">sentinela.alarm.code.template</field>
+        <field name="arch" type="xml">
+            <form string="Plantilla Maestra de Códigos">
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" placeholder="Ej. Plantilla Residencial"/></h1>
+                    </div>
+                    <group>
+                        <field name="description"/>
+                        <field name="active" widget="boolean_toggle"/>
+                    </group>
+                    <notebook>
+                        <page string="Configuración de Reacción">
+                            <field name="line_ids">
+                                <list editable="bottom">
+                                    <field name="alarm_code_id"/>
+                                    <field name="priority_id" widget="badge"/>
+                                    <field name="notify_email"/>
+                                    <field name="notify_telegram"/>
+                                    <field name="notes"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_alarm_code_template_list" model="ir.ui.view">
+        <field name="name">sentinela.alarm.code.template.list</field>
+        <field name="model">sentinela.alarm.code.template</field>
+        <field name="arch" type="xml">
+            <list string="Plantillas Maestras">
+                <field name="name"/>
+                <field name="description"/>
+                <field name="active"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_alarm_code_template" model="ir.actions.act_window">
+        <field name="name">Plantillas de Códigos</field>
+        <field name="res_model">sentinela.alarm.code.template</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>

@@ -1,6 +1,6 @@
 # Manual de Operaciones: Importación de Suscripciones de Alarma
 
-**Objetivo:** Migrar masivamente clientes de monitoreo desde MasAdmin hacia Odoo (Sentinela), asegurando la creación de contratos y la vinculación técnica de paneles.
+**Objetivo:** Migrar masivamente clientes de monitoreo desde AleaSystems hacia Odoo (Sentinela), asegurando la creación de contratos y la vinculación técnica de paneles.
 
 ## 1. Archivos Necesarios
 *   **Plantilla CSV:** `plantilla_importacion_alarmas.csv`

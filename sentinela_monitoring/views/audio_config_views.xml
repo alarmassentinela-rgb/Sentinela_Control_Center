@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_sentinela_receiver_status_form_audio" model="ir.ui.view">
+        <field name="name">sentinela.receiver.status.form.audio</field>
+        <field name="model">sentinela.receiver.status</field>
+        <field name="arch" type="xml">
+            <form string="Configuración de Audio Global" create="0" delete="0">
+                <sheet>
+                    <div class="oe_title">
+                        <h1>Control de Audio Central</h1>
+                    </div>
+                    <group>
+                        <setting string="Sonido de Alerta de Pendientes" help="Suba el archivo MP3 que sonará mientras haya alarmas sin atender.">
+                            <field name="pending_event_sound_filename" invisible="1"/>
+                            <field name="pending_event_sound" widget="binary" filename="pending_event_sound_filename"/>
+                        </setting>
+                    </group>
+                    <group>
+                        <field name="status" widget="badge" decoration-success="status == 'online'" decoration-danger="status == 'offline'"/>
+                        <field name="last_heartbeat" readonly="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_sentinela_audio_config" model="ir.actions.act_window">
+        <field name="name">Configuración de Audio</field>
+        <field name="res_model">sentinela.receiver.status</field>
+        <field name="view_mode">form</field>
+        <field name="target">inline</field>
+        <field name="res_id" eval="1"/>
+    </record>
+
+    <!-- 
+    <menuitem id="menu_sentinela_audio_config"
+              name="Configuración de Audio"
+              parent="sentinela_monitoring.menu_monitoring_config"
+              action="action_sentinela_audio_config"
+              sequence="5"/>
+    -->
+</odoo>

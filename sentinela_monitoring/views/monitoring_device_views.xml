@@ -19,15 +19,20 @@
                     <group>
                         <group string="Información del Dispositivo">
                             <field name="device_id" readonly="1"/>
-                            <field name="account_number"/>
-                            <field name="protocol"/>
-                            <field name="device_type"/>
+                            <field name="account_number" groups="base.group_system"/>
+                            <field name="account_number" groups="!base.group_system" readonly="1"/>
+                            <field name="protocol" groups="base.group_system"/>
+                            <field name="protocol" groups="!base.group_system" readonly="1"/>
+                            <field name="device_type" groups="base.group_system"/>
+                            <field name="device_type" groups="!base.group_system" readonly="1"/>
                             <field name="installation_date"/>
                             <field name="warranty_expiration"/>
                         </group>
                         <group string="Cliente">
-                            <field name="partner_id"/>
-                            <field name="subscription_id"/>
+                            <field name="partner_id" groups="base.group_system"/>
+                            <field name="partner_id" groups="!base.group_system" readonly="1"/>
+                            <field name="subscription_id" groups="base.group_system"/>
+                            <field name="subscription_id" groups="!base.group_system" readonly="1"/>
                         </group>
                     </group>
                     <group string="Ubicación">
@@ -47,15 +52,38 @@
                         <page string="Zonas de Monitoreo">
                             <field name="zone_ids">
                                 <list editable="bottom">
-                                    <field name="zone_number"/>
-                                    <field name="partition"/>
+                                    <field name="zone_number" groups="base.group_system"/>
+                                    <field name="zone_number" groups="!base.group_system" readonly="1"/>
+                                    <field name="partition" groups="base.group_system"/>
+                                    <field name="partition" groups="!base.group_system" readonly="1"/>
                                     <field name="name"/>
                                     <field name="zone_type"/>
                                     <field name="is_bypassed"/>
                                 </list>
                             </field>
                         </page>
+                        <page string="Contactos de Emergencia">
+                            <field name="contact_ids">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="name"/>
+                                    <field name="phone"/>
+                                    <field name="relation"/>
+                                    <field name="email"/>
+                                    <field name="notes"/>
+                                    <field name="last_update" readonly="1"/>
+                                </list>
+                            </field>
+                        </page>
                         <page string="Configuración de Eventos">
+                            <group>
+                                <group>
+                                    <field name="template_id" placeholder="Seleccione una plantilla maestra..."/>
+                                </group>
+                                <group>
+                                    <button name="action_apply_template" string="Cargar Plantilla" type="object" class="btn-primary" icon="fa-copy" invisible="not template_id"/>
+                                </group>
+                            </group>
                             <field name="alarm_config_ids">
                                 <list editable="bottom">
                                     <field name="alarm_code_id"/>

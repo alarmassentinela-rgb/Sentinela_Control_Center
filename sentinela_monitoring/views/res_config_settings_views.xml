@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_monitoring" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.monitoring</field>
+        <field name="model">res.config.settings</field>
+        <field name="priority" eval="90"/>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app data-string="Monitoreo" string="Monitoreo" name="sentinela_monitoring">
+                    <block title="Configuración de la Central" name="central_config">
+                        <setting string="Numeración de Cuentas" help="Define el número de cuenta inicial para instalaciones nuevas.">
+                            <div class="content-group">
+                                <div class="mt16">
+                                    <label for="monitoring_next_account_number" string="Siguiente Cuenta a Asignar"/>
+                                    <field name="monitoring_next_account_number" class="oe_inline"/>
+                                </div>
+                            </div>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="action_monitoring_config_settings" model="ir.actions.act_window">
+        <field name="name">Ajustes de Monitoreo</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">res.config.settings</field>
+        <field name="view_mode">form</field>
+        <field name="target">inline</field>
+        <field name="context">{'module': 'sentinela_monitoring'}</field>
+    </record>
+</odoo>

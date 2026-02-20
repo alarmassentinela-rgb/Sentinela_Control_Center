@@ -6,6 +6,7 @@ class FSMEquipment(models.Model):
 
     order_id = fields.Many2one('sentinela.fsm.order', string='Orden de Servicio', required=True, ondelete='cascade')
     product_id = fields.Many2one('product.product', string='Producto', required=True)
+    lot_id = fields.Many2one('stock.lot', string='Número de Serie/Lote', domain="[('product_id', '=', product_id)]")
     quantity = fields.Float(string='Cantidad', default=1.0, required=True)
     unit_price = fields.Float(string='Precio Unitario')
     total_price = fields.Float(string='Precio Total', compute='_compute_total_price', store=True)

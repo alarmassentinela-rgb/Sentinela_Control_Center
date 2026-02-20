@@ -6,12 +6,15 @@
         <field name="model">sentinela.monitoring.zone</field>
         <field name="arch" type="xml">
             <list string="Zonas de Monitoreo" editable="bottom">
-                <field name="zone_number"/>
-                <field name="partition"/>
+                <field name="zone_number" groups="base.group_system"/>
+                <field name="zone_number" groups="!base.group_system" readonly="1"/>
+                <field name="partition" groups="base.group_system"/>
+                <field name="partition" groups="!base.group_system" readonly="1"/>
                 <field name="name"/>
                 <field name="zone_type"/>
                 <field name="is_bypassed"/>
-                <field name="device_id"/>
+                <field name="device_id" groups="base.group_system"/>
+                <field name="device_id" groups="!base.group_system" readonly="1"/>
             </list>
         </field>
     </record>

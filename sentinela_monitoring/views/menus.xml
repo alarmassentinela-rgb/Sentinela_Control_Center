@@ -49,9 +49,21 @@
         action="action_sentinela_alarm_code"
         sequence="20"/>
 
+    <menuitem id="menu_sentinela_alarm_code_template"
+        name="Plantillas de Códigos"
+        parent="menu_sentinela_monitoring_config"
+        action="action_alarm_code_template"
+        sequence="25"/>
+
     <menuitem id="menu_sentinela_alarm_priority"
         name="Niveles de Prioridad"
         parent="menu_sentinela_monitoring_config"
         action="action_alarm_priority"
         sequence="30"/>
+
+    <menuitem id="menu_sentinela_monitoring_settings"
+        name="Ajustes de Central"
+        parent="menu_sentinela_monitoring_config"
+        action="action_monitoring_config_settings"
+        sequence="100"/>
 </odoo>

@@ -1,11 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data noupdate="1">
-        <record id="seq_alarm_signal" model="ir.sequence">
-            <field name="name">Alarm Signal</field>
-            <field name="code">sentinela.alarm.signal</field>
-            <field name="prefix">SIG-</field>
-            <field name="padding">6</field>
+        <!-- Secuencia para Cuentas de Monitoreo -->
+        <record id="seq_sentinela_monitoring_account" model="ir.sequence">
+            <field name="name">Cuentas de Monitoreo Sentinela</field>
+            <field name="code">sentinela.monitoring.account</field>
+            <field name="prefix"></field>
+            <field name="padding">4</field>
+            <field name="number_next">1000</field> <!-- Este lo podrás cambiar desde la UI -->
+            <field name="number_increment">1</field>
             <field name="company_id" eval="False"/>
         </record>
     </data>

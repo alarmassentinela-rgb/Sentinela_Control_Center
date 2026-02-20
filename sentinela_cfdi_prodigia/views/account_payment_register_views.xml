@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_account_payment_register_form_inherit_sentinela" model="ir.ui.view">
+        <field name="name">account.payment.register.form.inherit.sentinela</field>
+        <field name="model">account.payment.register</field>
+        <field name="inherit_id" ref="account.view_account_payment_register_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group" position="inside">
+                <group string="Localización Mexicana" name="mx_edi">
+                    <field name="l10n_mx_edi_payment_method_id_code"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>

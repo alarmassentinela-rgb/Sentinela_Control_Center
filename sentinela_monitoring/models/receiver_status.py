@@ -12,6 +12,10 @@ class ReceiverStatus(models.Model):
         ('offline', 'Desconectado')
     ], compute='_compute_status', string='Estado')
 
+    # Audio Global para el Dashboard
+    pending_event_sound = fields.Binary(string='Sonido Alerta Pendientes', help="Audio que sonará mientras existan alarmas sin atender.")
+    pending_event_sound_filename = fields.Char(string='Nombre Audio')
+
     @api.depends('last_heartbeat')
     def _compute_status(self):
         for rec in self:

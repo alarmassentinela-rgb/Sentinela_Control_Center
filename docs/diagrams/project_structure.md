@@ -27,7 +27,7 @@ graph TD
         end
     end
 
-    subgraph Remote_MasAdmin ["☁️ Remoto: MasAdmin (192.168.3.2)"]
+    subgraph Remote_AleaSystems ["☁️ Remoto: AleaSystems (192.168.3.2)"]
         direction TB
         
         subgraph Services ["🚀 Servicios Activos"]
@@ -46,15 +46,15 @@ graph TD
     end
 
     %% Connections
-    Local_DellCli ==>|SSH -p 2222 (Key: id_ed25519)| Remote_MasAdmin
+    Local_DellCli ==>|SSH -p 2222 (Key: id_ed25519)| Remote_AleaSystems
     Modules -.->|Deploy/Sync| Opt_Odoo
-    Scripts -.->|Manage/Audit| Remote_MasAdmin
+    Scripts -.->|Manage/Audit| Remote_AleaSystems
 
     classDef local fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
     classDef remote fill:#f3e5f5,stroke:#4a148c,stroke-width:2px;
     classDef service fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
     
     class Local_DellCli local;
-    class Remote_MasAdmin remote;
+    class Remote_AleaSystems remote;
     class Odoo,n8n,PG service;
 ```

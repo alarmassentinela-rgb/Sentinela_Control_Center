@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_subscriptions" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.subscriptions</field>
+        <field name="model">res.config.settings</field>
+        <field name="priority" eval="95"/>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app data-string="Suscripciones" string="Suscripciones" name="sentinela_subscriptions">
+                    <block title="Conectividad Connecta / floLIVE" name="connecta_config">
+                        <setting string="Credenciales de API" help="Configura el acceso para el monitoreo de tarjetas SIM (GPS).">
+                            <div class="content-group">
+                                <div class="mt16">
+                                    <label for="connecta_client_id" string="Client ID (Correo)"/>
+                                    <field name="connecta_client_id" class="oe_inline"/>
+                                </div>
+                                <div class="mt8">
+                                    <label for="connecta_access_token" string="Access Token (Contraseña)"/>
+                                    <field name="connecta_access_token" password="True" class="oe_inline"/>
+                                </div>
+                            </div>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="action_sentinela_subscription_config_settings" model="ir.actions.act_window">
+        <field name="name">Ajustes de Suscripciones</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">res.config.settings</field>
+        <field name="view_mode">form</field>
+        <field name="target">inline</field>
+        <field name="context">{'module': 'sentinela_subscriptions'}</field>
+    </record>
+</odoo>

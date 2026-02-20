@@ -45,8 +45,8 @@
                         <a t-att-class="'nav-link ' + (state.currentTab === 'alarms' ? 'active fw-bold' : '')" 
                            href="#" t-on-click.prevent="() => this.setTab('alarms')">
                             <i class="fa fa-bell me-1"></i> ALARMAS
-                            <span t-if="state.events.filter(e => e.status === 'active').length > 0" class="badge rounded-pill bg-danger ms-1">
-                                <t t-esc="state.events.filter(e => e.status === 'active').length"/>
+                            <span t-if="state.alarmCount > 0" class="badge rounded-pill bg-danger ms-1">
+                                <t t-esc="state.alarmCount"/>
                             </span>
                         </a>
                     </li>
@@ -59,9 +59,9 @@
                     <li class="nav-item">
                         <a t-att-class="'nav-link ' + (state.currentTab === 'pending' ? 'active fw-bold' : '')" 
                            href="#" t-on-click.prevent="() => this.setTab('pending')">
-                            <i class="fa fa-clock-o me-1"></i> EVENTOS PENDIENTES
-                            <span t-if="state.events.filter(e => e.status !== 'active').length > 0" class="badge rounded-pill bg-warning ms-1">
-                                <t t-esc="state.events.filter(e => e.status !== 'active').length"/>
+                            <i class="fa fa-clock me-1"></i> EVENTOS PENDIENTES
+                            <span t-if="state.pendingCount > 0" class="badge rounded-pill bg-warning ms-1">
+                                <t t-esc="state.pendingCount"/>
                             </span>
                         </a>
                     </li>

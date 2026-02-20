@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="purchase_order_form_inherit_syscom" model="ir.ui.view">
+        <field name="name">purchase.order.form.inherit.syscom</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_form"/>
+        <field name="arch" type="xml">
+            <header position="inside">
+                <button name="action_send_to_syscom" 
+                        string="🛒 Enviar a Syscom" 
+                        type="object" 
+                        class="btn-primary" 
+                        invisible="state not in ['draft', 'sent'] or not is_syscom_order"/>
+                <button name="action_sync_syscom_status" 
+                        string="🚚 Rastrear Syscom" 
+                        type="object" 
+                        invisible="not syscom_order_id"/>
+            </header>
+            <notebook position="inside">
+                <page string="Logística Syscom" name="syscom_logistics" invisible="not is_syscom_order">
+                    <group>
+                        <group>
+                            <field name="is_syscom_order" invisible="1"/>
+                            <field name="syscom_order_id"/>
+                            <field name="syscom_order_status" widget="badge" decoration-info="syscom_order_status == 'Enviado'" decoration-success="syscom_order_status == 'Entregado'"/>
+                            <field name="syscom_delivery_date"/>
+                        </group>
+                    </group>
+                    <separator string="Guías de Rastreo (Envíos Múltiples)"/>
+                    <field name="syscom_shipment_ids" readonly="1">
+                        <list>
+                            <field name="courier"/>
+                            <field name="tracking_number"/>
+                            <field name="status" widget="badge"/>
+                            <field name="tracking_url" widget="url" text="Ver Rastreo"/>
+                            <field name="create_date" string="Detectada"/>
+                        </list>
+                    </field>
+                </page>
+            </notebook>
+        </field>
+    </record>
+</odoo>

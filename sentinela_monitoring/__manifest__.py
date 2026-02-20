@@ -1,22 +1,9 @@
 {
     'name': 'Sentinela Monitoring System',
-    'version': '18.0.1.0.0',
+    'version': '18.0.1.3.4',
     'category': 'Industries/Security',
-    'summary': 'Sistema de monitoreo de alarmas integrado con Odoo (similar o mejor que Securithor)',
-    'description': """
-Sistema completo de monitoreo de alarmas para centrales de monitoreo.
-Características principales:
----------------------------
-* Recepción de señales de alarma a través de API
-* Dashboard en tiempo real para operadores
-* Gestión de dispositivos de monitoreo
-* Panel de control para clientes suscriptores
-* Integración con módulo FSM para respuesta a alarmas
-* Sistema de notificaciones automático
-* Informes y estadísticas detalladas
-* Mapas integrados para ubicación de alarmas
-* Botones de pánico virtuales
-""",
+    'summary': 'Sistema de monitoreo de alarmas integrado con Odoo',
+    'description': """Sistema completo de monitoreo de alarmas para centrales de monitoreo.""",
     'author': 'Sentinela IT',
     'website': 'https://sentinela.mx',
     'depends': [
@@ -29,6 +16,7 @@ Características principales:
     ],
     'data': [
         'security/ir.model.access.csv',
+        'data/ir_sequence_data.xml',
         'data/alarm_codes_data.xml',
         'wizard/alarm_handle_wizard_views.xml',
         'views/monitoring_device_views.xml',
@@ -36,10 +24,12 @@ Características principales:
         'views/alarm_signal_views.xml',
         'views/response_team_views.xml',
         'views/alarm_code_views.xml',
-        'views/alarm_priority_views.xml', # AGREGADO
+        'views/alarm_code_template_views.xml',
+        'views/alarm_priority_views.xml', 
+        'views/res_config_settings_views.xml',
         'views/subscription_views_extension.xml',
         'views/monitoring_zone_views.xml',
-        'views/monitoring_menu.xml', # AGREGADO
+        'views/monitoring_menu.xml',
         'views/menus.xml',
     ],
     'assets': {

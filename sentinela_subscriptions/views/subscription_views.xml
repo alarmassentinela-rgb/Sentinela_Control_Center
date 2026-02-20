@@ -32,9 +32,10 @@
         <field name="arch" type="xml">
             <list string="Suscripciones" 
                   decoration-danger="technical_state=='suspended'" 
-                  decoration-warning="state=='active' and payment_due_date and payment_due_date &lt; context_today().strftime('%Y-%m-%d')"
+                  decoration-warning="state=='active' and is_overdue"
                   decoration-info="state=='draft'" 
                   decoration-muted="state=='cancelled'">
+                <field name="is_overdue" column_invisible="True"/>
                 <field name="name"/>
                 <field name="monitoring_account_number" optional="show" string="Cuenta"/>
                 <field name="partner_id"/>
@@ -115,14 +116,15 @@
                             <label for="service_type"/>
                             <div class="o_row">
                                 <field name="service_type" readonly="not is_new_record and edit_plan_locked"/>
-                                <button name="toggle_plan_lock" type="object" icon="fa-lock" 
+                                <button name="toggle_plan_lock" type="object" icon="fa-lock" string="Unlock Plan"
                                     invisible="is_new_record or not edit_plan_locked" 
                                     help="Desbloquear edición"/>
-                                <button name="toggle_plan_lock" type="object" icon="fa-unlock" 
+                                <button name="toggle_plan_lock" type="object" icon="fa-unlock" string="Lock Plan"
                                     invisible="is_new_record or edit_plan_locked" 
                                     class="text-danger" help="Bloquear edición"/>
                             </div>
                             <field name="edit_plan_locked" invisible="1"/>
+                            <field name="edit_pppoe_locked" invisible="1"/>
                             <field name="is_new_record" invisible="1"/>
                             <field name="product_id" domain="[('is_subscription', '=', True), ('service_type', '=', service_type)]" 
                                 readonly="not is_new_record and edit_plan_locked"/>
@@ -147,6 +149,12 @@
                                 <field name="technical_state_date" readonly="1" invisible="not technical_state_date"/>
                             </div>
                             <field name="extension_end_date" invisible="not extension_end_date" decoration-danger="1"/>
+
+                            <separator string="Mantenimiento"/>
+                            <field name="maintenance_frequency"/>
+                            <field name="last_maintenance_date" readonly="1"/>
+                            <field name="is_maintenance_overdue" invisible="1"/>
+                            <field name="next_maintenance_date" readonly="1" decoration-warning="is_maintenance_overdue"/>
                         </group>
                         <group string="Contrato y Fechas">
                             <field name="is_contract_locked" invisible="1"/>
@@ -166,6 +174,7 @@
                             <field name="invoice_gen_type"/>
                             <field name="payment_due_type"/>
                             <field name="service_cut_type"/>
+                            <field name="auto_bill" widget="boolean_toggle"/>
                         </group>
                         <group string="Fechas Calculadas (Sistema)">
                             <field name="payment_due_date" readonly="1"/>
@@ -199,10 +208,10 @@
                                 <group>
                                     <field name="router_id" readonly="not is_new_record and edit_pppoe_locked"/>
                                     <field name="pppoe_user" readonly="not is_new_record and edit_pppoe_locked"/>
-                                    <field name="pppoe_password" password="True"/>
-                                    <button name="toggle_pppoe_lock" type="object" icon="fa-lock" 
+                                    <field name="pppoe_password" widget="password"/>
+                                    <button name="toggle_pppoe_lock" type="object" icon="fa-lock" string="Unlock PPPoE"
                                         groups="sentinela_subscriptions.group_subscription_manager" invisible="is_new_record or not edit_pppoe_locked"/>
-                                    <button name="toggle_pppoe_lock" type="object" icon="fa-unlock" 
+                                    <button name="toggle_pppoe_lock" type="object" icon="fa-unlock" string="Lock PPPoE"
                                         groups="sentinela_subscriptions.group_subscription_manager" invisible="is_new_record or edit_pppoe_locked" class="text-danger"/>
                                 </group>
                                 <group>
@@ -228,10 +237,17 @@
                             <!-- Sección para Rastreo GPS -->
                             <group string="Detalles de Rastreo GPS" invisible="service_type != 'gps'">
                                 <group string="Conectividad y Hardware">
-                                    <button name="action_pull_from_sale_order" type="object" string="Importar desde Venta" 
-                                            icon="fa-download" class="btn-link" help="Traer marca, modelo y serie desde la cotización"/>
+                                    <div class="o_row mb-2">
+                                        <button name="action_pull_from_sale_order" type="object" string="Importar de Venta" 
+                                                icon="fa-download" class="btn-link" help="Traer marca, modelo y serie desde la cotización"/>
+                                        <button name="action_sync_connecta_data" type="object" string="Sincronizar Connecta" 
+                                                icon="fa-refresh" class="btn-link text-info" help="Consultar estado y consumo en floLIVE"/>
+                                    </div>
                                     <field name="gps_imei" required="service_type == 'gps'"/>
                                     <field name="sim_iccid" required="service_type == 'gps'"/>
+                                    <field name="sim_status" widget="badge" decoration-success="sim_status == 'active'" decoration-danger="sim_status == 'suspended'" decoration-muted="sim_status == 'offline'"/>
+                                    <field name="sim_data_usage" widget="gauge" options="{'max_value': 50}"/>
+                                    <field name="sim_last_sync" readonly="1" class="text-muted small"/>
                                     <field name="sim_phone"/>
                                     <field name="gps_platform_id" options="{'no_create_edit': False, 'no_quick_create': False}"/>
                                 </group>

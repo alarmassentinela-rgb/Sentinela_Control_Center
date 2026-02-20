@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Layout Principal de la App (Sin headers innecesarios) -->
+    <template id="tech_layout" name="Tech App Layout">
+        &lt;!DOCTYPE html&gt;
+        <html lang="es">
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover"/>
+                <meta name="apple-mobile-web-app-capable" content="yes"/>
+                <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+                <title>Sentinela Tech</title>
+                <t t-call-assets="web.assets_frontend" t-js="false"/>
+                <style>
+                    body { background: #f0f2f5; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica; }
+                    .tech-card { background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 12px; }
+                    .status-bar { height: 44px; background: #1a237e; color: white; display: flex; align-items: center; padding: 0 16px; position: sticky; top: 0; z-index: 1000; }
+                    .btn-action { border-radius: 10px; padding: 12px; font-weight: 600; }
+                    .data-label { font-size: 11px; text-transform: uppercase; color: #666; font-weight: bold; }
+                    .data-value { font-size: 15px; color: #111; margin-bottom: 8px; }
+                </style>
+            </head>
+            <body>
+                <div class="status-bar shadow">
+                    <i class="fa fa-shield me-2"/> <b>SENTINELA TECH</b>
+                </div>
+                <div class="container py-3">
+                    <t t-out="0"/>
+                </div>
+                <t t-call-assets="web.assets_frontend" t-xml="false"/>
+            </body>
+        </html>
+    </template>
+
+    <!-- DASHBOARD: Agenda del día -->
+    <template id="tech_dashboard" name="Dashboard Técnico">
+        <t t-call="sentinela_fsm.tech_layout">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="mb-0">Mi Agenda</h4>
+                <span class="badge bg-primary rounded-pill"><t t-esc="len(orders)"/> Órdenes</span>
+            </div>
+
+            <t t-foreach="orders" t-as="order">
+                <a t-attf-href="/tech/order/#{order.id}" class="text-decoration-none">
+                    <div class="tech-card p-3 border-start border-4" t-attf-style="border-color: #{'#f44336' if order.priority == '3' else '#2196f3'} !important;">
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted small fw-bold" t-esc="order.name"/>
+                            <span class="small text-primary" t-field="order.scheduled_date" t-options='{"widget": "datetime", "format": "HH:mm"}'/>
+                        </div>
+                        <div class="fw-bold text-dark mt-1" t-esc="order.partner_id.name"/>
+                        <div class="small text-muted mb-2"><i class="fa fa-map-marker me-1"/> <t t-esc="order.service_address_id.city"/></div>
+                        
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span t-if="order.service_type == 'install'" class="badge bg-success-light text-success border">Instalación</span>
+                            <span t-if="order.service_type == 'repair'" class="badge bg-warning-light text-warning border">Reparación</span>
+                            <span t-attf-class="badge #{'bg-info' if order.stage == 'assigned' else 'bg-primary'}" t-esc="order.stage.upper()"/>
+                        </div>
+                    </div>
+                </a>
+            </t>
+            
+            <t t-if="not orders">
+                <div class="text-center py-5">
+                    <i class="fa fa-check-circle-o fa-3x text-success mb-3"/>
+                    <p class="text-muted">¡Todo listo! No tienes órdenes pendientes.</p>
+                </div>
+            </t>
+        </t>
+    </template>
+
+    <!-- VISTA DE EJECUCIÓN (ORQUESTACIÓN) -->
+    <template id="tech_order_view" name="Ejecución de Orden">
+        <t t-call="sentinela_fsm.tech_layout">
+            <div class="mb-3">
+                <a href="/tech/dashboard" class="text-primary small"><i class="fa fa-chevron-left me-1"/> Volver a Agenda</a>
+            </div>
+
+            <div class="tech-card p-3 shadow-sm">
+                <div class="d-flex justify-content-between">
+                    <h5 class="mb-0" t-esc="order.partner_id.name"/>
+                    <a t-attf-href="tel:#{order.phone}" class="btn btn-sm btn-outline-success rounded-circle"><i class="fa fa-phone"/></a>
+                </div>
+                <hr class="my-2"/>
+                <div class="data-label">Ubicación</div>
+                <div class="data-value small"><t t-esc="order.service_address_id.contact_address"/></div>
+                
+                <div class="d-grid mt-2">
+                    <a t-attf-href="https://www.google.com/maps/search/?api=1&amp;query=#{order.service_address_id.partner_latitude},#{order.service_address_id.partner_longitude}" 
+                       target="_blank" class="btn btn-outline-primary btn-sm"><i class="fa fa-map-signs me-2"/> Cómo llegar</a>
+                </div>
+            </div>
+
+            <!-- FLUJO DE ESTADO -->
+            <div t-if="order.stage == 'assigned'" class="tech-card p-4 text-center">
+                <p>Haz Check-In para iniciar el trabajo y obtener coordenadas de arribo.</p>
+                <form t-attf-action="/tech/order/#{order.id}/start" method="post">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <button type="submit" class="btn btn-primary btn-lg w-100 btn-action shadow">
+                        <i class="fa fa-play me-2"/> INICIAR TRABAJO
+                    </button>
+                </form>
+            </div>
+
+            <!-- TRABAJO EN PROCESO -->
+            <div t-if="order.stage == 'in_progress'" class="tech-card p-3">
+                <form t-attf-action="/tech/order/#{order.id}/save" method="post" id="tech_form">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <input type="hidden" name="lat" id="lat"/>
+                    <input type="hidden" name="lon" id="lon"/>
+
+                    <ul class="nav nav-pills nav-justified mb-3 small" id="pills-tab" role="tablist">
+                        <li class="nav-item">
+                            <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-tech">DATOS TÉCNICOS</button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-res">RESOLUCIÓN</button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content" id="pills-tabContent">
+                        <!-- Pestaña Datos Técnicos -->
+                        <div class="tab-pane fade show active" id="tab-tech">
+                            <!-- Si es ALARMA -->
+                            <div t-if="order.subscription_id.service_type == 'alarm'" class="mb-3">
+                                <div class="alert alert-info py-2 small">
+                                    <b>Cuenta de Monitoreo:</b> <span class="h5 mb-0 d-block" t-esc="order.subscription_id.monitoring_account_number or 'Por asignar'"/>
+                                </div>
+                                <label class="form-label small fw-bold">Listado de Zonas</label>
+                                <textarea name="alarm_zones" class="form-control form-control-sm" rows="4" placeholder="Zona 1: Puerta..."><t t-esc="order.alarm_zones"/></textarea>
+                            </div>
+
+                            <!-- Si es GPS -->
+                            <div t-if="order.subscription_id.service_type == 'gps'" class="mb-3">
+                                <label class="form-label small fw-bold">Serie / IMEI del Equipo</label>
+                                <div class="input-group">
+                                    <input type="text" name="vehicle_plate" class="form-control" t-att-value="order.vehicle_plate" placeholder="Placas"/>
+                                    <button class="btn btn-outline-secondary" type="button"><i class="fa fa-barcode"/></button>
+                                </div>
+                                <div class="row mt-2">
+                                    <div class="col-6">
+                                        <input type="text" name="vehicle_brand" class="form-control form-control-sm" placeholder="Marca" t-att-value="order.vehicle_brand"/>
+                                    </div>
+                                    <div class="col-6">
+                                        <input type="text" name="vehicle_model" class="form-control form-control-sm" placeholder="Modelo" t-att-value="order.vehicle_model"/>
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <label class="form-label small fw-bold">ICCID de la SIM (TNF)</label>
+                                    <input type="text" name="sim_iccid" class="form-control form-control-sm" t-att-value="order.sim_iccid"/>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Pestaña Resolución -->
+                        <div class="tab-pane fade" id="tab-res">
+                            <label class="form-label small fw-bold">Reporte de lo Realizado</label>
+                            <textarea name="resolution_notes" class="form-control" rows="5" placeholder="Explique qué se reparó o instaló..."><t t-esc="order.resolution_notes"/></textarea>
+                            
+                            <div class="mt-3 text-center border p-3 bg-light rounded">
+                                <i class="fa fa-camera fa-2x text-muted"/>
+                                <p class="small mb-0">Adjuntar Evidencias</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2 mt-4">
+                        <button type="submit" name="action" value="save" class="btn btn-outline-primary w-50">Guardar</button>
+                        <button type="submit" name="action" value="finish" class="btn btn-success w-50 shadow" onclick="return confirm('¿Seguro que deseas finalizar el trabajo?');">FINALIZAR</button>
+                    </div>
+                </form>
+            </div>
+
+            <script>
+                // Geolocalización automática para el Check-out
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(function(position) {
+                        document.getElementById('lat').value = position.coords.latitude;
+                        document.getElementById('lon').value = position.coords.longitude;
+                    });
+                }
+            </script>
+        </t>
+    </template>
+</odoo>

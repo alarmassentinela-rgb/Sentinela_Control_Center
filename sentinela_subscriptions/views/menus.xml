@@ -53,4 +53,10 @@
         parent="menu_sentinela_subscription_config"
         action="action_sentinela_gps_platform"
         sequence="50"/>
+
+    <menuitem id="menu_sentinela_subscription_settings"
+        name="Ajustes de Suscripciones"
+        parent="menu_sentinela_subscription_config"
+        action="action_sentinela_subscription_config_settings"
+        sequence="100"/>
 </odoo>

@@ -1,17 +1,14 @@
 # Vision Estratégica & Plan de Transformación Digital - Proyecto Sentinela
 
-**Host Local:** DellCli (WSL/Windows) | **Servidor:** MasAdmin (192.168.3.2)
+**Host Local:** DellCli (WSL/Windows) | **Servidor:** AleaSystems (192.168.3.2)
 **Estado Global:** ✅ Fase de Inteligencia y Automatización Completada.
 
 ---
 
-**Estado Actual (a 13 de febrero de 2026):**
-- **Sincronización Syscom:** ✅ COMPLETADA. Robot diario (8:00 AM) con TC dinámico y auto-vínculo de productos.
-- **FSM & Datos de Campo:** ✅ INTEGRADOS. Sincronización de coordenadas, IMEI y datos técnicos desde tickets a contratos.
-- **Módulos GPS:** ✅ EXPANDIDOS. Soporte para IMEI, SIM ICCID (TNF) y gestión de unidades/económicos.
-- **Motor de Cobranza:** ✅ REFINADO. Vistas para Irma con radar de mora y filtros de cortes próximos.
-- **Seguridad:** ✅ IMPLEMENTADA. Candados administrativos y motivos de baja obligatorios.
-- **Logística:** ✅ CONFIGURADA. Gestión de cable por metro y categorías de producto raíz.
+**Estado Actual (a 20 de febrero de 2026):**
+- **Integración Securithor:** ✅ COMPLETADA. 274 cuentas con zonas y contactos 100% sincronizados.
+- **Capa de Monitoreo:** ✅ ESTRUCTURADA. Nuevos modelos independientes para contactos de emergencia.
+- **Sincronización Syscom:** ✅ COMPLETADA. Robot diario (8:00 AM) con TC dinámico.
 
 **Tareas Pendientes:**
 1.  **Día 15 de Febrero:** Supervisar la transición total a Odoo para facturación y cobranza.

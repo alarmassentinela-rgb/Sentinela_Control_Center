@@ -1,5 +1,6 @@
 from . import monitoring_device
 from . import subscription_extension
+from . import monitoring_settings
 from . import fsm_order_extension
 from . import alarm_event
 from . import alarm_signal
@@ -9,3 +10,7 @@ from . import monitoring_zone
 from . import receiver_status
 from . import alarm_priority
 from . import device_alarm_config
+from . import monitoring_config
+from . import monitoring_contact
+from . import res_partner_extension
+from . import alarm_code_template
