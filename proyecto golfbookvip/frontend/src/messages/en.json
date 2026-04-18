@@ -1,0 +1,67 @@
+{
+  "nav": {
+    "features": "Features",
+    "about": "About",
+    "login": "Log in",
+    "register": "Sign up",
+    "dashboard": "My dashboard",
+    "logout": "Log out"
+  },
+  "hero": {
+    "badge": "Smart golf",
+    "title": "Your ultimate golf companion",
+    "subtitle": "Real-time scorecard, WHS handicap, friend bets and professional stats. All in one place.",
+    "cta_primary": "Start for free",
+    "cta_secondary": "View demo"
+  },
+  "features": {
+    "title": "Everything you need on the course",
+    "subtitle": "Built for golfers of all levels",
+    "scoring": {
+      "title": "Digital scorecard",
+      "desc": "Capture your scores in real time with hole GPS, par and automatic handicap."
+    },
+    "handicap": {
+      "title": "WHS Handicap",
+      "desc": "Official World Handicap System calculation updated after every round."
+    },
+    "bets": {
+      "title": "Bets with friends",
+      "desc": "Nassau, Skins, Match Play. Make your round more exciting with your friends."
+    },
+    "stats": {
+      "title": "Advanced stats",
+      "desc": "Analyze your fairways, GIR, putts and trends to improve your game."
+    },
+    "social": {
+      "title": "Social feed",
+      "desc": "Share your best rounds, eagles and holes-in-one with the community."
+    },
+    "spectator": {
+      "title": "Spectator mode",
+      "desc": "Follow your friends' round in real time from anywhere."
+    }
+  },
+  "auth": {
+    "login_title": "Welcome back",
+    "login_subtitle": "Sign in to your account",
+    "register_title": "Create your account",
+    "register_subtitle": "Join the GolfBookVIP community",
+    "email": "Email",
+    "password": "Password",
+    "full_name": "Full name",
+    "username": "Username",
+    "confirm_password": "Confirm password",
+    "btn_login": "Log in",
+    "btn_register": "Create account",
+    "no_account": "Don't have an account?",
+    "have_account": "Already have an account?",
+    "forgot_password": "Forgot your password?",
+    "terms": "By signing up you agree to our Terms and Privacy Policy."
+  },
+  "footer": {
+    "developed": "Developed by",
+    "rights": "All rights reserved.",
+    "tagline": "Technology that transforms your game."
+  }
+}

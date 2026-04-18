@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 180" width="520" height="180">
+  <defs>
+    <linearGradient id="goldGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#B8860B"/>
+      <stop offset="50%" style="stop-color:#DAA520"/>
+      <stop offset="100%" style="stop-color:#8B6914"/>
+    </linearGradient>
+    <linearGradient id="greenGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1A4A2E"/>
+      <stop offset="100%" style="stop-color:#0D3020"/>
+    </linearGradient>
+    <radialGradient id="ballRadial2" cx="38%" cy="35%" r="65%" fx="38%" fy="35%">
+      <stop offset="0%" style="stop-color:#ffffff"/>
+      <stop offset="70%" style="stop-color:#f0f0f0"/>
+      <stop offset="100%" style="stop-color:#d8d8d8"/>
+    </radialGradient>
+    <filter id="shadow2">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#00000033"/>
+    </filter>
+  </defs>
+
+  <!-- Fondo blanco -->
+  <rect width="520" height="180" rx="16" fill="#FAFAF8"/>
+  <rect width="520" height="180" rx="16" fill="none" stroke="#E8DCC8" stroke-width="2"/>
+
+  <!-- Línea decorativa superior -->
+  <rect x="20" y="10" width="480" height="2" rx="1" fill="url(#goldGrad2)" opacity="0.5"/>
+
+  <!-- ── ÍCONO ─────────────────────────────── -->
+  <circle cx="88" cy="90" r="62" fill="#F5F0E8" opacity="0.8"/>
+  <circle cx="88" cy="90" r="58" fill="none" stroke="url(#goldGrad2)" stroke-width="1.5" opacity="0.4"/>
+
+  <!-- Pelota de golf -->
+  <circle cx="88" cy="82" r="28" fill="url(#ballRadial2)" filter="url(#shadow2)"/>
+  <circle cx="88" cy="82" r="28" fill="none" stroke="#c8c8c8" stroke-width="0.5"/>
+
+  <!-- Dimples -->
+  <circle cx="82" cy="75" r="3" fill="#d0d0d0" opacity="0.8"/>
+  <circle cx="93" cy="73" r="3" fill="#d0d0d0" opacity="0.8"/>
+  <circle cx="100" cy="80" r="3" fill="#d0d0d0" opacity="0.8"/>
+  <circle cx="97" cy="89" r="3" fill="#d0d0d0" opacity="0.8"/>
+  <circle cx="87" cy="91" r="3" fill="#d0d0d0" opacity="0.8"/>
+  <circle cx="77" cy="87" r="3" fill="#d0d0d0" opacity="0.8"/>
+  <circle cx="75" cy="78" r="3" fill="#d0d0d0" opacity="0.8"/>
+  <circle cx="88" cy="68" r="3" fill="#d0d0d0" opacity="0.8"/>
+
+  <!-- Pin -->
+  <line x1="88" y1="114" x2="88" y2="140" stroke="url(#greenGrad2)" stroke-width="2.5" stroke-linecap="round"/>
+  <ellipse cx="88" cy="140" rx="10" ry="3" fill="url(#goldGrad2)" opacity="0.5"/>
+  <path d="M88 115 L108 120 L88 127 Z" fill="url(#greenGrad2)"/>
+
+  <!-- Corona -->
+  <g transform="translate(72, 46)">
+    <path d="M4 14 L4 6 L10 10 L16 2 L22 10 L28 6 L28 14 Z" fill="url(#goldGrad2)"/>
+    <rect x="2" y="14" width="28" height="5" rx="1" fill="url(#goldGrad2)"/>
+    <circle cx="16" cy="8" r="2" fill="#fff" opacity="0.8"/>
+    <circle cx="8" cy="11" r="1.5" fill="#fff" opacity="0.6"/>
+    <circle cx="24" cy="11" r="1.5" fill="#fff" opacity="0.6"/>
+  </g>
+
+  <!-- ── TEXTO ──────────────────────────────── -->
+
+  <!-- GOLF -->
+  <text x="168" y="80"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-size="52"
+        font-weight="700"
+        letter-spacing="4"
+        fill="url(#greenGrad2)">GOLF</text>
+
+  <line x1="168" y1="90" x2="490" y2="90" stroke="url(#goldGrad2)" stroke-width="0.8" opacity="0.4"/>
+
+  <!-- BOOK -->
+  <text x="168" y="128"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-size="52"
+        font-weight="700"
+        letter-spacing="4"
+        fill="#1A1A1A">BOOK</text>
+
+  <!-- VIP badge -->
+  <rect x="392" y="100" width="82" height="36" rx="6" fill="url(#greenGrad2)"/>
+  <text x="433" y="124"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-size="22"
+        font-weight="900"
+        letter-spacing="3"
+        fill="url(#goldGrad2)"
+        text-anchor="middle">VIP</text>
+
+  <circle cx="380" cy="116" r="3" fill="url(#goldGrad2)" opacity="0.6"/>
+
+  <!-- Tagline -->
+  <text x="168" y="155"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-size="11"
+        letter-spacing="4"
+        fill="url(#goldGrad2)"
+        opacity="0.8">YOUR PREMIUM GOLF EXPERIENCE</text>
+
+  <rect x="20" y="168" width="480" height="2" rx="1" fill="url(#goldGrad2)" opacity="0.5"/>
+</svg>

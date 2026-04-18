@@ -1,0 +1,52 @@
+{
+  "name": "GolfBookVIP",
+  "short_name": "GolfBookVIP",
+  "description": "Scorecard digital, hándicap WHS, apuestas y estadísticas para golfistas.",
+  "start_url": "/es/dashboard",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#10b981",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "es",
+  "categories": ["sports", "lifestyle"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "url": "/es/dashboard",
+      "description": "Ir al panel principal"
+    },
+    {
+      "name": "Nueva ronda",
+      "url": "/es/rounds/new",
+      "description": "Crear una nueva ronda"
+    }
+  ]
+}

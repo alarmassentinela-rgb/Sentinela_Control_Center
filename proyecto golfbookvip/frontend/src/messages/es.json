@@ -1,0 +1,67 @@
+{
+  "nav": {
+    "features": "Funciones",
+    "about": "Nosotros",
+    "login": "Iniciar sesión",
+    "register": "Registrarse",
+    "dashboard": "Mi panel",
+    "logout": "Cerrar sesión"
+  },
+  "hero": {
+    "badge": "Golf inteligente",
+    "title": "Tu compañero de golf definitivo",
+    "subtitle": "Scorecard en tiempo real, hándicap WHS, apuestas entre amigos y estadísticas profesionales. Todo en un solo lugar.",
+    "cta_primary": "Comenzar gratis",
+    "cta_secondary": "Ver demo"
+  },
+  "features": {
+    "title": "Todo lo que necesitas en el campo",
+    "subtitle": "Diseñado para golfistas de todos los niveles",
+    "scoring": {
+      "title": "Scorecard digital",
+      "desc": "Captura tus scores en tiempo real con GPS del hoyo, par y hándicap automático."
+    },
+    "handicap": {
+      "title": "Hándicap WHS",
+      "desc": "Cálculo oficial World Handicap System actualizado después de cada ronda."
+    },
+    "bets": {
+      "title": "Apuestas entre amigos",
+      "desc": "Nassau, Skins, Match Play. Haz la ronda más emocionante con tus amigos."
+    },
+    "stats": {
+      "title": "Estadísticas avanzadas",
+      "desc": "Analiza tus fairways, GIR, putts y tendencias para mejorar tu juego."
+    },
+    "social": {
+      "title": "Feed social",
+      "desc": "Comparte tus mejores rondas, eagles y hoyos en uno con la comunidad."
+    },
+    "spectator": {
+      "title": "Modo espectador",
+      "desc": "Sigue la ronda de tus amigos en tiempo real desde cualquier lugar."
+    }
+  },
+  "auth": {
+    "login_title": "Bienvenido de vuelta",
+    "login_subtitle": "Ingresa a tu cuenta",
+    "register_title": "Crea tu cuenta",
+    "register_subtitle": "Únete a la comunidad GolfBookVIP",
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "full_name": "Nombre completo",
+    "username": "Nombre de usuario",
+    "confirm_password": "Confirmar contraseña",
+    "btn_login": "Iniciar sesión",
+    "btn_register": "Crear cuenta",
+    "no_account": "¿No tienes cuenta?",
+    "have_account": "¿Ya tienes cuenta?",
+    "forgot_password": "¿Olvidaste tu contraseña?",
+    "terms": "Al registrarte aceptas nuestros Términos y Política de privacidad."
+  },
+  "footer": {
+    "developed": "Desarrollado por",
+    "rights": "Todos los derechos reservados.",
+    "tagline": "Tecnología que transforma tu juego."
+  }
+}

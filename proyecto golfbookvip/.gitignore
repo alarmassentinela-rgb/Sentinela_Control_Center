@@ -1,0 +1,49 @@
+# ── Entorno ──────────────────────────────────────────────
+.env
+.env.local
+.env.production
+*.env
+
+# ── Python ────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+venv/
+env/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# ── Docker ────────────────────────────────────────────────
+# No ignorar docker-compose.yml
+
+# ── Credenciales ──────────────────────────────────────────
+firebase-credentials.json
+*.pem
+*.key
+*.p12
+
+# ── Media / Uploads ───────────────────────────────────────
+media/
+backups/
+
+# ── SSL ───────────────────────────────────────────────────
+certbot/conf/
+certbot/www/
+
+# ── Logs ──────────────────────────────────────────────────
+*.log
+logs/
+
+# ── IDE ───────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# ── Testing ───────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
