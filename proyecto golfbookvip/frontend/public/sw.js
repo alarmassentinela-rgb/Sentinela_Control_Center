@@ -4,7 +4,7 @@
 //   - API calls      → Network First (always fresh, offline fallback)
 //   - Pages (HTML)   → Network First + offline fallback page
 
-const CACHE_NAME = 'golfbookvip-v2'
+const CACHE_NAME = 'golfbookvip-v3'
 const OFFLINE_URL = '/offline.html'
 
 // Resources to pre-cache on install
@@ -37,6 +37,14 @@ self.addEventListener('activate', (event) => {
     )
   )
   self.clients.claim()
+})
+
+// ─── Message handler — allow client to trigger immediate activation ──────────
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting()
+  }
 })
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
