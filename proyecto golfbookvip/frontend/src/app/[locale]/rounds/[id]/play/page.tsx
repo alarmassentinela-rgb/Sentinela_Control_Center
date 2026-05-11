@@ -348,15 +348,26 @@ export default function PlayRoundPage() {
       if (round.status !== 'active') { router.push(`/${locale}/rounds/${id}`); return }
       const me = meRes.data
       setMyUserId(me.id)
-      const myPlayer = (playersRes.data as { user_id: string; tee_color: string | null }[])
-        .find(p => p.user_id === me.id)
+      type PlayerRow = {
+        user_id: string
+        first_name: string
+        last_name: string
+        username: string
+        course_handicap: number | null
+        tee_color: string | null
+        status: string
+      }
+      const playersList = playersRes.data as PlayerRow[]
+      const myPlayer = playersList.find(p => p.user_id === me.id)
       if (myPlayer?.tee_color) setMyTee(myPlayer.tee_color)
       setAmCreator(round.created_by === me.id)
       setGameFormat(round.game_format)
       const courseRes = await api.get(`/courses/${round.course_id}`)
       setHoles(courseRes.data.holes)
 
-      // Tee groups: encontrar mi grupo y compañeros (excluyéndome)
+      // Tee groups: encontrar mi grupo y compañeros. Si no hay grupos asignados
+      // (ronda legacy), caer a "todos los demás jugadores confirmados".
+      let usedGroups = false
       try {
         const tgRes = await api.get(`/rounds/${id}/tee-groups`)
         const tg = tgRes.data
@@ -365,6 +376,7 @@ export default function PlayRoundPage() {
           type TGG = { group_number: number; starting_hole: number | null; players: TGP[] }
           const myGroup = (tg.groups as TGG[]).find(g => g.players.some(p => p.user_id === me.id))
           if (myGroup) {
+            usedGroups = true
             setMyStartingHole(myGroup.starting_hole ?? null)
             setGroupMates(myGroup.players.filter(p => p.user_id !== me.id))
             if (myGroup.starting_hole && myGroup.starting_hole > 1) {
@@ -372,7 +384,20 @@ export default function PlayRoundPage() {
             }
           }
         }
-      } catch { /* sin grupos asignados — flujo normal */ }
+      } catch { /* sin grupos — usamos fallback abajo */ }
+
+      if (!usedGroups) {
+        // Fallback legacy: todos los demás jugadores confirmados son compañeros
+        const mates: GroupMate[] = playersList
+          .filter(p => p.user_id !== me.id && ['confirmed', 'playing', 'finished'].includes(p.status))
+          .map(p => ({
+            user_id: p.user_id,
+            name: `${p.first_name} ${p.last_name}`,
+            username: p.username,
+            course_handicap: p.course_handicap,
+          }))
+        setGroupMates(mates)
+      }
 
       // Conflictos existentes
       try {
