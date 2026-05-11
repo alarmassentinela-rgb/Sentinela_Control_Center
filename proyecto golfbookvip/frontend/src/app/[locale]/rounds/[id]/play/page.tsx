@@ -1151,26 +1151,28 @@ export default function PlayRoundPage() {
                               <Plus size={20} />
                             </button>
                           </div>
-                          {/* Putts */}
-                          <div className="flex items-center justify-between mt-2.5 pt-2.5 border-t border-zinc-800">
-                            <span className="text-[10px] text-zinc-600 uppercase tracking-wider">{lbl('Putts', 'Putts')}</span>
-                            <div className="flex items-center gap-1.5">
-                              {[1, 2, 3, 4].map(n => (
-                                <button key={n}
-                                  onClick={() => setRowInputs(prev => ({
-                                    ...prev,
-                                    [p.user_id]: { ...row, putts: row.putts === n ? null : n, dirty: true },
-                                  }))}
-                                  className={`w-8 h-8 rounded-full text-xs font-bold border transition-all ${
-                                    row.putts === n
-                                      ? 'bg-emerald-500 border-emerald-400 text-white'
-                                      : 'bg-zinc-800 border-zinc-700 text-zinc-500'
-                                  }`}>
-                                  {n}
-                                </button>
-                              ))}
+                          {/* Putts — solo para mí (estadística personal) */}
+                          {p.isMe && (
+                            <div className="flex items-center justify-between mt-2.5 pt-2.5 border-t border-zinc-800">
+                              <span className="text-[10px] text-zinc-600 uppercase tracking-wider">{lbl('Putts', 'Putts')}</span>
+                              <div className="flex items-center gap-1.5">
+                                {[1, 2, 3, 4].map(n => (
+                                  <button key={n}
+                                    onClick={() => setRowInputs(prev => ({
+                                      ...prev,
+                                      [p.user_id]: { ...row, putts: row.putts === n ? null : n, dirty: true },
+                                    }))}
+                                    className={`w-8 h-8 rounded-full text-xs font-bold border transition-all ${
+                                      row.putts === n
+                                        ? 'bg-emerald-500 border-emerald-400 text-white'
+                                        : 'bg-zinc-800 border-zinc-700 text-zinc-500'
+                                    }`}>
+                                    {n}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
-                          </div>
+                          )}
                         </div>
                       )
                     })}
