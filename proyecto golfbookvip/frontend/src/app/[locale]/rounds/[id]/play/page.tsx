@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Minus, Plus, RotateCcw, Table2, Pencil, Trophy, AlertTriangle, Users, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Minus, Plus, RotateCcw, Table2, Pencil, Trophy, AlertTriangle, Users, X, Crosshair } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
@@ -13,6 +13,10 @@ interface Hole {
   distance_yards_blue: number | null
   distance_yards_white: number | null
   distance_yards_red: number | null
+  green_latitude: number | null
+  green_longitude: number | null
+  tee_latitude: number | null
+  tee_longitude: number | null
 }
 
 interface Score {
@@ -126,6 +130,20 @@ function netPar(par: number, ch: number | null, si: number | null): number {
 function netDoubleBogey(par: number, ch: number | null, si: number | null): number {
   return par + 2 + strokesReceived(ch, si)
 }
+
+// Distancia Haversine entre dos coords GPS (metros)
+function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000  // radio terrestre en metros
+  const toRad = (d: number) => d * Math.PI / 180
+  const dLat = toRad(lat2 - lat1)
+  const dLon = toRad(lon2 - lon1)
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
+
+const M_TO_YDS = 1.0936133
 
 function scoreLabel(gross: number, par: number) {
   const diff = gross - par
@@ -590,6 +608,10 @@ export default function PlayRoundPage() {
   const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null)
   const [withdrawingFor, setWithdrawingFor] = useState<{ user_id: string; name: string } | null>(null)
   const [withdrawReason, setWithdrawReason] = useState('')
+  const [gpsEnabled, setGpsEnabled] = useState(false)
+  const [userPos, setUserPos] = useState<{ lat: number; lng: number; accuracy: number } | null>(null)
+  const [gpsError, setGpsError] = useState<string | null>(null)
+  const gpsWatchIdRef = useRef<number | null>(null)
   const [groupMates, setGroupMates] = useState<GroupMate[]>([])
   const [conflicts, setConflicts] = useState<ConflictItem[]>([])
   const [resolvingFor, setResolvingFor] = useState<ConflictItem | null>(null)
@@ -833,6 +855,44 @@ export default function PlayRoundPage() {
       } catch { /* ignore */ }
     }
   }, [id, readQueue, writeQueue, flushingQueue, myUserId])
+
+  // GPS — watchPosition para actualizar distancia al pin en vivo
+  useEffect(() => {
+    if (!gpsEnabled) {
+      if (gpsWatchIdRef.current !== null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(gpsWatchIdRef.current)
+        gpsWatchIdRef.current = null
+      }
+      setUserPos(null)
+      setGpsError(null)
+      return
+    }
+    if (!navigator.geolocation) {
+      setGpsError(lbl('Tu navegador no soporta GPS', 'Your browser does not support GPS'))
+      setGpsEnabled(false)
+      return
+    }
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        setUserPos({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+        })
+        setGpsError(null)
+      },
+      (err) => {
+        setGpsError(`GPS: ${err.message}`)
+        if (err.code === err.PERMISSION_DENIED) setGpsEnabled(false)
+      },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 2000 }
+    )
+    gpsWatchIdRef.current = watchId
+    return () => {
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId)
+      gpsWatchIdRef.current = null
+    }
+  }, [gpsEnabled, lbl])
 
   // Online / offline + auto-flush al recuperar conexión
   useEffect(() => {
@@ -1907,8 +1967,42 @@ export default function PlayRoundPage() {
                     {hole.hole_number}
                   </p>
                 </div>
-                {/* Derecha: yardaje */}
+                {/* Derecha: GPS live (si activo) o yardaje estático */}
                 {(() => {
+                  // GPS activado pero aún sin primer fix
+                  if (gpsEnabled && !userPos && hole.green_latitude !== null && hole.green_longitude !== null) {
+                    return (
+                      <button onClick={() => setGpsEnabled(false)} className="text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Loader2 size={12} className="animate-spin text-emerald-400" />
+                          <p className="text-sm font-bold text-emerald-300">GPS</p>
+                        </div>
+                        <p className="text-[10px] text-zinc-500 mt-0.5">
+                          {gpsError || lbl('Buscando señal...', 'Acquiring...')}
+                        </p>
+                      </button>
+                    )
+                  }
+                  // GPS activo + hoyo tiene green coords → calcular distancia al pin en vivo
+                  if (gpsEnabled && userPos && hole.green_latitude !== null && hole.green_longitude !== null) {
+                    const meters = haversineMeters(userPos.lat, userPos.lng, hole.green_latitude, hole.green_longitude)
+                    const yards = Math.round(meters * M_TO_YDS)
+                    const acc = Math.round(userPos.accuracy)
+                    return (
+                      <button
+                        onClick={() => setGpsEnabled(false)}
+                        className="text-right group">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          <p className="text-2xl font-bold text-emerald-300 tabular-nums leading-none">{yards}</p>
+                        </div>
+                        <p className="text-[10px] text-zinc-400 mt-0.5">
+                          {lbl('yds al pin', 'yds to pin')} <span className="text-zinc-600">· ±{acc}m</span>
+                        </p>
+                      </button>
+                    )
+                  }
+                  // Sin GPS → yardaje estático por color de tee
                   const yds = myTee === 'black' ? hole.distance_yards_black
                     : myTee === 'blue'  ? hole.distance_yards_blue
                     : myTee === 'red'   ? hole.distance_yards_red
@@ -1921,12 +2015,23 @@ export default function PlayRoundPage() {
                     : myTee === 'blue'  ? lbl('yds azul', 'blue yds')
                     : myTee === 'red'   ? lbl('yds roja', 'red yds')
                     : lbl('yds blanca', 'white yds')
-                  return yds ? (
+                  const canTurnOn = hole.green_latitude !== null && hole.green_longitude !== null
+                  return (
                     <div className="text-right">
-                      <p className={`text-lg font-bold ${teeColor}`}>{yds}</p>
-                      <p className="text-xs text-zinc-500">{teeLbl}</p>
+                      {yds && (
+                        <p className={`text-lg font-bold ${teeColor}`}>{yds}</p>
+                      )}
+                      {yds && <p className="text-xs text-zinc-500">{teeLbl}</p>}
+                      {canTurnOn && (
+                        <button
+                          onClick={() => setGpsEnabled(true)}
+                          className="text-[10px] text-emerald-400 hover:text-emerald-300 mt-1 inline-flex items-center gap-1"
+                          title={lbl('Activar distancia GPS al pin', 'Enable GPS distance to pin')}>
+                          <Crosshair size={10} /> GPS
+                        </button>
+                      )}
                     </div>
-                  ) : <div />
+                  )
                 })()}
               </div>
             </div>
