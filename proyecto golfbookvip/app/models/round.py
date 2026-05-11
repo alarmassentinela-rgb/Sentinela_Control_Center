@@ -82,6 +82,9 @@ class RoundPlayer(Base):
     tee_color: Mapped[Optional[str]] = mapped_column(String(10))  # black, blue, white, red
     in_bet: Mapped[bool] = mapped_column(Boolean, default=True)
     status: Mapped[str] = mapped_column(String(20), default="invited")
+    participant_mode: Mapped[str] = mapped_column(String(20), default="playing")
+    withdrawn_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    withdrawn_reason: Mapped[Optional[str]] = mapped_column(String(200))
     is_guest: Mapped[bool] = mapped_column(Boolean, default=False)
     confirmed_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
     created_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now())

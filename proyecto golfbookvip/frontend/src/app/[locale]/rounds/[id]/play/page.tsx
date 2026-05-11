@@ -85,6 +85,10 @@ interface LeaderboardRow {
   last_name: string
   course_handicap: number | null
   team_number: number | null
+  status: string
+  participant_mode: 'playing' | 'observer'
+  withdrawn_at: string | null
+  withdrawn_reason: string | null
   holes_played: number
   thru: number
   total_gross: number
@@ -571,6 +575,21 @@ export default function PlayRoundPage() {
   const [isOnline, setIsOnline] = useState(true)
   const [pendingQueueCount, setPendingQueueCount] = useState(0)
   const [flushingQueue, setFlushingQueue] = useState(false)
+  type PlayerRosterRow = {
+    user_id: string
+    first_name: string
+    last_name: string
+    username: string
+    course_handicap: number | null
+    tee_color: string | null
+    status: string
+    participant_mode?: 'playing' | 'observer'
+    withdrawn_at?: string | null
+  }
+  const [playersList, setPlayersList] = useState<PlayerRosterRow[]>([])
+  const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null)
+  const [withdrawingFor, setWithdrawingFor] = useState<{ user_id: string; name: string } | null>(null)
+  const [withdrawReason, setWithdrawReason] = useState('')
   const [groupMates, setGroupMates] = useState<GroupMate[]>([])
   const [conflicts, setConflicts] = useState<ConflictItem[]>([])
   const [resolvingFor, setResolvingFor] = useState<ConflictItem | null>(null)
@@ -596,8 +615,11 @@ export default function PlayRoundPage() {
         course_handicap: number | null
         tee_color: string | null
         status: string
+        participant_mode?: 'playing' | 'observer'
+        withdrawn_at?: string | null
       }
       const playersList = playersRes.data as PlayerRow[]
+      setPlayersList(playersList)
       const myPlayer = playersList.find(p => p.user_id === me.id)
       if (myPlayer?.tee_color) setMyTee(myPlayer.tee_color)
       if (myPlayer?.course_handicap !== undefined) setMyCourseHandicap(myPlayer.course_handicap)
@@ -629,9 +651,13 @@ export default function PlayRoundPage() {
       } catch { /* sin grupos — usamos fallback abajo */ }
 
       if (!usedGroups) {
-        // Fallback legacy: todos los demás jugadores confirmados son compañeros
+        // Fallback legacy: jugadores activos (excluye withdrawn / observer).
         const mates: GroupMate[] = playersList
-          .filter(p => p.user_id !== me.id && ['confirmed', 'playing', 'finished'].includes(p.status))
+          .filter(p =>
+            p.user_id !== me.id
+            && ['confirmed', 'playing', 'finished'].includes(p.status)
+            && (p.participant_mode ?? 'playing') === 'playing'
+          )
           .map(p => ({
             user_id: p.user_id,
             name: `${p.first_name} ${p.last_name}`,
@@ -947,6 +973,70 @@ export default function PlayRoundPage() {
       if (everyoneSaved && currentHole < holesTotal) setCurrentHole(currentHole + 1)
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const refreshPlayers = async () => {
+    try {
+      const r = await api.get(`/rounds/${id}/players`)
+      setPlayersList(r.data as PlayerRosterRow[])
+      // Reconstruir groupMates excluyendo withdrawn/observer
+      const mates: GroupMate[] = (r.data as PlayerRosterRow[])
+        .filter(p =>
+          p.user_id !== myUserId
+          && ['confirmed', 'playing', 'finished'].includes(p.status)
+          && (p.participant_mode ?? 'playing') === 'playing'
+        )
+        .map(p => ({
+          user_id: p.user_id,
+          name: `${p.first_name} ${p.last_name}`,
+          username: p.username,
+          course_handicap: p.course_handicap,
+        }))
+      setGroupMates(mates)
+    } catch { /* ignore */ }
+  }
+
+  const submitWithdraw = async () => {
+    if (!withdrawingFor) return
+    try {
+      await api.post(
+        `/rounds/${id}/players/${withdrawingFor.user_id}/withdraw`,
+        null,
+        withdrawReason ? { params: { reason: withdrawReason } } : undefined
+      )
+      setWithdrawingFor(null)
+      setWithdrawReason('')
+      await refreshPlayers()
+    } catch (e) {
+      const err = e as { response?: { data?: { detail?: string } } }
+      alert(err.response?.data?.detail || lbl('Error al retirar jugador', 'Error withdrawing player'))
+    }
+  }
+
+  const unwithdrawPlayer = async (userId: string) => {
+    try {
+      await api.post(`/rounds/${id}/players/${userId}/unwithdraw`)
+      await refreshPlayers()
+    } catch (e) {
+      const err = e as { response?: { data?: { detail?: string } } }
+      alert(err.response?.data?.detail || 'Error')
+    }
+  }
+
+  const togglePlayerMode = async (userId: string, currentMode: 'playing' | 'observer') => {
+    const newMode = currentMode === 'playing' ? 'observer' : 'playing'
+    try {
+      await api.post(
+        `/rounds/${id}/players/${userId}/set-mode`,
+        null,
+        { params: { mode: newMode } }
+      )
+      setMenuOpenFor(null)
+      await refreshPlayers()
+    } catch (e) {
+      const err = e as { response?: { data?: { detail?: string } } }
+      alert(err.response?.data?.detail || 'Error')
     }
   }
 
@@ -1306,9 +1396,11 @@ export default function PlayRoundPage() {
           ) : (() => {
             const isStableford = gameFormat === 'stableford' || gameFormat === 'stableford_modified'
             // Calcular score vs par para cada jugador (acumulado solo de los hoyos jugados)
-            type EnrichedRow = LeaderboardRow & { toPar: number | null; played: boolean; finished: boolean }
+            type EnrichedRow = LeaderboardRow & { toPar: number | null; played: boolean; finished: boolean; isWithdrawn: boolean; isObserver: boolean }
             const enriched: EnrichedRow[] = leaderboard.map(p => {
-              if (p.thru <= 0) return { ...p, toPar: null, played: false, finished: false }
+              const isWithdrawn = p.status === 'withdrawn'
+              const isObserver = p.participant_mode === 'observer'
+              if (p.thru <= 0) return { ...p, toPar: null, played: false, finished: false, isWithdrawn, isObserver }
               const parPlayed = holes
                 .filter(h => h.hole_number <= p.thru)
                 .reduce((s, h) => s + h.par, 0)
@@ -1317,12 +1409,18 @@ export default function PlayRoundPage() {
                 toPar: p.total_gross - parPlayed,
                 played: true,
                 finished: p.holes_played === holesTotal,
+                isWithdrawn,
+                isObserver,
               }
             })
-            // Ordenar PGA-style:
-            // Stableford → puntos desc
-            // Stroke → to par asc (mejor=menor); no-jugados van al final
+            // Ordenar PGA-style: WD y observer al final; stableford desc; stroke asc
             const sorted = [...enriched].sort((a, b) => {
+              // WD / observer siempre al fondo
+              const aOut = a.isWithdrawn || a.isObserver
+              const bOut = b.isWithdrawn || b.isObserver
+              if (aOut && !bOut) return 1
+              if (bOut && !aOut) return -1
+              if (aOut && bOut) return 0
               if (isStableford) return b.total_stableford - a.total_stableford
               if (!a.played && !b.played) return 0
               if (!a.played) return 1
@@ -1384,32 +1482,51 @@ export default function PlayRoundPage() {
                       const isMe = p.user_id === myUserId
                       const pos = posDisplay[idx]
                       const isPodium = !p.played ? false : ['1', 'T1'].includes(pos) ? true : false
+                      const isOut = p.isWithdrawn || p.isObserver
                       return (
                         <div key={p.user_id}
                           className={`grid grid-cols-[34px_1fr_48px_52px_52px] items-center gap-1.5 px-3 py-3 transition-colors ${
                             isMe ? 'bg-emerald-500/10' : 'hover:bg-zinc-800/40'
-                          }`}>
+                          } ${isOut ? 'opacity-60' : ''}`}>
                           {/* POS */}
                           <div className={`text-center font-bold tabular-nums ${
+                            isOut ? 'text-zinc-600' :
                             isPodium ? 'text-amber-400' :
                             pos === '2' || pos === 'T2' ? 'text-zinc-300' :
                             pos === '3' || pos === 'T3' ? 'text-orange-400' :
                             'text-zinc-500'
                           } ${pos.length > 2 ? 'text-xs' : 'text-sm'}`}>
-                            {p.played ? pos : '—'}
+                            {p.isWithdrawn ? (
+                              <span className="text-[10px] font-bold text-amber-400">WD</span>
+                            ) : p.isObserver ? (
+                              <span className="text-base">👁</span>
+                            ) : (
+                              p.played ? pos : '—'
+                            )}
                           </div>
                           {/* PLAYER */}
                           <div className="min-w-0">
                             <p className={`font-semibold text-sm truncate ${
+                              isOut ? 'text-zinc-400' :
                               isMe ? 'text-emerald-300' : 'text-white'
                             }`}>
                               {p.first_name} {p.last_name.charAt(0)}.
                             </p>
-                            <p className="text-[10px] text-zinc-500">HCP {p.course_handicap ?? '—'}</p>
+                            <p className="text-[10px] text-zinc-500">
+                              HCP {p.course_handicap ?? '—'}
+                              {p.isWithdrawn && p.withdrawn_reason && (
+                                <span className="text-amber-500"> · {p.withdrawn_reason}</span>
+                              )}
+                              {p.isObserver && (
+                                <span className="text-zinc-500"> · {lbl('Solo observa', 'Observer')}</span>
+                              )}
+                            </p>
                           </div>
                           {/* TOT (to par o pts) */}
                           <div className="text-center">
-                            {isStableford ? (
+                            {isOut ? (
+                              <span className="text-zinc-700 text-sm">—</span>
+                            ) : isStableford ? (
                               <p className="text-lg font-bold text-emerald-400 tabular-nums leading-none">
                                 {p.total_stableford}
                               </p>
@@ -1421,19 +1538,28 @@ export default function PlayRoundPage() {
                           </div>
                           {/* GROSS — golpes reales acumulados */}
                           <div className="text-center">
-                            {!p.played ? (
+                            {!p.played || p.isObserver ? (
                               <span className="text-zinc-700 text-sm">—</span>
                             ) : (
                               <p className={`text-lg font-bold tabular-nums leading-none ${
+                                p.isWithdrawn ? 'text-zinc-400' :
                                 p.finished ? 'text-emerald-300' : 'text-white'
                               }`}>
                                 {p.total_gross}
                               </p>
                             )}
                           </div>
-                          {/* THRU — hoyo jugado o F */}
+                          {/* THRU — hoyo jugado, F, WD u observer */}
                           <div className="text-center">
-                            {!p.played ? (
+                            {p.isWithdrawn ? (
+                              <span className="inline-flex items-center justify-center px-2 h-7 rounded-md bg-amber-500/15 text-amber-400 font-bold text-[10px] border border-amber-500/40 uppercase tracking-wider">
+                                WD
+                              </span>
+                            ) : p.isObserver ? (
+                              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">
+                                {lbl('Observa', 'Watch')}
+                              </span>
+                            ) : !p.played ? (
                               <span className="text-[10px] text-zinc-600 uppercase tracking-wider">
                                 {lbl('—', '—')}
                               </span>
@@ -1891,16 +2017,41 @@ export default function PlayRoundPage() {
                                 <span className="text-xs text-zinc-500">HCP {p.course_handicap}</span>
                               )}
                             </div>
-                            {saved && !row.dirty && (
-                              <span className="flex items-center gap-1 text-xs text-emerald-400">
-                                <CheckCircle2 size={12} /> {lbl('Guardado', 'Saved')}
-                              </span>
-                            )}
-                            {row.dirty && (
-                              <span className="text-xs text-emerald-300">
-                                {isPickupValue ? lbl('Pickup (Net Double Bogey)', 'Pickup (Net Double Bogey)') : lbl('Sin guardar', 'Unsaved')}
-                              </span>
-                            )}
+                            <div className="flex items-center gap-2">
+                              {saved && !row.dirty && (
+                                <span className="flex items-center gap-1 text-xs text-emerald-400">
+                                  <CheckCircle2 size={12} /> {lbl('Guardado', 'Saved')}
+                                </span>
+                              )}
+                              {row.dirty && (
+                                <span className="text-xs text-emerald-300">
+                                  {isPickupValue ? lbl('Pickup', 'Pickup') : lbl('Sin guardar', 'Unsaved')}
+                                </span>
+                              )}
+                              {(amCreator || p.isMe) && (
+                                <div className="relative">
+                                  <button
+                                    onClick={() => setMenuOpenFor(menuOpenFor === p.user_id ? null : p.user_id)}
+                                    className="w-6 h-6 flex items-center justify-center text-zinc-500 hover:text-white rounded">
+                                    ⋯
+                                  </button>
+                                  {menuOpenFor === p.user_id && (
+                                    <div className="absolute right-0 top-7 z-20 w-48 bg-zinc-900 border border-zinc-700 rounded-lg shadow-2xl overflow-hidden">
+                                      <button
+                                        onClick={() => { setWithdrawingFor({ user_id: p.user_id, name: p.name }); setMenuOpenFor(null) }}
+                                        className="w-full px-3 py-2 text-left text-xs text-amber-300 hover:bg-zinc-800 flex items-center gap-2">
+                                        <X size={12} /> {lbl('Retirar de la ronda', 'Withdraw from round')}
+                                      </button>
+                                      <button
+                                        onClick={() => togglePlayerMode(p.user_id, 'playing')}
+                                        className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:bg-zinc-800 flex items-center gap-2 border-t border-zinc-800">
+                                        👁 {lbl('Marcar como observador', 'Mark as observer')}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </div>
                           {/* ± + label */}
                           <div className="flex items-center justify-between gap-3">
@@ -1991,6 +2142,53 @@ export default function PlayRoundPage() {
           </div>
 
           {/* Stroke Index help modal */}
+          {/* Withdraw player modal */}
+          {withdrawingFor && (
+            <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center px-4"
+                 onClick={() => { setWithdrawingFor(null); setWithdrawReason('') }}>
+              <div onClick={e => e.stopPropagation()}
+                   className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle size={18} className="text-amber-400" />
+                  <h3 className="font-bold text-white">
+                    {lbl('Retirar de la ronda', 'Withdraw from round')}
+                  </h3>
+                </div>
+                <p className="text-sm text-zinc-300 mb-3">
+                  <span className="font-semibold">{withdrawingFor.name}</span>
+                </p>
+                <p className="text-xs text-zinc-500 mb-4 leading-relaxed">
+                  {lbl(
+                    'Sus scores capturados se conservan. Los hoyos restantes quedan vacíos. No se genera diferencial WHS y no se cuenta en el ranking activo.',
+                    'Their captured scores are preserved. Remaining holes stay empty. No WHS differential is generated and they are excluded from active ranking.'
+                  )}
+                </p>
+                <div className="mb-4">
+                  <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1 block">
+                    {lbl('Motivo (opcional)', 'Reason (optional)')}
+                  </label>
+                  <input
+                    type="text"
+                    value={withdrawReason}
+                    onChange={e => setWithdrawReason(e.target.value.slice(0, 200))}
+                    placeholder={lbl('Ej. lesión, emergencia personal...', 'e.g. injury, personal emergency...')}
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-amber-500 focus:outline-none"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => { setWithdrawingFor(null); setWithdrawReason('') }}
+                    className="flex-1 py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-medium">
+                    {lbl('Cancelar', 'Cancel')}
+                  </button>
+                  <button onClick={submitWithdraw}
+                    className="flex-1 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-900 text-sm font-semibold">
+                    {lbl('Confirmar retiro', 'Confirm withdraw')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {showSiHelp && hole && (
             <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center px-4"
                  onClick={() => setShowSiHelp(false)}>

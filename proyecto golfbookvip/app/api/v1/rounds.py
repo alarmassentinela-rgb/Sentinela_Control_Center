@@ -75,6 +75,9 @@ async def get_round_players(round_id: uuid.UUID, current_user: CurrentUser, db: 
             "tee_color": rp.tee_color,
             "in_bet": rp.in_bet,
             "status": rp.status,
+            "participant_mode": rp.participant_mode,
+            "withdrawn_at": rp.withdrawn_at.isoformat() if rp.withdrawn_at else None,
+            "withdrawn_reason": rp.withdrawn_reason,
         }
         for rp, u in rows
     ]
@@ -555,7 +558,8 @@ async def finish_round(round_id: uuid.UUID, current_user: CurrentUser, db: DB, f
     if conflict_result.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Hay conflictos de score sin resolver. Resuelve todos los conflictos antes de finalizar.")
 
-    # Advertir si hay jugadores con scorecard incompleto (a menos que force=true)
+    # Advertir si hay jugadores con scorecard incompleto (a menos que force=true).
+    # Excluye: withdrawn (se retiraron) y participant_mode='observer' (no se espera scores).
     if not force:
         players_check = await db.execute(
             select(RoundPlayer, User)
@@ -563,6 +567,7 @@ async def finish_round(round_id: uuid.UUID, current_user: CurrentUser, db: DB, f
             .where(
                 RoundPlayer.round_id == round_id,
                 RoundPlayer.status.in_(["confirmed", "playing", "finished"]),
+                RoundPlayer.participant_mode == "playing",
             )
         )
         incomplete = []
@@ -593,10 +598,15 @@ async def finish_round(round_id: uuid.UUID, current_user: CurrentUser, db: DB, f
     round_.status = "finished"
     round_.finished_at = datetime.now(timezone.utc)
 
-    # Recalcular hándicap si la jugada es válida
+    # Recalcular hándicap si la jugada es válida.
+    # Excluye withdrawn y observers — esos jugadores no generan differential.
     if round_.is_handicap_valid:
         players_result = await db.execute(
-            select(RoundPlayer).where(RoundPlayer.round_id == round_id, RoundPlayer.status.in_(["confirmed", "playing", "finished"]))
+            select(RoundPlayer).where(
+                RoundPlayer.round_id == round_id,
+                RoundPlayer.status.in_(["confirmed", "playing", "finished"]),
+                RoundPlayer.participant_mode == "playing",
+            )
         )
         players = players_result.scalars().all()
 
@@ -734,6 +744,10 @@ async def get_scoreboard(round_id: uuid.UUID, db: DB):
             "last_name": u.last_name,
             "course_handicap": p.course_handicap,
             "team_number": p.team_number,
+            "status": p.status,
+            "participant_mode": p.participant_mode,
+            "withdrawn_at": p.withdrawn_at.isoformat() if p.withdrawn_at else None,
+            "withdrawn_reason": p.withdrawn_reason,
             "holes_played": len(scores),
             "thru": thru,
             "total_gross": total_gross,
@@ -1003,6 +1017,137 @@ async def remove_player_from_round(round_id: uuid.UUID, user_id: uuid.UUID, curr
         .where(RoundPlayer.round_id == round_id)
     )
     return _build_teams(result.all(), round_.teams_published)
+
+
+@router.post("/{round_id}/players/{user_id}/withdraw")
+async def withdraw_player(
+    round_id: uuid.UUID,
+    user_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: DB,
+    reason: Optional[str] = None,
+):
+    """Marca un jugador como retirado (WD). Sus scores capturados se preservan, los
+    hoyos restantes quedan vacíos, no genera differential, no bloquea el finish."""
+    round_result = await db.execute(select(Round).where(Round.id == round_id))
+    round_ = round_result.scalar_one_or_none()
+    if not round_:
+        raise HTTPException(status_code=404, detail="Ronda no encontrada")
+    # Permiso: creator o el propio jugador
+    is_creator = str(round_.created_by) == str(current_user.id)
+    is_self = str(user_id) == str(current_user.id)
+    if not (is_creator or is_self):
+        raise HTTPException(status_code=403, detail="Solo el creador o el jugador puede registrar el retiro")
+    if round_.status == "finished":
+        raise HTTPException(status_code=400, detail="No se puede retirar jugadores de una ronda finalizada")
+
+    rp_res = await db.execute(
+        select(RoundPlayer).where(RoundPlayer.round_id == round_id, RoundPlayer.user_id == user_id)
+    )
+    rp = rp_res.scalar_one_or_none()
+    if not rp:
+        raise HTTPException(status_code=404, detail="Jugador no encontrado en la ronda")
+
+    from datetime import datetime, timezone
+    rp.status = "withdrawn"
+    rp.withdrawn_at = datetime.now(timezone.utc)
+    rp.withdrawn_reason = (reason or "")[:200] if reason else None
+    await db.flush()
+
+    await manager.broadcast_to_round(
+        round_id=str(round_id),
+        message={"event": "player_withdrawn", "user_id": str(user_id), "reason": rp.withdrawn_reason},
+    )
+
+    # Notificar a otros jugadores
+    other_res = await db.execute(
+        select(RoundPlayer).where(
+            RoundPlayer.round_id == round_id,
+            RoundPlayer.user_id != user_id,
+            RoundPlayer.status.in_(["confirmed", "playing", "finished"]),
+        )
+    )
+    user_res = await db.execute(select(User).where(User.id == user_id))
+    wd_user = user_res.scalar_one_or_none()
+    wd_name = f"{wd_user.first_name} {wd_user.last_name}" if wd_user else "Un jugador"
+    for p in other_res.scalars().all():
+        await notify(
+            db, p.user_id, 'player_withdrawn',
+            title='Jugador retirado',
+            body=f'{wd_name} se retiró de la ronda{(" (" + rp.withdrawn_reason + ")") if rp.withdrawn_reason else ""}.',
+            data={'round_id': str(round_id), 'user_id': str(user_id)},
+        )
+
+    return {"message": "Jugador retirado", "user_id": str(user_id), "withdrawn_at": rp.withdrawn_at.isoformat()}
+
+
+@router.post("/{round_id}/players/{user_id}/unwithdraw")
+async def unwithdraw_player(round_id: uuid.UUID, user_id: uuid.UUID, current_user: CurrentUser, db: DB):
+    """Revierte el retiro (creator o el propio jugador)."""
+    round_result = await db.execute(select(Round).where(Round.id == round_id))
+    round_ = round_result.scalar_one_or_none()
+    if not round_:
+        raise HTTPException(status_code=404, detail="Ronda no encontrada")
+    is_creator = str(round_.created_by) == str(current_user.id)
+    is_self = str(user_id) == str(current_user.id)
+    if not (is_creator or is_self):
+        raise HTTPException(status_code=403, detail="Solo el creador o el jugador puede deshacer el retiro")
+    if round_.status == "finished":
+        raise HTTPException(status_code=400, detail="No se puede modificar una ronda finalizada")
+
+    rp_res = await db.execute(
+        select(RoundPlayer).where(RoundPlayer.round_id == round_id, RoundPlayer.user_id == user_id)
+    )
+    rp = rp_res.scalar_one_or_none()
+    if not rp:
+        raise HTTPException(status_code=404, detail="Jugador no encontrado en la ronda")
+    if rp.status != "withdrawn":
+        return {"message": "El jugador no estaba retirado", "user_id": str(user_id)}
+
+    rp.status = "playing" if round_.status == "active" else "confirmed"
+    rp.withdrawn_at = None
+    rp.withdrawn_reason = None
+    await db.flush()
+    return {"message": "Retiro revertido", "user_id": str(user_id)}
+
+
+@router.post("/{round_id}/players/{user_id}/set-mode")
+async def set_participant_mode(
+    round_id: uuid.UUID,
+    user_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: DB,
+    mode: str,
+):
+    """Cambia el participant_mode entre 'playing' y 'observer'.
+    Observer = jugador en la lista pero no se espera que tenga scores."""
+    if mode not in ("playing", "observer"):
+        raise HTTPException(status_code=400, detail="Modo inválido. Usa 'playing' u 'observer'.")
+
+    round_result = await db.execute(select(Round).where(Round.id == round_id))
+    round_ = round_result.scalar_one_or_none()
+    if not round_:
+        raise HTTPException(status_code=404, detail="Ronda no encontrada")
+    is_creator = str(round_.created_by) == str(current_user.id)
+    is_self = str(user_id) == str(current_user.id)
+    if not (is_creator or is_self):
+        raise HTTPException(status_code=403, detail="Solo el creador o el jugador puede cambiar este modo")
+
+    rp_res = await db.execute(
+        select(RoundPlayer).where(RoundPlayer.round_id == round_id, RoundPlayer.user_id == user_id)
+    )
+    rp = rp_res.scalar_one_or_none()
+    if not rp:
+        raise HTTPException(status_code=404, detail="Jugador no encontrado en la ronda")
+
+    rp.participant_mode = mode
+    await db.flush()
+
+    await manager.broadcast_to_round(
+        round_id=str(round_id),
+        message={"event": "participant_mode_changed", "user_id": str(user_id), "mode": mode},
+    )
+    return {"message": "Modo actualizado", "user_id": str(user_id), "mode": mode}
 
 
 @router.post("/{round_id}/teams/publish")
