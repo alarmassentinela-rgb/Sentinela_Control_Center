@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { Flag, Loader2, MapPin, Users, Radio, RefreshCw, Trophy, Minus, ChevronDown, ChevronUp, Wifi, WifiOff } from 'lucide-react'
+import { Flag, Loader2, MapPin, Users, Radio, RefreshCw, Trophy, Minus, ChevronDown, ChevronUp, Wifi, WifiOff, ArrowLeft, LayoutDashboard, Swords, CheckCircle2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
@@ -56,6 +56,33 @@ interface LiveData {
   player_scores: LivePlayer[]
 }
 
+interface LiveMatchupPlayer {
+  player_id: string
+  user_id: string
+  name: string
+  username: string
+  course_handicap: number | null
+  team_number: number
+}
+interface LiveMatchup {
+  match_number: number
+  player1: LiveMatchupPlayer | null
+  player2: LiveMatchupPlayer | null
+  holes_up: number
+  holes_remaining: number
+  last_hole_played: number
+  status: 'not_started' | 'in_progress' | 'closed' | 'halved' | 'bye'
+  result_str: string
+  winner_side: 'player1' | 'player2' | null
+}
+interface LiveMatchupsData {
+  has_matchups: boolean
+  team_numbers: number[]
+  team_score: Record<number, number>
+  matchups: LiveMatchup[]
+  holes_to_play: number
+}
+
 // ─── Team UI config ───────────────────────────────────────────────────────────
 
 const TEAM_UI: Record<string, {
@@ -105,6 +132,7 @@ export default function LiveScoreboardPage() {
   const { code } = useParams<{ code: string }>()
   const lbl = (es: string, en: string) => locale === 'es' ? es : en
 
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [data, setData]           = useState<LiveData | null>(null)
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState<string | null>(null)
@@ -112,6 +140,7 @@ export default function LiveScoreboardPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [showPlayers, setShowPlayers] = useState<Record<number, boolean>>({})
   const [secondsAgo, setSecondsAgo]   = useState(0)
+  const [matchupsLive, setMatchupsLive] = useState<LiveMatchupsData | null>(null)
   const [wsStatus, setWsStatus] = useState<'none' | 'connected' | 'disconnected'>('none')
   const wsRef  = useRef<WebSocket | null>(null)
   const pingRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -121,12 +150,18 @@ export default function LiveScoreboardPage() {
     if (!silent) setRefreshing(true)
     try {
       const res = await api.get(`/rounds/live/${code}`)
-      setData(res.data)
-      roundIdRef.current = res.data.round.id
+      const d = res.data
+      setData(d)
+      roundIdRef.current = d.round.id
       setLastUpdate(new Date())
       setSecondsAgo(0)
       setError(null)
-      return res.data
+      // Load matchups for match play
+      if (d.round.game_format === 'match' && d.round.has_teams) {
+        const mRes = await api.get(`/rounds/${d.round.id}/matchups`).catch(() => ({ data: null }))
+        if (mRes.data?.has_matchups) setMatchupsLive(mRes.data)
+      }
+      return d
     } catch {
       setError(lbl('Ronda no encontrada o código inválido.', 'Round not found or invalid code.'))
       return null
@@ -165,9 +200,10 @@ export default function LiveScoreboardPage() {
 
   // Initial load + setup
   useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+    setIsLoggedIn(!!token)
     fetchData().then((d) => {
       if (!d) return
-      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
       if (token && d.round.status === 'active') {
         connectWs(d.round.id, token)
       }
@@ -223,6 +259,17 @@ export default function LiveScoreboardPage() {
       <header className="bg-zinc-900/95 border-b border-zinc-800 backdrop-blur-md px-4 py-3 sticky top-0 z-10">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
+            {isLoggedIn ? (
+              <Link href={`/${locale}/dashboard`}
+                className="flex items-center gap-1.5 text-zinc-400 hover:text-white transition-colors mr-1">
+                <ArrowLeft size={16} />
+              </Link>
+            ) : (
+              <button onClick={() => window.history.back()}
+                className="flex items-center gap-1.5 text-zinc-400 hover:text-white transition-colors mr-1">
+                <ArrowLeft size={16} />
+              </button>
+            )}
             <div className="w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center">
               <Flag size={14} className="text-white" />
             </div>
@@ -514,6 +561,102 @@ export default function LiveScoreboardPage() {
           </div>
         )}
 
+        {/* ── Match Play Partidos ── */}
+        {round.game_format === 'match' && matchupsLive?.has_matchups && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 px-1">
+              <Swords size={15} className="text-purple-400" />
+              <h3 className="font-semibold text-white text-sm">{lbl('Partidos', 'Matches')}</h3>
+            </div>
+
+            {/* Team score summary */}
+            <div className="flex gap-3">
+              {matchupsLive.team_numbers.map(tn => {
+                const team = teams.find(t => t.team_number === tn)
+                const ui = TEAM_UI[team?.color ?? 'emerald'] ?? TEAM_UI.emerald
+                const pts = matchupsLive.team_score[tn] ?? 0
+                return (
+                  <div key={tn} className={`flex-1 rounded-xl border px-4 py-3 text-center ${ui.bg} ${ui.border}`}>
+                    <p className={`text-xs font-semibold mb-1 ${ui.text}`}>{team?.name ?? `Equipo ${tn}`}</p>
+                    <p className="text-3xl font-black text-white">{pts % 1 === 0 ? pts : pts.toFixed(1)}</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">{lbl('ganados', 'won')}</p>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Matchup cards */}
+            {matchupsLive.matchups.map(m => {
+              const t1 = teams.find(t => t.team_number === m.player1?.team_number)
+              const t2 = teams.find(t => t.team_number === m.player2?.team_number)
+              const ui1 = TEAM_UI[t1?.color ?? 'emerald'] ?? TEAM_UI.emerald
+              const ui2 = TEAM_UI[t2?.color ?? 'blue'] ?? TEAM_UI.blue
+              const p1Won = m.status === 'closed' && m.winner_side === 'player1'
+              const p2Won = m.status === 'closed' && m.winner_side === 'player2'
+
+              return (
+                <div key={m.match_number} className="bg-zinc-900/85 border border-zinc-700 rounded-2xl overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-700/40">
+                    <span className="text-xs text-zinc-500 font-semibold uppercase tracking-wide">
+                      {lbl('Partido', 'Match')} {m.match_number}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {m.status !== 'not_started' && m.status !== 'bye' && (
+                        <span className="text-xs text-zinc-500">H{m.last_hole_played}</span>
+                      )}
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                        m.status === 'not_started' ? 'bg-zinc-800 text-zinc-500' :
+                        m.status === 'closed' || m.status === 'halved' ? 'bg-emerald-500/20 text-emerald-400' :
+                        'bg-blue-500/20 text-blue-400'
+                      }`}>
+                        {m.status === 'not_started' ? lbl('Sin iniciar', 'Not started') :
+                         m.status === 'in_progress' ? lbl('En curso', 'In progress') :
+                         m.status === 'halved' ? lbl('Empatado', 'Halved') :
+                         m.status === 'closed' ? lbl('Cerrado', 'Closed') : 'BYE'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 py-4">
+                    <div className={`text-center ${p2Won ? 'opacity-40' : ''}`}>
+                      {m.player1 && (
+                        <>
+                          <div className={`inline-flex items-center justify-center w-8 h-8 rounded-full mb-1.5 ${ui1.bg} border ${ui1.border}`}>
+                            <span className={`text-sm font-black ${ui1.text}`}>{m.player1.name.charAt(0)}</span>
+                          </div>
+                          <p className="text-xs font-semibold text-white truncate">{m.player1.name.split(' ')[0]}</p>
+                          <p className={`text-xs ${ui1.text}`}>{t1?.name ?? `E${m.player1.team_number}`}</p>
+                          {p1Won && <CheckCircle2 size={12} className="text-emerald-400 mx-auto mt-1" />}
+                        </>
+                      )}
+                    </div>
+                    <div className="text-center min-w-[60px]">
+                      <p className={`text-2xl font-black ${
+                        m.status === 'not_started' ? 'text-zinc-600' :
+                        m.status === 'closed' || m.status === 'halved' ? 'text-emerald-400' : 'text-white'
+                      }`}>{m.result_str}</p>
+                      {m.status === 'in_progress' && m.holes_remaining > 0 && (
+                        <p className="text-xs text-zinc-600">{m.holes_remaining} {lbl('rest.', 'left')}</p>
+                      )}
+                    </div>
+                    <div className={`text-center ${p1Won ? 'opacity-40' : ''}`}>
+                      {m.player2 && (
+                        <>
+                          <div className={`inline-flex items-center justify-center w-8 h-8 rounded-full mb-1.5 ${ui2.bg} border ${ui2.border}`}>
+                            <span className={`text-sm font-black ${ui2.text}`}>{m.player2.name.charAt(0)}</span>
+                          </div>
+                          <p className="text-xs font-semibold text-white truncate">{m.player2.name.split(' ')[0]}</p>
+                          <p className={`text-xs ${ui2.text}`}>{t2?.name ?? `E${m.player2.team_number}`}</p>
+                          {p2Won && <CheckCircle2 size={12} className="text-emerald-400 mx-auto mt-1" />}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
         {/* ── No teams yet ── */}
         {!round.has_teams && round.status !== 'finished' && (
           <div className="bg-zinc-900/85 border border-zinc-800 rounded-2xl px-5 py-8 text-center">
@@ -527,72 +670,81 @@ export default function LiveScoreboardPage() {
           </div>
         )}
 
-        {/* ── Promo card ── */}
-        <div className="rounded-2xl overflow-hidden border border-zinc-700/50" style={{
-          background: 'linear-gradient(135deg, rgba(16,24,20,0.95) 0%, rgba(9,9,11,0.95) 100%)'
-        }}>
-          {/* Top accent line */}
-          <div className="h-px bg-gradient-to-r from-transparent via-emerald-500/60 to-transparent" />
-
-          <div className="px-6 py-6">
-            {/* Logo + tagline */}
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 shadow-lg shadow-emerald-500/20">
-                <Flag size={18} className="text-white" />
-              </div>
-              <div>
-                <p className="font-bold text-white text-lg leading-tight">
-                  GolfBook<span className="text-emerald-400">VIP</span>
-                </p>
-                <p className="text-xs text-zinc-500 leading-tight">
-                  {lbl('Tu compañero de golf digital', 'Your digital golf companion')}
-                </p>
-              </div>
+        {/* ── Promo card (solo para no registrados) / Dashboard card (para registrados) ── */}
+        {isLoggedIn ? (
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/85 px-5 py-4 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-white">
+                {lbl('¿Listo para jugar?', 'Ready to play?')}
+              </p>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                {lbl('Crea o únete a una ronda desde tu panel.', 'Create or join a round from your dashboard.')}
+              </p>
             </div>
-
-            <p className="text-sm text-zinc-300 leading-relaxed mb-5">
-              {lbl(
-                'Lo que acabas de ver es solo una parte. GolfBookVIP es la plataforma completa para llevar tu golf al siguiente nivel — desde el primer tee hasta el 19.',
-                "What you just watched is only a glimpse. GolfBookVIP is the complete platform to take your golf to the next level — from the first tee to the 19th hole."
-              )}
-            </p>
-
-            {/* Feature grid */}
-            <div className="grid grid-cols-2 gap-2.5 mb-5">
-              {[
-                { icon: '⛳', es: 'Scorecard digital hoyo a hoyo', en: 'Hole-by-hole digital scorecard' },
-                { icon: '📊', es: 'Hándicap WHS oficial y automático', en: 'Official WHS handicap, auto-updated' },
-                { icon: '🏆', es: 'Equipos y formatos avanzados', en: 'Teams, match play & advanced formats' },
-                { icon: '💰', es: 'Apuestas: Nassau, Skins, Oyes', en: 'Bets: Nassau, Skins, Oyes & more' },
-                { icon: '📈', es: 'Estadísticas y tendencia de HCP', en: 'Stats, trends & HCP history' },
-                { icon: '📱', es: 'Funciona en cualquier celular', en: 'Works on any smartphone' },
-              ].map(f => (
-                <div key={f.es} className="flex items-start gap-2 bg-zinc-800/40 rounded-xl px-3 py-2.5">
-                  <span className="text-base leading-none mt-0.5">{f.icon}</span>
-                  <p className="text-xs text-zinc-400 leading-snug">{locale === 'es' ? f.es : f.en}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* CTA */}
             <Link
-              href={`/${locale}/auth/register`}
-              className="flex items-center justify-center gap-2 w-full bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-3 rounded-xl transition-colors text-sm shadow-lg shadow-emerald-500/20"
+              href={`/${locale}/dashboard`}
+              className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold px-4 py-2.5 rounded-xl transition-colors text-sm flex-shrink-0"
             >
-              {lbl('Crear mi cuenta gratis', 'Create my free account')}
+              <LayoutDashboard size={15} />
+              {lbl('Mi panel', 'Dashboard')}
             </Link>
-
-            <p className="text-center text-xs text-zinc-600 mt-3">
-              {lbl(
-                'Sin tarjeta de crédito · Gratis para empezar',
-                'No credit card · Free to get started'
-              )}
-            </p>
           </div>
-
-          {/* Bottom accent line */}
-          <div className="h-px bg-gradient-to-r from-transparent via-emerald-500/30 to-transparent" />
-        </div>
+        ) : (
+          <div className="rounded-2xl overflow-hidden border border-zinc-700/50" style={{
+            background: 'linear-gradient(135deg, rgba(16,24,20,0.95) 0%, rgba(9,9,11,0.95) 100%)'
+          }}>
+            <div className="h-px bg-gradient-to-r from-transparent via-emerald-500/60 to-transparent" />
+            <div className="px-6 py-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 shadow-lg shadow-emerald-500/20">
+                  <Flag size={18} className="text-white" />
+                </div>
+                <div>
+                  <p className="font-bold text-white text-lg leading-tight">
+                    GolfBook<span className="text-emerald-400">VIP</span>
+                  </p>
+                  <p className="text-xs text-zinc-500 leading-tight">
+                    {lbl('Tu compañero de golf digital', 'Your digital golf companion')}
+                  </p>
+                </div>
+              </div>
+              <p className="text-sm text-zinc-300 leading-relaxed mb-5">
+                {lbl(
+                  'Lo que acabas de ver es solo una parte. GolfBookVIP es la plataforma completa para llevar tu golf al siguiente nivel — desde el primer tee hasta el 19.',
+                  "What you just watched is only a glimpse. GolfBookVIP is the complete platform to take your golf to the next level — from the first tee to the 19th hole."
+                )}
+              </p>
+              <div className="grid grid-cols-2 gap-2.5 mb-5">
+                {[
+                  { icon: '⛳', es: 'Scorecard digital hoyo a hoyo', en: 'Hole-by-hole digital scorecard' },
+                  { icon: '📊', es: 'Hándicap WHS oficial y automático', en: 'Official WHS handicap, auto-updated' },
+                  { icon: '🏆', es: 'Equipos y formatos avanzados', en: 'Teams, match play & advanced formats' },
+                  { icon: '💰', es: 'Apuestas: Nassau, Skins, Oyes', en: 'Bets: Nassau, Skins, Oyes & more' },
+                  { icon: '📈', es: 'Estadísticas y tendencia de HCP', en: 'Stats, trends & HCP history' },
+                  { icon: '📱', es: 'Funciona en cualquier celular', en: 'Works on any smartphone' },
+                ].map(f => (
+                  <div key={f.es} className="flex items-start gap-2 bg-zinc-800/40 rounded-xl px-3 py-2.5">
+                    <span className="text-base leading-none mt-0.5">{f.icon}</span>
+                    <p className="text-xs text-zinc-400 leading-snug">{locale === 'es' ? f.es : f.en}</p>
+                  </div>
+                ))}
+              </div>
+              <Link
+                href={`/${locale}/auth/register`}
+                className="flex items-center justify-center gap-2 w-full bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-3 rounded-xl transition-colors text-sm shadow-lg shadow-emerald-500/20"
+              >
+                {lbl('Crear mi cuenta gratis', 'Create my free account')}
+              </Link>
+              <p className="text-center text-xs text-zinc-500 mt-3">
+                {lbl('¿Ya tienes cuenta?', 'Already have an account?')}{' '}
+                <Link href={`/${locale}/auth/login`} className="text-emerald-400 hover:text-emerald-300 font-medium">
+                  {lbl('Iniciar sesión', 'Log in')}
+                </Link>
+              </p>
+            </div>
+            <div className="h-px bg-gradient-to-r from-transparent via-emerald-500/30 to-transparent" />
+          </div>
+        )}
 
         {/* ── Footer ── */}
         <p className="text-center text-xs text-zinc-700 pb-4">

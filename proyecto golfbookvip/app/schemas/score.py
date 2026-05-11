@@ -12,6 +12,7 @@ class ScoreSubmit(BaseModel):
     shot_latitude: Optional[float] = None
     shot_longitude: Optional[float] = None
     notes: Optional[str] = None
+    for_user_id: Optional[uuid.UUID] = None   # captura para compañero del mismo grupo
 
     @model_validator(mode="after")
     def validate_hole(self) -> "ScoreSubmit":
@@ -39,5 +40,7 @@ class ScoreOut(BaseModel):
     is_double_bogey: bool
     is_three_putt: bool
     oye_winner: bool
+    has_conflict: bool = False
+    conflict_score: Optional[int] = None
 
     model_config = {"from_attributes": True}

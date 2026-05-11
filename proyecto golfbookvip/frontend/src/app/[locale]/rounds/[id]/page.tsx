@@ -1,8 +1,8 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Fragment } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { Flag, ArrowLeft, Play, MapPin, Calendar, Loader2, CheckCircle2, Copy, Check, QrCode, DollarSign, ChevronDown, ChevronUp, Save, Edit2, X, Info, Trash2, Users, Shuffle, Radio, Eye, EyeOff, Send } from 'lucide-react'
+import { Flag, ArrowLeft, Play, MapPin, Calendar, Loader2, CheckCircle2, Copy, Check, QrCode, DollarSign, ChevronDown, ChevronUp, Save, Edit2, X, Info, Trash2, Users, Shuffle, Radio, Eye, EyeOff, Send, Swords, ArrowUp, ArrowDown, Layers, AlertTriangle } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
@@ -115,6 +115,56 @@ interface TeamsResponse {
   teams_published: boolean
 }
 
+interface MatchupPlayer {
+  player_id: string
+  user_id: string
+  name: string
+  username: string
+  course_handicap: number | null
+  team_number: number
+  match_order: number | null
+}
+interface Matchup {
+  match_number: number
+  player1: MatchupPlayer | null
+  player2: MatchupPlayer | null
+  holes_up: number
+  holes_remaining: number
+  last_hole_played: number
+  status: 'not_started' | 'in_progress' | 'closed' | 'halved' | 'bye'
+  result_str: string
+  winner_side: 'player1' | 'player2' | null
+}
+interface MatchupsResponse {
+  has_matchups: boolean
+  needs_setup: boolean
+  team_numbers: number[]
+  team_score: Record<number, number>
+  matchups: Matchup[]
+  holes_to_play: number
+  round_status: string
+}
+
+interface TeeGroupPlayer {
+  player_id: string
+  user_id: string
+  name: string
+  username: string
+  course_handicap: number | null
+  tee_group: number | null
+  starting_hole: number | null
+}
+interface TeeGroup {
+  group_number: number
+  starting_hole: number | null
+  players: TeeGroupPlayer[]
+}
+interface TeeGroupsData {
+  has_groups: boolean
+  groups: TeeGroup[]
+  ungrouped: TeeGroupPlayer[]
+}
+
 const TEAM_UI: Record<string, { bg: string; border: string; text: string; dot: string; btn: string }> = {
   emerald: { bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-400', dot: 'bg-emerald-400', btn: 'bg-emerald-500 hover:bg-emerald-400' },
   blue:    { bg: 'bg-blue-500/10',    border: 'border-blue-500/30',    text: 'text-blue-400',    dot: 'bg-blue-400',    btn: 'bg-blue-500 hover:bg-blue-400' },
@@ -133,7 +183,8 @@ function scoreCellCls(gross: number, par: number) {
 }
 
 function RoundScorecard({
-  board, players, holes, holesTotal, status, lbl
+  board, players, holes, holesTotal, status, lbl,
+  gameFormat, matchups, teamsData,
 }: {
   board: BoardEntry[]
   players: Player[]
@@ -141,27 +192,280 @@ function RoundScorecard({
   holesTotal: number
   status: string
   lbl: (es: string, en: string) => string
+  gameFormat?: string
+  matchups?: MatchupsResponse | null
+  teamsData?: TeamsResponse | null
 }) {
+  // useState must always be at top (before any conditional returns)
   const [activeIdx, setActiveIdx] = useState(0)
+
+  const activeHoles = holes.filter(h => h.hole_number <= holesTotal)
+  const front9 = activeHoles.filter(h => h.hole_number <= 9)
+  const back9  = activeHoles.filter(h => h.hole_number > 9)
+  const has18  = holesTotal === 18
+  const frontPar = front9.reduce((s, h) => s + h.par, 0)
+  const backPar  = back9.reduce((s, h) => s + h.par, 0)
+  const totalPar = frontPar + backPar
+
+  // Build per-player score map: {userId: {hole: {gross, net}}}
+  const allScoreMaps: Record<string, Record<number, { gross: number; net: number }>> = {}
+  board.forEach(b => {
+    allScoreMaps[b.user_id] = {}
+    b.scores.forEach(s => { allScoreMaps[b.user_id][s.hole] = { gross: s.gross, net: s.net } })
+  })
+
+  const sumGrossRange = (userId: string, from: number, to: number) => {
+    let sum = 0
+    for (let h = from; h <= to; h++) {
+      const s = allScoreMaps[userId]?.[h]
+      if (s) sum += s.gross
+    }
+    return sum
+  }
+
+  // ─── MATCH PLAY MATRIX VIEW ──────────────────────────────────────────────
+  if (gameFormat === 'match' && matchups?.has_matchups) {
+    // Extra columns: Out (18h) + Total  → colSpan for match state row
+    const extraCols = has18 ? 2 : 1
+
+    return (
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+        {/* Header */}
+        <div className="px-5 pt-4 pb-3 border-b border-zinc-800 flex items-center gap-2">
+          {status === 'finished'
+            ? <CheckCircle2 size={14} className="text-emerald-400" />
+            : <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />}
+          <h2 className="font-semibold text-white text-sm">
+            {status === 'finished' ? lbl('Tarjeta final', 'Final scorecard') : lbl('Tarjeta en curso', 'Live scorecard')}
+          </h2>
+          <span className="ml-auto text-xs text-zinc-600">
+            {lbl('scroll →', 'scroll →')}
+          </span>
+        </div>
+
+        {/* Scrollable matrix */}
+        <div className="overflow-x-auto">
+          <table className="border-collapse w-max">
+            {/* ── Header rows ── */}
+            <thead>
+              {/* Hole numbers */}
+              <tr className="bg-zinc-950/60">
+                <th className="sticky left-0 z-20 bg-zinc-950/80 backdrop-blur text-left text-[10px] text-zinc-500 uppercase tracking-wide px-3 py-2 font-semibold min-w-[116px] border-b border-zinc-800">
+                  {lbl('Jugador', 'Player')}
+                </th>
+                {activeHoles.map(h => (
+                  <th key={h.hole_number}
+                    className={`text-center text-[10px] font-medium py-2 w-7 border-b border-zinc-800 ${
+                      h.hole_number === 10 ? 'border-l border-zinc-700' : ''
+                    } ${h.hole_number <= 9 ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                    {h.hole_number}
+                  </th>
+                ))}
+                {has18 && (
+                  <th className="text-center text-[10px] font-bold text-zinc-300 py-2 w-9 border-b border-l border-zinc-700 bg-zinc-800/30">
+                    S
+                  </th>
+                )}
+                <th className="text-center text-[10px] font-bold text-zinc-200 py-2 w-12 border-b border-l border-zinc-700 bg-zinc-800/50">
+                  Tot
+                </th>
+              </tr>
+              {/* Par row */}
+              {activeHoles.length > 0 && (
+                <tr className="border-b border-zinc-800/60">
+                  <td className="sticky left-0 z-20 bg-zinc-900 text-[10px] text-zinc-500 px-3 py-1 font-bold">
+                    Par
+                  </td>
+                  {activeHoles.map(h => (
+                    <td key={h.hole_number}
+                      className={`text-center text-[10px] text-zinc-600 py-1 ${
+                        h.hole_number === 10 ? 'border-l border-zinc-800' : ''
+                      }`}>
+                      {h.par}
+                    </td>
+                  ))}
+                  {has18 && (
+                    <td className="text-center text-[10px] text-zinc-500 font-bold py-1 border-l border-zinc-700 bg-zinc-800/20">
+                      {frontPar}
+                    </td>
+                  )}
+                  <td className="text-center text-[10px] text-zinc-400 font-bold py-1 border-l border-zinc-700 bg-zinc-800/30">
+                    {totalPar}
+                  </td>
+                </tr>
+              )}
+            </thead>
+
+            {/* ── Matchup pairs ── */}
+            <tbody>
+              {matchups.matchups.map((m, mi) => {
+                const p1 = m.player1
+                const p2 = m.player2
+                const t1 = teamsData?.teams.find(t => t.team_number === p1?.team_number)
+                const t2 = teamsData?.teams.find(t => t.team_number === p2?.team_number)
+                const ui1 = TEAM_UI[t1?.color ?? 'emerald'] ?? TEAM_UI.emerald
+                const ui2 = TEAM_UI[t2?.color ?? 'blue'] ?? TEAM_UI.blue
+                const p1Won = m.status === 'closed' && m.winner_side === 'player1'
+                const p2Won = m.status === 'closed' && m.winner_side === 'player2'
+
+                // Render a player row inside a matchup
+                const renderRow = (
+                  player: typeof p1,
+                  opponentId: string | null,
+                  ui: typeof ui1,
+                  isLoser: boolean,
+                ) => {
+                  if (!player) return null
+                  const sm = allScoreMaps[player.user_id] ?? {}
+                  const opSm = opponentId ? (allScoreMaps[opponentId] ?? {}) : {}
+                  const frontGross = sumGrossRange(player.user_id, 1, 9)
+                  const backGross  = sumGrossRange(player.user_id, 10, 18)
+                  const totalGross = has18 ? frontGross + backGross : sumGrossRange(player.user_id, 1, holesTotal)
+                  const rel = totalGross > 0 ? totalGross - totalPar : null
+
+                  return (
+                    <tr className={`border-t border-zinc-800/40 transition-opacity ${isLoser ? 'opacity-50' : ''}`}>
+                      {/* Sticky name column */}
+                      <td className={`sticky left-0 z-10 bg-zinc-900 px-2 py-2 min-w-[116px] border-l-2 ${ui.border}`}>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${ui.dot}`} />
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-white truncate leading-tight max-w-[88px]">
+                              {player.name}
+                            </p>
+                            <p className={`text-[10px] leading-tight ${ui.text}`}>
+                              {t1?.team_number === player.team_number ? t1?.name : t2?.name} · HCP {player.course_handicap ?? '—'}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Hole cells */}
+                      {activeHoles.map(h => {
+                        const sc = sm[h.hole_number]
+                        const opSc = opSm[h.hole_number]
+                        const myNet = sc?.net ?? sc?.gross
+                        const opNet = opSc?.net ?? opSc?.gross
+                        const wonHole  = myNet !== undefined && opNet !== undefined && myNet < opNet
+                        const lostHole = myNet !== undefined && opNet !== undefined && myNet > opNet
+
+                        return (
+                          <td key={h.hole_number}
+                            className={`text-center py-1.5 px-0 w-7 ${
+                              h.hole_number === 10 ? 'border-l border-zinc-800' : ''
+                            } ${wonHole ? 'bg-emerald-500/5' : lostHole ? 'bg-red-500/5' : ''}`}>
+                            {sc ? (
+                              <span className={`
+                                inline-flex items-center justify-center w-6 h-6 text-[11px] font-bold
+                                ${scoreCellCls(sc.gross, h.par)}
+                                ${wonHole ? 'ring-1 ring-emerald-400/60 ring-offset-1 ring-offset-zinc-900' : ''}
+                              `}>
+                                {sc.gross}
+                              </span>
+                            ) : (
+                              <span className="text-zinc-700 text-sm leading-none">·</span>
+                            )}
+                          </td>
+                        )
+                      })}
+
+                      {/* Out subtotal */}
+                      {has18 && (
+                        <td className="text-center px-1 py-1.5 w-9 border-l border-zinc-700 bg-zinc-800/20">
+                          <span className="text-xs font-bold text-zinc-300">
+                            {frontGross > 0 ? frontGross : '—'}
+                          </span>
+                        </td>
+                      )}
+
+                      {/* Total */}
+                      <td className="text-center px-1 py-1.5 w-12 border-l border-zinc-700 bg-zinc-800/30">
+                        {totalGross > 0 ? (
+                          <div className="flex flex-col items-center">
+                            <span className="text-sm font-black text-white leading-tight">{totalGross}</span>
+                            {rel !== null && (
+                              <span className={`text-[9px] font-bold leading-none ${rel < 0 ? 'text-emerald-400' : rel > 0 ? 'text-red-400' : 'text-zinc-500'}`}>
+                                {rel === 0 ? 'E' : rel > 0 ? `+${rel}` : rel}
+                              </span>
+                            )}
+                          </div>
+                        ) : <span className="text-zinc-600 text-xs">—</span>}
+                      </td>
+                    </tr>
+                  )
+                }
+
+                return (
+                  <Fragment key={m.match_number}>
+                    {/* Divider between pairs */}
+                    {mi > 0 && (
+                      <tr>
+                        <td colSpan={activeHoles.length + extraCols + 1}
+                          className="h-px bg-zinc-700/60 p-0" />
+                      </tr>
+                    )}
+
+                    {/* Player 1 row */}
+                    {renderRow(p1, p2?.user_id ?? null, ui1, p2Won)}
+
+                    {/* Player 2 row */}
+                    {renderRow(p2, p1?.user_id ?? null, ui2, p1Won)}
+
+                    {/* Match state separator */}
+                    <tr className="bg-zinc-800/30 border-t border-zinc-700/40">
+                      <td colSpan={activeHoles.length + extraCols + 1} className="px-3 py-1.5">
+                        <div className="flex items-center gap-2">
+                          <Swords size={10} className="text-purple-400/60 flex-shrink-0" />
+                          <span className={`text-xs font-black tracking-wide ${
+                            m.status === 'not_started' ? 'text-zinc-600' :
+                            m.status === 'closed' || m.status === 'halved' ? 'text-emerald-400' :
+                            'text-white'
+                          }`}>
+                            {m.result_str}
+                          </span>
+                          {m.status !== 'not_started' && m.status !== 'bye' && (
+                            <span className="text-[10px] text-zinc-600">
+                              {m.status === 'in_progress'
+                                ? `· ${lbl('h', 'h')}${m.last_hole_played} · ${m.holes_remaining} ${lbl('rest.', 'left')}`
+                                : m.status === 'closed' && m.winner_side
+                                  ? `· ${m.winner_side === 'player1' ? p1?.name.split(' ')[0] : p2?.name.split(' ')[0]}`
+                                  : ''}
+                            </span>
+                          )}
+                          {m.status === 'not_started' && (
+                            <span className="text-[10px] text-zinc-700">{lbl('Sin iniciar', 'Not started')}</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  </Fragment>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
+  }
+
+  // ─── STANDARD TAB VIEW (all other formats) ───────────────────────────────
   const entry = board[activeIdx]
   if (!entry) return null
 
-  const activeHoles = holes.filter(h => h.hole_number <= holesTotal)
   const front = activeHoles.filter(h => h.hole_number <= 9)
-  const back = activeHoles.filter(h => h.hole_number > 9)
-  const sections = holesTotal === 18
+  const back  = activeHoles.filter(h => h.hole_number > 9)
+  const sections = has18
     ? [{ label: lbl('Salida', 'Out'), hs: front }, { label: lbl('Vuelta', 'In'), hs: back }]
     : [{ label: lbl('Total', 'Total'), hs: activeHoles }]
 
   const scoreMap: Record<number, { gross: number; net: number }> = {}
   entry.scores.forEach(s => { scoreMap[s.hole] = { gross: s.gross, net: s.net } })
 
-  const sumPar = (hs: Hole[]) => hs.reduce((s, h) => s + h.par, 0)
+  const sumPar   = (hs: Hole[]) => hs.reduce((s, h) => s + h.par, 0)
   const sumGross = (hs: Hole[]) => hs.reduce((s, h) => scoreMap[h.hole_number] ? s + scoreMap[h.hole_number].gross : s, 0)
-  const sumNet = (hs: Hole[]) => hs.reduce((s, h) => scoreMap[h.hole_number] ? s + scoreMap[h.hole_number].net : s, 0)
-  const played = (hs: Hole[]) => hs.filter(h => scoreMap[h.hole_number]).length
+  const sumNet   = (hs: Hole[]) => hs.reduce((s, h) => scoreMap[h.hole_number] ? s + scoreMap[h.hole_number].net : s, 0)
+  const played   = (hs: Hole[]) => hs.filter(h => scoreMap[h.hole_number]).length
 
-  const totalPar = sumPar(activeHoles)
   const totalGross = sumGross(activeHoles)
   const rel = totalGross - totalPar
 
@@ -198,7 +502,7 @@ function RoundScorecard({
         </div>
       )}
 
-      {/* Table */}
+      {/* Table — hoyo vertical */}
       <div className="overflow-x-auto">
         <div className="min-w-[380px] px-1 py-2">
           {sections.map(({ label, hs }) => (
@@ -281,7 +585,7 @@ function RoundScorecard({
           ))}
 
           {/* Grand total */}
-          {holesTotal === 18 && (
+          {has18 && (
             <div className="mx-3 mb-3 bg-zinc-800 rounded-xl px-4 py-3 flex items-center justify-between">
               <span className="text-xs font-bold text-zinc-400 uppercase tracking-wide">TOTAL</span>
               <div className="flex items-center gap-5">
@@ -694,6 +998,13 @@ export default function RoundDetailPage() {
   const [movingPlayer, setMovingPlayer] = useState<string | null>(null)
   const [teamsError, setTeamsError] = useState('')
   const [finishing, setFinishing] = useState(false)
+  const [teeGroupsData, setTeeGroupsData] = useState<TeeGroupsData | null>(null)
+  const [showTeeGroups, setShowTeeGroups] = useState(false)
+  // Draft: player_id → {tee_group, starting_hole}
+  const [teeGroupDraft, setTeeGroupDraft] = useState<Record<string, { tee_group: number | null; starting_hole: number }>>({})
+  const [editingTeeGroups, setEditingTeeGroups] = useState(false)
+  const [savingTeeGroups, setSavingTeeGroups] = useState(false)
+  const [numTeeGroups, setNumTeeGroups] = useState(1)
 
   const load = async () => {
     const [roundRes, playersRes, meRes] = await Promise.all([
@@ -732,6 +1043,27 @@ export default function RoundDetailPage() {
     if (teamsRes.data) {
       setTeamsData(teamsRes.data)
       if (teamsRes.data.has_teams) setShowTeams(true)
+    }
+    // Load matchups (match play only — works even before teams are published)
+    if (roundData.game_format === 'match') {
+      const mRes = await api.get(`/rounds/${id}/matchups`).catch(() => ({ data: null }))
+      if (mRes.data?.has_matchups) {
+        setMatchupsData(mRes.data)
+        setShowMatchups(true)
+      }
+    }
+    // Load tee groups (visible to all players)
+    const tgRes = await api.get(`/rounds/${id}/tee-groups`).catch(() => ({ data: null }))
+    if (tgRes.data) {
+      setTeeGroupsData(tgRes.data)
+      if (tgRes.data.has_groups) setShowTeeGroups(true)
+      // Initialize draft from current data
+      const draft: Record<string, { tee_group: number | null; starting_hole: number }> = {}
+      const allPlayers = [...(tgRes.data.groups?.flatMap((g: TeeGroup) => g.players) ?? []), ...(tgRes.data.ungrouped ?? [])]
+      allPlayers.forEach((p: TeeGroupPlayer) => {
+        draft[p.player_id] = { tee_group: p.tee_group, starting_hole: p.starting_hole ?? 1 }
+      })
+      setTeeGroupDraft(draft)
     }
   }
 
@@ -831,6 +1163,84 @@ export default function RoundDetailPage() {
     }
   }
 
+  // Moves a player up or down within their team's match order list
+  const handleReorderPlayer = async (teamNumber: number, playerIndex: number, direction: 'up' | 'down') => {
+    if (!teamsData) return
+    const team = teamsData.teams.find(t => t.team_number === teamNumber)
+    if (!team) return
+    const players = [...team.players]
+    const swapIdx = direction === 'up' ? playerIndex - 1 : playerIndex + 1
+    if (swapIdx < 0 || swapIdx >= players.length) return
+    // Swap
+    ;[players[playerIndex], players[swapIdx]] = [players[swapIdx], players[playerIndex]]
+    // Build new match_orders (1-based)
+    const orders = players.map((p, i) => ({ player_id: p.player_id, match_order: i + 1 }))
+    setReorderingMatch(true)
+    try {
+      await api.put(`/rounds/${id}/teams/reorder`, orders)
+      // Refresh both teams and matchups
+      const [teamsRes, mRes] = await Promise.all([
+        api.get(`/rounds/${id}/teams`),
+        api.get(`/rounds/${id}/matchups`),
+      ])
+      setTeamsData(teamsRes.data)
+      if (mRes.data?.has_matchups) setMatchupsData(mRes.data)
+    } finally {
+      setReorderingMatch(false)
+    }
+  }
+
+  const [removingPlayer, setRemovingPlayer] = useState<string | null>(null)
+  const handleRemovePlayer = async (userId: string, name: string) => {
+    if (!confirm(lbl(
+      `¿Quitar a ${name} de la ronda? Sus scores serán eliminados.`,
+      `Remove ${name} from the round? Their scores will be deleted.`
+    ))) return
+    setRemovingPlayer(userId)
+    try {
+      const res = await api.delete(`/rounds/${id}/players/${userId}`)
+      setTeamsData(res.data)
+      // Refresh matchups after removing player
+      const mRes = await api.get(`/rounds/${id}/matchups`).catch(() => ({ data: null }))
+      if (mRes.data?.has_matchups) setMatchupsData(mRes.data)
+      else setMatchupsData(null)
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      alert(detail ?? lbl('Error al quitar jugador', 'Error removing player'))
+    } finally {
+      setRemovingPlayer(null)
+    }
+  }
+
+  const refreshMatchups = async () => {
+    const mRes = await api.get(`/rounds/${id}/matchups`).catch(() => ({ data: null }))
+    if (mRes.data?.has_matchups) setMatchupsData(mRes.data)
+  }
+
+  const handleSaveTeeGroups = async () => {
+    setSavingTeeGroups(true)
+    try {
+      // Build assignments array from draft
+      const assignments = Object.entries(teeGroupDraft).map(([player_id, val]) => ({
+        player_id,
+        tee_group: val.tee_group,
+        starting_hole: val.tee_group !== null ? val.starting_hole : null,
+      }))
+      const res = await api.put(`/rounds/${id}/tee-groups`, assignments)
+      setTeeGroupsData(res.data)
+      setEditingTeeGroups(false)
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      alert(detail ?? lbl('Error al guardar grupos', 'Error saving groups'))
+    } finally {
+      setSavingTeeGroups(false)
+    }
+  }
+
+  const [matchupsData, setMatchupsData] = useState<MatchupsResponse | null>(null)
+  const [showMatchups, setShowMatchups] = useState(false)
+  const [reorderingMatch, setReorderingMatch] = useState(false)
+
   const [publishingTeams, setPublishingTeams] = useState(false)
   const handlePublishTeams = async () => {
     if (!confirm(lbl(
@@ -855,7 +1265,9 @@ export default function RoundDetailPage() {
     try {
       await api.post(`/rounds/${id}/finish`)
       await load()
-    } catch {
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      if (detail) alert(detail)
       setFinishing(false)
     }
   }
@@ -1362,7 +1774,7 @@ export default function RoundDetailPage() {
               <div className="px-6 pb-6 border-t border-zinc-800 pt-4 space-y-4">
 
                 {/* Creator controls */}
-                {amCreator && round.status === 'scheduled' && (
+                {amCreator && (round.status === 'scheduled' || round.status === 'active') && (
                   <div className="space-y-3">
                     <p className="text-sm text-zinc-400">
                       {lbl(
@@ -1457,22 +1869,61 @@ export default function RoundDetailPage() {
                               <span className={`font-bold text-sm ${ui.text}`}>{team.name}</span>
                               <span className="text-xs text-zinc-500">{team.players.length} {lbl('jugadores', 'players')}</span>
                             </div>
-                            <span className="text-xs text-zinc-500">
-                              {lbl('Total HCP', 'Total HCP')}: <span className="text-zinc-300 font-semibold">{team.total_handicap}</span>
-                            </span>
+                            <div className="flex items-center gap-2">
+                              {round.game_format === 'match' && amCreator && (
+                                <span className="text-xs text-purple-400/70">{lbl('↑↓ pairing', '↑↓ pairing')}</span>
+                              )}
+                              <span className="text-xs text-zinc-500">
+                                {lbl('Total HCP', 'Total HCP')}: <span className="text-zinc-300 font-semibold">{team.total_handicap}</span>
+                              </span>
+                            </div>
                           </div>
                           {/* Players */}
                           <div className="divide-y divide-zinc-800">
-                            {team.players.map(p => (
+                            {team.players.map((p, pIdx) => (
                               <div key={p.player_id} className="px-4 py-2.5 bg-zinc-900/60">
                                 <div className="flex items-center justify-between">
-                                  <div>
-                                    <p className="text-sm font-medium text-white">{p.name}</p>
-                                    <p className="text-xs text-zinc-500">@{p.username} · HCP {p.course_handicap ?? p.handicap_index ?? '—'}</p>
+                                  <div className="flex items-center gap-2">
+                                    {round.game_format === 'match' && amCreator && (
+                                      <div className="flex flex-col gap-0.5">
+                                        <button
+                                          disabled={pIdx === 0 || reorderingMatch}
+                                          onClick={() => handleReorderPlayer(team.team_number, pIdx, 'up')}
+                                          className="p-0.5 rounded text-zinc-500 hover:text-purple-400 disabled:opacity-25 transition-colors">
+                                          <ArrowUp size={12} />
+                                        </button>
+                                        <button
+                                          disabled={pIdx === team.players.length - 1 || reorderingMatch}
+                                          onClick={() => handleReorderPlayer(team.team_number, pIdx, 'down')}
+                                          className="p-0.5 rounded text-zinc-500 hover:text-purple-400 disabled:opacity-25 transition-colors">
+                                          <ArrowDown size={12} />
+                                        </button>
+                                      </div>
+                                    )}
+                                    <div>
+                                      <div className="flex items-center gap-1.5">
+                                        {round.game_format === 'match' && (
+                                          <span className="text-xs text-purple-400/60 font-mono w-4">{pIdx + 1}.</span>
+                                        )}
+                                        <p className="text-sm font-medium text-white">{p.name}</p>
+                                      </div>
+                                      <p className="text-xs text-zinc-500">@{p.username} · HCP {p.course_handicap ?? p.handicap_index ?? '—'}</p>
+                                    </div>
                                   </div>
-                                  {movingPlayer === p.player_id && (
-                                    <Loader2 size={14} className="animate-spin text-zinc-400" />
-                                  )}
+                                  <div className="flex items-center gap-1">
+                                    {movingPlayer === p.player_id && (
+                                      <Loader2 size={14} className="animate-spin text-zinc-400" />
+                                    )}
+                                    {reorderingMatch && <Loader2 size={12} className="animate-spin text-purple-400" />}
+                                    {amCreator && (round.status === 'scheduled' || round.status === 'active') && (
+                                      <button
+                                        onClick={() => handleRemovePlayer(p.user_id, p.name)}
+                                        disabled={movingPlayer !== null || reorderingMatch}
+                                        className="p-1.5 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-red-400/10 disabled:opacity-30 transition-all">
+                                        <X size={13} />
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                                 {/* Move buttons — creator only, while teams are unpublished */}
                                 {amCreator && !teamsData.teams_published && teamsData.teams.length > 1 && (
@@ -1515,9 +1966,19 @@ export default function RoundDetailPage() {
                                   <p className="text-sm text-zinc-300">{p.name}</p>
                                   <p className="text-xs text-zinc-500">HCP {p.course_handicap ?? '—'}</p>
                                 </div>
-                                {movingPlayer === p.player_id && (
-                                  <Loader2 size={14} className="animate-spin text-zinc-400" />
-                                )}
+                                <div className="flex items-center gap-1">
+                                  {movingPlayer === p.player_id && (
+                                    <Loader2 size={14} className="animate-spin text-zinc-400" />
+                                  )}
+                                  {amCreator && (round.status === 'scheduled' || round.status === 'active') && (
+                                    <button
+                                      onClick={() => handleRemovePlayer(p.user_id, p.name)}
+                                      disabled={movingPlayer !== null || removingPlayer !== null}
+                                      className="p-1.5 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-red-400/10 disabled:opacity-30 transition-all">
+                                      <X size={13} />
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                               {amCreator && !teamsData.teams_published && (
                                 <div className="flex items-center gap-1.5 mt-2 flex-wrap">
@@ -1541,6 +2002,421 @@ export default function RoundDetailPage() {
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Partidos (Match Play) ────────────────────────────────────────── */}
+        {round.game_format === 'match' && teamsData?.has_teams && (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+            <button onClick={async () => {
+              if (!showMatchups && !matchupsData) await refreshMatchups()
+              setShowMatchups(v => !v)
+            }}
+              className="w-full flex items-center justify-between px-6 py-4 hover:bg-zinc-800/50 transition-colors">
+              <div className="flex items-center gap-2">
+                <Swords size={16} className="text-purple-400" />
+                <span className="font-medium text-white">{lbl('Partidos', 'Matches')}</span>
+                {matchupsData?.has_matchups && (
+                  <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded-full">
+                    {matchupsData.matchups.length} {lbl('partidos', 'matches')}
+                  </span>
+                )}
+              </div>
+              {showMatchups ? <ChevronUp size={16} className="text-zinc-500" /> : <ChevronDown size={16} className="text-zinc-500" />}
+            </button>
+
+            {showMatchups && (
+              <div className="px-6 pb-6 border-t border-zinc-800 pt-4 space-y-4">
+
+                {/* Creator reorder hint */}
+                {amCreator && !reorderingMatch && (
+                  <p className="text-xs text-zinc-500 bg-zinc-800/50 rounded-lg px-3 py-2">
+                    {lbl(
+                      'El orden dentro de cada equipo define los enfrentamientos. Usa ↑↓ en la sección Equipos para cambiar pairings.',
+                      'Player order within each team defines the matchups. Use ↑↓ in the Teams section to change pairings.'
+                    )}
+                  </p>
+                )}
+
+                {/* Team score summary */}
+                {matchupsData?.has_matchups && matchupsData.team_score && (
+                  <div className="flex gap-3">
+                    {matchupsData.team_numbers.map(tn => {
+                      const team = teamsData?.teams.find(t => t.team_number === tn)
+                      const ui = TEAM_UI[team?.color ?? 'emerald'] ?? TEAM_UI.emerald
+                      const pts = matchupsData.team_score[tn] ?? 0
+                      return (
+                        <div key={tn} className={`flex-1 rounded-xl border px-4 py-3 text-center ${ui.bg} ${ui.border}`}>
+                          <p className={`text-xs font-semibold mb-1 ${ui.text}`}>{team?.name ?? `Equipo ${tn}`}</p>
+                          <p className="text-3xl font-black text-white">{pts % 1 === 0 ? pts : pts.toFixed(1)}</p>
+                          <p className="text-xs text-zinc-500 mt-0.5">{lbl('partidos ganados', 'matches won')}</p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* Matchup cards */}
+                {matchupsData?.matchups.map(m => {
+                  const t1 = teamsData?.teams.find(t => t.team_number === m.player1?.team_number)
+                  const t2 = teamsData?.teams.find(t => t.team_number === m.player2?.team_number)
+                  const ui1 = TEAM_UI[t1?.color ?? 'emerald'] ?? TEAM_UI.emerald
+                  const ui2 = TEAM_UI[t2?.color ?? 'blue'] ?? TEAM_UI.blue
+
+                  const statusColor =
+                    m.status === 'not_started' ? 'text-zinc-500' :
+                    m.status === 'closed' || m.status === 'halved' ? 'text-emerald-400' :
+                    'text-white'
+
+                  const p1Won = m.status === 'closed' && m.winner_side === 'player1'
+                  const p2Won = m.status === 'closed' && m.winner_side === 'player2'
+
+                  return (
+                    <div key={m.match_number} className="bg-zinc-800/50 border border-zinc-700 rounded-2xl overflow-hidden">
+                      {/* Match header */}
+                      <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-700/50">
+                        <span className="text-xs text-zinc-500 font-semibold uppercase tracking-wide">
+                          {lbl('Partido', 'Match')} {m.match_number}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          {m.status !== 'not_started' && m.status !== 'bye' && (
+                            <span className="text-xs text-zinc-500">
+                              {lbl('Hoyo', 'Hole')} {m.last_hole_played}
+                            </span>
+                          )}
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                            m.status === 'not_started' ? 'bg-zinc-700 text-zinc-400' :
+                            m.status === 'closed' || m.status === 'halved' ? 'bg-emerald-500/20 text-emerald-400' :
+                            'bg-blue-500/20 text-blue-400'
+                          }`}>
+                            {m.status === 'not_started' ? lbl('Sin iniciar', 'Not started') :
+                             m.status === 'in_progress' ? lbl('En curso', 'In progress') :
+                             m.status === 'halved' ? lbl('Empatado', 'Halved') :
+                             m.status === 'closed' ? lbl('Cerrado', 'Closed') :
+                             'BYE'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Players vs result */}
+                      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 py-4">
+                        {/* Player 1 */}
+                        <div className={`text-center ${p2Won ? 'opacity-50' : ''}`}>
+                          {m.player1 ? (
+                            <>
+                              <div className={`inline-flex items-center justify-center w-9 h-9 rounded-full mb-2 ${ui1.bg} border ${ui1.border}`}>
+                                <span className={`text-sm font-black ${ui1.text}`}>
+                                  {m.player1.name.charAt(0)}
+                                </span>
+                              </div>
+                              <p className={`text-sm font-semibold ${p1Won ? 'text-white' : 'text-zinc-200'}`}>
+                                {m.player1.name.split(' ')[0]}
+                              </p>
+                              <p className="text-xs text-zinc-500">{m.player1.name.split(' ').slice(1).join(' ')}</p>
+                              <p className={`text-xs mt-0.5 ${ui1.text}`}>{t1?.name ?? `E${m.player1.team_number}`}</p>
+                              {m.player1.course_handicap !== null && (
+                                <p className="text-xs text-zinc-600 mt-0.5">HCP {m.player1.course_handicap}</p>
+                              )}
+                              {p1Won && <CheckCircle2 size={14} className="text-emerald-400 mx-auto mt-1" />}
+                            </>
+                          ) : <span className="text-zinc-600 text-sm">—</span>}
+                        </div>
+
+                        {/* Result center */}
+                        <div className="text-center min-w-[64px]">
+                          <p className={`text-xl font-black ${statusColor}`}>{m.result_str}</p>
+                          {m.status === 'in_progress' && m.holes_remaining > 0 && (
+                            <p className="text-xs text-zinc-600 mt-0.5">{m.holes_remaining} {lbl('rest.', 'left')}</p>
+                          )}
+                          {m.status === 'not_started' && (
+                            <p className="text-xs text-zinc-700 mt-1">vs</p>
+                          )}
+                        </div>
+
+                        {/* Player 2 */}
+                        <div className={`text-center ${p1Won ? 'opacity-50' : ''}`}>
+                          {m.player2 ? (
+                            <>
+                              <div className={`inline-flex items-center justify-center w-9 h-9 rounded-full mb-2 ${ui2.bg} border ${ui2.border}`}>
+                                <span className={`text-sm font-black ${ui2.text}`}>
+                                  {m.player2.name.charAt(0)}
+                                </span>
+                              </div>
+                              <p className={`text-sm font-semibold ${p2Won ? 'text-white' : 'text-zinc-200'}`}>
+                                {m.player2.name.split(' ')[0]}
+                              </p>
+                              <p className="text-xs text-zinc-500">{m.player2.name.split(' ').slice(1).join(' ')}</p>
+                              <p className={`text-xs mt-0.5 ${ui2.text}`}>{t2?.name ?? `E${m.player2.team_number}`}</p>
+                              {m.player2.course_handicap !== null && (
+                                <p className="text-xs text-zinc-600 mt-0.5">HCP {m.player2.course_handicap}</p>
+                              )}
+                              {p2Won && <CheckCircle2 size={14} className="text-emerald-400 mx-auto mt-1" />}
+                            </>
+                          ) : <span className="text-zinc-600 text-sm">—</span>}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {/* No matchups yet */}
+                {(!matchupsData?.has_matchups) && (
+                  <div className="text-center py-6">
+                    <Swords size={32} className="text-zinc-700 mx-auto mb-3" />
+                    <p className="text-sm text-zinc-500">
+                      {lbl('Genera y publica los equipos para ver los partidos.', 'Generate and publish teams to see the matches.')}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Grupos de salida ─────────────────────────────────────────── */}
+        {(amCreator || teeGroupsData?.has_groups) && round.status !== 'finished' && (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+            <button onClick={() => setShowTeeGroups(v => !v)}
+              className="w-full flex items-center justify-between px-6 py-4 hover:bg-zinc-800/50 transition-colors">
+              <div className="flex items-center gap-2">
+                <Layers size={16} className="text-orange-400" />
+                <span className="font-medium text-white">{lbl('Grupos de salida', 'Tee groups')}</span>
+                {teeGroupsData?.has_groups && (
+                  <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded-full">
+                    {teeGroupsData.groups.length} {lbl('grupos', 'groups')}
+                  </span>
+                )}
+              </div>
+              {showTeeGroups ? <ChevronUp size={16} className="text-zinc-500" /> : <ChevronDown size={16} className="text-zinc-500" />}
+            </button>
+
+            {showTeeGroups && (
+              <div className="px-6 pb-6 border-t border-zinc-800 pt-4 space-y-4">
+
+                {/* Creator controls */}
+                {amCreator && !editingTeeGroups && (
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => {
+                        // Initialize draft from current data if not already
+                        if (teeGroupsData) {
+                          const allP = [...teeGroupsData.groups.flatMap(g => g.players), ...teeGroupsData.ungrouped]
+                          const draft: Record<string, { tee_group: number | null; starting_hole: number }> = {}
+                          allP.forEach(p => { draft[p.player_id] = { tee_group: p.tee_group, starting_hole: p.starting_hole ?? 1 } })
+                          setTeeGroupDraft(draft)
+                          // Set numTeeGroups to current count or 1
+                          setNumTeeGroups(Math.max(1, teeGroupsData.groups.length))
+                        }
+                        setEditingTeeGroups(true)
+                      }}
+                      className="flex items-center gap-1.5 text-xs bg-orange-500/15 hover:bg-orange-500/25 text-orange-400 border border-orange-500/30 px-3 py-1.5 rounded-lg transition-colors font-medium">
+                      <Edit2 size={12} />
+                      {teeGroupsData?.has_groups ? lbl('Editar grupos', 'Edit groups') : lbl('Asignar grupos', 'Assign groups')}
+                    </button>
+                    {!teeGroupsData?.has_groups && (
+                      <p className="text-xs text-zinc-500 self-center">
+                        {lbl('Asigna a los jugadores en grupos para que puedan capturar scores entre sí.', 'Assign players to groups so they can capture scores for each other.')}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Edit mode */}
+                {amCreator && editingTeeGroups && (
+                  <div className="space-y-4">
+                    {/* Number of groups selector */}
+                    <div>
+                      <p className="text-xs text-zinc-500 mb-2">{lbl('Número de grupos', 'Number of groups')}</p>
+                      <div className="flex gap-2 flex-wrap">
+                        {[1,2,3,4,5,6].map(n => (
+                          <button key={n} onClick={() => setNumTeeGroups(n)}
+                            className={`w-9 h-9 rounded-xl text-sm font-bold border transition-all ${
+                              numTeeGroups === n
+                                ? 'bg-orange-500/20 border-orange-400/50 text-orange-300'
+                                : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-500'
+                            }`}>
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Starting holes per group */}
+                    <div>
+                      <p className="text-xs text-zinc-500 mb-2">{lbl('Hoyo de salida por grupo', 'Starting hole per group')}</p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {Array.from({length: numTeeGroups}, (_, i) => i+1).map(g => {
+                          // Derive the starting hole from the first player assigned to this group
+                          const startHole = Object.values(teeGroupDraft).find(d => d.tee_group === g)?.starting_hole ?? 1
+                          return (
+                            <div key={g} className="flex items-center gap-2 bg-zinc-800 rounded-xl px-3 py-2">
+                              <span className="text-xs font-bold text-orange-400 w-16 flex-shrink-0">
+                                {lbl(`Grupo ${g}`, `Group ${g}`)}
+                              </span>
+                              <span className="text-xs text-zinc-500">{lbl('Hoyo', 'Hole')}</span>
+                              <input
+                                type="number" min="1" max={round.holes_to_play} value={startHole}
+                                onChange={e => {
+                                  const h = Math.min(round.holes_to_play, Math.max(1, parseInt(e.target.value) || 1))
+                                  setTeeGroupDraft(prev => {
+                                    const updated = { ...prev }
+                                    Object.entries(updated).forEach(([pid, d]) => {
+                                      if (d.tee_group === g) updated[pid] = { ...d, starting_hole: h }
+                                    })
+                                    return updated
+                                  })
+                                }}
+                                className="w-12 bg-zinc-700 border border-zinc-600 rounded-lg px-2 py-1 text-white text-xs text-center focus:outline-none focus:border-orange-400"
+                              />
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Player assignment */}
+                    <div>
+                      <p className="text-xs text-zinc-500 mb-2">{lbl('Asignar jugadores a grupos', 'Assign players to groups')}</p>
+                      <div className="space-y-1.5">
+                        {[
+                          ...teeGroupsData?.groups.flatMap(g => g.players) ?? [],
+                          ...teeGroupsData?.ungrouped ?? [],
+                        ].map(p => {
+                          const current = teeGroupDraft[p.player_id]
+                          return (
+                            <div key={p.player_id} className="flex items-center gap-3 bg-zinc-800/50 rounded-xl px-3 py-2.5">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-white truncate">{p.name}</p>
+                                <p className="text-xs text-zinc-500">HCP {p.course_handicap ?? '—'}</p>
+                              </div>
+                              <div className="flex gap-1 flex-wrap justify-end">
+                                {Array.from({length: numTeeGroups}, (_, i) => i+1).map(g => {
+                                  const startHole = Object.values(teeGroupDraft).find(d => d.tee_group === g)?.starting_hole ?? 1
+                                  return (
+                                    <button key={g}
+                                      onClick={() => setTeeGroupDraft(prev => ({
+                                        ...prev,
+                                        [p.player_id]: { tee_group: current?.tee_group === g ? null : g, starting_hole: startHole }
+                                      }))}
+                                      className={`w-8 h-8 rounded-lg text-xs font-bold border transition-all ${
+                                        current?.tee_group === g
+                                          ? 'bg-orange-500/25 border-orange-400/60 text-orange-300'
+                                          : 'bg-zinc-700 border-zinc-600 text-zinc-400 hover:border-zinc-400'
+                                      }`}>
+                                      {g}
+                                    </button>
+                                  )
+                                })}
+                                {current?.tee_group !== null && (
+                                  <button
+                                    onClick={() => setTeeGroupDraft(prev => ({
+                                      ...prev,
+                                      [p.player_id]: { ...prev[p.player_id], tee_group: null }
+                                    }))}
+                                    className="w-8 h-8 rounded-lg text-xs border border-zinc-700 bg-zinc-800 text-zinc-500 hover:text-red-400 hover:border-red-400/30 transition-all">
+                                    <X size={12} className="mx-auto" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Save/Cancel */}
+                    <div className="flex gap-2">
+                      <button onClick={handleSaveTeeGroups} disabled={savingTeeGroups}
+                        className="flex-1 flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-60 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors">
+                        {savingTeeGroups ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                        {lbl('Guardar grupos', 'Save groups')}
+                      </button>
+                      <button onClick={() => setEditingTeeGroups(false)}
+                        className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded-xl text-sm transition-colors">
+                        {lbl('Cancelar', 'Cancel')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Groups display (non-edit mode) */}
+                {!editingTeeGroups && teeGroupsData?.has_groups && (
+                  <div className="space-y-3">
+                    {teeGroupsData.groups.map(g => (
+                      <div key={g.group_number} className="bg-zinc-800/50 border border-zinc-700/60 rounded-xl overflow-hidden">
+                        <div className="flex items-center justify-between px-4 py-2 bg-orange-500/8 border-b border-orange-500/15">
+                          <div className="flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-full bg-orange-500/25 flex items-center justify-center text-xs font-black text-orange-300">
+                              {g.group_number}
+                            </span>
+                            <span className="text-sm font-semibold text-orange-300">
+                              {lbl(`Grupo ${g.group_number}`, `Group ${g.group_number}`)}
+                            </span>
+                          </div>
+                          {g.starting_hole && (
+                            <div className="flex items-center gap-1.5">
+                              <MapPin size={11} className="text-zinc-500" />
+                              <span className="text-xs text-zinc-400">
+                                {lbl(`Sale hoyo ${g.starting_hole}`, `Starts hole ${g.starting_hole}`)}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="divide-y divide-zinc-800/60">
+                          {g.players.map(p => (
+                            <div key={p.player_id} className="flex items-center gap-3 px-4 py-2.5">
+                              <div className="w-7 h-7 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-orange-400 flex-shrink-0">
+                                {p.name.charAt(0)}
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-white">
+                                  {p.name}
+                                  {p.user_id === myUserId && <span className="ml-1.5 text-xs text-emerald-400">{lbl('(tú)', '(you)')}</span>}
+                                </p>
+                                <p className="text-xs text-zinc-500">HCP {p.course_handicap ?? '—'}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Cross-capture hint */}
+                    <div className="bg-zinc-800/30 border border-zinc-700/40 rounded-xl px-4 py-3 flex items-start gap-2">
+                      <AlertTriangle size={13} className="text-yellow-500/70 flex-shrink-0 mt-0.5" />
+                      <p className="text-xs text-zinc-500 leading-relaxed">
+                        {lbl(
+                          'Los jugadores del mismo grupo pueden capturar scores entre sí. Si hay diferencia en el score de un hoyo, se marcará como conflicto.',
+                          'Players in the same group can capture scores for each other. If scores differ for the same hole, a conflict will be flagged.'
+                        )}
+                      </p>
+                    </div>
+
+                    {teeGroupsData.ungrouped.length > 0 && (
+                      <div className="bg-zinc-800/30 border border-dashed border-zinc-700 rounded-xl px-4 py-3">
+                        <p className="text-xs text-zinc-500 mb-2 font-semibold uppercase tracking-wide">{lbl('Sin grupo', 'Ungrouped')}</p>
+                        <div className="flex flex-wrap gap-2">
+                          {teeGroupsData.ungrouped.map(p => (
+                            <span key={p.player_id} className="text-xs bg-zinc-800 border border-zinc-700 px-2.5 py-1 rounded-full text-zinc-400">
+                              {p.name}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {!editingTeeGroups && !teeGroupsData?.has_groups && amCreator && (
+                  <div className="text-center py-4">
+                    <Layers size={28} className="text-zinc-700 mx-auto mb-2" />
+                    <p className="text-xs text-zinc-500">
+                      {lbl('Sin grupos asignados aún. Usa "Asignar grupos" para organizar las salidas.', 'No groups assigned yet. Use "Assign groups" to organize tee times.')}
+                    </p>
                   </div>
                 )}
               </div>
@@ -1812,6 +2688,9 @@ export default function RoundDetailPage() {
             holesTotal={round.holes_to_play}
             status={round.status}
             lbl={lbl}
+            gameFormat={round.game_format}
+            matchups={matchupsData}
+            teamsData={teamsData}
           />
         )}
       </main>

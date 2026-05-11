@@ -49,7 +49,7 @@ python-magic==0.4.27
 boto3==1.34.144          # S3 para media storage
 
 # IA / Chatbot
-anthropic==0.40.0
+google-generativeai==0.8.3
 
 # Utilidades
 python-dateutil==2.9.0

@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     # APIs externas
     OPENWEATHER_API_KEY: str = ""
     SENTRY_DSN: str = ""
-    ANTHROPIC_API_KEY: str = ""
+    GEMINI_API_KEY: str = ""
 
     # CORS
     CORS_ORIGINS: str = '["https://golfbookvip.com","https://www.golfbookvip.com"]'

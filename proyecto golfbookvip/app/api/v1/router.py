@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1 import auth, users, clubs, courses, rounds, scores_ws, stripe_webhook, groups, notifications, chat
+from app.api.v1 import auth, users, clubs, courses, rounds, scores_ws, stripe_webhook, groups, notifications, chat, admin
 
 api_router = APIRouter()
 
@@ -13,3 +13,4 @@ api_router.include_router(notifications.router,    prefix="/notifications", tags
 api_router.include_router(chat.router,             prefix="/chat",          tags=["chat"])
 api_router.include_router(scores_ws.router,        prefix="/ws",            tags=["websocket"])
 api_router.include_router(stripe_webhook.router,   prefix="/stripe",        tags=["stripe"])
+api_router.include_router(admin.router,            prefix="/admin",         tags=["admin"])

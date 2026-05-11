@@ -34,6 +34,10 @@ class Score(Base):
     shot_latitude: Mapped[Optional[float]] = mapped_column(Numeric(10, 8))
     shot_longitude: Mapped[Optional[float]] = mapped_column(Numeric(11, 8))
     notes: Mapped[Optional[str]] = mapped_column(String(500))
+    entered_by: Mapped[Optional[uuid.UUID]] = mapped_column(pgUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    conflict_score: Mapped[Optional[int]] = mapped_column(Integer)
+    conflict_entered_by: Mapped[Optional[uuid.UUID]] = mapped_column(pgUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    has_conflict: Mapped[bool] = mapped_column(Boolean, default=False)
     recorded_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now())
     updated_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
 

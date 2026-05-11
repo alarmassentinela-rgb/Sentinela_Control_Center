@@ -88,7 +88,8 @@ export default function ChatWidget() {
     abortRef.current = ctrl
 
     try {
-      const res = await fetch('/api/v1/chat', {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.golfbookvip.com'
+      const res = await fetch(`${apiUrl}/api/v1/chat/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

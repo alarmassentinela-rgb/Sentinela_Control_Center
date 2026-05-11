@@ -408,25 +408,46 @@ async def start_round(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
 
 @router.post("/{round_id}/scores", response_model=ScoreOut)
 async def submit_score(round_id: uuid.UUID, data: ScoreSubmit, current_user: CurrentUser, db: DB):
-    # Verificar que la jugada esté activa y el usuario sea jugador
+    # Verificar que la jugada esté activa
     round_result = await db.execute(select(Round).where(Round.id == round_id, Round.status == "active"))
     round_ = round_result.scalar_one_or_none()
     if not round_:
         raise HTTPException(status_code=400, detail="Jugada no activa")
 
-    player_result = await db.execute(
+    # Verificar que el submitter sea jugador confirmado
+    my_rp_result = await db.execute(
         select(RoundPlayer).where(
             RoundPlayer.round_id == round_id,
             RoundPlayer.user_id == current_user.id,
             RoundPlayer.status.in_(["confirmed", "playing"]),
         )
     )
-    rp = player_result.scalar_one_or_none()
-    if not rp:
+    my_rp = my_rp_result.scalar_one_or_none()
+    if not my_rp:
         raise HTTPException(status_code=403, detail="No eres jugador de esta jugada")
 
+    # Determinar para quién es el score (puede ser para un compañero)
+    target_user_id = data.for_user_id if data.for_user_id else current_user.id
+
+    if target_user_id != current_user.id:
+        # Captura cruzada — validar mismo grupo de salida
+        target_rp_result = await db.execute(
+            select(RoundPlayer).where(
+                RoundPlayer.round_id == round_id,
+                RoundPlayer.user_id == target_user_id,
+                RoundPlayer.status.in_(["confirmed", "playing"]),
+            )
+        )
+        target_rp = target_rp_result.scalar_one_or_none()
+        if not target_rp:
+            raise HTTPException(status_code=404, detail="Jugador objetivo no encontrado en la ronda")
+        if my_rp.tee_group is None or target_rp.tee_group is None or my_rp.tee_group != target_rp.tee_group:
+            raise HTTPException(status_code=403, detail="Solo puedes capturar scores de jugadores en tu mismo grupo de salida")
+        rp = target_rp
+    else:
+        rp = my_rp
+
     # Obtener par y stroke_index del hoyo
-    from app.models.course import CourseHole
     hole_result = await db.execute(
         select(CourseHole).where(
             CourseHole.course_id == round_.course_id,
@@ -444,33 +465,66 @@ async def submit_score(round_id: uuid.UUID, data: ScoreSubmit, current_user: Cur
     score_result = await db.execute(
         select(Score).where(
             Score.round_id == round_id,
-            Score.user_id == current_user.id,
+            Score.user_id == target_user_id,
             Score.hole_number == data.hole_number,
         )
     )
     score = score_result.scalar_one_or_none()
-    if not score:
-        score = Score(round_id=round_id, user_id=current_user.id, hole_number=data.hole_number)
-        db.add(score)
 
-    scoring_svc.apply_score_to_model(score, data, hole.par, stroke_index, course_handicap, round_.game_format)
+    conflict_detected = False
+    if not score:
+        # Primer registro del score
+        score = Score(round_id=round_id, user_id=target_user_id, hole_number=data.hole_number,
+                      entered_by=current_user.id)
+        db.add(score)
+        scoring_svc.apply_score_to_model(score, data, hole.par, stroke_index, course_handicap, round_.game_format)
+    else:
+        # Score ya existe — detectar conflicto
+        if (score.entered_by and str(score.entered_by) != str(current_user.id)
+                and score.gross_score != data.gross_score):
+            # Persona distinta entra valor diferente → conflicto
+            score.conflict_score = data.gross_score
+            score.conflict_entered_by = current_user.id
+            score.has_conflict = True
+            conflict_detected = True
+        else:
+            # Mismo que ingresó antes, o no había entered_by → actualizar limpiamente
+            scoring_svc.apply_score_to_model(score, data, hole.par, stroke_index, course_handicap, round_.game_format)
+            score.entered_by = current_user.id
+            score.has_conflict = False
+            score.conflict_score = None
+            score.conflict_entered_by = None
+
     await db.flush()
     await db.refresh(score)
 
-    # Broadcast a espectadores y jugadores por WebSocket
-    await manager.broadcast_to_round(
-        round_id=str(round_id),
-        message={
-            "event": "score_update",
-            "user_id": str(current_user.id),
-            "hole": data.hole_number,
-            "gross": data.gross_score,
-            "net": score.net_score,
-            "is_birdie": score.is_birdie,
-            "is_eagle": score.is_eagle,
-            "is_hole_in_one": score.is_hole_in_one,
-        },
-    )
+    # Broadcast — distinto evento si es conflicto
+    if conflict_detected:
+        await manager.broadcast_to_round(
+            round_id=str(round_id),
+            message={
+                "event": "score_conflict",
+                "user_id": str(target_user_id),
+                "hole": data.hole_number,
+                "score_a": score.gross_score,
+                "score_b": data.gross_score,
+            },
+        )
+    else:
+        await manager.broadcast_to_round(
+            round_id=str(round_id),
+            message={
+                "event": "score_update",
+                "user_id": str(target_user_id),
+                "hole": data.hole_number,
+                "gross": data.gross_score,
+                "net": score.net_score,
+                "is_birdie": score.is_birdie,
+                "is_eagle": score.is_eagle,
+                "is_hole_in_one": score.is_hole_in_one,
+                "has_conflict": conflict_detected,
+            },
+        )
 
     return score
 
@@ -483,6 +537,14 @@ async def finish_round(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
     round_ = result.scalar_one_or_none()
     if not round_:
         raise HTTPException(status_code=400, detail="No se puede finalizar esta jugada")
+
+    # Block finish if there are unresolved score conflicts
+    from app.models.score import Score as ScoreModel
+    conflict_result = await db.execute(
+        select(ScoreModel).where(ScoreModel.round_id == round_id, ScoreModel.has_conflict == True).limit(1)
+    )
+    if conflict_result.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="Hay conflictos de score sin resolver. Resuelve todos los conflictos antes de finalizar.")
 
     from datetime import datetime, timezone
     round_.status = "finished"
@@ -669,6 +731,7 @@ def _player_dict(rp: RoundPlayer, u: User) -> dict:
         "course_handicap": rp.course_handicap,
         "handicap_index": float(rp.handicap_index) if rp.handicap_index else None,
         "team_number": rp.team_number,
+        "match_order": rp.match_order,
     }
 
 def _build_teams(rows: list, teams_published: bool) -> dict:
@@ -793,6 +856,44 @@ async def assign_player_team(round_id: uuid.UUID, player_id: uuid.UUID, team_num
     return _build_teams(result.all(), False)
 
 
+@router.delete("/{round_id}/players/{user_id}")
+async def remove_player_from_round(round_id: uuid.UUID, user_id: uuid.UUID, current_user: CurrentUser, db: DB):
+    """Creator removes a player from the round (scheduled or active, not finished)."""
+    round_result = await db.execute(
+        select(Round).where(Round.id == round_id, Round.created_by == current_user.id)
+    )
+    round_ = round_result.scalar_one_or_none()
+    if not round_:
+        raise HTTPException(status_code=403, detail="Solo el creador puede quitar jugadores")
+    if round_.status == "finished":
+        raise HTTPException(status_code=400, detail="No se puede modificar una ronda finalizada")
+    if str(user_id) == str(current_user.id):
+        raise HTTPException(status_code=400, detail="El creador no puede quitarse a sí mismo")
+
+    rp_result = await db.execute(
+        select(RoundPlayer).where(RoundPlayer.round_id == round_id, RoundPlayer.user_id == user_id)
+    )
+    rp = rp_result.scalar_one_or_none()
+    if not rp:
+        raise HTTPException(status_code=404, detail="Jugador no encontrado en esta ronda")
+
+    from sqlalchemy import delete as sql_delete
+    from app.models.score import Score as ScoreModel
+    # Remove scores, balance and player record
+    await db.execute(sql_delete(ScoreModel).where(ScoreModel.round_id == round_id, ScoreModel.user_id == user_id))
+    await db.execute(sql_delete(RoundPlayerBalance).where(RoundPlayerBalance.round_id == round_id, RoundPlayerBalance.user_id == user_id))
+    await db.delete(rp)
+    await db.flush()
+
+    # Return updated teams
+    result = await db.execute(
+        select(RoundPlayer, User)
+        .join(User, User.id == RoundPlayer.user_id)
+        .where(RoundPlayer.round_id == round_id)
+    )
+    return _build_teams(result.all(), round_.teams_published)
+
+
 @router.post("/{round_id}/teams/publish")
 async def publish_teams(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
     """Makes teams visible to all players in the round."""
@@ -811,6 +912,464 @@ async def publish_teams(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
 
     round_.teams_published = True
     return {"message": "Equipos publicados. Todos los jugadores ya pueden verlos.", "teams_published": True}
+
+
+@router.put("/{round_id}/teams/reorder")
+async def reorder_team_players(
+    round_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: DB,
+    orders: list[dict],  # [{player_id: str, match_order: int}, ...]
+):
+    """Sets match_order for each player within their team (creator only).
+    match_order determines head-to-head pairings: same match_order across teams = matchup."""
+    round_result = await db.execute(
+        select(Round).where(Round.id == round_id, Round.created_by == current_user.id)
+    )
+    round_ = round_result.scalar_one_or_none()
+    if not round_:
+        raise HTTPException(status_code=403, detail="Solo el creador puede reordenar jugadores")
+
+    for item in orders:
+        pid = item.get("player_id")
+        mo = item.get("match_order")
+        if pid is None or mo is None:
+            continue
+        rp_res = await db.execute(
+            select(RoundPlayer).where(
+                RoundPlayer.id == uuid.UUID(pid),
+                RoundPlayer.round_id == round_id,
+            )
+        )
+        rp = rp_res.scalar_one_or_none()
+        if rp:
+            rp.match_order = mo
+
+    await db.flush()
+    result = await db.execute(
+        select(RoundPlayer, User)
+        .join(User, User.id == RoundPlayer.user_id)
+        .where(RoundPlayer.round_id == round_id)
+    )
+    return _build_teams(result.all(), round_.teams_published)
+
+
+def _compute_matchup_state(
+    scores_by_player: dict[str, dict[int, int]],
+    player1_id: str,
+    player2_id: str,
+    holes_to_play: int,
+) -> dict:
+    """
+    Computes head-to-head match play state between two players.
+    Returns holes_up (+ = p1 ahead), current_hole, status, result_str.
+    Uses net scores (or gross if net missing).
+    """
+    holes_up = 0  # positive = player1 winning
+    last_hole_played = 0
+
+    for h in range(1, holes_to_play + 1):
+        s1 = scores_by_player.get(player1_id, {}).get(h)
+        s2 = scores_by_player.get(player2_id, {}).get(h)
+        if s1 is None or s2 is None:
+            break
+        last_hole_played = h
+        if s1 < s2:
+            holes_up += 1
+        elif s2 < s1:
+            holes_up -= 1
+
+    holes_remaining = holes_to_play - last_hole_played
+    closed = abs(holes_up) > holes_remaining
+
+    if last_hole_played == 0:
+        status = "not_started"
+        result_str = "AS"
+    elif closed:
+        margin = abs(holes_up)
+        holes_left = holes_remaining
+        # e.g. 3&2
+        result_str = f"{margin}&{holes_left}" if holes_left > 0 else f"{margin} UP"
+        status = "closed"
+    elif last_hole_played == holes_to_play:
+        if holes_up == 0:
+            status = "halved"
+            result_str = "AS"
+        else:
+            margin = abs(holes_up)
+            result_str = f"{margin} UP"
+            status = "closed"
+    else:
+        status = "in_progress"
+        if holes_up == 0:
+            result_str = "AS"
+        elif holes_up > 0:
+            result_str = f"{holes_up} UP"
+        else:
+            result_str = f"{abs(holes_up)} DN"
+
+    winner_side = None
+    if status in ("closed", "halved"):
+        if holes_up > 0:
+            winner_side = "player1"
+        elif holes_up < 0:
+            winner_side = "player2"
+
+    return {
+        "holes_up": holes_up,
+        "holes_remaining": holes_remaining,
+        "last_hole_played": last_hole_played,
+        "status": status,
+        "result_str": result_str,
+        "winner_side": winner_side,
+    }
+
+
+@router.get("/{round_id}/matchups")
+async def get_matchups(round_id: uuid.UUID, db: DB):
+    """
+    Returns head-to-head matchups for Match Play format.
+    Players are paired by match_order (same value across teams = matchup).
+    Public endpoint — no auth required.
+    """
+    round_result = await db.execute(select(Round).where(Round.id == round_id))
+    round_ = round_result.scalar_one_or_none()
+    if not round_:
+        raise HTTPException(status_code=404, detail="Jugada no encontrada")
+
+    players_result = await db.execute(
+        select(RoundPlayer, User)
+        .join(User, User.id == RoundPlayer.user_id)
+        .where(RoundPlayer.round_id == round_id, RoundPlayer.team_number.isnot(None))
+        .order_by(RoundPlayer.team_number, RoundPlayer.match_order)
+    )
+    rows = players_result.all()
+    if not rows:
+        return {"has_matchups": False, "matchups": [], "needs_setup": True}
+
+    # Group by team
+    teams_players: dict[int, list] = {}
+    for rp, u in rows:
+        tn = rp.team_number
+        if tn not in teams_players:
+            teams_players[tn] = []
+        teams_players[tn].append((rp, u))
+
+    if len(teams_players) < 2:
+        return {"has_matchups": False, "matchups": [], "needs_setup": True}
+
+    # Check if match_order is set on at least one player
+    has_order = any(rp.match_order is not None for rp, _ in rows)
+    if not has_order:
+        # Auto-assign match_order based on list position
+        for tn, players in teams_players.items():
+            for i, (rp, _) in enumerate(players):
+                rp.match_order = i + 1
+        await db.flush()
+
+    # Re-sort by match_order
+    for tn in teams_players:
+        teams_players[tn].sort(key=lambda x: x[0].match_order if x[0].match_order is not None else 999)
+
+    # Load scores
+    from app.models.score import Score as ScoreModel
+    scores_result = await db.execute(
+        select(ScoreModel).where(ScoreModel.round_id == round_id)
+    )
+    all_scores = scores_result.scalars().all()
+
+    # Build scores_by_player: {user_id_str: {hole: net_score}}
+    scores_by_player: dict[str, dict[int, int]] = {}
+    for s in all_scores:
+        uid = str(s.user_id)
+        score_val = s.net_score if s.net_score is not None else s.gross_score
+        if score_val is not None:
+            if uid not in scores_by_player:
+                scores_by_player[uid] = {}
+            scores_by_player[uid][s.hole_number] = score_val
+
+    # Pair up: use team 1 vs team 2 (or first two teams if different numbers)
+    team_numbers = sorted(teams_players.keys())
+    t1_players = teams_players[team_numbers[0]]
+    t2_players = teams_players[team_numbers[1]]
+    max_pairs = max(len(t1_players), len(t2_players))
+
+    matchups = []
+    for i in range(max_pairs):
+        p1_rp, p1_u = t1_players[i] if i < len(t1_players) else (None, None)
+        p2_rp, p2_u = t2_players[i] if i < len(t2_players) else (None, None)
+
+        match_num = i + 1
+        if p1_rp and p2_rp:
+            state = _compute_matchup_state(
+                scores_by_player,
+                str(p1_rp.user_id),
+                str(p2_rp.user_id),
+                round_.holes_to_play,
+            )
+            matchups.append({
+                "match_number": match_num,
+                "player1": {
+                    "player_id": str(p1_rp.id),
+                    "user_id": str(p1_rp.user_id),
+                    "name": f"{p1_u.first_name} {p1_u.last_name}",
+                    "username": p1_u.username,
+                    "course_handicap": p1_rp.course_handicap,
+                    "team_number": p1_rp.team_number,
+                    "match_order": p1_rp.match_order,
+                },
+                "player2": {
+                    "player_id": str(p2_rp.id),
+                    "user_id": str(p2_rp.user_id),
+                    "name": f"{p2_u.first_name} {p2_u.last_name}",
+                    "username": p2_u.username,
+                    "course_handicap": p2_rp.course_handicap,
+                    "team_number": p2_rp.team_number,
+                    "match_order": p2_rp.match_order,
+                },
+                **state,
+            })
+        elif p1_rp:
+            matchups.append({
+                "match_number": match_num,
+                "player1": _player_dict(p1_rp, p1_u),
+                "player2": None,
+                "status": "bye",
+                "result_str": "BYE",
+                "holes_up": 0,
+                "holes_remaining": round_.holes_to_play,
+                "winner_side": "player1",
+            })
+        elif p2_rp:
+            matchups.append({
+                "match_number": match_num,
+                "player1": None,
+                "player2": _player_dict(p2_rp, p2_u),
+                "status": "bye",
+                "result_str": "BYE",
+                "holes_up": 0,
+                "holes_remaining": round_.holes_to_play,
+                "winner_side": "player2",
+            })
+
+    team_score = {tn: 0 for tn in team_numbers}
+    for m in matchups:
+        if m["status"] == "closed":
+            if m["winner_side"] == "player1" and m["player1"]:
+                team_score[m["player1"]["team_number"]] += 1
+            elif m["winner_side"] == "player2" and m["player2"]:
+                team_score[m["player2"]["team_number"]] += 1
+        elif m["status"] == "halved":
+            for tn in team_numbers:
+                team_score[tn] += 0.5
+
+    return {
+        "has_matchups": True,
+        "needs_setup": False,
+        "team_numbers": team_numbers,
+        "team_score": team_score,
+        "matchups": matchups,
+        "holes_to_play": round_.holes_to_play,
+        "round_status": round_.status,
+    }
+
+
+# ─── Tee groups ──────────────────────────────────────────────────────────────
+
+@router.get("/{round_id}/tee-groups")
+async def get_tee_groups(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
+    """Returns tee group assignments for the round."""
+    result = await db.execute(
+        select(RoundPlayer, User)
+        .join(User, User.id == RoundPlayer.user_id)
+        .where(RoundPlayer.round_id == round_id)
+        .order_by(RoundPlayer.tee_group, RoundPlayer.tee_order)
+    )
+    rows = result.all()
+
+    groups: dict[int, dict] = {}
+    ungrouped = []
+    for rp, u in rows:
+        p = {
+            "player_id": str(rp.id),
+            "user_id": str(rp.user_id),
+            "name": f"{u.first_name} {u.last_name}",
+            "username": u.username,
+            "course_handicap": rp.course_handicap,
+            "tee_group": rp.tee_group,
+            "starting_hole": rp.starting_hole,
+        }
+        if rp.tee_group is not None:
+            if rp.tee_group not in groups:
+                groups[rp.tee_group] = {
+                    "group_number": rp.tee_group,
+                    "starting_hole": rp.starting_hole,
+                    "players": [],
+                }
+            groups[rp.tee_group]["players"].append(p)
+        else:
+            ungrouped.append(p)
+
+    return {
+        "has_groups": len(groups) > 0,
+        "groups": sorted(groups.values(), key=lambda g: g["group_number"]),
+        "ungrouped": ungrouped,
+    }
+
+
+@router.put("/{round_id}/tee-groups")
+async def set_tee_groups(
+    round_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: DB,
+    assignments: list[dict],  # [{player_id, tee_group, starting_hole}]
+):
+    """Batch-assigns tee groups and starting holes. Creator only."""
+    round_result = await db.execute(
+        select(Round).where(Round.id == round_id, Round.created_by == current_user.id)
+    )
+    if not round_result.scalar_one_or_none():
+        raise HTTPException(status_code=403, detail="Solo el creador puede asignar grupos de salida")
+
+    for item in assignments:
+        pid = item.get("player_id")
+        grp = item.get("tee_group")
+        hole = item.get("starting_hole", 1)
+        if not pid:
+            continue
+        rp_res = await db.execute(
+            select(RoundPlayer).where(
+                RoundPlayer.id == uuid.UUID(pid),
+                RoundPlayer.round_id == round_id,
+            )
+        )
+        rp = rp_res.scalar_one_or_none()
+        if rp:
+            rp.tee_group = grp
+            rp.starting_hole = hole if grp is not None else None
+
+    await db.flush()
+
+    result = await db.execute(
+        select(RoundPlayer, User)
+        .join(User, User.id == RoundPlayer.user_id)
+        .where(RoundPlayer.round_id == round_id)
+        .order_by(RoundPlayer.tee_group, RoundPlayer.tee_order)
+    )
+    rows = result.all()
+    groups: dict[int, dict] = {}
+    ungrouped = []
+    for rp, u in rows:
+        p = {"player_id": str(rp.id), "user_id": str(rp.user_id),
+             "name": f"{u.first_name} {u.last_name}", "username": u.username,
+             "course_handicap": rp.course_handicap, "tee_group": rp.tee_group,
+             "starting_hole": rp.starting_hole}
+        if rp.tee_group is not None:
+            if rp.tee_group not in groups:
+                groups[rp.tee_group] = {"group_number": rp.tee_group,
+                                         "starting_hole": rp.starting_hole, "players": []}
+            groups[rp.tee_group]["players"].append(p)
+        else:
+            ungrouped.append(p)
+    return {"has_groups": len(groups) > 0,
+            "groups": sorted(groups.values(), key=lambda g: g["group_number"]),
+            "ungrouped": ungrouped}
+
+
+@router.get("/{round_id}/conflicts")
+async def get_conflicts(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
+    """Returns all unresolved score conflicts for this round."""
+    from app.models.score import Score as ScoreModel
+    result = await db.execute(
+        select(ScoreModel, User)
+        .join(User, User.id == ScoreModel.user_id)
+        .where(ScoreModel.round_id == round_id, ScoreModel.has_conflict == True)
+    )
+    rows = result.all()
+    return [
+        {
+            "user_id": str(s.user_id),
+            "player_name": f"{u.first_name} {u.last_name}",
+            "hole_number": s.hole_number,
+            "score_a": s.gross_score,
+            "score_b": s.conflict_score,
+            "entered_by": str(s.entered_by) if s.entered_by else None,
+            "conflict_entered_by": str(s.conflict_entered_by) if s.conflict_entered_by else None,
+        }
+        for s, u in rows
+    ]
+
+
+@router.post("/{round_id}/scores/{hole_number}/resolve")
+async def resolve_conflict(
+    round_id: uuid.UUID,
+    hole_number: int,
+    current_user: CurrentUser,
+    db: DB,
+    correct_score: int,
+    target_user_id: Optional[uuid.UUID] = None,
+):
+    """Resolves a score conflict. The player themselves or the round creator can resolve."""
+    from app.models.score import Score as ScoreModel
+    uid = target_user_id if target_user_id else current_user.id
+
+    # Only the player themselves or the creator can resolve
+    round_res = await db.execute(select(Round).where(Round.id == round_id))
+    round_ = round_res.scalar_one_or_none()
+    is_creator = round_ and str(round_.created_by) == str(current_user.id)
+    if str(uid) != str(current_user.id) and not is_creator:
+        raise HTTPException(status_code=403, detail="Solo el jugador o el creador puede resolver conflictos")
+
+    score_res = await db.execute(
+        select(ScoreModel).where(
+            ScoreModel.round_id == round_id,
+            ScoreModel.user_id == uid,
+            ScoreModel.hole_number == hole_number,
+        )
+    )
+    score = score_res.scalar_one_or_none()
+    if not score:
+        raise HTTPException(status_code=404, detail="Score no encontrado")
+
+    # Get hole info to recalculate
+    rp_res = await db.execute(
+        select(RoundPlayer).where(RoundPlayer.round_id == round_id, RoundPlayer.user_id == uid)
+    )
+    rp = rp_res.scalar_one_or_none()
+    hole_res = await db.execute(
+        select(CourseHole).where(
+            CourseHole.course_id == round_.course_id,
+            CourseHole.hole_number == hole_number,
+        )
+    )
+    hole = hole_res.scalar_one_or_none()
+    if hole and rp:
+        from app.schemas.score import ScoreSubmit
+        from app.services import scoring as scoring_svc
+        data = ScoreSubmit(hole_number=hole_number, gross_score=correct_score)
+        scoring_svc.apply_score_to_model(score, data, hole.par, hole.stroke_index or hole_number,
+                                          rp.course_handicap or 0, round_.game_format)
+    else:
+        score.gross_score = correct_score
+
+    score.has_conflict = False
+    score.conflict_score = None
+    score.conflict_entered_by = None
+    score.entered_by = current_user.id
+    await db.flush()
+
+    # Broadcast resolution
+    await manager.broadcast_to_round(
+        round_id=str(round_id),
+        message={
+            "event": "conflict_resolved",
+            "user_id": str(uid),
+            "hole": hole_number,
+            "final_score": correct_score,
+        },
+    )
+
+    return {"message": "Conflicto resuelto", "gross_score": correct_score, "has_conflict": False}
 
 
 # ─── Live scoreboard (public, no auth) ───────────────────────────────────────

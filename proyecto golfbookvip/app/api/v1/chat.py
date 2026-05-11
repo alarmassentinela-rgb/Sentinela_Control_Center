@@ -1,4 +1,5 @@
 import json
+import httpx
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -23,7 +24,48 @@ class ChatRequest(BaseModel):
     locale: str = "es"
 
 
-def _build_system_prompt(user, stats, round_info, locale: str) -> str:
+async def _get_weather(city: str, country: str = "") -> Optional[dict]:
+    """Fetch current weather from OpenWeatherMap. Returns None on any error."""
+    if not settings.OPENWEATHER_API_KEY or not city:
+        return None
+    try:
+        location = f"{city},{country}" if country else city
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            res = await client.get(
+                "https://api.openweathermap.org/data/2.5/weather",
+                params={
+                    "q": location,
+                    "appid": settings.OPENWEATHER_API_KEY,
+                    "units": "metric",
+                    "lang": "es",
+                },
+            )
+        if res.status_code != 200:
+            return None
+        d = res.json()
+        wind_kmh = round(d["wind"]["speed"] * 3.6)
+        wind_dir = _wind_direction(d["wind"].get("deg", 0))
+        return {
+            "city": d["name"],
+            "temp": round(d["main"]["temp"]),
+            "feels_like": round(d["main"]["feels_like"]),
+            "condition": d["weather"][0]["description"].capitalize(),
+            "humidity": d["main"]["humidity"],
+            "wind_kmh": wind_kmh,
+            "wind_dir": wind_dir,
+            "gusts_kmh": round(d["wind"].get("gust", d["wind"]["speed"]) * 3.6),
+        }
+    except Exception:
+        return None
+
+
+def _wind_direction(deg: float) -> str:
+    dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+            "S", "SSO", "SO", "OSO", "O", "ONO", "NO", "NNO"]
+    return dirs[round(deg / 22.5) % 16]
+
+
+def _build_system_prompt(user, stats, round_info, weather, locale: str) -> str:
     lang = "Responde siempre en español, a menos que el usuario escriba en inglés." \
         if locale == "es" else \
         "Always respond in English unless the user writes in Spanish."
@@ -41,7 +83,7 @@ Estadísticas del jugador:
 - Score promedio: {avg}
 - GIR%: {gir}
 - Putts por ronda: {putts}
-- Mejores diferencial: {f"{stats.best_differential:.1f}" if stats.best_differential else "N/A"}
+- Mejor diferencial: {f"{stats.best_differential:.1f}" if stats.best_differential else "N/A"}
 - Birdies totales: {stats.total_birdies}
 - Eagles totales: {stats.total_eagles}"""
 
@@ -53,6 +95,17 @@ Ronda en curso:
 - Cancha: {round_info.get('course_name', 'No especificada')}
 - Formato: {round_info.get('game_format', 'stroke')}
 - Hoyos: {round_info.get('holes_to_play', 18)}"""
+
+    weather_block = ""
+    if weather:
+        weather_block = f"""
+Clima actual en {weather['city']}:
+- Temperatura: {weather['temp']}°C (sensación {weather['feels_like']}°C)
+- Condición: {weather['condition']}
+- Humedad: {weather['humidity']}%
+- Viento: {weather['wind_kmh']} km/h dirección {weather['wind_dir']} (ráfagas {weather['gusts_kmh']} km/h)
+
+Considera el clima al dar consejos de selección de palo: el viento en contra aumenta la distancia efectiva del hoyo, el viento a favor la reduce (~1 club por cada 15-20 km/h). El frío reduce la distancia de la bola (~5% por cada 10°C bajo 20°C)."""
 
     return f"""Eres CaddyAI, el asistente inteligente de GolfBookVIP. Eres un caddie experto con profundo conocimiento de:
 - Reglas oficiales de golf (R&A / USGA 2023)
@@ -68,21 +121,22 @@ Jugador actual:
 - Hándicap Index: {hcp}
 {stats_block}
 {round_block}
+{weather_block}
 
 Pautas de respuesta:
 - Sé conciso y práctico, como un buen caddie en el campo
-- Cuando des distancias de palos, considera que el jugador tiene HCP {hcp}
-- Si te preguntan una regla, cita el artículo correspondiente cuando sea relevante
+- Cuando des distancias de palos, considera el hándicap del jugador Y el clima actual
+- Si te preguntan una regla, cita el artículo cuando sea relevante
 - No inventes scores ni estadísticas que no estén en el contexto
 - {lang}"""
 
 
 @router.post("/")
 async def chat(data: ChatRequest, current_user: CurrentUser, db: DB):
-    if not settings.ANTHROPIC_API_KEY:
+    if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="CaddyAI no está configurado")
 
-    # Load player stats for context
+    # Load player stats
     from app.models.handicap import PlayerStats
     stats_res = await db.execute(
         select(PlayerStats).where(PlayerStats.user_id == current_user.id)
@@ -109,25 +163,40 @@ async def chat(data: ChatRequest, current_user: CurrentUser, db: DB):
                 "holes_to_play": round_.holes_to_play,
             }
 
-    system_prompt = _build_system_prompt(current_user, stats, round_info, data.locale)
+    # Fetch current weather using player's city
+    weather = await _get_weather(
+        city=current_user.city or "",
+        country=current_user.country or "",
+    )
 
-    # Build message history for Claude
-    messages = [{"role": m.role, "content": m.content} for m in data.history]
-    messages.append({"role": "user", "content": data.message})
+    system_prompt = _build_system_prompt(current_user, stats, round_info, weather, data.locale)
+
+    # Build Gemini message history
+    gemini_history = []
+    for m in data.history:
+        role = "model" if m.role == "assistant" else "user"
+        gemini_history.append({"role": role, "parts": [m.content]})
 
     async def generate():
         try:
-            from anthropic import AsyncAnthropic
-            client = AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+            import google.generativeai as genai
+            genai.configure(api_key=settings.GEMINI_API_KEY)
 
-            async with client.messages.stream(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=1024,
-                system=system_prompt,
-                messages=messages,
-            ) as stream:
-                async for text in stream.text_stream:
-                    yield f"data: {json.dumps({'text': text})}\n\n"
+            model = genai.GenerativeModel(
+                model_name="gemini-2.5-flash",
+                system_instruction=system_prompt,
+            )
+
+            chat_session = model.start_chat(history=gemini_history)
+
+            response = await chat_session.send_message_async(
+                data.message,
+                stream=True,
+            )
+
+            async for chunk in response:
+                if chunk.text:
+                    yield f"data: {json.dumps({'text': chunk.text})}\n\n"
 
             yield f"data: {json.dumps({'done': True})}\n\n"
 
@@ -139,6 +208,6 @@ async def chat(data: ChatRequest, current_user: CurrentUser, db: DB):
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",  # Disable Nginx buffering for SSE
+            "X-Accel-Buffering": "no",
         },
     )
