@@ -37,6 +37,31 @@ interface Course {
   holes: Hole[]
 }
 
+// Parsea texto pegado y extrae lat/lng. Acepta:
+//  - "25.753905, -97.555131"            (Google Maps "Copy coordinates")
+//  - "25.753905,-97.555131"             (sin espacio)
+//  - "@25.7539,-97.5551,..."            (URL Google Maps con @)
+//  - "?ll=25.7539,-97.5551" / "?q=..."  (URL con parámetros)
+function parseLatLng(text: string): { lat: number; lng: number } | null {
+  if (!text) return null
+  // URL Google Maps con @lat,lng
+  const m1 = text.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/)
+  if (m1) return { lat: parseFloat(m1[1]), lng: parseFloat(m1[2]) }
+  // URL con ll= o q=lat,lng
+  const m2 = text.match(/[?&](?:ll|q)=(-?\d+\.?\d*),\s*(-?\d+\.?\d*)/)
+  if (m2) return { lat: parseFloat(m2[1]), lng: parseFloat(m2[2]) }
+  // "lat, lng" plano
+  const m3 = text.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/)
+  if (m3) {
+    const lat = parseFloat(m3[1])
+    const lng = parseFloat(m3[2])
+    if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      return { lat, lng }
+    }
+  }
+  return null
+}
+
 function emptyHole(n: number): Hole {
   return {
     hole_number: n, par: 4, stroke_index: null,
@@ -77,17 +102,18 @@ export default function CourseEditPage() {
         filled.push(existing ?? emptyHole(i))
       }
       setHoles(filled)
-      // Permiso: superadmin O created_by === yo O created_by === null (legacy)
       const me = meRes.data
       const ok = me.is_superadmin || !cRes.data.created_by || cRes.data.created_by === me.id
       setCanEdit(ok)
-      if (!ok) setError(lbl('No tienes permiso para editar este campo', 'You cannot edit this course'))
+      if (!ok) {
+        setError(locale === 'es' ? 'No tienes permiso para editar este campo' : 'You cannot edit this course')
+      }
     } catch {
-      setError(lbl('Campo no encontrado', 'Course not found'))
+      setError(locale === 'es' ? 'Campo no encontrado' : 'Course not found')
     } finally {
       setLoading(false)
     }
-  }, [id, lbl])
+  }, [id, locale])
 
   useEffect(() => {
     if (!localStorage.getItem('access_token')) { router.push(`/${locale}/auth/login`); return }
@@ -460,6 +486,30 @@ export default function CourseEditPage() {
                           onChange={e => updateHole(idx, lngKey, e.target.value ? parseFloat(e.target.value) : null)}
                           className="w-full bg-zinc-950 border border-zinc-700 rounded px-1.5 py-1 text-white text-[10px] tabular-nums" />
                       </div>
+                      {/* Pegar de Google Maps */}
+                      <input
+                        type="text"
+                        placeholder={lbl('Pegar de Google Maps...', 'Paste from Google Maps...')}
+                        onPaste={e => {
+                          const text = e.clipboardData.getData('text')
+                          const parsed = parseLatLng(text)
+                          if (parsed) {
+                            updateHole(idx, latKey, parsed.lat)
+                            updateHole(idx, lngKey, parsed.lng)
+                            e.preventDefault()
+                            ;(e.target as HTMLInputElement).value = ''
+                          }
+                        }}
+                        onChange={e => {
+                          const parsed = parseLatLng(e.target.value)
+                          if (parsed) {
+                            updateHole(idx, latKey, parsed.lat)
+                            updateHole(idx, lngKey, parsed.lng)
+                            e.target.value = ''
+                          }
+                        }}
+                        className="w-full bg-zinc-900 border border-zinc-800 hover:border-emerald-500/40 focus:border-emerald-500 rounded px-2 py-1 text-zinc-400 placeholder-zinc-600 text-[10px] mt-1.5 focus:outline-none transition-colors"
+                      />
                       {(h[latKey] !== null && h[lngKey] !== null) && (
                         <button
                           onClick={() => {
