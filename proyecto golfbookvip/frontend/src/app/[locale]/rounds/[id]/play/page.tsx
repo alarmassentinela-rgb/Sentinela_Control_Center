@@ -1084,10 +1084,11 @@ export default function PlayRoundPage() {
                     </span>
                   </div>
                   {/* Header columnas (PGA-style) */}
-                  <div className="grid grid-cols-[40px_1fr_56px_56px] items-center gap-2 px-3 py-2 bg-zinc-950/60 border-b border-zinc-800 text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">
+                  <div className="grid grid-cols-[34px_1fr_48px_52px_52px] items-center gap-1.5 px-3 py-2 bg-zinc-950/60 border-b border-zinc-800 text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">
                     <span>POS</span>
                     <span>{lbl('Jugador', 'Player')}</span>
                     <span className="text-center">{isStableford ? 'PTS' : 'TOT'}</span>
+                    <span className="text-center">GROSS</span>
                     <span className="text-center">THRU</span>
                   </div>
                   {/* Rows */}
@@ -1098,7 +1099,7 @@ export default function PlayRoundPage() {
                       const isPodium = !p.played ? false : ['1', 'T1'].includes(pos) ? true : false
                       return (
                         <div key={p.user_id}
-                          className={`grid grid-cols-[40px_1fr_56px_56px] items-center gap-2 px-3 py-3 transition-colors ${
+                          className={`grid grid-cols-[34px_1fr_48px_52px_52px] items-center gap-1.5 px-3 py-3 transition-colors ${
                             isMe ? 'bg-emerald-500/10' : 'hover:bg-zinc-800/40'
                           }`}>
                           {/* POS */}
@@ -1122,28 +1123,40 @@ export default function PlayRoundPage() {
                           {/* TOT (to par o pts) */}
                           <div className="text-center">
                             {isStableford ? (
-                              <p className="text-xl font-bold text-emerald-400 tabular-nums leading-none">
+                              <p className="text-lg font-bold text-emerald-400 tabular-nums leading-none">
                                 {p.total_stableford}
                               </p>
                             ) : (
-                              <p className={`text-xl font-bold tabular-nums leading-none ${toParColor(p.toPar)}`}>
+                              <p className={`text-lg font-bold tabular-nums leading-none ${toParColor(p.toPar)}`}>
                                 {fmtToPar(p.toPar)}
                               </p>
                             )}
                           </div>
-                          {/* THRU — el dato protagonista al estilo PGA */}
+                          {/* GROSS — golpes reales acumulados */}
+                          <div className="text-center">
+                            {!p.played ? (
+                              <span className="text-zinc-700 text-sm">—</span>
+                            ) : (
+                              <p className={`text-lg font-bold tabular-nums leading-none ${
+                                p.finished ? 'text-emerald-300' : 'text-white'
+                              }`}>
+                                {p.total_gross}
+                              </p>
+                            )}
+                          </div>
+                          {/* THRU — hoyo jugado o F */}
                           <div className="text-center">
                             {!p.played ? (
                               <span className="text-[10px] text-zinc-600 uppercase tracking-wider">
                                 {lbl('—', '—')}
                               </span>
                             ) : p.finished ? (
-                              <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-sm border border-emerald-500/40">
+                              <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-sm border border-emerald-500/40">
                                 F
                               </span>
                             ) : (
                               <div>
-                                <p className="text-lg font-bold text-white tabular-nums leading-none">
+                                <p className="text-base font-bold text-white tabular-nums leading-none">
                                   {p.thru}
                                 </p>
                                 <p className="text-[9px] text-zinc-600 uppercase tracking-wider mt-0.5">
@@ -1160,8 +1173,8 @@ export default function PlayRoundPage() {
                   <div className="px-4 py-2 bg-zinc-950/60 border-t border-zinc-800">
                     <p className="text-[9px] text-zinc-600 uppercase tracking-widest text-center">
                       {isStableford
-                        ? lbl('PTS = Puntos acumulados · THRU = hoyo jugado', 'PTS = Total points · THRU = hole played')
-                        : lbl('TOT vs Par · THRU = hoyo jugado · F = Terminó', 'TOT vs Par · THRU = hole reached · F = Finished')}
+                        ? lbl('PTS = Puntos · GROSS = golpes totales · THRU = hoyo jugado', 'PTS = Points · GROSS = total strokes · THRU = hole')
+                        : lbl('TOT vs Par · GROSS = golpes totales · THRU = hoyo · F = Terminó', 'TOT vs Par · GROSS = total strokes · THRU = hole · F = Finished')}
                     </p>
                   </div>
                 </div>
