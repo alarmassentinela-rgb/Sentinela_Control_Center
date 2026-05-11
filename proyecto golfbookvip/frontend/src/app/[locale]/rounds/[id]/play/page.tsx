@@ -105,6 +105,24 @@ const PAR_COLOR: Record<number, string> = {
   5: 'text-yellow-400',
 }
 
+// WHS: strokes que recibes en un hoyo dado tu Course Handicap y SI del hoyo
+function strokesReceived(ch: number | null, si: number | null): number {
+  if (ch === null || si === null || si < 1 || si > 18) return 0
+  const base = Math.floor(Math.max(0, ch) / 18)
+  const extra = (Math.max(0, ch) % 18) >= si ? 1 : 0
+  return base + extra
+}
+
+// Net Par del hoyo para un jugador (par + strokes recibidos)
+function netPar(par: number, ch: number | null, si: number | null): number {
+  return par + strokesReceived(ch, si)
+}
+
+// Net Double Bogey (regla de pickup WHS): par + 2 + strokes recibidos
+function netDoubleBogey(par: number, ch: number | null, si: number | null): number {
+  return par + 2 + strokesReceived(ch, si)
+}
+
 function scoreLabel(gross: number, par: number) {
   const diff = gross - par
   if (gross === 1) return { text: 'Hoyo en 1!', cls: 'text-yellow-300 font-bold' }
@@ -549,6 +567,7 @@ export default function PlayRoundPage() {
   const [myCourseHandicap, setMyCourseHandicap] = useState<number | null>(null)
   const [showSiHelp, setShowSiHelp] = useState(false)
   const [myStartingHole, setMyStartingHole] = useState<number | null>(null)
+  const [courseName, setCourseName] = useState<string>('')
   const [groupMates, setGroupMates] = useState<GroupMate[]>([])
   const [conflicts, setConflicts] = useState<ConflictItem[]>([])
   const [resolvingFor, setResolvingFor] = useState<ConflictItem | null>(null)
@@ -583,6 +602,7 @@ export default function PlayRoundPage() {
       setGameFormat(round.game_format)
       const courseRes = await api.get(`/courses/${round.course_id}`)
       setHoles(courseRes.data.holes)
+      setCourseName(courseRes.data.name ?? '')
 
       // Tee groups: encontrar mi grupo y compañeros. Si no hay grupos asignados
       // (ronda legacy), caer a "todos los demás jugadores confirmados".
@@ -751,6 +771,32 @@ export default function PlayRoundPage() {
         if (currentHole < holesTotal) setCurrentHole(currentHole + 1)
         return
       }
+
+      // Validación: avisar si algún score parece absurdo (> par + 6 sin compensar HCP)
+      const holeRef = holes.find(h => h.hole_number === currentHole)
+      if (holeRef) {
+        const absurd: string[] = []
+        for (const [uid, v] of dirtyEntries) {
+          const ch = uid === myUserId
+            ? myCourseHandicap
+            : (groupMates.find(m => m.user_id === uid)?.course_handicap ?? null)
+          const ndb = netDoubleBogey(holeRef.par, ch, holeRef.stroke_index)
+          // Permitimos hasta NDB+2 antes de avisar (margen para errores reales)
+          if (v.gross > ndb + 2 || v.gross < 1) {
+            const name = uid === myUserId
+              ? lbl('Tú', 'You')
+              : (groupMates.find(m => m.user_id === uid)?.name.split(' ')[0] ?? '?')
+            absurd.push(`${name}: ${v.gross} (par ${holeRef.par}${ch !== null ? `, net máx WHS ${ndb}` : ''})`)
+          }
+        }
+        if (absurd.length > 0) {
+          const ok = confirm(lbl(
+            `⚠️ Score(s) inusualmente alto(s):\n\n${absurd.join('\n')}\n\n¿Confirmar de todos modos?`,
+            `⚠️ Unusually high score(s):\n\n${absurd.join('\n')}\n\nConfirm anyway?`,
+          ))
+          if (!ok) return  // finally limpiará submitting
+        }
+      }
       const results = await Promise.allSettled(dirtyEntries.map(([uid, v]) => {
         const payload: Record<string, unknown> = {
           hole_number: currentHole,
@@ -905,6 +951,14 @@ export default function PlayRoundPage() {
         className="fixed inset-0 -z-10 pointer-events-none bg-zinc-950/55"
       />
       {/* Header */}
+      {/* Course name strip */}
+      {courseName && (
+        <div className="bg-zinc-950/80 border-b border-zinc-800/60 px-4 py-1.5">
+          <p className="max-w-lg mx-auto text-[10px] text-zinc-500 uppercase tracking-widest font-medium truncate text-center">
+            ⛳ {courseName}
+          </p>
+        </div>
+      )}
       <header className="bg-zinc-900 border-b border-zinc-800 px-4 py-3">
         <div className="max-w-lg mx-auto flex items-center justify-between">
           <button onClick={() => router.push(`/${locale}/rounds/${id}`)} className="text-zinc-400 hover:text-white">
@@ -1464,6 +1518,17 @@ export default function PlayRoundPage() {
                   <span className={`text-2xl font-bold ${PAR_COLOR[hole.par] ?? 'text-white'}`}>
                     Par {hole.par}
                   </span>
+                  {(() => {
+                    const np = netPar(hole.par, myCourseHandicap, hole.stroke_index)
+                    if (np !== hole.par) {
+                      return (
+                        <p className="text-[11px] text-emerald-400 font-semibold leading-none mt-0.5">
+                          Net {np}
+                        </p>
+                      )
+                    }
+                    return null
+                  })()}
                   {hole.stroke_index && (
                     <button
                       onClick={() => setShowSiHelp(true)}
@@ -1575,6 +1640,9 @@ export default function PlayRoundPage() {
                       const row = rowInputs[p.user_id] ?? { gross: hole?.par ?? 4, putts: null, dirty: false }
                       const saved = allScores[p.user_id]?.[currentHole]
                       const lbl_ = hole && row.gross > 0 ? scoreLabel(row.gross, hole.par) : null
+                      const playerCH = p.isMe ? myCourseHandicap : p.course_handicap
+                      const ndb = hole ? netDoubleBogey(hole.par, playerCH, hole.stroke_index) : null
+                      const isPickupValue = ndb !== null && row.gross === ndb && row.dirty
                       return (
                         <div key={p.user_id}
                           className={`bg-zinc-900 border rounded-2xl px-4 py-3 transition-colors ${
@@ -1596,7 +1664,9 @@ export default function PlayRoundPage() {
                               </span>
                             )}
                             {row.dirty && (
-                              <span className="text-xs text-emerald-300">{lbl('Sin guardar', 'Unsaved')}</span>
+                              <span className="text-xs text-emerald-300">
+                                {isPickupValue ? lbl('Pickup (Net Double Bogey)', 'Pickup (Net Double Bogey)') : lbl('Sin guardar', 'Unsaved')}
+                              </span>
                             )}
                           </div>
                           {/* ± + label */}
@@ -1624,6 +1694,21 @@ export default function PlayRoundPage() {
                               <Plus size={20} />
                             </button>
                           </div>
+                          {/* Pickup button — recoge bola, score = Net Double Bogey (WHS) */}
+                          {ndb !== null && (
+                            <div className="flex justify-center mt-2">
+                              <button
+                                onClick={() => setRowInputs(prev => ({
+                                  ...prev,
+                                  [p.user_id]: { ...row, gross: ndb, dirty: true },
+                                }))}
+                                title={lbl(`Recoger bola — score = Net Double Bogey (${ndb})`, `Pick up — score = Net Double Bogey (${ndb})`)}
+                                className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-zinc-500 hover:text-amber-400 transition-colors px-2 py-1 rounded-md hover:bg-amber-500/10">
+                                <X size={11} />
+                                {lbl('Pickup', 'Pickup')} <span className="text-zinc-600">({ndb})</span>
+                              </button>
+                            </div>
+                          )}
                           {/* Putts — solo para mí (estadística personal) */}
                           {p.isMe && (
                             <div className="flex items-center justify-between mt-2.5 pt-2.5 border-t border-zinc-800">
