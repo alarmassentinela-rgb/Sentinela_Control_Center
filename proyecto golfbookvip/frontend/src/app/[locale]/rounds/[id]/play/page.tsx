@@ -312,10 +312,13 @@ export default function PlayRoundPage() {
   const lbl = (es: string, en: string) => locale === 'es' ? es : en
 
   const [holes, setHoles] = useState<Hole[]>([])
+  // scores: solo MIS scores (para mantener la vista Card existente)
   const [scores, setScores] = useState<Record<number, Score>>({})
+  // allScores: scores de TODOS los jugadores del grupo (incluye yo + mates)
+  const [allScores, setAllScores] = useState<Record<string, Record<number, Score>>>({})
+  // rowInputs: estado local del hoyo actual por jugador (gross/putts/dirty)
+  const [rowInputs, setRowInputs] = useState<Record<string, { gross: number; putts: number | null; dirty: boolean }>>({})
   const [currentHole, setCurrentHole] = useState(1)
-  const [grossInput, setGrossInput] = useState(4)
-  const [puttsInput, setPuttsInput] = useState<number | null>(null)
   const [holesTotal, setHolesTotal] = useState(18)
   const [myTee, setMyTee] = useState<string>('blue')
   const [loading, setLoading] = useState(true)
@@ -331,7 +334,6 @@ export default function PlayRoundPage() {
   const [myUserId, setMyUserId] = useState<string>('')
   const [myStartingHole, setMyStartingHole] = useState<number | null>(null)
   const [groupMates, setGroupMates] = useState<GroupMate[]>([])
-  const [targetUserId, setTargetUserId] = useState<string>('')   // empty = self
   const [conflicts, setConflicts] = useState<ConflictItem[]>([])
   const [resolvingFor, setResolvingFor] = useState<ConflictItem | null>(null)
   const [resolvingValue, setResolvingValue] = useState<number>(0)
@@ -406,13 +408,21 @@ export default function PlayRoundPage() {
       } catch { /* ignore */ }
 
       const boardRes = await api.get(`/rounds/${id}/scoreboard`)
-      const myEntry = boardRes.data.find((e: { user_id: string }) => e.user_id === me.id)
+      type BoardRow = { user_id: string; scores: Score[] }
+      const all: Record<string, Record<number, Score>> = {}
+      for (const row of (boardRes.data as BoardRow[])) {
+        const m: Record<number, Score> = {}
+        for (const s of (row.scores ?? [])) m[s.hole] = s
+        all[row.user_id] = m
+      }
+      setAllScores(all)
+      const myEntry = (boardRes.data as BoardRow[]).find(e => e.user_id === me.id)
       if (myEntry?.scores?.length) {
         const saved: Record<number, Score> = {}
         myEntry.scores.forEach((s: Score) => { saved[s.hole] = s })
         setScores(saved)
         const lastPlayed = Math.max(...myEntry.scores.map((s: Score) => s.hole))
-        if (lastPlayed < round.holes_to_play) setCurrentHole(lastPlayed + 1)
+        if (lastPlayed < round.holes_to_play && (!usedGroups)) setCurrentHole(lastPlayed + 1)
       }
 
       // WebSocket — eventos de conflicto y resolución
@@ -425,7 +435,16 @@ export default function PlayRoundPage() {
         ws.onmessage = async (e) => {
           try {
             const msg = JSON.parse(e.data)
-            if (msg.event === 'score_conflict') {
+            if (msg.event === 'score_update') {
+              const { user_id, hole, gross, net } = msg
+              setAllScores(prev => ({
+                ...prev,
+                [user_id]: { ...(prev[user_id] ?? {}), [hole]: { hole, gross, net: net ?? gross } },
+              }))
+              if (user_id === me.id) {
+                setScores(prev => ({ ...prev, [hole]: { hole, gross, net: net ?? gross } }))
+              }
+            } else if (msg.event === 'score_conflict') {
               setConflictBanner({ user_id: msg.user_id, hole: msg.hole, a: msg.score_a, b: msg.score_b })
               try {
                 const cRes = await api.get(`/rounds/${id}/conflicts`)
@@ -434,7 +453,11 @@ export default function PlayRoundPage() {
             } else if (msg.event === 'conflict_resolved') {
               setConflicts(prev => prev.filter(c => !(c.user_id === msg.user_id && c.hole_number === msg.hole)))
               setConflictBanner(prev => (prev && prev.user_id === msg.user_id && prev.hole === msg.hole) ? null : prev)
-              // Si es mi score, refrescar valor visible
+              setAllScores(prev => {
+                const existing = prev[msg.user_id]?.[msg.hole]
+                if (!existing) return prev
+                return { ...prev, [msg.user_id]: { ...prev[msg.user_id], [msg.hole]: { ...existing, gross: msg.final_score } } }
+              })
               if (msg.user_id === me.id) {
                 setScores(prev => {
                   const existing = prev[msg.hole]
@@ -457,14 +480,24 @@ export default function PlayRoundPage() {
     }
   }, [id, locale, router])
 
+  // Reset row inputs cuando cambia de hoyo o cambian los jugadores.
+  // Preserva filas con dirty=true (edición en curso) — no las pisa con allScores.
   useEffect(() => {
     const hole = holes.find(h => h.hole_number === currentHole)
-    if (hole) {
-      const existing = scores[currentHole]
-      setGrossInput(existing?.gross ?? hole.par)
-      setPuttsInput(existing?.putts ?? null)
-    }
-  }, [currentHole, holes])
+    if (!hole || !myUserId) return
+    setRowInputs(prev => {
+      const next: Record<string, { gross: number; putts: number | null; dirty: boolean }> = {}
+      const buildFor = (uid: string) => {
+        const existing = allScores[uid]?.[currentHole]
+        const cur = prev[uid]
+        if (cur?.dirty) return cur  // edición en curso, no pisar
+        return { gross: existing?.gross ?? hole.par, putts: existing?.putts ?? null, dirty: false }
+      }
+      next[myUserId] = buildFor(myUserId)
+      for (const m of groupMates) next[m.user_id] = buildFor(m.user_id)
+      return next
+    })
+  }, [currentHole, holes, myUserId, groupMates, allScores])
 
   useEffect(() => {
     if (view !== 'match') return
@@ -484,30 +517,60 @@ export default function PlayRoundPage() {
   const submitScore = async () => {
     setSubmitting(true)
     try {
-      const payload: Record<string, unknown> = {
-        hole_number: currentHole,
-        gross_score: grossInput,
-        putts: puttsInput,
-      }
-      if (targetUserId && targetUserId !== myUserId) payload.for_user_id = targetUserId
-      const res = await api.post(`/rounds/${id}/scores`, payload)
-
-      // Solo actualizar tabla local si estoy capturando para mí
-      if (!targetUserId || targetUserId === myUserId) {
-        setScores(prev => ({
-          ...prev,
-          [currentHole]: { hole: currentHole, gross: grossInput, net: res.data.net_score, putts: puttsInput ?? undefined }
-        }))
+      const dirtyEntries = Object.entries(rowInputs).filter(([, v]) => v.dirty)
+      if (dirtyEntries.length === 0) {
+        // Nada que enviar — solo avanzar
         if (currentHole < holesTotal) setCurrentHole(currentHole + 1)
-      } else {
-        // Captura cruzada — si vino con conflicto, refrescar lista
-        if (res.data.has_conflict) {
-          try {
-            const cRes = await api.get(`/rounds/${id}/conflicts`)
-            setConflicts(cRes.data ?? [])
-          } catch { /* ignore */ }
+        return
+      }
+      const results = await Promise.allSettled(dirtyEntries.map(([uid, v]) => {
+        const payload: Record<string, unknown> = {
+          hole_number: currentHole,
+          gross_score: v.gross,
+          putts: v.putts,
+        }
+        if (uid !== myUserId) payload.for_user_id = uid
+        return api.post(`/rounds/${id}/scores`, payload).then(res => ({ uid, gross: v.gross, putts: v.putts, net: res.data.net_score as number, has_conflict: res.data.has_conflict as boolean }))
+      }))
+
+      // Aplicar resultados al estado
+      const newAll = { ...allScores }
+      let anyConflict = false
+      let myUpdated = false
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
+          const { uid, gross, putts, net, has_conflict } = r.value
+          if (has_conflict) anyConflict = true
+          newAll[uid] = { ...(newAll[uid] ?? {}), [currentHole]: { hole: currentHole, gross, net, putts: putts ?? undefined } }
+          if (uid === myUserId) myUpdated = true
         }
       }
+      setAllScores(newAll)
+      if (myUpdated && newAll[myUserId]) setScores(newAll[myUserId])
+
+      // Limpiar dirty de las filas que sí guardaron
+      setRowInputs(prev => {
+        const next = { ...prev }
+        for (const r of results) {
+          if (r.status === 'fulfilled') {
+            const { uid } = r.value
+            next[uid] = { ...next[uid], dirty: false }
+          }
+        }
+        return next
+      })
+
+      if (anyConflict) {
+        try {
+          const cRes = await api.get(`/rounds/${id}/conflicts`)
+          setConflicts(cRes.data ?? [])
+        } catch { /* ignore */ }
+      }
+
+      // Avanzar al siguiente hoyo si TODOS los míos+mates ya tienen score guardado
+      const everyoneSaved = [myUserId, ...groupMates.map(m => m.user_id)]
+        .every(uid => newAll[uid]?.[currentHole])
+      if (everyoneSaved && currentHole < holesTotal) setCurrentHole(currentHole + 1)
     } finally {
       setSubmitting(false)
     }
@@ -1024,107 +1087,114 @@ export default function PlayRoundPage() {
               </div>
             )}
 
-            {/* Target selector (only if I have group mates) */}
-            {groupMates.length > 0 && (
-              <div className="w-full mb-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Users size={13} className="text-zinc-500" />
-                  <p className="text-xs text-zinc-500 uppercase tracking-wider">
-                    {lbl('Capturar score de', 'Recording score for')}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => setTargetUserId('')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                      !targetUserId
-                        ? 'bg-emerald-500 border-emerald-400 text-white'
-                        : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-500'
+            {/* Player rows */}
+            {(() => {
+              type RosterEntry = { user_id: string; name: string; course_handicap: number | null; isMe: boolean }
+              const roster: RosterEntry[] = [
+                { user_id: myUserId, name: lbl('Yo', 'Me'), course_handicap: null, isMe: true },
+                ...groupMates.map(m => ({ user_id: m.user_id, name: m.name, course_handicap: m.course_handicap, isMe: false })),
+              ]
+              const anyDirty = Object.values(rowInputs).some(v => v.dirty)
+              return (
+                <>
+                  <div className="w-full space-y-3 mb-5">
+                    {roster.map(p => {
+                      const row = rowInputs[p.user_id] ?? { gross: hole?.par ?? 4, putts: null, dirty: false }
+                      const saved = allScores[p.user_id]?.[currentHole]
+                      const lbl_ = hole && row.gross > 0 ? scoreLabel(row.gross, hole.par) : null
+                      return (
+                        <div key={p.user_id}
+                          className={`bg-zinc-900 border rounded-2xl px-4 py-3 transition-colors ${
+                            row.dirty
+                              ? 'border-emerald-500/50'
+                              : saved ? 'border-zinc-700' : 'border-zinc-800'
+                          }`}>
+                          {/* Row header */}
+                          <div className="flex items-baseline justify-between mb-2">
+                            <div className="flex items-baseline gap-2 min-w-0">
+                              <span className="font-semibold text-white truncate">{p.name}</span>
+                              {p.course_handicap !== null && (
+                                <span className="text-xs text-zinc-500">HCP {p.course_handicap}</span>
+                              )}
+                            </div>
+                            {saved && !row.dirty && (
+                              <span className="flex items-center gap-1 text-xs text-emerald-400">
+                                <CheckCircle2 size={12} /> {lbl('Guardado', 'Saved')}
+                              </span>
+                            )}
+                            {row.dirty && (
+                              <span className="text-xs text-emerald-300">{lbl('Sin guardar', 'Unsaved')}</span>
+                            )}
+                          </div>
+                          {/* ± + label */}
+                          <div className="flex items-center justify-between gap-3">
+                            <button
+                              onClick={() => setRowInputs(prev => ({
+                                ...prev,
+                                [p.user_id]: { ...row, gross: Math.max(1, row.gross - 1), dirty: true },
+                              }))}
+                              className="w-12 h-12 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-white hover:bg-zinc-700 active:scale-95">
+                              <Minus size={20} />
+                            </button>
+                            <div className="flex-1 text-center">
+                              <span className="text-5xl font-bold text-white tabular-nums">{row.gross}</span>
+                              {lbl_ && (
+                                <p className={`text-xs mt-0.5 ${lbl_.cls}`}>{lbl_.text}</p>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => setRowInputs(prev => ({
+                                ...prev,
+                                [p.user_id]: { ...row, gross: row.gross + 1, dirty: true },
+                              }))}
+                              className="w-12 h-12 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-white hover:bg-zinc-700 active:scale-95">
+                              <Plus size={20} />
+                            </button>
+                          </div>
+                          {/* Putts */}
+                          <div className="flex items-center justify-between mt-2.5 pt-2.5 border-t border-zinc-800">
+                            <span className="text-[10px] text-zinc-600 uppercase tracking-wider">{lbl('Putts', 'Putts')}</span>
+                            <div className="flex items-center gap-1.5">
+                              {[1, 2, 3, 4].map(n => (
+                                <button key={n}
+                                  onClick={() => setRowInputs(prev => ({
+                                    ...prev,
+                                    [p.user_id]: { ...row, putts: row.putts === n ? null : n, dirty: true },
+                                  }))}
+                                  className={`w-8 h-8 rounded-full text-xs font-bold border transition-all ${
+                                    row.putts === n
+                                      ? 'bg-emerald-500 border-emerald-400 text-white'
+                                      : 'bg-zinc-800 border-zinc-700 text-zinc-500'
+                                  }`}>
+                                  {n}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {myStartingHole && currentHole === myStartingHole && (
+                    <p className="text-[10px] text-zinc-600 mb-3 text-center">
+                      {lbl(`Tu grupo arranca en hoyo ${myStartingHole}`, `Your group starts at hole ${myStartingHole}`)}
+                    </p>
+                  )}
+                  {/* Submit */}
+                  <button onClick={submitScore} disabled={submitting}
+                    className={`w-full flex items-center justify-center gap-2 disabled:opacity-60 text-white font-semibold py-4 rounded-2xl transition-colors text-base active:scale-95 ${
+                      anyDirty
+                        ? 'bg-emerald-500 hover:bg-emerald-400'
+                        : 'bg-zinc-700 hover:bg-zinc-600'
                     }`}>
-                    {lbl('Yo', 'Me')}
+                    {submitting ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+                    {anyDirty
+                      ? lbl('Guardar hoyo', 'Save hole')
+                      : lbl('Siguiente hoyo', 'Next hole')}
                   </button>
-                  {groupMates.map(m => (
-                    <button
-                      key={m.user_id}
-                      onClick={() => setTargetUserId(m.user_id)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                        targetUserId === m.user_id
-                          ? 'bg-blue-500 border-blue-400 text-white'
-                          : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-500'
-                      }`}>
-                      {m.name.split(' ')[0]}
-                    </button>
-                  ))}
-                </div>
-                {myStartingHole && (
-                  <p className="text-[10px] text-zinc-600 mt-1.5">
-                    {lbl('Tu grupo arranca en hoyo', 'Your group starts at hole')} {myStartingHole}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {scores[currentHole] && (!targetUserId || targetUserId === myUserId) && (
-              <div className="mb-4 flex items-center gap-2 text-sm text-emerald-400">
-                <CheckCircle2 size={15} />
-                {lbl('Hoyo registrado — puedes corregir', 'Hole recorded — you can correct')}
-              </div>
-            )}
-            {targetUserId && targetUserId !== myUserId && (
-              <div className="mb-4 flex items-center gap-2 text-sm text-blue-400">
-                <Users size={15} />
-                {lbl(
-                  `Capturando para ${groupMates.find(m => m.user_id === targetUserId)?.name.split(' ')[0] ?? ''}`,
-                  `Recording for ${groupMates.find(m => m.user_id === targetUserId)?.name.split(' ')[0] ?? ''}`
-                )}
-              </div>
-            )}
-
-            {/* Gross */}
-            <div className="text-center mb-6 w-full">
-              <p className="text-xs text-zinc-500 mb-3 uppercase tracking-wider">{lbl('Golpes', 'Strokes')}</p>
-              <div className="flex items-center justify-center gap-6">
-                <button onClick={() => setGrossInput(Math.max(1, grossInput - 1))}
-                  className="w-14 h-14 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-white hover:bg-zinc-700 active:scale-95 transition-all">
-                  <Minus size={22} />
-                </button>
-                <div className="text-center">
-                  <span className="text-7xl font-bold text-white tabular-nums">{grossInput}</span>
-                  {hole && grossInput > 0 && (() => {
-                    const { text, cls } = scoreLabel(grossInput, hole.par)
-                    return <p className={`text-sm mt-1 ${cls}`}>{text}</p>
-                  })()}
-                </div>
-                <button onClick={() => setGrossInput(grossInput + 1)}
-                  className="w-14 h-14 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-white hover:bg-zinc-700 active:scale-95 transition-all">
-                  <Plus size={22} />
-                </button>
-              </div>
-            </div>
-
-            {/* Putts */}
-            <div className="text-center mb-8 w-full">
-              <p className="text-xs text-zinc-500 mb-3 uppercase tracking-wider">{lbl('Putts (opcional)', 'Putts (optional)')}</p>
-              <div className="flex items-center justify-center gap-4">
-                {[1, 2, 3, 4].map(n => (
-                  <button key={n} onClick={() => setPuttsInput(puttsInput === n ? null : n)}
-                    className={`w-11 h-11 rounded-full text-sm font-bold border transition-all ${
-                      puttsInput === n
-                        ? 'bg-emerald-500 border-emerald-400 text-white'
-                        : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-500'
-                    }`}>
-                    {n}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Submit */}
-            <button onClick={submitScore} disabled={submitting}
-              className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-white font-semibold py-4 rounded-2xl transition-colors text-base active:scale-95">
-              {submitting ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
-              {lbl('Registrar hoyo', 'Record hole')}
-            </button>
+                </>
+              )
+            })()}
           </div>
 
           {/* Resolve conflict modal */}
