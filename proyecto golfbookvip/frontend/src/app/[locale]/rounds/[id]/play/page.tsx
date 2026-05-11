@@ -515,7 +515,7 @@ export default function PlayRoundPage() {
     }
   }
 
-  const handleFinish = async () => {
+  const handleFinish = async (force = false) => {
     if (conflicts.length > 0) {
       alert(lbl(
         `Hay ${conflicts.length} conflicto(s) de score sin resolver. Resuelve todos antes de finalizar.`,
@@ -523,20 +523,32 @@ export default function PlayRoundPage() {
       ))
       return
     }
-    if (!confirm(lbl('¿Finalizar la ronda?', 'Finish the round?'))) return
+    if (!force && !confirm(lbl('¿Finalizar la ronda?', 'Finish the round?'))) return
     setFinishing(true)
     try {
-      await api.post(`/rounds/${id}/finish`)
+      await api.post(`/rounds/${id}/finish`, null, force ? { params: { force: true } } : undefined)
       router.push(`/${locale}/rounds/${id}`)
     } catch (e) {
-      const err = e as { response?: { status?: number; data?: { detail?: string } } }
-      if (err.response?.status === 409) {
-        alert(err.response?.data?.detail || lbl('Hay conflictos sin resolver.', 'There are unresolved conflicts.'))
-        // Refrescar lista por si cambió
+      type FinishDetail = string | { code?: string; message?: string; incomplete?: { name: string; holes_logged: number; holes_total: number }[] }
+      const err = e as { response?: { status?: number; data?: { detail?: FinishDetail } } }
+      const detail = err.response?.data?.detail
+      if (err.response?.status === 409 && typeof detail === 'object' && detail?.code === 'incomplete_players') {
+        const list = (detail.incomplete ?? [])
+          .map(p => `• ${p.name} (${p.holes_logged}/${p.holes_total})`).join('\n')
+        const ok = confirm(lbl(
+          `Hay jugadores con scorecard incompleto:\n\n${list}\n\n¿Finalizar de todos modos?`,
+          `Players with incomplete scorecard:\n\n${list}\n\nFinish anyway?`
+        ))
+        if (ok) { setFinishing(false); return handleFinish(true) }
+      } else if (err.response?.status === 409 && typeof detail === 'string') {
+        alert(detail)
+        // Refrescar lista de conflictos por si cambió
         try {
           const cRes = await api.get(`/rounds/${id}/conflicts`)
           setConflicts(cRes.data ?? [])
         } catch { /* ignore */ }
+      } else if (typeof detail === 'string') {
+        alert(detail)
       }
       setFinishing(false)
     }
@@ -616,7 +628,7 @@ export default function PlayRoundPage() {
             lbl={lbl}
           />
           {amCreator && (
-            <button onClick={handleFinish} disabled={finishing}
+            <button onClick={() => handleFinish(false)} disabled={finishing}
               className={`w-full mt-4 flex items-center justify-center gap-2 disabled:opacity-60 text-white font-semibold py-3.5 rounded-2xl transition-colors ${
                 allPlayed
                   ? 'bg-emerald-500 hover:bg-emerald-400'
@@ -1189,7 +1201,7 @@ export default function PlayRoundPage() {
                   <ChevronLeft size={16} />{lbl('Anterior', 'Prev')}
                 </button>
                 {allPlayed ? (
-                  <button onClick={handleFinish} disabled={finishing}
+                  <button onClick={() => handleFinish(false)} disabled={finishing}
                     className="flex-1 flex items-center justify-center gap-1 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-white font-semibold py-2 rounded-xl text-sm transition-colors">
                     {finishing ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
                     {lbl('Finalizar', 'Finish')}

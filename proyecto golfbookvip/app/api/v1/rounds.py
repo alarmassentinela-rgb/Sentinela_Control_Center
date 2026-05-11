@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, delete, func
 from typing import Optional
 import uuid, secrets, string
 from datetime import date as date_type
@@ -430,7 +430,7 @@ async def submit_score(round_id: uuid.UUID, data: ScoreSubmit, current_user: Cur
     target_user_id = data.for_user_id if data.for_user_id else current_user.id
 
     if target_user_id != current_user.id:
-        # Captura cruzada — validar mismo grupo de salida
+        # Captura cruzada
         target_rp_result = await db.execute(
             select(RoundPlayer).where(
                 RoundPlayer.round_id == round_id,
@@ -441,8 +441,17 @@ async def submit_score(round_id: uuid.UUID, data: ScoreSubmit, current_user: Cur
         target_rp = target_rp_result.scalar_one_or_none()
         if not target_rp:
             raise HTTPException(status_code=404, detail="Jugador objetivo no encontrado en la ronda")
-        if my_rp.tee_group is None or target_rp.tee_group is None or my_rp.tee_group != target_rp.tee_group:
-            raise HTTPException(status_code=403, detail="Solo puedes capturar scores de jugadores en tu mismo grupo de salida")
+
+        # Si existen tee_groups en la ronda, validar mismo grupo.
+        # Si NO existen (ronda legacy o sin grupos asignados), permitir libremente.
+        any_group_result = await db.execute(
+            select(func.count()).select_from(RoundPlayer)
+            .where(RoundPlayer.round_id == round_id, RoundPlayer.tee_group.isnot(None))
+        )
+        has_any_group = (any_group_result.scalar() or 0) > 0
+        if has_any_group:
+            if my_rp.tee_group is None or target_rp.tee_group is None or my_rp.tee_group != target_rp.tee_group:
+                raise HTTPException(status_code=403, detail="Solo puedes capturar scores de jugadores en tu mismo grupo de salida")
         rp = target_rp
     else:
         rp = my_rp
@@ -530,7 +539,7 @@ async def submit_score(round_id: uuid.UUID, data: ScoreSubmit, current_user: Cur
 
 
 @router.post("/{round_id}/finish")
-async def finish_round(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
+async def finish_round(round_id: uuid.UUID, current_user: CurrentUser, db: DB, force: bool = False):
     result = await db.execute(
         select(Round).where(Round.id == round_id, Round.created_by == current_user.id, Round.status == "active")
     )
@@ -545,6 +554,40 @@ async def finish_round(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
     )
     if conflict_result.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Hay conflictos de score sin resolver. Resuelve todos los conflictos antes de finalizar.")
+
+    # Advertir si hay jugadores con scorecard incompleto (a menos que force=true)
+    if not force:
+        players_check = await db.execute(
+            select(RoundPlayer, User)
+            .join(User, User.id == RoundPlayer.user_id)
+            .where(
+                RoundPlayer.round_id == round_id,
+                RoundPlayer.status.in_(["confirmed", "playing", "finished"]),
+            )
+        )
+        incomplete = []
+        for rp, u in players_check.all():
+            sc = await db.execute(
+                select(func.count()).select_from(ScoreModel)
+                .where(ScoreModel.round_id == round_id, ScoreModel.user_id == rp.user_id)
+            )
+            n = sc.scalar() or 0
+            if n < round_.holes_to_play:
+                incomplete.append({
+                    "user_id": str(rp.user_id),
+                    "name": f"{u.first_name} {u.last_name}",
+                    "holes_logged": n,
+                    "holes_total": round_.holes_to_play,
+                })
+        if incomplete:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "incomplete_players",
+                    "message": "Hay jugadores con scorecard incompleto. Reenvía con force=true para finalizar de todos modos.",
+                    "incomplete": incomplete,
+                },
+            )
 
     from datetime import datetime, timezone
     round_.status = "finished"
@@ -616,6 +659,52 @@ async def finish_round(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
             )
 
     return {"message": "Jugada finalizada", "round_id": str(round_id)}
+
+
+@router.post("/{round_id}/reopen")
+async def reopen_round(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
+    """Reabre una ronda finalizada (solo creator). Revierte los differentials generados
+    por el finish y recalcula los hándicaps afectados."""
+    result = await db.execute(
+        select(Round).where(
+            Round.id == round_id,
+            Round.created_by == current_user.id,
+            Round.status == "finished",
+        )
+    )
+    round_ = result.scalar_one_or_none()
+    if not round_:
+        raise HTTPException(status_code=400, detail="Solo el creador puede reabrir una ronda finalizada")
+
+    # Buscar diferenciales generados por este finish (para recalcular HCP después)
+    diffs_res = await db.execute(
+        select(ScoreDifferential.user_id).where(ScoreDifferential.round_id == round_id)
+    )
+    affected_user_ids = [row[0] for row in diffs_res.all()]
+
+    # Borrar diferenciales de esta ronda
+    await db.execute(delete(ScoreDifferential).where(ScoreDifferential.round_id == round_id))
+
+    # Reabrir
+    round_.status = "active"
+    round_.finished_at = None
+    await db.flush()
+
+    # Recalcular hándicap de cada jugador afectado
+    for uid in affected_user_ids:
+        await hcp_svc.recalculate_handicap(str(uid), db)
+
+    # Broadcast WS
+    await manager.broadcast_to_round(
+        round_id=str(round_id),
+        message={"event": "round_reopened", "round_id": str(round_id)},
+    )
+
+    return {
+        "message": "Ronda reabierta",
+        "round_id": str(round_id),
+        "differentials_removed": len(affected_user_ids),
+    }
 
 
 @router.get("/{round_id}/scoreboard")

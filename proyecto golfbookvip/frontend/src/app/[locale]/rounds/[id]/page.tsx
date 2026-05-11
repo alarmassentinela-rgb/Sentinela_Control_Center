@@ -2,7 +2,7 @@
 import { useEffect, useState, Fragment } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { Flag, ArrowLeft, Play, MapPin, Calendar, Loader2, CheckCircle2, Copy, Check, QrCode, DollarSign, ChevronDown, ChevronUp, Save, Edit2, X, Info, Trash2, Users, Shuffle, Radio, Eye, EyeOff, Send, Swords, ArrowUp, ArrowDown, Layers, AlertTriangle } from 'lucide-react'
+import { Flag, ArrowLeft, Play, MapPin, Calendar, Loader2, CheckCircle2, Copy, Check, QrCode, DollarSign, ChevronDown, ChevronUp, Save, Edit2, X, Info, Trash2, Users, Shuffle, Radio, Eye, EyeOff, Send, Swords, ArrowUp, ArrowDown, Layers, AlertTriangle, RotateCcw } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
@@ -1259,15 +1259,49 @@ export default function RoundDetailPage() {
     }
   }
 
-  const handleFinishRound = async () => {
-    if (!confirm(lbl('¿Finalizar la ronda? Esta acción no se puede deshacer.', 'Finish the round? This cannot be undone.'))) return
+  const handleFinishRound = async (force = false) => {
+    if (!force && !confirm(lbl('¿Finalizar la ronda? Esta acción no se puede deshacer.', 'Finish the round? This cannot be undone.'))) return
     setFinishing(true)
     try {
-      await api.post(`/rounds/${id}/finish`)
+      await api.post(`/rounds/${id}/finish`, null, force ? { params: { force: true } } : undefined)
+      await load()
+    } catch (e: unknown) {
+      type FinishErrDetail = string | { code?: string; message?: string; incomplete?: { name: string; holes_logged: number; holes_total: number }[] }
+      const detail = (e as { response?: { status?: number; data?: { detail?: FinishErrDetail } } })?.response?.data?.detail
+      const status = (e as { response?: { status?: number } })?.response?.status
+      if (status === 409 && typeof detail === 'object' && detail?.code === 'incomplete_players') {
+        const list = (detail.incomplete ?? [])
+          .map(p => `• ${p.name} (${p.holes_logged}/${p.holes_total})`).join('\n')
+        const ok = confirm(
+          lbl(
+            `Hay jugadores con scorecard incompleto:\n\n${list}\n\n¿Finalizar de todos modos?`,
+            `Players with incomplete scorecard:\n\n${list}\n\nFinish anyway?`
+          )
+        )
+        if (ok) { setFinishing(false); return handleFinishRound(true) }
+      } else if (typeof detail === 'string') {
+        alert(detail)
+      } else if (detail) {
+        alert(JSON.stringify(detail))
+      }
+      setFinishing(false)
+    }
+  }
+
+  const handleReopenRound = async () => {
+    const msg = lbl(
+      '¿Reabrir la ronda? Se revertirán los diferenciales generados al cierre y los hándicaps afectados se recalcularán.',
+      'Reopen the round? The differentials generated at close will be reverted and affected handicaps will be recalculated.'
+    )
+    if (!confirm(msg)) return
+    setFinishing(true)
+    try {
+      await api.post(`/rounds/${id}/reopen`)
       await load()
     } catch (e: unknown) {
       const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      if (detail) alert(detail)
+      if (detail) alert(typeof detail === 'string' ? detail : JSON.stringify(detail))
+    } finally {
       setFinishing(false)
     }
   }
@@ -1576,10 +1610,17 @@ export default function RoundDetailPage() {
               </Link>
             )}
             {amCreator && round.status === 'active' && (
-              <button onClick={handleFinishRound} disabled={finishing}
+              <button onClick={() => handleFinishRound(false)} disabled={finishing}
                 className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-60 text-zinc-300 hover:text-white font-medium px-5 py-2.5 rounded-full transition-colors text-sm border border-zinc-700">
                 {finishing ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
                 {lbl('Finalizar ronda', 'Finish round')}
+              </button>
+            )}
+            {amCreator && round.status === 'finished' && (
+              <button onClick={handleReopenRound} disabled={finishing}
+                className="flex items-center gap-2 bg-amber-500/15 hover:bg-amber-500/25 disabled:opacity-60 text-amber-400 border border-amber-500/40 font-medium px-5 py-2.5 rounded-full transition-colors text-sm">
+                {finishing ? <Loader2 size={15} className="animate-spin" /> : <RotateCcw size={15} />}
+                {lbl('Reabrir ronda', 'Reopen round')}
               </button>
             )}
             {amCreator && inviteUrl && round.status !== 'finished' && (
