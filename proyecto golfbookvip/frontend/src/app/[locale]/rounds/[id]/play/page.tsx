@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Minus, Plus, RotateCcw, Table2, Pencil, Trophy, AlertTriangle, Users } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Minus, Plus, RotateCcw, Table2, Pencil, Trophy, AlertTriangle, Users, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
@@ -533,6 +533,8 @@ export default function PlayRoundPage() {
   const [floridaData, setFloridaData] = useState<FloridaData | null>(null)
   const [floridaLoading, setFloridaLoading] = useState(false)
   const [myUserId, setMyUserId] = useState<string>('')
+  const [myCourseHandicap, setMyCourseHandicap] = useState<number | null>(null)
+  const [showSiHelp, setShowSiHelp] = useState(false)
   const [myStartingHole, setMyStartingHole] = useState<number | null>(null)
   const [groupMates, setGroupMates] = useState<GroupMate[]>([])
   const [conflicts, setConflicts] = useState<ConflictItem[]>([])
@@ -563,6 +565,7 @@ export default function PlayRoundPage() {
       const playersList = playersRes.data as PlayerRow[]
       const myPlayer = playersList.find(p => p.user_id === me.id)
       if (myPlayer?.tee_color) setMyTee(myPlayer.tee_color)
+      if (myPlayer?.course_handicap !== undefined) setMyCourseHandicap(myPlayer.course_handicap)
       setAmCreator(round.created_by === me.id)
       setGameFormat(round.game_format)
       const courseRes = await api.get(`/courses/${round.course_id}`)
@@ -1235,7 +1238,13 @@ export default function PlayRoundPage() {
                     Par {hole.par}
                   </span>
                   {hole.stroke_index && (
-                    <p className="text-xs text-zinc-500">SI {hole.stroke_index}</p>
+                    <button
+                      onClick={() => setShowSiHelp(true)}
+                      className="flex items-center gap-1 text-xs text-zinc-500 hover:text-emerald-400 transition-colors mt-0.5"
+                      title={lbl('Qué significa SI', 'What does SI mean')}>
+                      SI {hole.stroke_index}
+                      <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-zinc-800 text-[9px] font-bold text-zinc-400">?</span>
+                    </button>
                   )}
                 </div>
                 {/* Centro: HOYO X (protagonista) */}
@@ -1435,6 +1444,126 @@ export default function PlayRoundPage() {
               )
             })()}
           </div>
+
+          {/* Stroke Index help modal */}
+          {showSiHelp && hole && (
+            <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center px-4"
+                 onClick={() => setShowSiHelp(false)}>
+              <div onClick={e => e.stopPropagation()}
+                   className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm p-5 max-h-[85vh] overflow-y-auto">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <h3 className="font-bold text-white text-lg">
+                      {lbl('Stroke Index (SI)', 'Stroke Index (SI)')}
+                    </h3>
+                    <p className="text-xs text-zinc-500">
+                      {lbl('Índice de dificultad del hoyo', 'Hole difficulty index')}
+                    </p>
+                  </div>
+                  <button onClick={() => setShowSiHelp(false)} className="text-zinc-500 hover:text-white p-1">
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <p className="text-sm text-zinc-300 leading-relaxed mb-3">
+                  {lbl(
+                    'Es el ranking de dificultad del hoyo dentro del campo, del 1 al 18:',
+                    'It is the difficulty ranking of the hole within the course, from 1 to 18:'
+                  )}
+                </p>
+                <ul className="text-sm text-zinc-400 space-y-1 mb-4 ml-2">
+                  <li>• <span className="text-red-400 font-semibold">SI 1</span> = {lbl('hoyo más difícil', 'hardest hole')}</li>
+                  <li>• <span className="text-emerald-400 font-semibold">SI 18</span> = {lbl('hoyo más fácil', 'easiest hole')}</li>
+                </ul>
+
+                <p className="text-sm text-zinc-300 leading-relaxed mb-3">
+                  {lbl(
+                    'El SI define en qué hoyos recibes "strokes de ventaja" según tu Course Handicap (CH).',
+                    'SI defines in which holes you receive "stroke advantages" based on your Course Handicap (CH).'
+                  )}
+                </p>
+
+                {/* Ejemplo con este hoyo */}
+                <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-3 mb-4">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">
+                    {lbl('En este hoyo', 'In this hole')}
+                  </p>
+                  <div className="flex items-center justify-between gap-3 mb-1">
+                    <span className="text-zinc-400 text-sm">{lbl('Hoyo', 'Hole')}</span>
+                    <span className="text-white font-semibold">{hole.hole_number} · Par {hole.par}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 mb-1">
+                    <span className="text-zinc-400 text-sm">SI</span>
+                    <span className="text-white font-semibold">
+                      {hole.stroke_index} {hole.stroke_index && hole.stroke_index <= 6
+                        ? lbl('(difícil)', '(hard)')
+                        : hole.stroke_index && hole.stroke_index >= 13
+                        ? lbl('(fácil)', '(easy)')
+                        : lbl('(medio)', '(medium)')}
+                    </span>
+                  </div>
+                  {myCourseHandicap !== null && (
+                    <>
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <span className="text-zinc-400 text-sm">{lbl('Tu CH', 'Your CH')}</span>
+                        <span className="text-white font-semibold">{myCourseHandicap}</span>
+                      </div>
+                      <div className="border-t border-zinc-800 pt-2 mt-2">
+                        {(() => {
+                          const si = hole.stroke_index ?? 18
+                          const ch = myCourseHandicap
+                          const baseStrokes = Math.floor(ch / 18)
+                          const extra = (ch % 18) >= si ? 1 : 0
+                          const total = baseStrokes + extra
+                          return (
+                            <>
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-zinc-300 font-medium">
+                                  {lbl('Recibes', 'You receive')}
+                                </span>
+                                <span className={`text-lg font-bold ${
+                                  total > 0 ? 'text-emerald-400' : 'text-zinc-500'
+                                }`}>
+                                  {total === 0
+                                    ? lbl('0 strokes', '0 strokes')
+                                    : total === 1
+                                    ? lbl('1 stroke', '1 stroke')
+                                    : `${total} ${lbl('strokes', 'strokes')}`}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-zinc-500 mt-1">
+                                {total === 0
+                                  ? lbl(
+                                      `Tu CH (${ch}) < SI (${si}), juegas a la par.`,
+                                      `Your CH (${ch}) < SI (${si}), play at par.`
+                                    )
+                                  : lbl(
+                                      `Tu CH (${ch}) ≥ SI (${si}), te corresponde ventaja. Tu Net Par = ${hole.par + total}.`,
+                                      `Your CH (${ch}) ≥ SI (${si}), you get the advantage. Your Net Par = ${hole.par + total}.`
+                                    )}
+                              </p>
+                            </>
+                          )
+                        })()}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <p className="text-[11px] text-zinc-500 leading-relaxed mb-4">
+                  {lbl(
+                    'Regla WHS: recibes 1 stroke en los hoyos con SI ≤ tu CH. Si tu CH supera 18, recibes 1 stroke en todos y otro extra en los SI ≤ (CH − 18).',
+                    'WHS rule: you receive 1 stroke in holes with SI ≤ your CH. If your CH exceeds 18, you get 1 stroke in all of them plus an extra one in SI ≤ (CH − 18).'
+                  )}
+                </p>
+
+                <button onClick={() => setShowSiHelp(false)}
+                  className="w-full py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white text-sm font-semibold">
+                  {lbl('Entendido', 'Got it')}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Resolve conflict modal */}
           {resolvingFor && (
