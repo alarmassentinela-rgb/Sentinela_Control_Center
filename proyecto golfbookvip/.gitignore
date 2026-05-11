@@ -21,6 +21,10 @@ build/
 
 # ── Credenciales ──────────────────────────────────────────
 firebase-credentials.json
+firebase-credentials.json.OLD.*
+*firebase-adminsdk*.json
+*service-account*.json
+*-credentials.json
 *.pem
 *.key
 *.p12
