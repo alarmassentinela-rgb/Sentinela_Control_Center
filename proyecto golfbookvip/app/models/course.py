@@ -27,6 +27,7 @@ class Course(Base):
     course_rating: Mapped[Optional[float]] = mapped_column(Numeric(4, 1))
     slope_rating: Mapped[Optional[int]] = mapped_column(Integer)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(pgUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
     created_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now())
     updated_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -48,5 +49,12 @@ class CourseHole(Base):
     distance_yards_red: Mapped[Optional[int]] = mapped_column(Integer)
     description: Mapped[Optional[str]] = mapped_column(Text)
     image_url: Mapped[Optional[str]] = mapped_column(String(500))
+    # GPS general (deprecated — usar tee_* y green_*)
     latitude: Mapped[Optional[float]] = mapped_column(Numeric(10, 8))
     longitude: Mapped[Optional[float]] = mapped_column(Numeric(11, 8))
+    # GPS específico — centro del green (para distancia al pin)
+    green_latitude: Mapped[Optional[float]] = mapped_column(Numeric(10, 8))
+    green_longitude: Mapped[Optional[float]] = mapped_column(Numeric(11, 8))
+    # GPS específico — tee de salida
+    tee_latitude: Mapped[Optional[float]] = mapped_column(Numeric(10, 8))
+    tee_longitude: Mapped[Optional[float]] = mapped_column(Numeric(11, 8))

@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { Flag, ArrowLeft, MapPin, Star, Loader2, Hash } from 'lucide-react'
+import { Flag, ArrowLeft, MapPin, Star, Loader2, Hash, Edit2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
@@ -25,6 +25,7 @@ interface Course {
   par_total: number | null
   course_rating: number | null
   slope_rating: number | null
+  created_by: string | null
   holes: Hole[]
 }
 
@@ -38,11 +39,16 @@ export default function CourseDetailPage() {
   const [course, setCourse] = useState<Course | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [canEdit, setCanEdit] = useState(false)
 
   useEffect(() => {
     if (!localStorage.getItem('access_token')) { router.push(`/${locale}/auth/login`); return }
-    api.get(`/courses/${id}`)
-      .then((r) => setCourse(r.data))
+    Promise.all([api.get(`/courses/${id}`), api.get('/users/me')])
+      .then(([cRes, meRes]) => {
+        setCourse(cRes.data)
+        const me = meRes.data
+        setCanEdit(me.is_superadmin || !cRes.data.created_by || cRes.data.created_by === me.id)
+      })
       .catch(() => setError(lbl('Campo no encontrado', 'Course not found')))
       .finally(() => setLoading(false))
   }, [id])
@@ -194,12 +200,19 @@ export default function CourseDetailPage() {
             )}
 
             {/* CTA */}
-            <div className="flex justify-center">
+            <div className="flex flex-wrap justify-center gap-3">
               <Link href={`/${locale}/rounds/new?course_id=${course.id}`}
                 className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold px-8 py-3 rounded-full transition-colors text-sm">
                 <Flag size={16} />
                 {lbl('Iniciar ronda en esta cancha', 'Start a round here')}
               </Link>
+              {canEdit && (
+                <Link href={`/${locale}/courses/${course.id}/edit`}
+                  className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 hover:text-white font-medium px-6 py-3 rounded-full transition-colors text-sm">
+                  <Edit2 size={14} />
+                  {lbl('Editar campo y hoyos', 'Edit course & holes')}
+                </Link>
+              )}
             </div>
           </div>
         )}
