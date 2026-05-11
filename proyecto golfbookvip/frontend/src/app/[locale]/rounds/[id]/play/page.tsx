@@ -304,6 +304,207 @@ function ScorecardTable({
   )
 }
 
+// ─── Multi-Player Scorecard ───────────────────────────────────────────────────
+function MultiPlayerScorecard({
+  holes, allScores, holesTotal, players, onEdit, lbl,
+}: {
+  holes: Hole[]
+  allScores: Record<string, Record<number, Score>>
+  holesTotal: number
+  players: { user_id: string; name: string; course_handicap: number | null; isMe: boolean }[]
+  onEdit: (h: number) => void
+  lbl: (es: string, en: string) => string
+}) {
+  const activeHoles = holes.filter(h => h.hole_number <= holesTotal).sort((a, b) => a.hole_number - b.hole_number)
+  const front = activeHoles.filter(h => h.hole_number <= 9)
+  const back = activeHoles.filter(h => h.hole_number > 9)
+
+  const sumPar = (hs: Hole[]) => hs.reduce((s, h) => s + h.par, 0)
+  const sumGross = (uid: string, hs: Hole[]) =>
+    hs.reduce((s, h) => {
+      const sc = allScores[uid]?.[h.hole_number]
+      return sc ? s + sc.gross : s
+    }, 0)
+  const countPlayed = (uid: string, hs: Hole[]) =>
+    hs.filter(h => allScores[uid]?.[h.hole_number]).length
+
+  const sections = holesTotal === 18
+    ? [
+        { label: lbl('Salida', 'Out'), hs: front },
+        { label: lbl('Vuelta', 'In'), hs: back },
+      ]
+    : [
+        { label: lbl('Total', 'Total'), hs: activeHoles },
+      ]
+
+  return (
+    <div className="space-y-5">
+      {sections.map(({ label, hs }) => (
+        <div key={label} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-xs tabular-nums">
+              <thead>
+                {/* Hole numbers */}
+                <tr className="bg-zinc-950 border-b border-zinc-800">
+                  <th className="text-left text-[10px] text-zinc-500 uppercase tracking-wider py-2 px-2 sticky left-0 bg-zinc-950 z-10 min-w-[100px]">
+                    {label}
+                  </th>
+                  {hs.map(h => (
+                    <th key={h.hole_number}
+                      onClick={() => onEdit(h.hole_number)}
+                      className="text-center py-2 px-1 text-[10px] text-zinc-500 font-medium cursor-pointer hover:text-emerald-400 min-w-[26px]">
+                      {h.hole_number}
+                    </th>
+                  ))}
+                  <th className="text-center py-2 px-2 text-[10px] text-emerald-400 font-bold uppercase">
+                    Tot
+                  </th>
+                </tr>
+                {/* Par */}
+                <tr className="border-b border-zinc-800/60">
+                  <th className="text-left text-[10px] text-zinc-600 py-1.5 px-2 sticky left-0 bg-zinc-900 z-10 font-medium">
+                    {lbl('Par', 'Par')}
+                  </th>
+                  {hs.map(h => (
+                    <td key={h.hole_number}
+                      className={`text-center py-1.5 text-xs font-semibold ${PAR_COLOR[h.par] ?? 'text-white'}`}>
+                      {h.par}
+                    </td>
+                  ))}
+                  <td className="text-center py-1.5 text-xs font-bold text-zinc-300 px-2">
+                    {sumPar(hs)}
+                  </td>
+                </tr>
+                {/* Stroke Index */}
+                <tr className="border-b border-zinc-800">
+                  <th className="text-left text-[10px] text-zinc-600 py-1.5 px-2 sticky left-0 bg-zinc-900 z-10 font-medium">
+                    SI
+                  </th>
+                  {hs.map(h => (
+                    <td key={h.hole_number} className="text-center py-1.5 text-[10px] text-zinc-600">
+                      {h.stroke_index ?? '—'}
+                    </td>
+                  ))}
+                  <td />
+                </tr>
+              </thead>
+              <tbody>
+                {players.map((p, idx) => {
+                  const isLast = idx === players.length - 1
+                  const grossTotal = sumGross(p.user_id, hs)
+                  const played = countPlayed(p.user_id, hs)
+                  const parTotal = sumPar(hs)
+                  const diff = played === hs.length ? grossTotal - parTotal : null
+                  return (
+                    <tr key={p.user_id}
+                      className={`${isLast ? '' : 'border-b border-zinc-800/60'} ${p.isMe ? 'bg-emerald-500/5' : ''}`}>
+                      <th className={`text-left py-2 px-2 sticky left-0 z-10 ${p.isMe ? 'bg-emerald-500/5' : 'bg-zinc-900'}`}>
+                        <p className={`text-xs font-semibold truncate max-w-[90px] ${p.isMe ? 'text-emerald-300' : 'text-zinc-200'}`}>
+                          {p.name}
+                        </p>
+                        {p.course_handicap !== null && (
+                          <p className="text-[9px] text-zinc-600 font-normal">HCP {p.course_handicap}</p>
+                        )}
+                      </th>
+                      {hs.map(h => {
+                        const sc = allScores[p.user_id]?.[h.hole_number]
+                        if (!sc) {
+                          return (
+                            <td key={h.hole_number}
+                              onClick={() => onEdit(h.hole_number)}
+                              className="text-center py-2 text-zinc-700 cursor-pointer hover:bg-zinc-800/40">
+                              —
+                            </td>
+                          )
+                        }
+                        const cellCls = scoreCellStyle(sc.gross, h.par)
+                        return (
+                          <td key={h.hole_number}
+                            onClick={() => onEdit(h.hole_number)}
+                            className="text-center py-1.5 px-0.5 cursor-pointer hover:bg-zinc-800/40">
+                            <span className={`inline-flex items-center justify-center w-6 h-6 text-xs font-bold ${cellCls}`}>
+                              {sc.gross}
+                            </span>
+                          </td>
+                        )
+                      })}
+                      <td className="text-center py-2 px-2">
+                        {played === 0 ? (
+                          <span className="text-zinc-700 text-xs">—</span>
+                        ) : (
+                          <div>
+                            <p className="text-sm font-bold text-white">{grossTotal}</p>
+                            {diff !== null && (
+                              <p className={`text-[9px] font-medium ${
+                                diff < 0 ? 'text-emerald-400' :
+                                diff > 0 ? 'text-red-400' :
+                                'text-zinc-400'
+                              }`}>
+                                {diff === 0 ? 'E' : diff > 0 ? `+${diff}` : diff}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+
+      {/* Grand total — 18 holes only */}
+      {holesTotal === 18 && (
+        <div className="bg-zinc-900 border border-zinc-700 rounded-xl overflow-hidden">
+          <div className="px-4 py-2.5 bg-zinc-950 border-b border-zinc-800">
+            <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium">{lbl('Total ronda', 'Round total')}</p>
+          </div>
+          <table className="w-full text-xs tabular-nums">
+            <tbody>
+              {players.map(p => {
+                const gT = sumGross(p.user_id, activeHoles)
+                const pT = sumPar(activeHoles)
+                const played = countPlayed(p.user_id, activeHoles)
+                const diff = played === activeHoles.length ? gT - pT : null
+                return (
+                  <tr key={p.user_id} className={`border-b border-zinc-800/60 ${p.isMe ? 'bg-emerald-500/5' : ''}`}>
+                    <th className={`text-left px-4 py-2 ${p.isMe ? 'text-emerald-300' : 'text-zinc-200'} text-sm font-semibold`}>
+                      {p.name}
+                    </th>
+                    <td className="text-center text-zinc-500 text-xs py-2">
+                      {played}/{activeHoles.length} {lbl('hoyos', 'holes')}
+                    </td>
+                    <td className="text-right px-4 py-2">
+                      {played === 0 ? (
+                        <span className="text-zinc-700">—</span>
+                      ) : (
+                        <div className="flex items-baseline gap-2 justify-end">
+                          <span className="text-xl font-bold text-white">{gT}</span>
+                          {diff !== null && (
+                            <span className={`text-xs font-medium ${
+                              diff < 0 ? 'text-emerald-400' :
+                              diff > 0 ? 'text-red-400' :
+                              'text-zinc-400'
+                            }`}>
+                              {diff === 0 ? 'E' : diff > 0 ? `+${diff}` : diff}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function PlayRoundPage() {
   const locale = useLocale()
@@ -707,14 +908,30 @@ export default function PlayRoundPage() {
       {/* ── CARD VIEW ─────────────────────────────────────────────────────── */}
       {view === 'card' && (
         <div className="flex-1 overflow-auto px-4 py-5 max-w-lg mx-auto w-full">
-          <ScorecardTable
-            holes={holes}
-            scores={scores}
-            holesTotal={holesTotal}
-            tee={myTee}
-            onEdit={goToHole}
-            lbl={lbl}
-          />
+          {groupMates.length > 0 ? (
+            <MultiPlayerScorecard
+              holes={holes}
+              allScores={allScores}
+              holesTotal={holesTotal}
+              players={[
+                { user_id: myUserId, name: lbl('Yo', 'Me'), course_handicap: null, isMe: true },
+                ...groupMates.map(m => ({
+                  user_id: m.user_id, name: m.name, course_handicap: m.course_handicap, isMe: false,
+                })),
+              ]}
+              onEdit={goToHole}
+              lbl={lbl}
+            />
+          ) : (
+            <ScorecardTable
+              holes={holes}
+              scores={scores}
+              holesTotal={holesTotal}
+              tee={myTee}
+              onEdit={goToHole}
+              lbl={lbl}
+            />
+          )}
           {amCreator && (
             <button onClick={() => handleFinish(false)} disabled={finishing}
               className={`w-full mt-4 flex items-center justify-center gap-2 disabled:opacity-60 text-white font-semibold py-3.5 rounded-2xl transition-colors ${
