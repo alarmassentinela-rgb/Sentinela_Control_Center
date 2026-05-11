@@ -568,6 +568,9 @@ export default function PlayRoundPage() {
   const [showSiHelp, setShowSiHelp] = useState(false)
   const [myStartingHole, setMyStartingHole] = useState<number | null>(null)
   const [courseName, setCourseName] = useState<string>('')
+  const [isOnline, setIsOnline] = useState(true)
+  const [pendingQueueCount, setPendingQueueCount] = useState(0)
+  const [flushingQueue, setFlushingQueue] = useState(false)
   const [groupMates, setGroupMates] = useState<GroupMate[]>([])
   const [conflicts, setConflicts] = useState<ConflictItem[]>([])
   const [resolvingFor, setResolvingFor] = useState<ConflictItem | null>(null)
@@ -762,6 +765,78 @@ export default function PlayRoundPage() {
       .finally(() => setLeaderboardLoading(false))
   }, [view, id, allScores])
 
+  // Cola offline: persistir intentos fallidos en localStorage y reintentar al volver
+  const queueKey = `pendingScores:${id}`
+  type PendingScore = { hole_number: number; gross_score: number; putts: number | null; for_user_id?: string }
+  const readQueue = useCallback((): PendingScore[] => {
+    if (typeof localStorage === 'undefined') return []
+    try { return JSON.parse(localStorage.getItem(queueKey) || '[]') } catch { return [] }
+  }, [queueKey])
+  const writeQueue = useCallback((items: PendingScore[]) => {
+    if (typeof localStorage === 'undefined') return
+    localStorage.setItem(queueKey, JSON.stringify(items))
+    setPendingQueueCount(items.length)
+  }, [queueKey])
+  const flushQueue = useCallback(async () => {
+    const items = readQueue()
+    if (items.length === 0 || flushingQueue) return
+    setFlushingQueue(true)
+    const failures: PendingScore[] = []
+    for (const it of items) {
+      try {
+        await api.post(`/rounds/${id}/scores`, it)
+      } catch {
+        failures.push(it)
+      }
+    }
+    writeQueue(failures)
+    setFlushingQueue(false)
+    // Refrescar scoreboard si algo se sincronizó
+    if (failures.length < items.length) {
+      try {
+        const r = await api.get(`/rounds/${id}/scoreboard`)
+        const all: Record<string, Record<number, Score>> = {}
+        type BoardRow = { user_id: string; scores: Score[] }
+        for (const row of (r.data as BoardRow[])) {
+          const m: Record<number, Score> = {}
+          for (const s of (row.scores ?? [])) m[s.hole] = s
+          all[row.user_id] = m
+        }
+        setAllScores(all)
+        if (all[myUserId]) setScores(all[myUserId])
+      } catch { /* ignore */ }
+    }
+  }, [id, readQueue, writeQueue, flushingQueue, myUserId])
+
+  // Online / offline + auto-flush al recuperar conexión
+  useEffect(() => {
+    if (typeof navigator === 'undefined') return
+    setIsOnline(navigator.onLine)
+    setPendingQueueCount(readQueue().length)
+    const goOnline = () => { setIsOnline(true); flushQueue() }
+    const goOffline = () => setIsOnline(false)
+    window.addEventListener('online', goOnline)
+    window.addEventListener('offline', goOffline)
+    return () => {
+      window.removeEventListener('online', goOnline)
+      window.removeEventListener('offline', goOffline)
+    }
+  }, [flushQueue, readQueue])
+
+  // Advertencia al salir con cambios sin guardar (refresh / cerrar pestaña)
+  useEffect(() => {
+    const anyDirty = Object.values(rowInputs).some(v => v.dirty)
+    if (!anyDirty) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [rowInputs])
+
+  const anyDirty = Object.values(rowInputs).some(v => v.dirty)
+
   const submitScore = async () => {
     setSubmitting(true)
     try {
@@ -797,14 +872,28 @@ export default function PlayRoundPage() {
           if (!ok) return  // finally limpiará submitting
         }
       }
+      type SubmitResult = { uid: string; gross: number; putts: number | null; net: number; has_conflict: boolean; networkError?: boolean }
       const results = await Promise.allSettled(dirtyEntries.map(([uid, v]) => {
-        const payload: Record<string, unknown> = {
+        const payload: PendingScore = {
           hole_number: currentHole,
           gross_score: v.gross,
           putts: v.putts,
         }
         if (uid !== myUserId) payload.for_user_id = uid
-        return api.post(`/rounds/${id}/scores`, payload).then(res => ({ uid, gross: v.gross, putts: v.putts, net: res.data.net_score as number, has_conflict: res.data.has_conflict as boolean }))
+        return api.post(`/rounds/${id}/scores`, payload).then(res => ({
+          uid, gross: v.gross, putts: v.putts,
+          net: res.data.net_score as number,
+          has_conflict: res.data.has_conflict as boolean,
+        } as SubmitResult)).catch(err => {
+          // Solo encolar errores de red — no errores 4xx del backend
+          const isNetwork = !err?.response
+          if (isNetwork) {
+            // Guardar en cola para reintento automático
+            const queue = readQueue()
+            writeQueue([...queue, payload])
+          }
+          throw { uid, networkError: isNetwork, err }
+        })
       }))
 
       // Aplicar resultados al estado
@@ -817,18 +906,29 @@ export default function PlayRoundPage() {
           if (has_conflict) anyConflict = true
           newAll[uid] = { ...(newAll[uid] ?? {}), [currentHole]: { hole: currentHole, gross, net, putts: putts ?? undefined } }
           if (uid === myUserId) myUpdated = true
+        } else if (r.reason?.networkError) {
+          // Optimistic local update — mostrar el score como si ya estuviera (se sincronizará)
+          const v = rowInputs[r.reason.uid]
+          if (v && holeRef) {
+            newAll[r.reason.uid] = {
+              ...(newAll[r.reason.uid] ?? {}),
+              [currentHole]: { hole: currentHole, gross: v.gross, net: v.gross, putts: v.putts ?? undefined },
+            }
+            if (r.reason.uid === myUserId) myUpdated = true
+          }
         }
       }
       setAllScores(newAll)
       if (myUpdated && newAll[myUserId]) setScores(newAll[myUserId])
 
-      // Limpiar dirty de las filas que sí guardaron
+      // Limpiar dirty de las filas que se guardaron O encolaron
       setRowInputs(prev => {
         const next = { ...prev }
         for (const r of results) {
           if (r.status === 'fulfilled') {
-            const { uid } = r.value
-            next[uid] = { ...next[uid], dirty: false }
+            next[r.value.uid] = { ...next[r.value.uid], dirty: false }
+          } else if (r.reason?.networkError) {
+            next[r.reason.uid] = { ...next[r.reason.uid], dirty: false }
           }
         }
         return next
@@ -951,6 +1051,33 @@ export default function PlayRoundPage() {
         className="fixed inset-0 -z-10 pointer-events-none bg-zinc-950/55"
       />
       {/* Header */}
+      {/* Offline indicator + pending sync queue */}
+      {!isOnline && (
+        <div className="bg-red-500/15 border-b border-red-500/30 px-4 py-1.5">
+          <p className="max-w-lg mx-auto text-[11px] text-red-300 font-semibold text-center flex items-center justify-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+            {lbl(
+              `Sin conexión${pendingQueueCount > 0 ? ` · ${pendingQueueCount} en cola` : ''}`,
+              `Offline${pendingQueueCount > 0 ? ` · ${pendingQueueCount} queued` : ''}`
+            )}
+          </p>
+        </div>
+      )}
+      {isOnline && pendingQueueCount > 0 && (
+        <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-1.5">
+          <p className="max-w-lg mx-auto text-[11px] text-amber-300 font-semibold text-center flex items-center justify-center gap-1.5">
+            {flushingQueue ? (
+              <Loader2 size={11} className="animate-spin" />
+            ) : (
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+            )}
+            {lbl(
+              `Sincronizando ${pendingQueueCount} score(s)...`,
+              `Syncing ${pendingQueueCount} score(s)...`
+            )}
+          </p>
+        </div>
+      )}
       {/* Course name strip */}
       {courseName && (
         <div className="bg-zinc-950/80 border-b border-zinc-800/60 px-4 py-1.5">
@@ -961,7 +1088,15 @@ export default function PlayRoundPage() {
       )}
       <header className="bg-zinc-900 border-b border-zinc-800 px-4 py-3">
         <div className="max-w-lg mx-auto flex items-center justify-between">
-          <button onClick={() => router.push(`/${locale}/rounds/${id}`)} className="text-zinc-400 hover:text-white">
+          <button
+            onClick={() => {
+              if (anyDirty && !confirm(lbl(
+                'Tienes scores sin guardar. ¿Salir de todos modos?',
+                'You have unsaved scores. Leave anyway?'
+              ))) return
+              router.push(`/${locale}/rounds/${id}`)
+            }}
+            className="text-zinc-400 hover:text-white">
             <ChevronLeft size={22} />
           </button>
           {/* View toggle */}
@@ -1014,6 +1149,104 @@ export default function PlayRoundPage() {
       {/* ── CARD VIEW ─────────────────────────────────────────────────────── */}
       {view === 'card' && (
         <div className="flex-1 overflow-auto px-4 py-5 max-w-lg mx-auto w-full">
+          {/* Mini stats personales + proyección */}
+          {(() => {
+            const myScoresArr = Object.values(allScores[myUserId] ?? {})
+            if (myScoresArr.length === 0) return null
+            const holeByNum: Record<number, Hole> = {}
+            holes.forEach(h => { holeByNum[h.hole_number] = h })
+            let birdies = 0, pars = 0, bogeys = 0, doublesPlus = 0, eagles = 0
+            let totalPutts = 0, holesWithPutts = 0
+            let playedGross = 0, playedPar = 0
+            for (const s of myScoresArr) {
+              const h = holeByNum[s.hole]
+              if (!h) continue
+              const diff = s.gross - h.par
+              if (diff <= -2) eagles++
+              else if (diff === -1) birdies++
+              else if (diff === 0) pars++
+              else if (diff === 1) bogeys++
+              else doublesPlus++
+              playedGross += s.gross
+              playedPar += h.par
+              if (s.putts && s.putts > 0) { totalPutts += s.putts; holesWithPutts++ }
+            }
+            const played = myScoresArr.length
+            const remaining = holesTotal - played
+            const remainingPar = holes
+              .filter(h => h.hole_number <= holesTotal && !allScores[myUserId]?.[h.hole_number])
+              .reduce((s, h) => s + h.par, 0)
+            const avgVsParPerHole = (playedGross - playedPar) / Math.max(played, 1)
+            const projection = remaining > 0
+              ? Math.round(playedGross + remainingPar + (avgVsParPerHole * remaining))
+              : playedGross
+            const projVsPar = projection - holes.filter(h => h.hole_number <= holesTotal).reduce((s, h) => s + h.par, 0)
+            const avgPutts = holesWithPutts > 0 ? (totalPutts / holesWithPutts) : null
+            return (
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3 mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
+                    {lbl('Tus stats hoy', 'Your stats today')}
+                  </h3>
+                  <span className="text-[10px] text-zinc-500">
+                    {played}/{holesTotal} {lbl('hoyos', 'holes')}
+                  </span>
+                </div>
+                {/* Grid de scores */}
+                <div className="grid grid-cols-5 gap-1.5 mb-3">
+                  {[
+                    { label: lbl('Eagles', 'Eagles'), val: eagles, cls: 'bg-yellow-400/15 text-yellow-300 border-yellow-500/30' },
+                    { label: 'Birdies', val: birdies, cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
+                    { label: 'Pars', val: pars, cls: 'bg-zinc-800 text-zinc-200 border-zinc-700' },
+                    { label: 'Bogeys', val: bogeys, cls: 'bg-orange-500/15 text-orange-300 border-orange-500/30' },
+                    { label: 'Dbl+', val: doublesPlus, cls: 'bg-red-500/15 text-red-300 border-red-500/30' },
+                  ].map(s => (
+                    <div key={s.label} className={`rounded-lg border px-1 py-1.5 text-center ${s.cls}`}>
+                      <p className="text-lg font-bold tabular-nums leading-none">{s.val}</p>
+                      <p className="text-[9px] uppercase mt-0.5 opacity-80">{s.label}</p>
+                    </div>
+                  ))}
+                </div>
+                {/* Proyección + putts */}
+                {(gameFormat === 'stroke' || gameFormat === 'stableford' || gameFormat === 'stableford_modified' || gameFormat === 'skins') && (
+                  <div className="flex items-center justify-between gap-3 pt-2 border-t border-zinc-800">
+                    <div className="flex-1">
+                      <p className="text-[10px] text-zinc-500 uppercase tracking-wider">
+                        {lbl('Proyección', 'Projected')}
+                      </p>
+                      <p className="text-lg font-bold text-white leading-tight">
+                        {projection}{' '}
+                        <span className={`text-xs font-semibold ${
+                          projVsPar < 0 ? 'text-emerald-400' :
+                          projVsPar > 0 ? 'text-red-400' :
+                          'text-zinc-400'
+                        }`}>
+                          ({projVsPar === 0 ? 'E' : projVsPar > 0 ? `+${projVsPar}` : projVsPar})
+                        </span>
+                      </p>
+                      <p className="text-[9px] text-zinc-600">
+                        {lbl('al ritmo actual', 'at current pace')}
+                      </p>
+                    </div>
+                    {avgPutts !== null && (
+                      <div className="text-right">
+                        <p className="text-[10px] text-zinc-500 uppercase tracking-wider">
+                          {lbl('Putts/Hoyo', 'Putts/Hole')}
+                        </p>
+                        <p className="text-lg font-bold text-blue-300 leading-tight">
+                          {avgPutts.toFixed(1)}
+                        </p>
+                        <p className="text-[9px] text-zinc-600">
+                          {holesWithPutts} {lbl('hoyos con putts', 'holes w/ putts')}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
           {groupMates.length > 0 ? (
             <MultiPlayerScorecard
               holes={holes}
