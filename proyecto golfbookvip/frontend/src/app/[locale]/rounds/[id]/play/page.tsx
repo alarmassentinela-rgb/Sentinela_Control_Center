@@ -1,7 +1,7 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { Flag, ChevronLeft, ChevronRight, CheckCircle2, Loader2, Minus, Plus, RotateCcw, Table2, Pencil, Trophy } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Minus, Plus, RotateCcw, Table2, Pencil, Trophy, AlertTriangle, Users } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
@@ -62,6 +62,21 @@ interface FloridaData {
   teams: FloridaTeam[]
   hole_results: MatchHole[]
   holes_to_play: number
+}
+
+interface GroupMate {
+  user_id: string
+  name: string
+  username: string
+  course_handicap: number | null
+}
+
+interface ConflictItem {
+  user_id: string
+  player_name: string
+  hole_number: number
+  score_a: number
+  score_b: number
 }
 
 const MATCH_TEAM_UI: Record<string, { bg: string; text: string; border: string; dot: string }> = {
@@ -313,6 +328,17 @@ export default function PlayRoundPage() {
   const [gameFormat, setGameFormat] = useState<string>('')
   const [floridaData, setFloridaData] = useState<FloridaData | null>(null)
   const [floridaLoading, setFloridaLoading] = useState(false)
+  const [myUserId, setMyUserId] = useState<string>('')
+  const [myStartingHole, setMyStartingHole] = useState<number | null>(null)
+  const [groupMates, setGroupMates] = useState<GroupMate[]>([])
+  const [targetUserId, setTargetUserId] = useState<string>('')   // empty = self
+  const [conflicts, setConflicts] = useState<ConflictItem[]>([])
+  const [resolvingFor, setResolvingFor] = useState<ConflictItem | null>(null)
+  const [resolvingValue, setResolvingValue] = useState<number>(0)
+  const [resolving, setResolving] = useState(false)
+  const [conflictBanner, setConflictBanner] = useState<{ user_id: string; hole: number; a: number; b: number } | null>(null)
+  const wsRef = useRef<WebSocket | null>(null)
+  const pingRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     if (!localStorage.getItem('access_token')) { router.push(`/${locale}/auth/login`); return }
@@ -320,16 +346,42 @@ export default function PlayRoundPage() {
       const round = rRes.data
       setHolesTotal(round.holes_to_play)
       if (round.status !== 'active') { router.push(`/${locale}/rounds/${id}`); return }
+      const me = meRes.data
+      setMyUserId(me.id)
       const myPlayer = (playersRes.data as { user_id: string; tee_color: string | null }[])
-        .find(p => p.user_id === meRes.data.id)
+        .find(p => p.user_id === me.id)
       if (myPlayer?.tee_color) setMyTee(myPlayer.tee_color)
-      setAmCreator(round.created_by === meRes.data.id)
+      setAmCreator(round.created_by === me.id)
       setGameFormat(round.game_format)
       const courseRes = await api.get(`/courses/${round.course_id}`)
       setHoles(courseRes.data.holes)
+
+      // Tee groups: encontrar mi grupo y compañeros (excluyéndome)
+      try {
+        const tgRes = await api.get(`/rounds/${id}/tee-groups`)
+        const tg = tgRes.data
+        if (tg.has_groups) {
+          type TGP = { user_id: string; name: string; username: string; course_handicap: number | null }
+          type TGG = { group_number: number; starting_hole: number | null; players: TGP[] }
+          const myGroup = (tg.groups as TGG[]).find(g => g.players.some(p => p.user_id === me.id))
+          if (myGroup) {
+            setMyStartingHole(myGroup.starting_hole ?? null)
+            setGroupMates(myGroup.players.filter(p => p.user_id !== me.id))
+            if (myGroup.starting_hole && myGroup.starting_hole > 1) {
+              setCurrentHole(myGroup.starting_hole)
+            }
+          }
+        }
+      } catch { /* sin grupos asignados — flujo normal */ }
+
+      // Conflictos existentes
+      try {
+        const cRes = await api.get(`/rounds/${id}/conflicts`)
+        setConflicts(cRes.data ?? [])
+      } catch { /* ignore */ }
+
       const boardRes = await api.get(`/rounds/${id}/scoreboard`)
-      const myId = (await api.get('/users/me')).data.id
-      const myEntry = boardRes.data.find((e: { user_id: string }) => e.user_id === myId)
+      const myEntry = boardRes.data.find((e: { user_id: string }) => e.user_id === me.id)
       if (myEntry?.scores?.length) {
         const saved: Record<number, Score> = {}
         myEntry.scores.forEach((s: Score) => { saved[s.hole] = s })
@@ -337,8 +389,48 @@ export default function PlayRoundPage() {
         const lastPlayed = Math.max(...myEntry.scores.map((s: Score) => s.hole))
         if (lastPlayed < round.holes_to_play) setCurrentHole(lastPlayed + 1)
       }
+
+      // WebSocket — eventos de conflicto y resolución
+      const token = localStorage.getItem('access_token')
+      if (token) {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.golfbookvip.com'
+        const wsBase = apiUrl.replace(/^https/, 'wss').replace(/^http(?!s)/, 'ws')
+        const ws = new WebSocket(`${wsBase}/api/v1/ws/rounds/${id}?token=${token}`)
+        wsRef.current = ws
+        ws.onmessage = async (e) => {
+          try {
+            const msg = JSON.parse(e.data)
+            if (msg.event === 'score_conflict') {
+              setConflictBanner({ user_id: msg.user_id, hole: msg.hole, a: msg.score_a, b: msg.score_b })
+              try {
+                const cRes = await api.get(`/rounds/${id}/conflicts`)
+                setConflicts(cRes.data ?? [])
+              } catch { /* ignore */ }
+            } else if (msg.event === 'conflict_resolved') {
+              setConflicts(prev => prev.filter(c => !(c.user_id === msg.user_id && c.hole_number === msg.hole)))
+              setConflictBanner(prev => (prev && prev.user_id === msg.user_id && prev.hole === msg.hole) ? null : prev)
+              // Si es mi score, refrescar valor visible
+              if (msg.user_id === me.id) {
+                setScores(prev => {
+                  const existing = prev[msg.hole]
+                  if (!existing) return prev
+                  return { ...prev, [msg.hole]: { ...existing, gross: msg.final_score } }
+                })
+              }
+            }
+          } catch { /* ignore */ }
+        }
+        pingRef.current = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ action: 'ping' }))
+        }, 30000)
+      }
     }).finally(() => setLoading(false))
-  }, [id])
+
+    return () => {
+      wsRef.current?.close()
+      if (pingRef.current) clearInterval(pingRef.current)
+    }
+  }, [id, locale, router])
 
   useEffect(() => {
     const hole = holes.find(h => h.hole_number === currentHole)
@@ -367,28 +459,87 @@ export default function PlayRoundPage() {
   const submitScore = async () => {
     setSubmitting(true)
     try {
-      const res = await api.post(`/rounds/${id}/scores`, {
+      const payload: Record<string, unknown> = {
         hole_number: currentHole,
         gross_score: grossInput,
         putts: puttsInput,
-      })
-      setScores(prev => ({
-        ...prev,
-        [currentHole]: { hole: currentHole, gross: grossInput, net: res.data.net_score, putts: puttsInput ?? undefined }
-      }))
-      if (currentHole < holesTotal) setCurrentHole(currentHole + 1)
+      }
+      if (targetUserId && targetUserId !== myUserId) payload.for_user_id = targetUserId
+      const res = await api.post(`/rounds/${id}/scores`, payload)
+
+      // Solo actualizar tabla local si estoy capturando para mí
+      if (!targetUserId || targetUserId === myUserId) {
+        setScores(prev => ({
+          ...prev,
+          [currentHole]: { hole: currentHole, gross: grossInput, net: res.data.net_score, putts: puttsInput ?? undefined }
+        }))
+        if (currentHole < holesTotal) setCurrentHole(currentHole + 1)
+      } else {
+        // Captura cruzada — si vino con conflicto, refrescar lista
+        if (res.data.has_conflict) {
+          try {
+            const cRes = await api.get(`/rounds/${id}/conflicts`)
+            setConflicts(cRes.data ?? [])
+          } catch { /* ignore */ }
+        }
+      }
     } finally {
       setSubmitting(false)
     }
   }
 
+  const resolveConflict = async () => {
+    if (!resolvingFor) return
+    setResolving(true)
+    try {
+      await api.post(
+        `/rounds/${id}/scores/${resolvingFor.hole_number}/resolve`,
+        null,
+        { params: { correct_score: resolvingValue, target_user_id: resolvingFor.user_id } }
+      )
+      setConflicts(prev => prev.filter(c => !(c.user_id === resolvingFor.user_id && c.hole_number === resolvingFor.hole_number)))
+      if (resolvingFor.user_id === myUserId) {
+        setScores(prev => {
+          const existing = prev[resolvingFor.hole_number]
+          if (!existing) return prev
+          return { ...prev, [resolvingFor.hole_number]: { ...existing, gross: resolvingValue } }
+        })
+      }
+      setResolvingFor(null)
+      setConflictBanner(null)
+    } catch (e) {
+      const err = e as { response?: { data?: { detail?: string } } }
+      alert(err.response?.data?.detail || lbl('No se pudo resolver el conflicto', 'Could not resolve conflict'))
+    } finally {
+      setResolving(false)
+    }
+  }
+
   const handleFinish = async () => {
+    if (conflicts.length > 0) {
+      alert(lbl(
+        `Hay ${conflicts.length} conflicto(s) de score sin resolver. Resuelve todos antes de finalizar.`,
+        `There are ${conflicts.length} unresolved score conflict(s). Resolve all before finishing.`
+      ))
+      return
+    }
     if (!confirm(lbl('¿Finalizar la ronda?', 'Finish the round?'))) return
     setFinishing(true)
     try {
       await api.post(`/rounds/${id}/finish`)
       router.push(`/${locale}/rounds/${id}`)
-    } catch { setFinishing(false) }
+    } catch (e) {
+      const err = e as { response?: { status?: number; data?: { detail?: string } } }
+      if (err.response?.status === 409) {
+        alert(err.response?.data?.detail || lbl('Hay conflictos sin resolver.', 'There are unresolved conflicts.'))
+        // Refrescar lista por si cambió
+        try {
+          const cRes = await api.get(`/rounds/${id}/conflicts`)
+          setConflicts(cRes.data ?? [])
+        } catch { /* ignore */ }
+      }
+      setFinishing(false)
+    }
   }
 
   const goToHole = (h: number) => {
@@ -786,10 +937,109 @@ export default function PlayRoundPage() {
 
           {/* Score input */}
           <div className="flex-1 flex flex-col items-center justify-center px-4 py-8 max-w-lg mx-auto w-full">
-            {scores[currentHole] && (
+            {/* Conflict banner (live) */}
+            {conflictBanner && (
+              <div className="w-full mb-4 bg-red-500/10 border border-red-500/40 rounded-xl px-4 py-3 flex items-start gap-3">
+                <AlertTriangle size={18} className="text-red-400 mt-0.5 flex-shrink-0" />
+                <div className="flex-1 text-sm">
+                  <p className="font-semibold text-red-300">
+                    {lbl('Conflicto de score', 'Score conflict')} — {lbl('Hoyo', 'Hole')} {conflictBanner.hole}
+                  </p>
+                  <p className="text-zinc-400 text-xs mt-0.5">
+                    {lbl('Valores en disputa', 'Disputed values')}: {conflictBanner.a} vs {conflictBanner.b}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setConflictBanner(null)}
+                  className="text-red-300 hover:text-red-200 text-xs underline">
+                  {lbl('Cerrar', 'Close')}
+                </button>
+              </div>
+            )}
+
+            {/* Pending conflicts list */}
+            {conflicts.length > 0 && (
+              <div className="w-full mb-4 bg-amber-500/10 border border-amber-500/40 rounded-xl px-4 py-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertTriangle size={15} className="text-amber-400" />
+                  <p className="text-sm font-semibold text-amber-300">
+                    {conflicts.length} {lbl('conflicto(s) pendiente(s)', 'pending conflict(s)')}
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  {conflicts.map((c) => (
+                    <div key={`${c.user_id}-${c.hole_number}`}
+                      className="flex items-center justify-between text-xs bg-zinc-900/50 rounded-lg px-3 py-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-zinc-200 truncate">{c.player_name}</p>
+                        <p className="text-zinc-500">{lbl('Hoyo', 'Hole')} {c.hole_number} · {c.score_a} vs {c.score_b}</p>
+                      </div>
+                      {(c.user_id === myUserId || amCreator) && (
+                        <button
+                          onClick={() => { setResolvingFor(c); setResolvingValue(c.score_a) }}
+                          className="ml-2 px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-zinc-900 font-semibold rounded-md text-xs">
+                          {lbl('Resolver', 'Resolve')}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Target selector (only if I have group mates) */}
+            {groupMates.length > 0 && (
+              <div className="w-full mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Users size={13} className="text-zinc-500" />
+                  <p className="text-xs text-zinc-500 uppercase tracking-wider">
+                    {lbl('Capturar score de', 'Recording score for')}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setTargetUserId('')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                      !targetUserId
+                        ? 'bg-emerald-500 border-emerald-400 text-white'
+                        : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-500'
+                    }`}>
+                    {lbl('Yo', 'Me')}
+                  </button>
+                  {groupMates.map(m => (
+                    <button
+                      key={m.user_id}
+                      onClick={() => setTargetUserId(m.user_id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                        targetUserId === m.user_id
+                          ? 'bg-blue-500 border-blue-400 text-white'
+                          : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-500'
+                      }`}>
+                      {m.name.split(' ')[0]}
+                    </button>
+                  ))}
+                </div>
+                {myStartingHole && (
+                  <p className="text-[10px] text-zinc-600 mt-1.5">
+                    {lbl('Tu grupo arranca en hoyo', 'Your group starts at hole')} {myStartingHole}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {scores[currentHole] && (!targetUserId || targetUserId === myUserId) && (
               <div className="mb-4 flex items-center gap-2 text-sm text-emerald-400">
                 <CheckCircle2 size={15} />
                 {lbl('Hoyo registrado — puedes corregir', 'Hole recorded — you can correct')}
+              </div>
+            )}
+            {targetUserId && targetUserId !== myUserId && (
+              <div className="mb-4 flex items-center gap-2 text-sm text-blue-400">
+                <Users size={15} />
+                {lbl(
+                  `Capturando para ${groupMates.find(m => m.user_id === targetUserId)?.name.split(' ')[0] ?? ''}`,
+                  `Recording for ${groupMates.find(m => m.user_id === targetUserId)?.name.split(' ')[0] ?? ''}`
+                )}
               </div>
             )}
 
@@ -839,6 +1089,74 @@ export default function PlayRoundPage() {
               {lbl('Registrar hoyo', 'Record hole')}
             </button>
           </div>
+
+          {/* Resolve conflict modal */}
+          {resolvingFor && (
+            <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center px-4"
+                 onClick={() => !resolving && setResolvingFor(null)}>
+              <div onClick={e => e.stopPropagation()}
+                   className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle size={18} className="text-amber-400" />
+                  <h3 className="font-semibold text-white">
+                    {lbl('Resolver conflicto', 'Resolve conflict')}
+                  </h3>
+                </div>
+                <p className="text-sm text-zinc-400 mb-1">
+                  <span className="text-zinc-200 font-medium">{resolvingFor.player_name}</span>
+                  {' · '}{lbl('Hoyo', 'Hole')} {resolvingFor.hole_number}
+                </p>
+                <p className="text-xs text-zinc-500 mb-4">
+                  {lbl('Valores en disputa', 'Disputed values')}: <span className="text-zinc-300">{resolvingFor.score_a}</span>
+                  {' '}{lbl('vs', 'vs')}{' '}
+                  <span className="text-zinc-300">{resolvingFor.score_b}</span>
+                </p>
+
+                <div className="flex items-center justify-center gap-4 mb-4">
+                  <button onClick={() => setResolvingValue(Math.max(1, resolvingValue - 1))}
+                    className="w-11 h-11 rounded-full bg-zinc-800 border border-zinc-700 text-white hover:bg-zinc-700 flex items-center justify-center">
+                    <Minus size={18} />
+                  </button>
+                  <span className="text-5xl font-bold text-white tabular-nums w-16 text-center">{resolvingValue}</span>
+                  <button onClick={() => setResolvingValue(resolvingValue + 1)}
+                    className="w-11 h-11 rounded-full bg-zinc-800 border border-zinc-700 text-white hover:bg-zinc-700 flex items-center justify-center">
+                    <Plus size={18} />
+                  </button>
+                </div>
+
+                <div className="flex gap-2 mb-4">
+                  <button onClick={() => setResolvingValue(resolvingFor.score_a)}
+                    className={`flex-1 py-2 rounded-lg text-xs font-medium border ${
+                      resolvingValue === resolvingFor.score_a
+                        ? 'bg-emerald-500 border-emerald-400 text-white'
+                        : 'bg-zinc-800 border-zinc-700 text-zinc-400'
+                    }`}>
+                    {lbl('Usar', 'Use')} {resolvingFor.score_a}
+                  </button>
+                  <button onClick={() => setResolvingValue(resolvingFor.score_b)}
+                    className={`flex-1 py-2 rounded-lg text-xs font-medium border ${
+                      resolvingValue === resolvingFor.score_b
+                        ? 'bg-emerald-500 border-emerald-400 text-white'
+                        : 'bg-zinc-800 border-zinc-700 text-zinc-400'
+                    }`}>
+                    {lbl('Usar', 'Use')} {resolvingFor.score_b}
+                  </button>
+                </div>
+
+                <div className="flex gap-2">
+                  <button onClick={() => setResolvingFor(null)} disabled={resolving}
+                    className="flex-1 py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-medium">
+                    {lbl('Cancelar', 'Cancel')}
+                  </button>
+                  <button onClick={resolveConflict} disabled={resolving}
+                    className="flex-1 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-zinc-900 text-sm font-semibold flex items-center justify-center gap-1.5">
+                    {resolving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                    {lbl('Confirmar', 'Confirm')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Bottom: hole dots + nav */}
           <div className="bg-zinc-900 border-t border-zinc-800 px-4 py-3">
