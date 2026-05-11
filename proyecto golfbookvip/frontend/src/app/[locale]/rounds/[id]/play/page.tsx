@@ -863,50 +863,16 @@ export default function PlayRoundPage() {
 
   return (
     <div className="min-h-screen flex flex-col relative bg-zinc-950">
-      {/* Fondo: gradiente cielo → bosque → fairway + silueta de pinos */}
+      {/* Fondo: foto de campo (pinos + lago) con velo oscuro para legibilidad */}
       <div
         aria-hidden
-        className="fixed inset-0 -z-10 pointer-events-none"
-        style={{
-          background:
-            'linear-gradient(180deg, ' +
-            '#0a1f2e 0%, ' +
-            '#10374a 20%, ' +
-            '#0e4a3e 55%, ' +
-            '#0a3d2e 80%, ' +
-            '#082416 100%' +
-            ')',
-        }}
+        className="fixed inset-0 -z-10 pointer-events-none bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: 'url(/play-bg.jpg)' }}
       />
-      {/* Silueta de pinos al fondo */}
-      <svg
+      <div
         aria-hidden
-        className="fixed bottom-0 left-0 right-0 -z-10 pointer-events-none w-full h-48 opacity-50"
-        viewBox="0 0 400 200" preserveAspectRatio="xMidYMax slice">
-        <defs>
-          <linearGradient id="pineGrad" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0" stopColor="#062014" stopOpacity="0.85" />
-            <stop offset="1" stopColor="#020a06" stopOpacity="1" />
-          </linearGradient>
-          <linearGradient id="lakeGrad" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0" stopColor="#1e7a8c" stopOpacity="0.35" />
-            <stop offset="1" stopColor="#0a3a4a" stopOpacity="0.55" />
-          </linearGradient>
-        </defs>
-        {/* Lago (al fondo izquierdo, sutil) */}
-        <ellipse cx="80" cy="160" rx="120" ry="14" fill="url(#lakeGrad)" />
-        {/* Pinos */}
-        <g fill="url(#pineGrad)">
-          <polygon points="20,200 35,140 50,200" />
-          <polygon points="55,200 75,120 95,200" />
-          <polygon points="110,200 130,150 150,200" />
-          <polygon points="155,200 178,110 200,200" />
-          <polygon points="200,200 220,140 240,200" />
-          <polygon points="245,200 270,100 295,200" />
-          <polygon points="295,200 315,140 335,200" />
-          <polygon points="335,200 360,125 385,200" />
-        </g>
-      </svg>
+        className="fixed inset-0 -z-10 pointer-events-none bg-zinc-950/55"
+      />
       {/* Header */}
       <header className="bg-zinc-900 border-b border-zinc-800 px-4 py-3">
         <div className="max-w-lg mx-auto flex items-center justify-between">
