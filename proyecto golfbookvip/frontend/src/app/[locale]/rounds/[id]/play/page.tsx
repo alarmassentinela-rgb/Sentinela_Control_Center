@@ -79,6 +79,19 @@ interface ConflictItem {
   score_b: number
 }
 
+interface LeaderboardRow {
+  user_id: string
+  first_name: string
+  last_name: string
+  course_handicap: number | null
+  team_number: number | null
+  holes_played: number
+  thru: number
+  total_gross: number
+  total_net: number
+  total_stableford: number
+}
+
 const MATCH_TEAM_UI: Record<string, { bg: string; text: string; border: string; dot: string }> = {
   emerald: { bg: 'bg-emerald-500/15', text: 'text-emerald-400', border: 'border-emerald-500/30', dot: 'bg-emerald-400' },
   blue:    { bg: 'bg-blue-500/15',    text: 'text-blue-400',    border: 'border-blue-500/30',    dot: 'bg-blue-400'    },
@@ -525,7 +538,7 @@ export default function PlayRoundPage() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [finishing, setFinishing] = useState(false)
-  const [view, setView] = useState<'input' | 'card' | 'match'>('input')
+  const [view, setView] = useState<'input' | 'card' | 'match' | 'leaderboard'>('input')
   const [matchData, setMatchData] = useState<MatchData | null>(null)
   const [matchLoading, setMatchLoading] = useState(false)
   const [amCreator, setAmCreator] = useState(false)
@@ -718,6 +731,17 @@ export default function PlayRoundPage() {
     }
   }, [view, id, gameFormat])
 
+  // Refrescar marcador al entrar a la vista y cuando cambian los scores
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false)
+  const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>([])
+  useEffect(() => {
+    if (view !== 'leaderboard') return
+    setLeaderboardLoading(true)
+    api.get(`/rounds/${id}/scoreboard`)
+      .then(r => setLeaderboard(r.data ?? []))
+      .finally(() => setLeaderboardLoading(false))
+  }, [view, id, allScores])
+
   const submitScore = async () => {
     setSubmitting(true)
     try {
@@ -902,13 +926,24 @@ export default function PlayRoundPage() {
               <Table2 size={13} />
               {lbl('Tarjeta', 'Card')}
             </button>
-            <button onClick={() => setView('match')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                view === 'match' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-zinc-300'
-              }`}>
-              <Trophy size={13} />
-              {gameFormat === 'florida' ? 'Florida' : 'Match'}
-            </button>
+            {(gameFormat === 'match' || gameFormat === 'florida') && (
+              <button onClick={() => setView('match')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  view === 'match' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-zinc-300'
+                }`}>
+                <Trophy size={13} />
+                {gameFormat === 'florida' ? 'Florida' : 'Match'}
+              </button>
+            )}
+            {(gameFormat === 'stroke' || gameFormat === 'stableford' || gameFormat === 'stableford_modified' || gameFormat === 'skins') && (
+              <button onClick={() => setView('leaderboard')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  view === 'leaderboard' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-zinc-300'
+                }`}>
+                <Trophy size={13} />
+                {lbl('Marcador', 'Leaderboard')}
+              </button>
+            )}
           </div>
           {/* Running total */}
           <div className="text-right min-w-[3rem]">
@@ -969,6 +1004,134 @@ export default function PlayRoundPage() {
       )}
 
       {/* ── MATCH / FLORIDA VIEW ─────────────────────────────────────────── */}
+      {/* ── LEADERBOARD VIEW ─────────────────────────────────────────────── */}
+      {view === 'leaderboard' && (
+        <div className="flex-1 overflow-auto px-4 py-5 max-w-lg mx-auto w-full space-y-3">
+          {leaderboardLoading && leaderboard.length === 0 ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 size={24} className="animate-spin text-emerald-500" />
+            </div>
+          ) : leaderboard.length === 0 ? (
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl px-6 py-10 text-center">
+              <Trophy size={32} className="text-zinc-600 mx-auto mb-3" />
+              <p className="text-zinc-400 font-medium">{lbl('Sin scores aún', 'No scores yet')}</p>
+            </div>
+          ) : (() => {
+            const isStableford = gameFormat === 'stableford' || gameFormat === 'stableford_modified'
+            // Ordenar: stableford desc (más pts mejor); el resto: gross asc
+            const sorted = [...leaderboard].sort((a, b) => {
+              if (isStableford) return b.total_stableford - a.total_stableford
+              // Stroke / skins: lowest gross wins; jugadores sin scores van al final
+              const av = a.total_gross || 999
+              const bv = b.total_gross || 999
+              return av - bv
+            })
+            const parTotal = holes.filter(h => h.hole_number <= holesTotal).reduce((s, h) => s + h.par, 0)
+            return (
+              <>
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                  <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
+                    <h2 className="font-semibold text-white flex items-center gap-2 text-sm">
+                      <Trophy size={14} className="text-amber-400" />
+                      {lbl('Marcador en vivo', 'Live leaderboard')}
+                    </h2>
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">
+                      {isStableford ? lbl('Puntos Stableford', 'Stableford points')
+                        : lbl('Bruto vs Par', 'Gross vs Par')}
+                    </span>
+                  </div>
+                  <div className="divide-y divide-zinc-800">
+                    {sorted.map((p, idx) => {
+                      const isMe = p.user_id === myUserId
+                      const grossPlayed = p.total_gross
+                      const parPlayed = holes
+                        .filter(h => p.thru > 0 && h.hole_number <= p.thru)
+                        .reduce((s, h) => s + h.par, 0)
+                      const diff = grossPlayed && parPlayed ? grossPlayed - parPlayed : null
+                      const projected = p.holes_played === holesTotal
+                        ? diff
+                        : (diff !== null ? diff : null)
+                      const rank = idx + 1
+                      return (
+                        <div key={p.user_id}
+                          className={`flex items-center gap-3 px-4 py-3 ${isMe ? 'bg-emerald-500/5' : ''}`}>
+                          {/* Rank */}
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                            rank === 1 ? 'bg-amber-500/25 text-amber-300 border border-amber-500/50' :
+                            rank === 2 ? 'bg-zinc-400/15 text-zinc-300 border border-zinc-400/30' :
+                            rank === 3 ? 'bg-orange-600/15 text-orange-400 border border-orange-600/30' :
+                            'bg-zinc-800 text-zinc-500 border border-zinc-700'
+                          }`}>
+                            {rank}
+                          </div>
+                          {/* Name + thru */}
+                          <div className="flex-1 min-w-0">
+                            <p className={`font-semibold truncate ${isMe ? 'text-emerald-300' : 'text-zinc-100'}`}>
+                              {p.first_name} {p.last_name}
+                              {isMe && <span className="text-[10px] text-emerald-500 ml-1">({lbl('Tú', 'You')})</span>}
+                            </p>
+                            <p className="text-[10px] text-zinc-500">
+                              HCP {p.course_handicap ?? '—'} ·{' '}
+                              {p.thru > 0
+                                ? p.thru === holesTotal
+                                  ? lbl('Terminó', 'Done')
+                                  : `${lbl('Hoyo', 'Thru')} ${p.thru}`
+                                : lbl('Sin empezar', 'Not started')}
+                            </p>
+                          </div>
+                          {/* Main stat */}
+                          <div className="text-right">
+                            {isStableford ? (
+                              <>
+                                <p className="text-2xl font-bold text-emerald-400 tabular-nums leading-none">
+                                  {p.total_stableford}
+                                </p>
+                                <p className="text-[9px] text-zinc-600 uppercase mt-0.5">pts</p>
+                              </>
+                            ) : (
+                              <>
+                                <p className="text-2xl font-bold text-white tabular-nums leading-none">
+                                  {p.total_gross || '—'}
+                                </p>
+                                {projected !== null && (
+                                  <p className={`text-[11px] font-semibold mt-0.5 ${
+                                    projected < 0 ? 'text-emerald-400' :
+                                    projected > 0 ? 'text-red-400' :
+                                    'text-zinc-400'
+                                  }`}>
+                                    {projected === 0 ? 'E' : projected > 0 ? `+${projected}` : projected}
+                                  </p>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+                {!isStableford && parTotal > 0 && (
+                  <p className="text-[10px] text-zinc-600 text-center">
+                    {lbl('Par de la ronda', 'Round par')}: {parTotal}
+                  </p>
+                )}
+                <button
+                  onClick={() => {
+                    setLeaderboardLoading(true)
+                    api.get(`/rounds/${id}/scoreboard`)
+                      .then(r => setLeaderboard(r.data ?? []))
+                      .finally(() => setLeaderboardLoading(false))
+                  }}
+                  className="w-full flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-sm py-2.5 rounded-xl border border-zinc-700">
+                  <RotateCcw size={13} />
+                  {lbl('Actualizar', 'Refresh')}
+                </button>
+              </>
+            )
+          })()}
+        </div>
+      )}
+
       {view === 'match' && gameFormat === 'florida' && (
         <div className="flex-1 overflow-auto px-4 py-5 max-w-lg mx-auto w-full space-y-4">
           {floridaLoading ? (

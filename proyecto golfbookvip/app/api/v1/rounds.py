@@ -709,23 +709,45 @@ async def reopen_round(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
 
 @router.get("/{round_id}/scoreboard")
 async def get_scoreboard(round_id: uuid.UUID, db: DB):
-    players_result = await db.execute(select(RoundPlayer).where(RoundPlayer.round_id == round_id))
-    players = players_result.scalars().all()
+    players_result = await db.execute(
+        select(RoundPlayer, User)
+        .join(User, User.id == RoundPlayer.user_id)
+        .where(RoundPlayer.round_id == round_id)
+    )
+    rows = players_result.all()
 
     board = []
-    for p in players:
+    for p, u in rows:
         scores_result = await db.execute(
             select(Score)
             .where(Score.round_id == round_id, Score.user_id == p.user_id)
             .order_by(Score.hole_number)
         )
         scores = scores_result.scalars().all()
-        total = sum(s.gross_score for s in scores if s.gross_score)
+        total_gross = sum(s.gross_score for s in scores if s.gross_score)
+        total_net = sum(s.net_score for s in scores if s.net_score)
+        total_stableford = sum(s.stableford_points for s in scores if s.stableford_points)
+        thru = max((s.hole_number for s in scores), default=0)
         board.append({
             "user_id": str(p.user_id),
+            "first_name": u.first_name,
+            "last_name": u.last_name,
+            "course_handicap": p.course_handicap,
+            "team_number": p.team_number,
             "holes_played": len(scores),
-            "total_gross": total,
-            "scores": [{"hole": s.hole_number, "gross": s.gross_score, "net": s.net_score} for s in scores],
+            "thru": thru,
+            "total_gross": total_gross,
+            "total_net": total_net,
+            "total_stableford": total_stableford,
+            "scores": [
+                {
+                    "hole": s.hole_number,
+                    "gross": s.gross_score,
+                    "net": s.net_score,
+                    "stableford": s.stableford_points,
+                }
+                for s in scores
+            ],
         })
 
     return sorted(board, key=lambda x: x["total_gross"] if x["total_gross"] else 999)
