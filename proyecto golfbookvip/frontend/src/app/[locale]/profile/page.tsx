@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
+import AleaCredit from '@/components/layout/AleaCredit'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -593,9 +594,7 @@ export default function ProfilePage() {
           </div>
         )}
 
-        <p className="text-center text-xs text-zinc-700">
-          {lbl('Desarrollado por', 'Developed by')} <span className="text-zinc-500">AleaSystems</span>
-        </p>
+        <AleaCredit className="mt-0" />
       </main>
     </div>
   )

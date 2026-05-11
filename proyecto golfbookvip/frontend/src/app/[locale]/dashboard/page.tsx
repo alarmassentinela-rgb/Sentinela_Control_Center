@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Flag, LogOut, User, TrendingUp, Calendar, BarChart2, Settings, MapPin, Users, ChevronRight, Play, Clock, CheckCircle2, UserPlus, Rss, Bell } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
+import AleaCredit from '@/components/layout/AleaCredit'
 
 interface UserProfile {
   first_name: string
@@ -298,9 +299,7 @@ export default function DashboardPage() {
         )}
 
         {/* Footer credit */}
-        <p className="text-center text-xs text-zinc-700 mt-8">
-          {locale === 'es' ? 'Desarrollado por' : 'Developed by'} <span className="text-zinc-500">AleaSystems</span>
-        </p>
+        <AleaCredit />
       </main>
     </div>
   )

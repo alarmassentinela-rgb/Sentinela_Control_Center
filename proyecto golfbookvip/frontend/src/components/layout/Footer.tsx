@@ -1,6 +1,7 @@
 'use client'
 import { Flag } from 'lucide-react'
 import { useT, useLocale } from '@/components/DictionaryProvider'
+import { APP_VERSION } from '@/lib/version'
 
 export default function Footer() {
   const t = useT('footer')
@@ -51,9 +52,14 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="border-t border-zinc-800 pt-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-zinc-600">
+        <div className="border-t border-zinc-800 pt-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-zinc-400">
           <p>© {new Date().getFullYear()} GolfBookVIP. {t('rights')}</p>
-          <p>{t('developed')} <span className="text-zinc-400 font-semibold">AleaSystems</span></p>
+          <p>
+            {t('developed')}{' '}
+            <span className="text-emerald-400 font-semibold">AleaSystems</span>
+            <span className="text-zinc-500 mx-1.5">·</span>
+            <span className="text-emerald-400 font-mono">v{APP_VERSION}</span>
+          </p>
         </div>
       </div>
     </footer>

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Flag, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useT, useLocale } from '@/components/DictionaryProvider'
+import AleaCredit from '@/components/layout/AleaCredit'
 
 function LoginForm() {
   const t = useT('auth')
@@ -116,9 +117,7 @@ function LoginForm() {
             </Link>
           </div>
         </div>
-        <p className="text-center text-xs text-zinc-700 mt-6">
-          {locale === 'es' ? 'Desarrollado por' : 'Developed by'} <span className="text-zinc-500">AleaSystems</span>
-        </p>
+        <AleaCredit className="mt-6" />
       </div>
     </div>
   )
