@@ -1172,11 +1172,7 @@ export default function PlayRoundPage() {
   }
 
   if (loading) return (
-    <div
-      className="min-h-screen flex items-center justify-center bg-cover bg-center"
-      style={{
-        backgroundImage: 'linear-gradient(rgba(9,9,11,0.55), rgba(9,9,11,0.55)), url(/play-bg.jpg)',
-      }}>
+    <div className="min-h-screen flex items-center justify-center">
       <Loader2 size={28} className="animate-spin text-emerald-500" />
     </div>
   )
@@ -1189,18 +1185,8 @@ export default function PlayRoundPage() {
   const holesPlayed = Object.keys(scores).length
 
   return (
-    <div className="min-h-screen flex flex-col relative bg-zinc-950">
-      {/* Fondo: foto de campo (pinos + lago) con velo oscuro para legibilidad */}
-      <div
-        aria-hidden
-        className="fixed inset-0 -z-10 pointer-events-none bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: 'url(/play-bg.jpg)' }}
-      />
-      <div
-        aria-hidden
-        className="fixed inset-0 -z-10 pointer-events-none bg-zinc-950/55"
-      />
-      {/* Header */}
+    <div className="min-h-screen flex flex-col relative">
+      {/* Fondo manejado por BackgroundProvider global (capa fija detrás de todo) */}
       {/* Offline indicator + pending sync queue */}
       {!isOnline && (
         <div className="bg-red-500/15 border-b border-red-500/30 px-4 py-1.5">

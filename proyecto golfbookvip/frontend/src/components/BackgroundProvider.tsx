@@ -7,7 +7,7 @@ const OVERLAY =
 
 function getBg(pathname: string): string {
   if (/\/auth\//.test(pathname))                return '/golf-auth.jpg'
-  if (/\/rounds\/[^/]+\/play/.test(pathname))   return '/golf-play.jpg'
+  if (/\/rounds\/[^/]+\/play/.test(pathname))   return '/play-bg.jpg'
   if (/\/rounds\/new/.test(pathname))            return '/golf-new.jpg'
   if (/\/rounds\/[^/]+/.test(pathname))          return '/golf-detail.jpg'
   if (/\/rounds/.test(pathname))                 return '/golf-rounds.jpg'
