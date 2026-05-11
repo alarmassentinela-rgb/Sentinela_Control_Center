@@ -849,7 +849,11 @@ export default function PlayRoundPage() {
   }
 
   if (loading) return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+    <div
+      className="min-h-screen flex items-center justify-center bg-cover bg-center"
+      style={{
+        backgroundImage: 'linear-gradient(rgba(9,9,11,0.55), rgba(9,9,11,0.55)), url(/play-bg.jpg)',
+      }}>
       <Loader2 size={28} className="animate-spin text-emerald-500" />
     </div>
   )
