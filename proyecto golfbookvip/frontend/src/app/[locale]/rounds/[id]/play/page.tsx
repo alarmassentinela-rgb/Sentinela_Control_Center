@@ -1018,103 +1018,154 @@ export default function PlayRoundPage() {
             </div>
           ) : (() => {
             const isStableford = gameFormat === 'stableford' || gameFormat === 'stableford_modified'
-            // Ordenar: stableford desc (más pts mejor); el resto: gross asc
-            const sorted = [...leaderboard].sort((a, b) => {
-              if (isStableford) return b.total_stableford - a.total_stableford
-              // Stroke / skins: lowest gross wins; jugadores sin scores van al final
-              const av = a.total_gross || 999
-              const bv = b.total_gross || 999
-              return av - bv
+            // Calcular score vs par para cada jugador (acumulado solo de los hoyos jugados)
+            type EnrichedRow = LeaderboardRow & { toPar: number | null; played: boolean; finished: boolean }
+            const enriched: EnrichedRow[] = leaderboard.map(p => {
+              if (p.thru <= 0) return { ...p, toPar: null, played: false, finished: false }
+              const parPlayed = holes
+                .filter(h => h.hole_number <= p.thru)
+                .reduce((s, h) => s + h.par, 0)
+              return {
+                ...p,
+                toPar: p.total_gross - parPlayed,
+                played: true,
+                finished: p.holes_played === holesTotal,
+              }
             })
-            const parTotal = holes.filter(h => h.hole_number <= holesTotal).reduce((s, h) => s + h.par, 0)
+            // Ordenar PGA-style:
+            // Stableford → puntos desc
+            // Stroke → to par asc (mejor=menor); no-jugados van al final
+            const sorted = [...enriched].sort((a, b) => {
+              if (isStableford) return b.total_stableford - a.total_stableford
+              if (!a.played && !b.played) return 0
+              if (!a.played) return 1
+              if (!b.played) return -1
+              return (a.toPar ?? 999) - (b.toPar ?? 999)
+            })
+            // Asignar posiciones con T (tied) cuando hay empate
+            const positions: string[] = []
+            let lastValue: number | null = Number.POSITIVE_INFINITY
+            let lastPos = 0
+            sorted.forEach((p, idx) => {
+              const val = isStableford ? -p.total_stableford : (p.toPar ?? 999)
+              if (val !== lastValue) {
+                lastPos = idx + 1
+                lastValue = val
+              }
+              positions.push(String(lastPos))
+            })
+            // Marcar T si más de uno comparte posición
+            const posCounts: Record<string, number> = {}
+            positions.forEach(p => { posCounts[p] = (posCounts[p] ?? 0) + 1 })
+            const posDisplay = positions.map(p => posCounts[p] > 1 ? `T${p}` : p)
+
+            const fmtToPar = (n: number | null) =>
+              n === null ? '—' : n === 0 ? 'E' : n > 0 ? `+${n}` : String(n)
+            const toParColor = (n: number | null) =>
+              n === null ? 'text-zinc-500' :
+              n < 0 ? 'text-red-400' :        // PGA-style: under par = red on light, here keep contrast
+              n === 0 ? 'text-zinc-200' :
+              'text-zinc-400'
+
             return (
               <>
-                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
-                  <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
-                    <h2 className="font-semibold text-white flex items-center gap-2 text-sm">
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl">
+                  {/* Header título */}
+                  <div className="px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between bg-zinc-950">
+                    <h2 className="font-bold text-white flex items-center gap-2 text-sm tracking-wider uppercase">
                       <Trophy size={14} className="text-amber-400" />
                       {lbl('Marcador en vivo', 'Live leaderboard')}
                     </h2>
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">
-                      {isStableford ? lbl('Puntos Stableford', 'Stableford points')
-                        : lbl('Bruto vs Par', 'Gross vs Par')}
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-widest">
+                      {gameFormat === 'stroke' ? 'Stroke Play' :
+                       gameFormat === 'stableford' ? 'Stableford' :
+                       gameFormat === 'stableford_modified' ? 'Stableford Mod.' :
+                       gameFormat === 'skins' ? 'Skins' : gameFormat}
                     </span>
                   </div>
+                  {/* Header columnas (PGA-style) */}
+                  <div className="grid grid-cols-[40px_1fr_56px_56px] items-center gap-2 px-3 py-2 bg-zinc-950/60 border-b border-zinc-800 text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">
+                    <span>POS</span>
+                    <span>{lbl('Jugador', 'Player')}</span>
+                    <span className="text-center">{isStableford ? 'PTS' : 'TOT'}</span>
+                    <span className="text-center">THRU</span>
+                  </div>
+                  {/* Rows */}
                   <div className="divide-y divide-zinc-800">
                     {sorted.map((p, idx) => {
                       const isMe = p.user_id === myUserId
-                      const grossPlayed = p.total_gross
-                      const parPlayed = holes
-                        .filter(h => p.thru > 0 && h.hole_number <= p.thru)
-                        .reduce((s, h) => s + h.par, 0)
-                      const diff = grossPlayed && parPlayed ? grossPlayed - parPlayed : null
-                      const projected = p.holes_played === holesTotal
-                        ? diff
-                        : (diff !== null ? diff : null)
-                      const rank = idx + 1
+                      const pos = posDisplay[idx]
+                      const isPodium = !p.played ? false : ['1', 'T1'].includes(pos) ? true : false
                       return (
                         <div key={p.user_id}
-                          className={`flex items-center gap-3 px-4 py-3 ${isMe ? 'bg-emerald-500/5' : ''}`}>
-                          {/* Rank */}
-                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                            rank === 1 ? 'bg-amber-500/25 text-amber-300 border border-amber-500/50' :
-                            rank === 2 ? 'bg-zinc-400/15 text-zinc-300 border border-zinc-400/30' :
-                            rank === 3 ? 'bg-orange-600/15 text-orange-400 border border-orange-600/30' :
-                            'bg-zinc-800 text-zinc-500 border border-zinc-700'
+                          className={`grid grid-cols-[40px_1fr_56px_56px] items-center gap-2 px-3 py-3 transition-colors ${
+                            isMe ? 'bg-emerald-500/10' : 'hover:bg-zinc-800/40'
                           }`}>
-                            {rank}
+                          {/* POS */}
+                          <div className={`text-center font-bold tabular-nums ${
+                            isPodium ? 'text-amber-400' :
+                            pos === '2' || pos === 'T2' ? 'text-zinc-300' :
+                            pos === '3' || pos === 'T3' ? 'text-orange-400' :
+                            'text-zinc-500'
+                          } ${pos.length > 2 ? 'text-xs' : 'text-sm'}`}>
+                            {p.played ? pos : '—'}
                           </div>
-                          {/* Name + thru */}
-                          <div className="flex-1 min-w-0">
-                            <p className={`font-semibold truncate ${isMe ? 'text-emerald-300' : 'text-zinc-100'}`}>
-                              {p.first_name} {p.last_name}
-                              {isMe && <span className="text-[10px] text-emerald-500 ml-1">({lbl('Tú', 'You')})</span>}
+                          {/* PLAYER */}
+                          <div className="min-w-0">
+                            <p className={`font-semibold text-sm truncate ${
+                              isMe ? 'text-emerald-300' : 'text-white'
+                            }`}>
+                              {p.first_name} {p.last_name.charAt(0)}.
                             </p>
-                            <p className="text-[10px] text-zinc-500">
-                              HCP {p.course_handicap ?? '—'} ·{' '}
-                              {p.thru > 0
-                                ? p.thru === holesTotal
-                                  ? lbl('Terminó', 'Done')
-                                  : `${lbl('Hoyo', 'Thru')} ${p.thru}`
-                                : lbl('Sin empezar', 'Not started')}
-                            </p>
+                            <p className="text-[10px] text-zinc-500">HCP {p.course_handicap ?? '—'}</p>
                           </div>
-                          {/* Main stat */}
-                          <div className="text-right">
+                          {/* TOT (to par o pts) */}
+                          <div className="text-center">
                             {isStableford ? (
-                              <>
-                                <p className="text-2xl font-bold text-emerald-400 tabular-nums leading-none">
-                                  {p.total_stableford}
-                                </p>
-                                <p className="text-[9px] text-zinc-600 uppercase mt-0.5">pts</p>
-                              </>
+                              <p className="text-xl font-bold text-emerald-400 tabular-nums leading-none">
+                                {p.total_stableford}
+                              </p>
                             ) : (
-                              <>
-                                <p className="text-2xl font-bold text-white tabular-nums leading-none">
-                                  {p.total_gross || '—'}
+                              <p className={`text-xl font-bold tabular-nums leading-none ${toParColor(p.toPar)}`}>
+                                {fmtToPar(p.toPar)}
+                              </p>
+                            )}
+                          </div>
+                          {/* THRU — el dato protagonista al estilo PGA */}
+                          <div className="text-center">
+                            {!p.played ? (
+                              <span className="text-[10px] text-zinc-600 uppercase tracking-wider">
+                                {lbl('—', '—')}
+                              </span>
+                            ) : p.finished ? (
+                              <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-sm border border-emerald-500/40">
+                                F
+                              </span>
+                            ) : (
+                              <div>
+                                <p className="text-lg font-bold text-white tabular-nums leading-none">
+                                  {p.thru}
                                 </p>
-                                {projected !== null && (
-                                  <p className={`text-[11px] font-semibold mt-0.5 ${
-                                    projected < 0 ? 'text-emerald-400' :
-                                    projected > 0 ? 'text-red-400' :
-                                    'text-zinc-400'
-                                  }`}>
-                                    {projected === 0 ? 'E' : projected > 0 ? `+${projected}` : projected}
-                                  </p>
-                                )}
-                              </>
+                                <p className="text-[9px] text-zinc-600 uppercase tracking-wider mt-0.5">
+                                  /{holesTotal}
+                                </p>
+                              </div>
                             )}
                           </div>
                         </div>
                       )
                     })}
                   </div>
+                  {/* Footer leyenda */}
+                  <div className="px-4 py-2 bg-zinc-950/60 border-t border-zinc-800">
+                    <p className="text-[9px] text-zinc-600 uppercase tracking-widest text-center">
+                      {isStableford
+                        ? lbl('PTS = Puntos acumulados · THRU = hoyo jugado', 'PTS = Total points · THRU = hole played')
+                        : lbl('TOT vs Par · THRU = hoyo jugado · F = Terminó', 'TOT vs Par · THRU = hole reached · F = Finished')}
+                    </p>
+                  </div>
                 </div>
-                {!isStableford && parTotal > 0 && (
-                  <p className="text-[10px] text-zinc-600 text-center">
-                    {lbl('Par de la ronda', 'Round par')}: {parTotal}
-                  </p>
-                )}
+
                 <button
                   onClick={() => {
                     setLeaderboardLoading(true)
