@@ -1228,20 +1228,26 @@ export default function PlayRoundPage() {
           {/* Hole info bar */}
           {hole && (
             <div className="bg-zinc-900 border-b border-zinc-800 px-4 py-4">
-              <div className="max-w-lg mx-auto flex items-center justify-between">
+              <div className="max-w-lg mx-auto grid grid-cols-3 items-center gap-2">
+                {/* Izquierda: Par + SI */}
                 <div>
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 text-sm font-bold flex items-center justify-center">
-                      {hole.hole_number}
-                    </span>
-                    <span className={`text-2xl font-bold ${PAR_COLOR[hole.par] ?? 'text-white'}`}>
-                      Par {hole.par}
-                    </span>
-                  </div>
+                  <span className={`text-2xl font-bold ${PAR_COLOR[hole.par] ?? 'text-white'}`}>
+                    Par {hole.par}
+                  </span>
                   {hole.stroke_index && (
-                    <p className="text-xs text-zinc-500 pl-10">Stroke Index {hole.stroke_index}</p>
+                    <p className="text-xs text-zinc-500">SI {hole.stroke_index}</p>
                   )}
                 </div>
+                {/* Centro: HOYO X (protagonista) */}
+                <div className="text-center">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-[0.2em] font-medium">
+                    {lbl('Hoyo', 'Hole')}
+                  </p>
+                  <p className="text-4xl font-extrabold text-emerald-400 leading-none tabular-nums">
+                    {hole.hole_number}
+                  </p>
+                </div>
+                {/* Derecha: yardaje */}
                 {(() => {
                   const yds = myTee === 'black' ? hole.distance_yards_black
                     : myTee === 'blue'  ? hole.distance_yards_blue
@@ -1260,7 +1266,7 @@ export default function PlayRoundPage() {
                       <p className={`text-lg font-bold ${teeColor}`}>{yds}</p>
                       <p className="text-xs text-zinc-500">{teeLbl}</p>
                     </div>
-                  ) : null
+                  ) : <div />
                 })()}
               </div>
             </div>
