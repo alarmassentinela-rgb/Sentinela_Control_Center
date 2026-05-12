@@ -3,7 +3,28 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 Versionado [Semantic Versioning](https://semver.org/lang/es/).
 
-Cada release está respaldada por un tag git (`git checkout v1.0.0` para volver a ese estado).
+Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` para volver a ese estado).
+
+---
+
+## [1.0.1] - 2026-05-12
+
+Hotfix de seguridad. Rotación de credenciales de Firebase tras detectar la llave comprometida en historia git.
+
+### Security
+
+- Rotada llave de servicio Firebase `02e0dfbc6c...` → nueva llave `860d0f18082d...` (revocada manualmente en Firebase Console → Service Accounts)
+- Llave nueva desplegada en `/opt/golfbookvip/firebase-credentials.json` del servidor y verificada dentro del container `golfbookvip_api`
+- Backup local `firebase-credentials.json.OLD.*` eliminado del servidor tras confirmación de revocación
+
+### Changed
+
+- `.gitignore` endurecido con patrones `*firebase-adminsdk*.json`, `*service-account*.json`, `*-credentials.json`, `firebase-credentials.json.OLD.*` para prevenir futuros leaks de credenciales por descarga directa desde Firebase Console
+- Footer del frontend ahora muestra `v1.0.1`
+
+### Notes
+
+- La llave vieja sigue presente en la historia git del commit `588c33a`, pero está revocada — recuperarla del historial no la reactiva en Firebase
 
 ---
 
