@@ -18,6 +18,7 @@ class UserOut(BaseModel):
     initial_handicap: Optional[float] = None
     is_verified: bool
     email_verified: bool
+    is_superadmin: bool = False
     created_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}

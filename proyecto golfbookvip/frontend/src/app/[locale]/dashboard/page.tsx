@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Flag, LogOut, User, TrendingUp, Calendar, BarChart2, Settings, MapPin, Users, ChevronRight, Play, Clock, CheckCircle2, UserPlus, Rss, Bell } from 'lucide-react'
+import { Flag, LogOut, User, TrendingUp, Calendar, BarChart2, Settings, MapPin, Users, ChevronRight, Play, Clock, CheckCircle2, UserPlus, Rss, Bell, ShieldCheck } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 import AleaCredit from '@/components/layout/AleaCredit'
@@ -13,6 +13,7 @@ interface UserProfile {
   email: string
   username: string
   handicap_index: number | null
+  is_superadmin?: boolean
 }
 
 interface Round {
@@ -92,6 +93,13 @@ export default function DashboardPage() {
             <span className="font-bold text-white">GolfBook<span className="text-emerald-400">VIP</span></span>
           </div>
           <div className="flex items-center gap-3">
+            {user.is_superadmin && (
+              <Link href={`/${locale}/admin`}
+                title={locale === 'es' ? 'Panel de administración' : 'Admin panel'}
+                className="text-emerald-400 hover:text-emerald-300 transition-colors">
+                <ShieldCheck size={20} />
+              </Link>
+            )}
             <Link href={`/${locale}/notifications`}
               className="relative text-zinc-400 hover:text-white transition-colors">
               <Bell size={20} />
@@ -128,6 +136,27 @@ export default function DashboardPage() {
             <p className="text-zinc-400 text-sm">@{user.username}</p>
           </div>
         </div>
+
+        {/* Admin shortcut (only for superadmins) */}
+        {user.is_superadmin && (
+          <Link href={`/${locale}/admin`}
+            className="block mb-6 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/15 hover:border-emerald-500/50 rounded-2xl p-4 transition-all group">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
+                <ShieldCheck size={20} className="text-emerald-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-white text-sm">
+                  {locale === 'es' ? 'Panel de administración' : 'Admin panel'}
+                </p>
+                <p className="text-xs text-emerald-400/70 truncate">
+                  {locale === 'es' ? 'Estadísticas, usuarios, hándicaps y links de recuperación' : 'Stats, users, handicaps and recovery links'}
+                </p>
+              </div>
+              <ChevronRight size={18} className="text-emerald-400/60 group-hover:text-emerald-400 transition-colors flex-shrink-0" />
+            </div>
+          </Link>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">

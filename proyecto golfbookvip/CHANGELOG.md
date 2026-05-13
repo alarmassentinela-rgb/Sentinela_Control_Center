@@ -7,6 +7,27 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.1.1] - 2026-05-13
+
+UX: acceso discoverable al panel de administración para superadmins desde el dashboard. Antes había que conocer la URL `/admin/` directamente.
+
+### Added — Acceso al admin para superadmins
+
+- Icono escudo verde 🛡️ en el header del dashboard (junto a la campana de notificaciones) — visible solo si `user.is_superadmin === true`
+- Card prominente "Panel de administración" debajo del welcome del dashboard — mismo gating
+
+### Changed — API
+
+- `UserOut` schema ahora expone `is_superadmin: bool = False` (campo siempre presente, default false para jugadores normales)
+- `GET /users/me` ahora incluye el flag en la respuesta para que el frontend pueda condicionar UI
+
+### Notes
+
+- La seguridad real sigue siendo backend (`_require_admin()` en endpoints). El gating del frontend es UX, no defensa
+- Jugadores normales NO ven el botón ni el card — el flag siempre llega como `false` para ellos
+
+---
+
 ## [1.1.0] - 2026-05-13
 
 Herramientas de superadmin desde feedback de la primera ronda real (12-may): jugadores que olvidan contraseña + necesidad de corregir hándicaps inflados por rondas de prueba.
