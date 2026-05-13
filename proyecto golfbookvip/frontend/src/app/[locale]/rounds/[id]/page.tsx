@@ -2489,13 +2489,21 @@ export default function RoundDetailPage() {
                     {lbl('Solo el organizador puede modificar las apuestas.', 'Only the organizer can edit bets.')}
                   </p>
                 )}
+                {amCreator && round.status === 'active' && (
+                  <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
+                    ⚠️ {lbl(
+                      'Estás editando apuestas con la ronda en curso. Los cambios pueden no aplicar a hoyos ya jugados (skines, nassau front 9, etc.).',
+                      'You are editing bets with the round in progress. Changes may not apply to already-played holes (skins, nassau front 9, etc.).'
+                    )}
+                  </p>
+                )}
                 {/* Entry fee */}
                 <div className="flex items-center justify-between">
                   <label className="text-sm text-zinc-300">{lbl('Entrada (por jugador)', 'Entry fee (per player)')}</label>
                   <div className="flex items-center gap-1">
                     <span className="text-zinc-500 text-sm">$</span>
                     <input type="number" min="0" step="1" value={betForm.entry_fee}
-                      onChange={bf('entry_fee')} disabled={round.status !== 'scheduled' || !amCreator}
+                      onChange={bf('entry_fee')} disabled={round.status === 'finished' || !amCreator}
                       className="w-20 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-white text-sm text-right focus:outline-none focus:border-emerald-500 disabled:opacity-50" />
                   </div>
                 </div>
@@ -2505,7 +2513,7 @@ export default function RoundDetailPage() {
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-sm text-zinc-300">Nassau</label>
                     <input type="checkbox" checked={betForm.nassau_enabled}
-                      onChange={bf('nassau_enabled')} disabled={round.status !== 'scheduled' || !amCreator}
+                      onChange={bf('nassau_enabled')} disabled={round.status === 'finished' || !amCreator}
                       className="w-4 h-4 accent-emerald-500" />
                   </div>
                   {betForm.nassau_enabled && (
@@ -2520,7 +2528,7 @@ export default function RoundDetailPage() {
                           <div className="flex items-center gap-1">
                             <span className="text-zinc-500 text-xs">$</span>
                             <input type="number" min="0" step="1" value={(betForm as any)[k]}
-                              onChange={bf(k as keyof BetConfig)} disabled={round.status !== 'scheduled' || !amCreator}
+                              onChange={bf(k as keyof BetConfig)} disabled={round.status === 'finished' || !amCreator}
                               className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-white text-sm text-right focus:outline-none focus:border-emerald-500 disabled:opacity-50" />
                           </div>
                         </div>
@@ -2535,7 +2543,7 @@ export default function RoundDetailPage() {
                   <div className="flex items-center gap-1">
                     <span className="text-zinc-500 text-sm">$</span>
                     <input type="number" min="0" step="1" value={betForm.per_hole_bet}
-                      onChange={bf('per_hole_bet')} disabled={round.status !== 'scheduled' || !amCreator}
+                      onChange={bf('per_hole_bet')} disabled={round.status === 'finished' || !amCreator}
                       className="w-20 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-white text-sm text-right focus:outline-none focus:border-emerald-500 disabled:opacity-50" />
                   </div>
                 </div>
@@ -2554,7 +2562,7 @@ export default function RoundDetailPage() {
                       <div className="flex items-center gap-1">
                         <span className="text-zinc-500 text-sm">$</span>
                         <input type="number" min="0" step="1" value={(betForm as any)[k as string]}
-                          onChange={bf(k as keyof BetConfig)} disabled={round.status !== 'scheduled' || !amCreator}
+                          onChange={bf(k as keyof BetConfig)} disabled={round.status === 'finished' || !amCreator}
                           className="w-20 bg-zinc-700 border border-zinc-600 rounded-lg px-2 py-1 text-white text-sm text-right focus:outline-none focus:border-emerald-500 disabled:opacity-50" />
                       </div>
                     </div>
@@ -2566,7 +2574,7 @@ export default function RoundDetailPage() {
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-sm text-zinc-300">Oyes</label>
                     <input type="checkbox" checked={betForm.oyes_enabled}
-                      onChange={bf('oyes_enabled')} disabled={round.status !== 'scheduled' || !amCreator}
+                      onChange={bf('oyes_enabled')} disabled={round.status === 'finished' || !amCreator}
                       className="w-4 h-4 accent-emerald-500" />
                   </div>
                   {betForm.oyes_enabled && (
@@ -2575,7 +2583,7 @@ export default function RoundDetailPage() {
                       <div className="flex items-center gap-1">
                         <span className="text-zinc-500 text-sm">$</span>
                         <input type="number" min="0" step="1" value={betForm.oyes_prize}
-                          onChange={bf('oyes_prize')} disabled={round.status !== 'scheduled' || !amCreator}
+                          onChange={bf('oyes_prize')} disabled={round.status === 'finished' || !amCreator}
                           className="w-20 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-white text-sm text-right focus:outline-none focus:border-emerald-500 disabled:opacity-50" />
                       </div>
                     </div>
@@ -2590,7 +2598,7 @@ export default function RoundDetailPage() {
                       <p className="text-xs text-zinc-600">{lbl('Un skin por hoyo, carry-over en empates', 'One skin per hole, carry-over on ties')}</p>
                     </div>
                     <input type="checkbox" checked={betForm.skins_enabled}
-                      onChange={bf('skins_enabled')} disabled={round.status !== 'scheduled' || !amCreator}
+                      onChange={bf('skins_enabled')} disabled={round.status === 'finished' || !amCreator}
                       className="w-4 h-4 accent-emerald-500" />
                   </div>
                   {betForm.skins_enabled && (
@@ -2600,21 +2608,21 @@ export default function RoundDetailPage() {
                         <div className="flex items-center gap-1">
                           <span className="text-zinc-500 text-sm">$</span>
                           <input type="number" min="0" step="1" value={betForm.skins_value}
-                            onChange={bf('skins_value')} disabled={round.status !== 'scheduled' || !amCreator}
+                            onChange={bf('skins_value')} disabled={round.status === 'finished' || !amCreator}
                             className="w-20 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-white text-sm text-right focus:outline-none focus:border-emerald-500 disabled:opacity-50" />
                         </div>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-zinc-400">{lbl('Usar score neto', 'Use net score')}</span>
                         <input type="checkbox" checked={betForm.skins_use_net}
-                          onChange={bf('skins_use_net')} disabled={round.status !== 'scheduled' || !amCreator}
+                          onChange={bf('skins_use_net')} disabled={round.status === 'finished' || !amCreator}
                           className="w-4 h-4 accent-emerald-500" />
                       </div>
                     </div>
                   )}
                 </div>
 
-                {amCreator && round.status === 'scheduled' && (
+                {amCreator && round.status !== 'finished' && (
                   <button onClick={saveBets} disabled={savingBet}
                     className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm">
                     {savingBet ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
