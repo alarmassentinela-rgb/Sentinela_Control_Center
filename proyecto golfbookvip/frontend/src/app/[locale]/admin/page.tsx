@@ -5,7 +5,7 @@ import {
   Users, Flag, CheckCircle2, Clock, Play, BarChart2,
   TrendingUp, Trophy, Search, ChevronLeft, ChevronRight,
   ToggleLeft, ToggleRight, Loader2, RefreshCw, ShieldCheck,
-  Activity, Hash,
+  Activity, Hash, Pencil, KeyRound, Copy, Check, X,
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
@@ -146,6 +146,17 @@ export default function AdminPage() {
   const [searchInput, setSearchInput] = useState('')
   const [togglingUser, setTogglingUser] = useState<string | null>(null)
 
+  // Edit handicap modal
+  const [editUser, setEditUser] = useState<AdminUser | null>(null)
+  const [editHcp, setEditHcp] = useState<string>('')
+  const [savingHcp, setSavingHcp] = useState(false)
+
+  // Reset link toast
+  const [resetLinkUser, setResetLinkUser] = useState<AdminUser | null>(null)
+  const [resetLink, setResetLink] = useState<string>('')
+  const [resetLinkCopied, setResetLinkCopied] = useState(false)
+  const [generatingLink, setGeneratingLink] = useState<string | null>(null)
+
   // Rounds tab
   const [roundsPage, setRoundsPage] = useState(1)
   const [roundsTotal, setRoundsTotal] = useState(0)
@@ -213,6 +224,53 @@ export default function AdminPage() {
       const res = await api.patch(`/admin/users/${userId}/toggle-active`)
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_active: res.data.is_active } : u))
     } finally { setTogglingUser(null) }
+  }
+
+  const openEditHcp = (u: AdminUser) => {
+    setEditUser(u)
+    setEditHcp(u.handicap_index !== null ? String(u.handicap_index) : '')
+  }
+
+  const handleSaveHcp = async () => {
+    if (!editUser) return
+    const trimmed = editHcp.trim()
+    const parsed = trimmed === '' ? null : Number(trimmed)
+    if (parsed !== null && (Number.isNaN(parsed) || parsed < -10 || parsed > 54)) {
+      alert('Hándicap debe ser número entre -10 y 54 (o vacío para borrar)')
+      return
+    }
+    setSavingHcp(true)
+    try {
+      const res = await api.patch(`/admin/users/${editUser.id}`, { handicap_index: parsed })
+      setUsers(prev => prev.map(u => u.id === editUser.id ? { ...u, handicap_index: res.data.handicap_index } : u))
+      setEditUser(null)
+    } catch {
+      alert('Error al guardar hándicap')
+    } finally { setSavingHcp(false) }
+  }
+
+  const handleGenerateResetLink = async (u: AdminUser) => {
+    setGeneratingLink(u.id)
+    setResetLinkCopied(false)
+    try {
+      const res = await api.post(`/admin/users/${u.id}/reset-link`)
+      const url = `${window.location.origin}/${locale}/auth/reset-password?token=${encodeURIComponent(res.data.token)}`
+      setResetLink(url)
+      setResetLinkUser(u)
+      try {
+        await navigator.clipboard.writeText(url)
+        setResetLinkCopied(true)
+      } catch { /* clipboard puede fallar en HTTP — el modal muestra el link igual */ }
+    } catch {
+      alert('Error al generar link de recuperación')
+    } finally { setGeneratingLink(null) }
+  }
+
+  const copyResetLinkManual = async () => {
+    try {
+      await navigator.clipboard.writeText(resetLink)
+      setResetLinkCopied(true)
+    } catch { /* ignored */ }
   }
 
   // ── Loading / forbidden ───────────────────────────────────────────────────
@@ -451,20 +509,39 @@ export default function AdminPage() {
                           {u.is_active ? 'Activo' : 'Inactivo'}
                         </span>
                       </td>
-                      <td className="px-3 py-3 text-center">
-                        {!u.is_superadmin && (
+                      <td className="px-3 py-3">
+                        <div className="flex items-center justify-center gap-2">
                           <button
-                            onClick={() => handleToggleUser(u.id)}
-                            disabled={togglingUser === u.id}
-                            title={u.is_active ? 'Desactivar' : 'Activar'}
-                            className="text-zinc-500 hover:text-zinc-300 transition-colors disabled:opacity-40">
-                            {togglingUser === u.id
-                              ? <Loader2 size={16} className="animate-spin" />
-                              : u.is_active
-                                ? <ToggleRight size={20} className="text-emerald-500" />
-                                : <ToggleLeft size={20} />}
+                            onClick={() => openEditHcp(u)}
+                            title="Editar hándicap"
+                            className="text-zinc-500 hover:text-blue-400 transition-colors">
+                            <Pencil size={15} />
                           </button>
-                        )}
+                          {u.is_active && (
+                            <button
+                              onClick={() => handleGenerateResetLink(u)}
+                              disabled={generatingLink === u.id}
+                              title="Generar link de recuperación de contraseña"
+                              className="text-zinc-500 hover:text-amber-400 transition-colors disabled:opacity-40">
+                              {generatingLink === u.id
+                                ? <Loader2 size={15} className="animate-spin" />
+                                : <KeyRound size={15} />}
+                            </button>
+                          )}
+                          {!u.is_superadmin && (
+                            <button
+                              onClick={() => handleToggleUser(u.id)}
+                              disabled={togglingUser === u.id}
+                              title={u.is_active ? 'Desactivar' : 'Activar'}
+                              className="text-zinc-500 hover:text-zinc-300 transition-colors disabled:opacity-40">
+                              {togglingUser === u.id
+                                ? <Loader2 size={16} className="animate-spin" />
+                                : u.is_active
+                                  ? <ToggleRight size={20} className="text-emerald-500" />
+                                  : <ToggleLeft size={20} />}
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -569,6 +646,85 @@ export default function AdminPage() {
         )}
 
       </main>
+
+      {/* ── EDIT HANDICAP MODAL ───────────────────────────────────────── */}
+      {editUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+          onClick={() => !savingHcp && setEditUser(null)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-sm p-6"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-bold text-white text-base">Editar hándicap</h3>
+                <p className="text-xs text-zinc-500 mt-0.5">{editUser.first_name} {editUser.last_name} · @{editUser.username}</p>
+              </div>
+              <button onClick={() => !savingHcp && setEditUser(null)} className="text-zinc-500 hover:text-zinc-300">
+                <X size={18} />
+              </button>
+            </div>
+            <label className="text-xs font-medium text-zinc-400 block mb-1.5">Hándicap Index (-10 a 54, vacío = sin hándicap)</label>
+            <input
+              type="number" step="0.1" min="-10" max="54"
+              value={editHcp}
+              onChange={e => setEditHcp(e.target.value)}
+              placeholder="—"
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white text-lg font-semibold focus:outline-none focus:border-emerald-500"
+              autoFocus />
+            <p className="text-xs text-zinc-500 mt-2">
+              Hándicap actual: <span className="text-zinc-300 font-mono">{editUser.handicap_index !== null ? editUser.handicap_index.toFixed(1) : '—'}</span>
+            </p>
+            <div className="flex gap-2 mt-5">
+              <button onClick={() => setEditUser(null)} disabled={savingHcp}
+                className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50">
+                Cancelar
+              </button>
+              <button onClick={handleSaveHcp} disabled={savingHcp}
+                className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                {savingHcp && <Loader2 size={14} className="animate-spin" />}
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── RESET LINK MODAL ──────────────────────────────────────────── */}
+      {resetLinkUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+          onClick={() => setResetLinkUser(null)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-bold text-white text-base flex items-center gap-2">
+                  <KeyRound size={16} className="text-amber-400" />
+                  Link de recuperación
+                </h3>
+                <p className="text-xs text-zinc-500 mt-0.5">{resetLinkUser.first_name} {resetLinkUser.last_name} · {resetLinkUser.email}</p>
+              </div>
+              <button onClick={() => setResetLinkUser(null)} className="text-zinc-500 hover:text-zinc-300">
+                <X size={18} />
+              </button>
+            </div>
+            <p className="text-xs text-zinc-400 mb-2">Comparte este enlace por WhatsApp o el medio que prefieras. Vence en <span className="text-amber-400 font-semibold">1 hora</span>.</p>
+            <div className="bg-zinc-800 border border-zinc-700 rounded-xl p-3 mb-3 break-all font-mono text-xs text-zinc-300 max-h-32 overflow-y-auto">
+              {resetLink}
+            </div>
+            <button onClick={copyResetLinkManual}
+              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                resetLinkCopied
+                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700'
+              }`}>
+              {resetLinkCopied ? <><Check size={14} /> Copiado al portapapeles</> : <><Copy size={14} /> Copiar al portapapeles</>}
+            </button>
+            <p className="text-xs text-zinc-600 mt-3 leading-relaxed">
+              El jugador abre el link, escribe nueva contraseña y entra. El token se invalida automáticamente cuando cambia la contraseña.
+            </p>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

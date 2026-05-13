@@ -2,8 +2,11 @@
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select, func, case
 from datetime import datetime, timezone, timedelta
+from pydantic import BaseModel, Field
+from typing import Optional
 
 from app.core.deps import CurrentUser, DB
+from app.core.security import create_reset_token
 from app.models.user import User
 from app.models.round import Round, RoundPlayer
 from app.models.score import Score
@@ -11,6 +14,10 @@ from app.models.course import Course
 from app.models.handicap import ScoreDifferential
 
 router = APIRouter()
+
+
+class UserPatchPayload(BaseModel):
+    handicap_index: Optional[float] = Field(default=None, ge=-10, le=54)
 
 
 def _require_admin(current_user: User):
@@ -260,3 +267,43 @@ async def toggle_user_active(user_id: str, current_user: CurrentUser, db: DB):
     user.is_active = not user.is_active
     await db.flush()
     return {"user_id": user_id, "is_active": user.is_active}
+
+
+# ─── Update user fields (handicap_index for now) ──────────────────────────────
+
+@router.patch("/users/{user_id}")
+async def update_user(user_id: str, payload: UserPatchPayload, current_user: CurrentUser, db: DB):
+    _require_admin(current_user)
+    import uuid as _uuid
+    result = await db.execute(select(User).where(User.id == _uuid.UUID(user_id)))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    user.handicap_index = payload.handicap_index
+    await db.flush()
+    return {
+        "user_id": user_id,
+        "handicap_index": float(user.handicap_index) if user.handicap_index is not None else None,
+    }
+
+
+# ─── Generate password reset link for a user ──────────────────────────────────
+
+@router.post("/users/{user_id}/reset-link")
+async def generate_reset_link(user_id: str, current_user: CurrentUser, db: DB):
+    """Superadmin genera un token de reset de 1h para un jugador.
+    Devuelve el token; el frontend arma la URL completa con su origin + locale."""
+    _require_admin(current_user)
+    import uuid as _uuid
+    result = await db.execute(select(User).where(User.id == _uuid.UUID(user_id), User.is_active == True))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado o inactivo")
+    token = create_reset_token(str(user.id), user.password_hash)
+    return {
+        "user_id": user_id,
+        "user_email": user.email,
+        "user_name": f"{user.first_name} {user.last_name}",
+        "token": token,
+        "expires_in_hours": 1,
+    }

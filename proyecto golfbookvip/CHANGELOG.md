@@ -7,6 +7,29 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.1.0] - 2026-05-13
+
+Herramientas de superadmin desde feedback de la primera ronda real (12-may): jugadores que olvidan contraseña + necesidad de corregir hándicaps inflados por rondas de prueba.
+
+### Added — Edición de hándicap desde panel admin
+
+- `PATCH /admin/users/{user_id}` — actualiza `handicap_index` (rango -10 a 54, o `null` para borrar)
+- Botón ✏️ por fila en `/admin/` → modal con input numérico, paso 0.1, validación cliente y servidor
+- Aplica a cualquier usuario (incluso superadmin) — al usar el panel se sobreescribe sin recalcular diferenciales históricos
+
+### Added — Reset de contraseña asistido por admin
+
+- `POST /admin/users/{user_id}/reset-link` — superadmin genera token HMAC de 1h para un jugador
+- Botón 🔑 por fila en `/admin/` (solo usuarios activos) → genera link, lo copia al portapapeles automáticamente y abre modal con el link completo para revisión/recopia manual
+- Pensado para WhatsApp: admin manda el link, jugador lo abre, escribe nueva contraseña
+- Token se invalida automáticamente al cambiar la contraseña (HMAC depende del hash actual)
+
+### Notes
+
+- SMTP real sigue pendiente para flujo self-service de "olvidé contraseña" — esto cubre el gap operativo mientras tanto
+
+---
+
 ## [1.0.1] - 2026-05-12
 
 Hotfix de seguridad. Rotación de credenciales de Firebase tras detectar la llave comprometida en historia git.
