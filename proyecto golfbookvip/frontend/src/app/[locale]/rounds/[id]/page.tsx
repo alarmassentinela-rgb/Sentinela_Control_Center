@@ -50,9 +50,19 @@ interface Player {
 
 interface BoardEntry {
   user_id: string
+  first_name?: string
+  last_name?: string
   holes_played: number
   total_gross: number
-  scores: { hole: number; gross: number; net: number }[]
+  total_net?: number
+  total_stableford?: number
+  course_handicap?: number | null
+  thru?: number
+  team_number?: number | null
+  status?: string
+  participant_mode?: string
+  withdrawn_at?: string | null
+  scores: { hole: number; gross: number; net: number; stableford?: number | null }[]
 }
 
 interface Hole {
@@ -487,20 +497,65 @@ function RoundScorecard({
         )}
       </div>
 
-      {/* Player tabs */}
+      {/* Leaderboard vertical — todos los jugadores visibles con totales */}
       {board.length > 1 && (
-        <div className="flex gap-1 px-4 py-2 overflow-x-auto border-b border-zinc-800">
-          {board.map((b, i) => {
-            const p = players.find(pl => pl.user_id === b.user_id)
-            return (
-              <button key={b.user_id} onClick={() => setActiveIdx(i)}
-                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  activeIdx === i ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-zinc-300'
-                }`}>
-                {p ? `${p.first_name} ${p.last_name.charAt(0)}.` : `J${i+1}`}
-              </button>
-            )
-          })}
+        <div className="border-b border-zinc-800">
+          <div className="px-5 py-2 bg-zinc-800/40 flex items-center justify-between">
+            <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
+              {lbl(`Jugadores (${board.length})`, `Players (${board.length})`)}
+            </span>
+            <span className="text-[10px] text-zinc-600">
+              {lbl('Toca uno para ver su tarjeta', 'Tap to view scorecard')}
+            </span>
+          </div>
+          <div className="max-h-72 overflow-y-auto divide-y divide-zinc-800/40">
+            {board.map((b, i) => {
+              const total = b.total_gross || 0
+              const pl = players.find(pl => pl.user_id === b.user_id)
+              const isActive = i === activeIdx
+              const relToPar = total > 0 ? total - totalPar : null
+              const isFinished = (b.thru ?? 0) >= holesTotal
+              return (
+                <button key={b.user_id} onClick={() => setActiveIdx(i)}
+                  className={`w-full flex items-center gap-3 px-4 py-2 transition-colors text-left ${
+                    isActive ? 'bg-emerald-500/10 hover:bg-emerald-500/15' : 'hover:bg-zinc-800/40'
+                  }`}>
+                  <span className={`w-6 text-xs font-mono font-bold flex-shrink-0 ${
+                    i === 0 ? 'text-yellow-400'
+                    : i === 1 ? 'text-zinc-300'
+                    : i === 2 ? 'text-amber-700'
+                    : 'text-zinc-600'
+                  }`}>#{i + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-medium truncate ${isActive ? 'text-white' : 'text-zinc-300'}`}>
+                      {pl ? `${pl.first_name} ${pl.last_name}` : `J${i+1}`}
+                    </p>
+                    <p className="text-[10px] text-zinc-500">
+                      HCP {b.course_handicap ?? '—'} · {lbl('Thru', 'Thru')} {isFinished ? <span className="text-emerald-400 font-bold">F</span> : (b.thru || '—')}
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-end flex-shrink-0">
+                    {total > 0 ? (
+                      <>
+                        <span className="text-sm font-bold text-white tabular-nums">{total}</span>
+                        {relToPar !== null && (
+                          <span className={`text-[10px] font-bold tabular-nums ${
+                            relToPar < 0 ? 'text-emerald-400'
+                            : relToPar > 0 ? 'text-orange-400'
+                            : 'text-zinc-400'
+                          }`}>
+                            {relToPar === 0 ? 'E' : relToPar > 0 ? `+${relToPar}` : relToPar}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-xs text-zinc-600">—</span>
+                    )}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
         </div>
       )}
 
@@ -1791,6 +1846,13 @@ export default function RoundDetailPage() {
                 className="flex items-center gap-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 font-medium px-5 py-2.5 rounded-full transition-colors text-sm">
                 <AlertTriangle size={15} />
                 {lbl('Firmar tarjeta', 'Sign scorecard')}
+              </Link>
+            )}
+            {(round.status === 'finished' || round.status === 'pending_validation') && (
+              <Link href={`/${locale}/rounds/${id}/results`}
+                className="flex items-center gap-2 bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/40 font-medium px-5 py-2.5 rounded-full transition-colors text-sm">
+                <span>📊</span>
+                {lbl('Imprimir resultados', 'Print results')}
               </Link>
             )}
             {amCreator && (round.status === 'active' || round.status === 'scheduled') && (

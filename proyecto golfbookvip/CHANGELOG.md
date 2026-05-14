@@ -7,6 +7,62 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.6.0] - 2026-05-14
+
+Resultados pro + visibilidad de jugadores en scorecard. Bundle pensado para torneos de 22+ jugadores donde se necesita ver a todos al mismo tiempo y poder imprimir resultados con detalle profesional.
+
+### Changed — Scorecard en round detail: tabs horizontales → leaderboard vertical
+
+- Reemplazada la fila de tabs horizontales con scroll lateral (escondía 16 de 22 jugadores) por **lista vertical leaderboard** con todos visibles
+- Cada fila muestra: posición (medallas oro/plata/bronce en top 3), nombre completo, HCP, Thru, Gross, vs Par con color por to-par
+- Click en una fila → selecciona y muestra el scorecard hoyo-por-hoyo de ese jugador abajo
+- `max-h-72 overflow-y-auto` permite scroll vertical limpio si hay más de ~9 jugadores
+- Counter "Jugadores (N)" en el header de la sección
+
+### Added — Página `/rounds/[id]/results`
+
+Nueva ruta con dos vistas conmutables + botón Imprimir:
+
+**Vista "Maestra"** (1 hoja, formato Letter, para tablón del clubhouse):
+- Header: brand · fecha · torneo · curso · formato · par/CR/Slope
+- **Winner banner** dorado con trofeo, nombre y score grande
+- **Tabla de posiciones** completa: POS · Jugador · HCP · Gross · vs Par · Net · Pts · Thru. Winner row resaltada con fondo amarillo
+- **Sección "Premios especiales"** (best of awards) con grid 2 columnas:
+  - 🎯 Mejor gross
+  - ⚡ Mejor net
+  - 🏅 Mejor stableford
+  - 🐦 Más birdies
+  - 🎖 Más pars
+  - ⬆️ Mejor salida (1-9)
+  - ⬇️ Mejor vuelta (10-18)
+  - 🎯 Mejor par 3 / par 4 / par 5 (sumas por categoría)
+  - ⚪ Score más bajo en un hoyo
+  - 🦅 Eagles o mejor (lista, fondo púrpura)
+  - ⛳ HOLE IN ONE (lista, fondo rojo)
+
+**Vista "Tarjetas"** (1 hoja por jugador, para entrega individual):
+- Header del torneo
+- **Bloque player-header**: posición ordinal grande con medalla si top 3, nombre, HCP/C-HCP/tee · totales Gross/Net/vs Par/Pts a la derecha
+- Scorecard hoyo-por-hoyo (Salida + Vuelta) con par/SI por hoyo
+- Cada celda de gross **coloreada según resultado**: eagle (amarillo), birdie (verde), par (neutro), bogey (naranja), double+ (rojo)
+- Filas Net y Stableford (si aplica) abajo
+- **Performance grid**: Eagles · Birdies · Pars · Bogeys · Dbl+ con números grandes
+- Espacios para firma jugador / marker
+
+### Added — Botón "📊 Imprimir resultados" en round detail
+
+- Aparece cuando `status === 'finished'` o `'pending_validation'`
+- Color púrpura, ícono 📊
+- Navega a `/rounds/[id]/results`
+
+### Notes
+
+- Stats calculadas client-side desde `/scoreboard` — no requiere endpoints nuevos
+- Print CSS con `@page { size: letter; margin: 0 }` y page-breaks entre tarjetas
+- Excluye automáticamente jugadores withdrawn y observers de leaderboards y premios
+
+---
+
 ## [1.5.2] - 2026-05-14
 
 ### Fixed — Spinner colgado en acciones de ronda
