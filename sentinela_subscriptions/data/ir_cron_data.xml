@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<odoo>
-    <data noupdate="1">
+<odoo noupdate="1">
         <!-- Cron existente: Generar Facturas -->
         <record id="ir_cron_generate_invoices" model="ir.cron">
             <field name="name">Suscripciones: Generar Pre-Facturas</field>
@@ -22,5 +21,4 @@
             <field name="interval_type">hours</field> <!-- Revisar cada hora -->
 
         </record>
-    </data>
 </odoo>

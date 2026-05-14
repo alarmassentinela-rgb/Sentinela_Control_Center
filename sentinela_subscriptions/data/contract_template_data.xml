@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<odoo>
-<data noupdate="1">
+<odoo noupdate="1">
 
     <!-- ============================================================
          PLANTILLA 1: CONTRATO DE SERVICIO DE INTERNET (WISP)
@@ -235,5 +234,4 @@ Las partes se someten a la jurisdicción de los tribunales del Estado de
         </field>
     </record>
 
-</data>
 </odoo>

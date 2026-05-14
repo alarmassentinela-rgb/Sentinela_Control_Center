@@ -1,6 +1,6 @@
 {
     'name': 'Sentinela Subscriptions',
-    'version': '18.0.1.2.0',
+    'version': '18.0.1.2.1',
     'category': 'Sales/Subscriptions',
     'depends': ['base', 'mail', 'product', 'account', 'sale', 'sentinela_digital_sign'],
     'data': [
@@ -8,7 +8,6 @@
         'security/ir.model.access.csv',
         'data/ir_sequence_data.xml',
         'data/ir_cron_data.xml',
-        'data/contract_template_data.xml',
         'data/mail_template_extension_data.xml',
         'views/subscription_master_view.xml',
         'views/subscription_master_view_PRO.xml',

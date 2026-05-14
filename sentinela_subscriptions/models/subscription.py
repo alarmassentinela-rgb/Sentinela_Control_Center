@@ -137,6 +137,14 @@ class SentinelaSubscription(models.Model):
     equipment_model = fields.Char(string='Modelo')
     equipment_serial = fields.Char(string='Número de Serie (Manual)')
 
+    # --- Vehículo (GPS / SentiCar) ---
+    vehicle_brand = fields.Char(string='Marca Vehículo')
+    vehicle_model = fields.Char(string='Modelo Vehículo')
+    vehicle_year = fields.Integer(string='Año Vehículo')
+    vehicle_color = fields.Char(string='Color Vehículo')
+    vehicle_plate = fields.Char(string='Placa')
+    vehicle_vin = fields.Char(string='VIN / NIV')
+
     # --- Internet WISP — Antena CPE ---
     antenna_brand = fields.Char(string='Marca Antena')
     antenna_model = fields.Char(string='Modelo Antena')
