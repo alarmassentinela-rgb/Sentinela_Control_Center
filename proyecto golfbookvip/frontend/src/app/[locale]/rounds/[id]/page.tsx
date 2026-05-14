@@ -210,6 +210,7 @@ function RoundScorecard({
 }) {
   // useState must always be at top (before any conditional returns)
   const [activeIdx, setActiveIdx] = useState(0)
+  const [view, setView] = useState<'detail' | 'matrix'>('detail')
 
   const activeHoles = holes.filter(h => h.hole_number <= holesTotal)
   const front9 = activeHoles.filter(h => h.hole_number <= 9)
@@ -484,19 +485,54 @@ function RoundScorecard({
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
       {/* Header */}
-      <div className="px-5 pt-5 pb-3 border-b border-zinc-800 flex items-center justify-between">
-        <h2 className="font-semibold text-white flex items-center gap-2">
+      <div className="px-5 pt-5 pb-3 border-b border-zinc-800 flex items-center justify-between gap-3">
+        <h2 className="font-semibold text-white flex items-center gap-2 min-w-0">
           {status === 'finished'
             ? <><CheckCircle2 size={15} className="text-emerald-400" />{lbl('Tarjeta final', 'Final scorecard')}</>
             : <>{lbl('Tarjeta en curso', 'Live scorecard')}</>}
         </h2>
-        {totalGross > 0 && (
-          <span className={`text-sm font-bold ${rel < 0 ? 'text-emerald-400' : rel > 0 ? 'text-red-400' : 'text-zinc-300'}`}>
-            {rel === 0 ? 'E' : rel > 0 ? `+${rel}` : rel} ({totalGross})
-          </span>
-        )}
+        <div className="flex items-center gap-3 flex-shrink-0">
+          {/* Vista toggle */}
+          <div className="flex gap-1 bg-zinc-800 border border-zinc-700 rounded-lg p-0.5">
+            <button onClick={() => setView('detail')}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                view === 'detail' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-zinc-300'
+              }`}>
+              {lbl('Detalle', 'Detail')}
+            </button>
+            <button onClick={() => setView('matrix')}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                view === 'matrix' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-zinc-300'
+              }`}>
+              {lbl('Matriz', 'Matrix')}
+            </button>
+          </div>
+          {totalGross > 0 && view === 'detail' && (
+            <span className={`text-sm font-bold ${rel < 0 ? 'text-emerald-400' : rel > 0 ? 'text-red-400' : 'text-zinc-300'}`}>
+              {rel === 0 ? 'E' : rel > 0 ? `+${rel}` : rel} ({totalGross})
+            </span>
+          )}
+        </div>
       </div>
 
+      {/* Vista MATRIZ — todos los jugadores × todos los hoyos */}
+      {view === 'matrix' && (
+        <ScorecardMatrix
+          board={board}
+          players={players}
+          activeHoles={activeHoles}
+          has18={has18}
+          frontPar={frontPar}
+          backPar={backPar}
+          totalPar={totalPar}
+          gameFormat={gameFormat}
+          lbl={lbl}
+        />
+      )}
+
+      {/* Vista DETALLE — leaderboard + scorecard del seleccionado */}
+      {view === 'detail' && (
+      <>
       {/* Mobile: leaderboard arriba, scorecard abajo. Desktop (lg): lado a lado en grid 1+2. */}
       <div className="lg:grid lg:grid-cols-3 lg:divide-x lg:divide-zinc-800">
 
@@ -673,6 +709,189 @@ function RoundScorecard({
       </div>
 
       </div>{/* /lg:grid wrapper */}
+      </>
+      )}
+    </div>
+  )
+}
+
+// ─── Vista matriz: todos los jugadores × todos los hoyos ──────────────────────
+
+function ScorecardMatrix({
+  board, players, activeHoles, has18, frontPar, backPar, totalPar, gameFormat, lbl,
+}: {
+  board: BoardEntry[]
+  players: Player[]
+  activeHoles: Hole[]
+  has18: boolean
+  frontPar: number
+  backPar: number
+  totalPar: number
+  gameFormat?: string
+  lbl: (es: string, en: string) => string
+}) {
+  const front9 = activeHoles.filter(h => h.hole_number <= 9)
+  const back9  = activeHoles.filter(h => h.hole_number > 9)
+
+  // Sort board for the matrix (by total_gross or stableford depending on format)
+  const sortedBoard = [...board].sort((a, b) => {
+    if (gameFormat === 'stableford' || gameFormat === 'stableford_modified') {
+      return (b.total_stableford ?? 0) - (a.total_stableford ?? 0)
+    }
+    const av = a.total_gross > 0 ? a.total_gross : 9999
+    const bv = b.total_gross > 0 ? b.total_gross : 9999
+    return av - bv
+  })
+
+  const scoreCellCls = (gross: number, par: number) => {
+    const d = gross - par
+    if (d <= -2) return 'bg-amber-500/30 text-amber-200 font-black'      // eagle+
+    if (d === -1) return 'bg-emerald-500/25 text-emerald-200 font-bold'  // birdie
+    if (d === 0)  return 'text-zinc-200 font-bold'                       // par
+    if (d === 1)  return 'text-orange-300 font-medium'                   // bogey
+    return 'bg-red-500/15 text-red-300 font-medium'                      // double+
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="border-collapse w-max text-xs">
+        {/* Header con números de hoyo + Out/In/Tot */}
+        <thead>
+          <tr className="bg-zinc-950/60">
+            <th className="sticky left-0 z-20 bg-zinc-950 text-left text-[10px] text-zinc-400 uppercase tracking-wide px-3 py-2 font-semibold min-w-[140px] border-b border-zinc-800">
+              {lbl('Jugador', 'Player')}
+            </th>
+            <th className="text-center text-[10px] text-zinc-500 py-2 px-1 w-8 border-b border-zinc-800">HCP</th>
+            {front9.map(h => (
+              <th key={h.hole_number} className="text-center text-[10px] font-medium text-zinc-400 py-2 w-7 border-b border-zinc-800">
+                {h.hole_number}
+              </th>
+            ))}
+            {has18 && (
+              <th className="text-center text-[10px] font-bold text-zinc-300 py-2 w-9 border-b border-l border-zinc-700 bg-zinc-800/30">
+                {lbl('S', 'Out')}
+              </th>
+            )}
+            {back9.map(h => (
+              <th key={h.hole_number} className="text-center text-[10px] font-medium text-zinc-400 py-2 w-7 border-b border-zinc-800">
+                {h.hole_number}
+              </th>
+            ))}
+            {has18 && back9.length > 0 && (
+              <th className="text-center text-[10px] font-bold text-zinc-300 py-2 w-9 border-b border-l border-zinc-700 bg-zinc-800/30">
+                {lbl('V', 'In')}
+              </th>
+            )}
+            <th className="text-center text-[10px] font-bold text-zinc-200 py-2 w-12 border-b border-l border-zinc-700 bg-zinc-800/50">
+              Tot
+            </th>
+            <th className="text-center text-[10px] font-bold text-zinc-400 py-2 w-12 border-b border-l border-zinc-700 bg-zinc-800/50">
+              ± Par
+            </th>
+          </tr>
+          {/* Par row */}
+          <tr className="border-b border-zinc-800">
+            <th className="sticky left-0 z-20 bg-zinc-900 text-left text-[10px] text-zinc-500 px-3 py-1 font-bold uppercase">Par</th>
+            <td className="text-center py-1 px-1 text-[10px] text-zinc-600">—</td>
+            {front9.map(h => (
+              <td key={h.hole_number} className="text-center py-1 text-[10px] text-zinc-500 bg-zinc-800/30">{h.par}</td>
+            ))}
+            {has18 && <td className="text-center py-1 text-[10px] font-bold text-zinc-400 border-l border-zinc-700 bg-zinc-800/50">{frontPar}</td>}
+            {back9.map(h => (
+              <td key={h.hole_number} className="text-center py-1 text-[10px] text-zinc-500 bg-zinc-800/30">{h.par}</td>
+            ))}
+            {has18 && back9.length > 0 && <td className="text-center py-1 text-[10px] font-bold text-zinc-400 border-l border-zinc-700 bg-zinc-800/50">{backPar}</td>}
+            <td className="text-center py-1 text-[10px] font-bold text-zinc-300 border-l border-zinc-700 bg-zinc-800/60">{totalPar}</td>
+            <td className="text-center py-1 text-[10px] text-zinc-600">—</td>
+          </tr>
+          {/* SI row */}
+          <tr className="border-b border-zinc-800">
+            <th className="sticky left-0 z-20 bg-zinc-900 text-left text-[10px] text-zinc-500 px-3 py-1 font-bold uppercase">SI</th>
+            <td className="text-center py-1 px-1 text-[10px] text-zinc-700">—</td>
+            {front9.map(h => (
+              <td key={h.hole_number} className="text-center py-1 text-[10px] text-zinc-600 bg-zinc-800/30">{h.stroke_index ?? '—'}</td>
+            ))}
+            {has18 && <td className="text-center py-1 text-[10px] text-zinc-700 border-l border-zinc-700 bg-zinc-800/50">—</td>}
+            {back9.map(h => (
+              <td key={h.hole_number} className="text-center py-1 text-[10px] text-zinc-600 bg-zinc-800/30">{h.stroke_index ?? '—'}</td>
+            ))}
+            {has18 && back9.length > 0 && <td className="text-center py-1 text-[10px] text-zinc-700 border-l border-zinc-700 bg-zinc-800/50">—</td>}
+            <td className="text-center py-1 text-[10px] text-zinc-700 border-l border-zinc-700 bg-zinc-800/60">—</td>
+            <td className="text-center py-1 text-[10px] text-zinc-700">—</td>
+          </tr>
+        </thead>
+
+        {/* Body: 1 fila por jugador */}
+        <tbody className="divide-y divide-zinc-800/40">
+          {sortedBoard.map((b, idx) => {
+            const pl = players.find(pp => pp.user_id === b.user_id)
+            const scoreMap: Record<number, number> = {}
+            b.scores.forEach(s => { scoreMap[s.hole] = s.gross })
+            const front9Gross = front9.reduce((sum, h) => scoreMap[h.hole_number] ? sum + scoreMap[h.hole_number] : sum, 0)
+            const back9Gross  = back9.reduce((sum, h) => scoreMap[h.hole_number] ? sum + scoreMap[h.hole_number] : sum, 0)
+            const totalGross = front9Gross + back9Gross
+            const relToPar = totalGross > 0 ? totalGross - totalPar : null
+            const medalCls = idx === 0 ? 'text-yellow-400' : idx === 1 ? 'text-zinc-300' : idx === 2 ? 'text-amber-700' : 'text-zinc-600'
+            const front9Played = front9.every(h => scoreMap[h.hole_number])
+            const back9Played = back9.every(h => scoreMap[h.hole_number])
+            return (
+              <tr key={b.user_id} className="hover:bg-zinc-800/30">
+                <td className="sticky left-0 z-10 bg-zinc-900 px-3 py-1.5 border-r border-zinc-800">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className={`text-[10px] font-mono font-bold w-4 flex-shrink-0 ${medalCls}`}>#{idx+1}</span>
+                    <span className="text-xs text-zinc-200 font-medium truncate">
+                      {pl ? `${pl.first_name} ${pl.last_name.charAt(0)}.` : `J${idx+1}`}
+                    </span>
+                  </div>
+                </td>
+                <td className="text-center py-1.5 text-[10px] text-zinc-500 font-mono">{b.course_handicap ?? '—'}</td>
+                {front9.map(h => {
+                  const sc = scoreMap[h.hole_number]
+                  return (
+                    <td key={h.hole_number} className={`text-center py-1.5 ${sc ? scoreCellCls(sc, h.par) : 'text-zinc-700'}`}>
+                      {sc ?? '—'}
+                    </td>
+                  )
+                })}
+                {has18 && (
+                  <td className="text-center py-1.5 text-xs font-bold text-zinc-300 border-l border-zinc-700 bg-zinc-800/50">
+                    {front9Played ? front9Gross : '—'}
+                  </td>
+                )}
+                {back9.map(h => {
+                  const sc = scoreMap[h.hole_number]
+                  return (
+                    <td key={h.hole_number} className={`text-center py-1.5 ${sc ? scoreCellCls(sc, h.par) : 'text-zinc-700'}`}>
+                      {sc ?? '—'}
+                    </td>
+                  )
+                })}
+                {has18 && back9.length > 0 && (
+                  <td className="text-center py-1.5 text-xs font-bold text-zinc-300 border-l border-zinc-700 bg-zinc-800/50">
+                    {back9Played ? back9Gross : '—'}
+                  </td>
+                )}
+                <td className="text-center py-1.5 text-sm font-bold text-white border-l border-zinc-700 bg-zinc-800/60">
+                  {totalGross > 0 ? totalGross : '—'}
+                </td>
+                <td className={`text-center py-1.5 text-xs font-bold ${
+                  relToPar === null ? 'text-zinc-600'
+                  : relToPar < 0 ? 'text-emerald-400'
+                  : relToPar > 0 ? 'text-red-400' : 'text-zinc-300'
+                }`}>
+                  {relToPar === null ? '—' : relToPar === 0 ? 'E' : relToPar > 0 ? `+${relToPar}` : relToPar}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      <p className="text-[10px] text-zinc-600 px-5 py-2 border-t border-zinc-800">
+        {lbl(
+          'Scroll horizontal → para ver todos los hoyos · Eagle ámbar · Birdie verde · Par neutro · Bogey naranja · Doble+ rojo',
+          'Scroll horizontal → for all holes · Eagle amber · Birdie green · Par neutral · Bogey orange · Double+ red'
+        )}
+      </p>
     </div>
   )
 }

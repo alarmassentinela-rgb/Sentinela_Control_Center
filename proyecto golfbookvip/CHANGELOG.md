@@ -7,6 +7,38 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.7.1] - 2026-05-14
+
+### Added — Vista Matriz en "Tarjeta en curso"
+
+Nueva vista que muestra **TODOS los jugadores con sus scores hoyo-por-hoyo simultáneamente** en una tabla compacta. Resuelve el caso de torneo con 20+ jugadores donde antes solo se veía la tarjeta de uno a la vez.
+
+- Toggle "Detalle · Matriz" en el header del scorecard (creator o cualquier visualizador)
+- **Detalle** (default): leaderboard + scorecard del jugador seleccionado (comportamiento previo)
+- **Matriz** (nueva):
+  - Columna sticky izquierda con posición + nombre + medalla top 3
+  - Columna HCP
+  - 18 columnas de hoyos con score gross
+  - Columna "S" (suma salida 1-9) y "V" (suma vuelta 10-18) en 18 hoyos
+  - Columna Tot + ±Par
+  - Filas Par y SI debajo del header de hoyos
+  - **Celdas coloreadas por resultado**:
+    - 🟡 Eagle+ (-2 o mejor): fondo ámbar
+    - 🟢 Birdie (-1): fondo verde
+    - ⚪ Par (0): neutro
+    - 🟠 Bogey (+1): naranja
+    - 🔴 Doble o peor (+2 o más): fondo rojo
+  - Scroll horizontal en móvil, ajusta a desktop sin scroll
+  - Ordenado por gross asc (o stableford pts desc según formato)
+
+### Notes
+
+- Vista universal — funciona en stroke, stableford, skins, match, florida
+- Para Match Play sigue habiendo una matriz de match propia que se usa cuando hay `matchups` (esa tiene resultado pareado, no totales)
+- En desktop la matriz ocupa el ancho disponible; en móvil se desliza horizontal
+
+---
+
 ## [1.7.0] - 2026-05-14
 
 Responsive desktop layouts en las pantallas más usadas. Mobile sin cambios — solo se agregan estilos que aplican a partir de ≥1024px (lg:) y ≥1280px (xl:). Se aprovecha pantalla grande sin sacrificar la experiencia móvil.
