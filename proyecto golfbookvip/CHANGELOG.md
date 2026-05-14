@@ -7,6 +7,19 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.4.2] - 2026-05-14
+
+### Changed — Marca de strokes en scorecard impresa
+
+- Reemplazado el punto rojo (•) dentro de la celda — estorbaba al anotar el score manuscrito
+- Ahora se marca con **línea roja en el borde inferior** de la celda:
+  - 1 stroke recibido → `border-bottom: 3px solid red`
+  - 2 strokes (C-HCP > 18) → `border-bottom: 5px double red`
+- Es la convención de las cards profesionales de torneo (no invade el espacio de captura)
+- Glosario actualizado: "marcados con línea roja al pie de la celda"
+
+---
+
 ## [1.4.1] - 2026-05-14
 
 ### Added — Glosario en tarjeta de salida

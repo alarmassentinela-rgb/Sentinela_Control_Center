@@ -270,7 +270,7 @@ function GroupCard({ round, course, group, locale }: { round: Round; course: Cou
       <div className="glossary">
         <span><b>HCP</b>: {lbl('Handicap Index — tu hándicap WHS general.', 'Handicap Index — your general WHS handicap.')}</span>
         <span><b>C-HCP</b>: {lbl('Course Handicap — hándicap ajustado al campo/tee (CR y Slope).', 'Course Handicap — adjusted to the course/tee (CR & Slope).')}</span>
-        <span><b>SI</b>: {lbl('Stroke Index — dificultad del hoyo (1 = más difícil, 18 = más fácil). Recibes strokes en los SI bajos según tu C-HCP.', 'Stroke Index — hole difficulty (1 = hardest, 18 = easiest). You get strokes on low SI holes based on your C-HCP.')}</span>
+        <span><b>SI</b>: {lbl('Stroke Index — dificultad del hoyo (1 = más difícil, 18 = más fácil). Recibes strokes en los SI bajos según tu C-HCP — marcados con línea roja al pie de la celda.', 'Stroke Index — hole difficulty (1 = hardest, 18 = easiest). You get strokes on low SI holes based on your C-HCP — marked with red underline at the bottom of the cell.')}</span>
         <span><b>Marker</b>: {lbl('Otro jugador del grupo que verifica y firma tu tarjeta al final de la ronda.', 'Another player in the group who verifies and signs your scorecard at the end of the round.')}</span>
       </div>
 
@@ -309,9 +309,9 @@ function ScorecardGrid({ label, holes, players, startHole }: { label: string; ho
             <th className="row-label player-row-name">{p.name.split(' ')[0]}</th>
             {holes.map(h => {
               const strokes = strokesReceived(p.course_handicap, h.stroke_index)
+              const strokeClass = strokes === 1 ? 'stroke-1' : strokes >= 2 ? 'stroke-2' : ''
               return (
-                <td key={h.hole_number} className="score-cell">
-                  {strokes > 0 && <span className="stroke-dot">{'•'.repeat(Math.min(2, strokes))}</span>}
+                <td key={h.hole_number} className={`score-cell ${strokeClass}`}>
                 </td>
               )
             })}
@@ -485,7 +485,9 @@ export default function TeeCardsPage() {
         .scorecard-grid .player-row .score-cell { height: 1.7rem; background: #fff; }
         .scorecard-grid .player-row-name { font-size: 9.5pt; }
         .scorecard-grid .tot-col { background: #fef3c7; font-weight: 700; }
-        .scorecard-grid .stroke-dot { color: #dc2626; font-size: 12pt; font-weight: 900; line-height: 0.8; }
+        /* Strokes recibidos marcados con bold underline en el borde inferior de la celda */
+        .scorecard-grid .player-row .score-cell.stroke-1 { border-bottom: 3px solid #dc2626; }
+        .scorecard-grid .player-row .score-cell.stroke-2 { border-bottom: 5px double #dc2626; }
 
         .totals-table { width: 100%; border-collapse: collapse; margin-bottom: 0.7rem; font-size: 10pt; }
         .totals-table td { border: 1px solid #ccc; padding: 0.35rem 0.6rem; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
