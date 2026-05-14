@@ -10,8 +10,17 @@ class FsmTaskTemplate(models.Model):
         ('all', 'Todos'),
         ('install', 'Instalación'),
         ('repair', 'Reparación'),
-        ('transfer', 'Traslado')
-    ], string='Aplica en', default='all')
+        ('transfer', 'Traslado'),
+        ('maintenance', 'Mantenimiento'),
+        ('patrol', 'Patrullaje / Respuesta')
+    ], string='Tipo de Servicio', default='all')
+    tech_category = fields.Selection([
+        ('all', 'Todas'),
+        ('alarm', 'Alarmas'),
+        ('gps', 'Senticar (Rastreo)'),
+        ('cctv', 'Cámaras (CCTV)'),
+        ('internet', 'Internet')
+    ], string='Tecnología', default='all')
 
 class FsmOrderLine(models.Model):
     _name = 'sentinela.fsm.order.line'

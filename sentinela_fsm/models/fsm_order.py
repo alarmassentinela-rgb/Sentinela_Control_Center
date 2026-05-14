@@ -26,9 +26,6 @@ class FsmOrder(models.Model):
         domain="[('partner_id', '=', partner_id)]") # Domain in python definition works for standard views
     description = fields.Html(string='Descripción del Problema/Solicitud', required=True)
 
-    # Monitoring Integration
-    alarm_event_id = fields.Many2one('sentinela.alarm.event', string='Evento de Alarma Relacionado')
-    
     # Scheduling
     technician_id = fields.Many2one('res.users', string='Técnico Asignado', tracking=True)
     scheduled_date = fields.Datetime(string='Fecha Programada', tracking=True)
@@ -81,6 +78,14 @@ class FsmOrder(models.Model):
     internet_signal_dbm = fields.Char(string='Potencia Señal (dBm)')
     internet_pppoe_user = fields.Char(string='Usuario PPPoE Asignado')
 
+    # Datos Técnicos capturados en campo (Instalaciones CCTV)
+    cctv_dvr_brand = fields.Char(string='Marca DVR/NVR')
+    cctv_dvr_model = fields.Char(string='Modelo DVR/NVR')
+    cctv_num_cameras = fields.Integer(string='Núm. Cámaras')
+    cctv_storage = fields.Char(string='Disco Duro (TB/GB)')
+    cctv_remote_user = fields.Char(string='Usuario Acceso Remoto')
+    cctv_remote_pass = fields.Char(string='Password Acceso Remoto')
+
     # Coordenadas Reales de Instalación
     install_lat = fields.Float(string='Latitud Instalación', digits=(10, 7))
     install_lon = fields.Float(string='Longitud Instalación', digits=(10, 7))
@@ -97,7 +102,12 @@ class FsmOrder(models.Model):
 
     # Execution
     check_in_date = fields.Datetime(string='Check-In (Inicio)')
+    arrival_date = fields.Datetime(string='Llegada al Sitio')
     check_out_date = fields.Datetime(string='Check-Out (Fin)')
+
+    # Coordenadas de llegada
+    arrival_lat = fields.Float(string='Latitud Llegada', digits=(10, 7))
+    arrival_lon = fields.Float(string='Longitud Llegada', digits=(10, 7))
 
     # Time Tracking
     actual_start_time = fields.Datetime(string='Inicio Real del Trabajo')
@@ -108,7 +118,23 @@ class FsmOrder(models.Model):
     work_time = fields.Float(string='Tiempo de Trabajo (Horas)', compute='_compute_work_time', store=True)
 
     # Resolution
+    patrol_result = fields.Selection([
+        ('no_news', 'Sin Novedad (Todo Seguro)'),
+        ('false_alarm', 'Falsa Alarma (Error de Usuario)'),
+        ('technical_fault', 'Falla Técnica (Falso Disparo)'),
+        ('suspicious', 'Actividad Sospechosa Detectada'),
+        ('intrusion_attempt', 'Intento de Intrusión (Daños Materiales)'),
+        ('confirmed_intrusion', 'INTRUSIÓN CONFIRMADA / ROBO'),
+        ('emergency_medical', 'Emergencia Médica Real'),
+        ('fire_confirmed', 'Incendio Confirmado')
+    ], string='Dictamen de la Patrulla')
+    
+    is_forced_entry = fields.Boolean(string='¿Hay señales de intrusión forzada?', default=False)
+    police_notified = fields.Boolean(string='¿Se dio aviso a la Policía/911?', default=False)
+    
     resolution_notes = fields.Text(string='Notas de Resolución')
+    received_by_name = fields.Char(string='Nombre de quien recibe')
+    received_by_relationship = fields.Char(string='Parentesco/Cargo')
     customer_signature = fields.Binary(string='Firma del Cliente')
     customer_rating = fields.Integer(string='Calificación del Cliente', help='Calificación del 1 al 5', default=0)
     customer_feedback = fields.Text(string='Comentarios del Cliente')
@@ -118,6 +144,19 @@ class FsmOrder(models.Model):
     report_sent_date = fields.Datetime(string='Fecha de Envío a Cliente', readonly=True)
 
     is_fsm_manager = fields.Boolean(string="Is FSM Manager", compute='_compute_is_fsm_manager')
+    work_log_ids = fields.One2many('sentinela.fsm.work.log', 'order_id', string='Bitácora de Trabajo')
+    tracking_token = fields.Char(string='Token de Rastreo', copy=False, readonly=True)
+
+    def _generate_tracking_token(self):
+        import uuid
+        for order in self:
+            if not order.tracking_token:
+                order.tracking_token = str(uuid.uuid4())
+
+    def get_tracking_url(self):
+        self.ensure_one()
+        base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
+        return f"{base_url}/SentiCar/rastreo/{self.tracking_token}"
 
     def _compute_is_fsm_manager(self):
         for order in self:
@@ -144,9 +183,10 @@ class FsmOrder(models.Model):
             }
 
             # Enviar mensaje al usuario
-            self.env['bus.bus'].sendone(
-                (self._cr.dbname, 'res.users', recipient_user.id),
-                {'type': 'simple_notification', 'payload': notification['params']}
+            self.env['bus.bus']._sendone(
+                recipient_user.partner_id,
+                'simple_notification',
+                notification['params']
             )
 
             # También crear un mensaje en el chatter
@@ -204,7 +244,55 @@ class FsmOrder(models.Model):
                 notification_type='start'
             )
 
+        # NOTIFICAR AL CLIENTE POR TELEGRAM (NUEVO)
+        if self.partner_id.telegram_chat_id:
+            tracking_url = self.get_tracking_url()
+            if self.service_type == 'patrol':
+                msg = (f"🚨 *SENTINELA: EMERGENCIA EN CURSO*\n\n"
+                       f"Hola *{self.partner_id.name}*, hemos activado nuestro protocolo de respuesta. "
+                       f"La patrulla con el oficial *{self.technician_id.name}* va en camino a su domicilio ahora mismo.\n\n"
+                       f"🧭 *Siga la trayectoria de la patrulla en tiempo real (SentiCar):* \n{tracking_url}")
+            else:
+                msg = (f"🚀 *Sentinela: Técnico en camino*\n\n"
+                       f"Hola *{self.partner_id.name}*, le informamos que nuestro técnico *{self.technician_id.name}* "
+                       f"ha iniciado su orden de servicio *{self.name}* y se dirige a su domicilio.\n\n"
+                       f"📍 *Ubicación:* {self.service_address_id.contact_address or self.partner_id.contact_address}\n\n"
+                       f"🧭 *Siga a su técnico en tiempo real por SentiCar:* \n{tracking_url}")
+            
+            self.partner_id.send_telegram_message(msg)
+            self.message_post(body=f"📲 Notificación de '{'Patrulla' if self.service_type == 'patrol' else 'Técnico'} en camino' enviada al cliente con link de SentiCar.")
+
+    def action_arrival(self):
+        """ Registra la llegada de la patrulla al sitio """
+        self.ensure_one()
+        self.arrival_date = fields.Datetime.now()
+        
+        # Intentar obtener ubicación desde Traccar o por contexto
+        # Nota: El controlador pasará las coordenadas GPS del móvil si están disponibles
+        
+        self.message_post(body="📍 **ARRIBO AL SITIO:** El patrullero ha reportado su llegada al domicilio.")
+        
+        # Notificar al cliente por Telegram
+        if self.partner_id.telegram_chat_id:
+            msg = (f"🛡️ *Sentinela: Patrulla en sitio*\n\n"
+                   f"Hola *{self.partner_id.name}*, le informamos que nuestra unidad de respuesta ya se encuentra en su domicilio (Folio: {self.name}).\n"
+                   f"El patrullero iniciará la inspección perimetral de seguridad.")
+            self.partner_id.send_telegram_message(msg)
+            
+        return True
+
     def action_finish(self):
+        # BLOQUEO DE SEGURIDAD: Validar firma antes de permitir el cierre
+        if not self.customer_signature:
+            raise models.ValidationError(_("No se puede finalizar la orden sin la firma de conformidad del cliente."))
+
+        # Registrar el avance final en la bitácora
+        self.env['sentinela.fsm.work.log'].create({
+            'order_id': self.id,
+            'notes': f"FINALIZACIÓN: {self.resolution_notes or 'Trabajo completado.'}",
+            'stage_at_moment': 'done'
+        })
+
         # Generar movimientos de inventario antes de cerrar
         if self.equipment_ids:
             self._create_stock_moves()
@@ -421,6 +509,9 @@ class FsmOrder(models.Model):
         for vals in vals_list:
             if vals.get('name', 'Nuevo') == 'Nuevo':
                 vals['name'] = self.env['ir.sequence'].next_by_code('sentinela.fsm.order') or 'OS-0000'
+            # Generar token de rastreo
+            import uuid
+            vals['tracking_token'] = str(uuid.uuid4())
         
         orders = super().create(vals_list)
         
@@ -431,10 +522,19 @@ class FsmOrder(models.Model):
         return orders
 
     def _populate_checklist(self):
-        """ Copies templates to order lines based on service type """
-        templates = self.env['sentinela.fsm.task.template'].search([
-            '|', ('service_type', '=', 'all'), ('service_type', '=', self.service_type)
-        ])
+        """ Copies templates to order lines based on service type AND technology """
+        # Determinar tecnología (desde suscripción o producto)
+        tech = 'all'
+        if self.subscription_id:
+            tech = self.subscription_id.service_type
+        
+        # Buscar tareas que apliquen a este servicio y esta tecnología
+        domain = [
+            ('service_type', 'in', ['all', self.service_type]),
+            ('tech_category', 'in', ['all', tech])
+        ]
+        
+        templates = self.env['sentinela.fsm.task.template'].search(domain, order='sequence asc')
         lines = []
         for t in templates:
             lines.append((0, 0, {
@@ -456,6 +556,98 @@ class FsmOrder(models.Model):
             'pause_notes': False,
         })
         self.message_post(body=_("Order resumed by %s.") % self.env.user.name)
+
+    def action_pause(self, reason_id=None, notes=False):
+        """ Pausa la orden con un motivo específico y guarda en bitácora """
+        self.ensure_one()
+        self.write({
+            'stage': 'paused',
+            'pause_reason_id': reason_id,
+            'pause_notes': notes,
+        })
+        # Registrar en la bitácora cronológica
+        if notes:
+            self.env['sentinela.fsm.work.log'].create({
+                'order_id': self.id,
+                'notes': f"PAUSA ({self.pause_reason_id.name or 'Sin motivo'}): {notes}",
+                'stage_at_moment': 'paused'
+            })
+        
+        msg = f"Orden PAUSADA por el técnico. Motivo: {self.pause_reason_id.name or 'No especificado'}. <br/>Notas: {notes or ''}"
+        self.message_post(body=msg)
+        return True
+
+    def action_request_quote(self, req_notes):
+        """ Crea una requisición de cotización enriquecida con contexto técnico """
+        self.ensure_one()
+        salesperson = self.partner_id.user_id or self.env.user
+        
+        # Construir BLOQUE DE CONTEXTO TÉCNICO para el vendedor
+        tech_context = ""
+        if self.alarm_panel_brand or self.alarm_panel_model:
+            tech_context += f"<li><b>SISTEMA DE ALARMA:</b> {self.alarm_panel_brand or ''} {self.alarm_panel_model or ''}</li>"
+        if self.cctv_dvr_brand or self.cctv_dvr_model:
+            tech_context += f"<li><b>SISTEMA CCTV:</b> {self.cctv_dvr_brand or ''} {self.cctv_dvr_model or ''} ({self.cctv_num_cameras} cámaras)</li>"
+        if self.internet_router_serial:
+            tech_context += f"<li><b>INTERNET:</b> Router {self.internet_router_serial}</li>"
+        if self.vehicle_brand or self.vehicle_model:
+            tech_context += f"<li><b>VEHÍCULO:</b> {self.vehicle_brand or ''} {self.vehicle_model or ''} (Placas: {self.vehicle_plate or 'N/A'})</li>"
+
+        full_note = f"""
+            <div style="font-family: Arial, sans-serif;">
+                <p style="color: #e67e22; font-size: 16px;"><b>⚠️ REQUISICIÓN DESDE CAMPO</b></p>
+                <p><b>Lo que solicita el cliente:</b><br/>{req_notes}</p>
+                <hr/>
+                <p style="font-size: 12px; color: #666;"><b>DATOS TÉCNICOS EN SITIO (PARA COMPATIBILIDAD):</b></p>
+                <ul style="font-size: 12px; color: #666;">
+                    {tech_context or '<li>No hay datos técnicos registrados aún.</li>'}
+                </ul>
+                <p style="font-size: 11px;"><i>Solicitado por: {self.technician_id.name}</i></p>
+            </div>
+        """
+
+        # Crear Actividad para ventas
+        self.env['mail.activity'].create({
+            'activity_type_id': self.env.ref('mail.mail_activity_data_todo').id,
+            'note': full_note,
+            'summary': f"💰 Cotizar adicional: {req_notes[:30]}...",
+            'user_id': salesperson.id,
+            'res_id': self.id,
+            'res_model_id': self.env['ir.model']._get(self._name).id,
+            'date_deadline': fields.Date.today(),
+        })
+        
+        self.message_post(body=f"📝 <b>REQUISICIÓN ENVIADA A VENTAS:</b> {req_notes}")
+        return True
+
+    def get_last_location_from_traccar(self):
+        """ Obtiene la última posición del técnico desde Traccar """
+        self.ensure_one()
+        traccar_id = self.technician_id.partner_id.traccar_device_id
+        if not traccar_id:
+            return False
+        
+        import requests
+        from requests.auth import HTTPBasicAuth
+        
+        # URL local del servidor Traccar
+        url = "http://172.20.0.2:8082/api/positions" # IP interna del contenedor traccar
+        params = {'deviceId': traccar_id}
+        
+        try:
+            # Intentamos con admin/admin por defecto, esto debería configurarse en system parameters
+            res = requests.get(url, params=params, auth=HTTPBasicAuth('admin', 'admin'), timeout=5)
+            if res.ok and res.json():
+                pos = res.json()[0]
+                return {
+                    'lat': pos.get('latitude'),
+                    'lon': pos.get('longitude'),
+                    'speed': pos.get('speed'),
+                    'last_update': pos.get('fixTime')
+                }
+        except:
+            pass
+        return False
 
     def notify_salesperson_for_quote(self):
         for order in self:
@@ -522,3 +714,22 @@ class FsmOrder(models.Model):
         self.report_sent_date = fields.Datetime.now()
         self.message_post(body="📧 Reporte de patrullaje enviado al cliente con adjunto PDF.")
         return True
+
+class SentinelaFsmWorkLog(models.Model):
+    _name = 'sentinela.fsm.work.log'
+    _description = 'Bitácora de Trabajo FSM'
+    _order = 'date desc'
+
+    order_id = fields.Many2one('sentinela.fsm.order', string='Orden de Servicio', ondelete='cascade', required=True)
+    technician_id = fields.Many2one('res.users', string='Técnico', default=lambda self: self.env.user)
+    date = fields.Datetime(string='Fecha', default=fields.Datetime.now)
+    notes = fields.Text(string='Notas / Actividad')
+    
+    stage_at_moment = fields.Selection([
+        ('new', 'Nueva'),
+        ('assigned', 'Asignada'),
+        ('in_progress', 'En Proceso'),
+        ('paused', 'Pausada'),
+        ('done', 'Finalizada'),
+        ('cancel', 'Cancelada')
+    ], string='Estado al Registrar')

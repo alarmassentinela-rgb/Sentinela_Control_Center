@@ -1,4 +1,5 @@
 from odoo import models, fields, api, _
+from dateutil.relativedelta import relativedelta
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -48,13 +49,25 @@ class SaleOrder(models.Model):
             sub_lines = order.order_line.filtered(lambda l: l.product_id.is_subscription)
             
             for line in sub_lines:
+                # REVISIÓN DE RENOVACIÓN: No crear FSM si el contrato ya está activo (es una renovación)
+                # Buscamos si ya existe una suscripción activa para este cliente y producto
+                existing_active_sub = Subscription.search([
+                    ('partner_id', '=', order.partner_id.id),
+                    ('product_id', '=', line.product_id.id),
+                    ('state', 'in', ['active', 'closed', 'suspended'])
+                ], limit=1)
+                
+                if existing_active_sub:
+                    _logger.info(f"FSM: Skipping auto-creation for renewal of {order.partner_id.name}")
+                    continue
+
                 # Avoid duplicates if this SO was already processed or partially processed
                 # We check if there's already an FSM order or Sub linked to this SO for this product
                 existing_sub = Subscription.search([
                     ('partner_id', '=', order.partner_id.id),
                     ('product_id', '=', line.product_id.id),
                     ('state', '=', 'draft'),
-                    ('create_date', '>=', fields.Datetime.now() - fields.relativedelta.relativedelta(minutes=5))
+                    ('create_date', '>=', fields.Datetime.now() - relativedelta(minutes=5))
                 ], limit=1)
                 
                 if not existing_sub:
@@ -66,6 +79,7 @@ class SaleOrder(models.Model):
                         'price_unit': line.price_unit,
                         'service_type': line.product_id.service_type or 'alarm',
                         'recurring_interval': line.product_id.default_recurring_interval or '1',
+                        'next_billing_date': fields.Date.today(), # ASIGNAR FECHA PARA EVITAR ERROR DE VALIDACIÓN
                         'state': 'draft',
                     })
                     
@@ -79,5 +93,28 @@ class SaleOrder(models.Model):
                         'priority': '1',
                     })
                     _logger.info(f"FSM/SUB: Auto-created Installation flow for {order.partner_id.name}")
+
+            # 4. AUTOMATION: One-time Service Orders (non-subscriptions)
+            # Find lines that are SERVICES but NOT marked as subscription (those are handled above)
+            service_lines = order.order_line.filtered(lambda l: l.product_id.type == 'service' and not l.product_id.is_subscription)
+            
+            for s_line in service_lines:
+                # Check if we already created an FSM order for this SO/Product recently to avoid dupes
+                # (Simple check by description/origin)
+                existing_fsm = FsmOrder.search([
+                    ('partner_id', '=', order.partner_id.id),
+                    ('description', 'like', order.name),
+                    ('create_date', '>=', fields.Datetime.now() - relativedelta(minutes=5))
+                ], limit=1)
+                
+                if not existing_fsm:
+                    FsmOrder.create({
+                        'partner_id': order.partner_id.id,
+                        'service_address_id': order.partner_shipping_id.id or order.partner_id.id,
+                        'service_type': 'install' if 'Instalación' in s_line.product_id.name else 'repair',
+                        'description': f"ORDEN DE SERVICIO TÉCNICO: {s_line.product_id.name} vendido en {order.name}.<br/>Realizar el trabajo solicitado y documentar.",
+                        'priority': '0',
+                    })
+                    _logger.info(f"FSM: Auto-created Service Order for {order.partner_id.name} from SO {order.name}")
 
         return res

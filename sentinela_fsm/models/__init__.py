@@ -1,5 +1,4 @@
 from . import fsm_order
-from . import sale_order
 from . import fsm_checklist
 from . import subscription
 from . import fsm_evidence
@@ -10,3 +9,4 @@ from . import fsm_notification
 from . import fsm_chat
 from . import fsm_route_optimization
 from . import res_users
+from . import sale_order

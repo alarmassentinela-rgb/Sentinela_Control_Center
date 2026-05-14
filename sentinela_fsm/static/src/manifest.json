@@ -1,0 +1,17 @@
+{
+  "name": "Senti Car Tech",
+  "short_name": "Senti Car",
+  "description": "Plataforma de Gestión Técnica Sentinela",
+  "start_url": "/tech/dashboard",
+  "display": "standalone",
+  "background_color": "#1a237e",
+  "theme_color": "#1a237e",
+  "icons": [
+    {
+      "src": "/sentinela_fsm/static/src/logo_senticar.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

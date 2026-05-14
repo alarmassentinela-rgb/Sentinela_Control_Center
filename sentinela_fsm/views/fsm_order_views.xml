@@ -146,9 +146,8 @@
                                 </group>
                             </group>
                             <group>
-                                <!-- Campos para GPS -->
-                                <group string="Datos del Vehículo (GPS)" invisible="subscription_id and service_type != 'gps'">
-                                    <field name="vehicle_brand" placeholder="Ej. Nissan"/>
+                                                                 <!-- Campos para GPS -->
+                                                                <group string="Datos del Vehículo (Senticar)" invisible="subscription_id and service_type != 'gps'">                                    <field name="vehicle_brand" placeholder="Ej. Nissan"/>
                                     <field name="vehicle_model" placeholder="Ej. NP300"/>
                                     <field name="vehicle_color" placeholder="Ej. Blanco"/>
                                     <field name="vehicle_plate" placeholder="Ej. ABC-1234"/>

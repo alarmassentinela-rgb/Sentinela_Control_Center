@@ -9,6 +9,8 @@
                 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover"/>
                 <meta name="apple-mobile-web-app-capable" content="yes"/>
                 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+                <link rel="manifest" href="/sentinela_fsm/static/src/manifest_tech.json"/>
+                <link rel="apple-touch-icon" href="/sentinela_fsm/static/description/icon.png"/>
                 <title>Sentinela Tech</title>
                 <t t-call-assets="web.assets_frontend" t-js="false"/>
                 <style>
@@ -18,6 +20,12 @@
                     .btn-action { border-radius: 10px; padding: 12px; font-weight: 600; }
                     .data-label { font-size: 11px; text-transform: uppercase; color: #666; font-weight: bold; }
                     .data-value { font-size: 15px; color: #111; margin-bottom: 8px; }
+                    .nav-pills .nav-link { color: #666; background: #eee; margin: 0 4px; border-radius: 8px; }
+                    .nav-pills .nav-link.active { background: #1a237e !important; color: white !important; }
+                    .bg-emergency { background: #fff5f5; border: 2px solid #f44336; }
+                    .emergency-title { color: #d32f2f; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+                    .blink-border { animation: blinker 1.5s linear infinite; }
+                    @keyframes blinker { 50% { border-color: transparent; } }
                 </style>
             </head>
             <body>
@@ -27,7 +35,7 @@
                 <div class="container py-3">
                     <t t-out="0"/>
                 </div>
-                <t t-call-assets="web.assets_frontend" t-xml="false"/>
+                <t t-call-assets="web.assets_frontend" t-css="false"/>
             </body>
         </html>
     </template>
@@ -45,15 +53,21 @@
                     <div class="tech-card p-3 border-start border-4" t-attf-style="border-color: #{'#f44336' if order.priority == '3' else '#2196f3'} !important;">
                         <div class="d-flex justify-content-between">
                             <span class="text-muted small fw-bold" t-esc="order.name"/>
-                            <span class="small text-primary" t-field="order.scheduled_date" t-options='{"widget": "datetime", "format": "HH:mm"}'/>
+                            <t t-set="is_late" t-value="order.scheduled_date and order.scheduled_date &lt; datetime.datetime.now() and order.stage == 'assigned'"/>
+                            <span t-attf-class="small fw-bold #{'text-danger' if is_late else 'text-primary'}">
+                                <i t-if="is_late" class="fa fa-clock-o me-1"/>
+                                <span t-field="order.scheduled_date" t-options='{"widget": "datetime", "format": "dd MMM, HH:mm"}'/>
+                            </span>
                         </div>
                         <div class="fw-bold text-dark mt-1" t-esc="order.partner_id.name"/>
                         <div class="small text-muted mb-2"><i class="fa fa-map-marker me-1"/> <t t-esc="order.service_address_id.city"/></div>
                         
                         <div class="d-flex justify-content-between align-items-center">
-                            <span t-if="order.service_type == 'install'" class="badge bg-success-light text-success border">Instalación</span>
-                            <span t-if="order.service_type == 'repair'" class="badge bg-warning-light text-warning border">Reparación</span>
-                            <span t-attf-class="badge #{'bg-info' if order.stage == 'assigned' else 'bg-primary'}" t-esc="order.stage.upper()"/>
+                            <span t-if="order.service_type == 'install'" class="badge bg-success">Instalación</span>
+                            <span t-if="order.service_type == 'repair'" class="badge bg-warning text-dark">Reparación</span>
+                            <span t-if="order.stage == 'assigned'" class="badge bg-info">ASIGNADO</span>
+                            <span t-if="order.stage == 'in_progress'" class="badge bg-primary">EN PROCESO</span>
+                            <span t-if="order.stage == 'paused'" class="badge bg-secondary">PAUSADO</span>
                         </div>
                     </div>
                 </a>
@@ -68,11 +82,25 @@
         </t>
     </template>
 
-    <!-- VISTA DE EJECUCIÓN (ORQUESTACIÓN) -->
+    <!-- VISTA DE EJECUCIÓN -->
     <template id="tech_order_view" name="Ejecución de Orden">
         <t t-call="sentinela_fsm.tech_layout">
-            <div class="mb-3">
-                <a href="/tech/dashboard" class="text-primary small"><i class="fa fa-chevron-left me-1"/> Volver a Agenda</a>
+            <div class="mb-3 d-flex justify-content-between align-items-center">
+                <a href="/tech/dashboard" class="text-primary small"><i class="fa fa-chevron-left me-1"/> Agenda</a>
+                
+                <div t-if="order.stage == 'in_progress'">
+                    <button type="button" class="btn btn-outline-warning btn-sm fw-bold" data-bs-toggle="modal" data-bs-target="#modalPause">
+                        <i class="fa fa-pause me-1"/> PAUSAR
+                    </button>
+                </div>
+            </div>
+
+            <div t-if="request.params.get('error') == 'no_signature'" class="alert alert-danger small py-2 mb-3 shadow-sm">
+                <i class="fa fa-warning me-2"/> <b>BLOQUEO:</b> Debes capturar la firma del cliente antes de finalizar.
+            </div>
+            
+            <div t-if="request.params.get('success') == 'quote_sent'" class="alert alert-success small py-2 mb-3 shadow-sm">
+                <i class="fa fa-check me-2"/> Requisición enviada a ventas con éxito.
             </div>
 
             <div class="tech-card p-3 shadow-sm">
@@ -90,9 +118,160 @@
                 </div>
             </div>
 
+            <!-- CITA PROGRAMADA (NUEVO) -->
+            <div class="tech-card p-3 shadow-sm bg-light">
+                <div class="row align-items-center">
+                    <div class="col-2 text-center text-primary">
+                        <i class="fa fa-calendar fa-2x"/>
+                    </div>
+                    <div class="col-10">
+                        <div class="data-label">Cita Programada</div>
+                        <t t-set="is_late" t-value="order.scheduled_date and order.scheduled_date &lt; datetime.datetime.now() and order.stage == 'assigned'"/>
+                        <div t-attf-class="fw-bold #{'text-danger' if is_late else 'text-dark'}" style="font-size: 18px;">
+                            <span t-field="order.scheduled_date" t-options='{"widget": "datetime", "format": "EEEE dd &apos;de&apos; MMMM, HH:mm"}'/>
+                        </div>
+                        <div t-if="is_late" class="extra-small text-danger fw-bold"><i class="fa fa-warning"/> ¡ATENCIÓN: Cita retrasada!</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MODO EMERGENCIA (PATRULLAJE) -->
+            <t t-if="order.service_type == 'patrol' and order.alarm_event_id">
+                <div class="tech-card p-3 shadow bg-emergency blink-border mb-3">
+                    <div class="d-flex align-items-center mb-2">
+                        <i class="fa fa-warning fa-2x text-danger me-3"/>
+                        <div>
+                            <h5 class="mb-0 emergency-title">Emergencia Activa</h5>
+                            <span class="badge bg-danger" t-esc="order.alarm_event_id.name"/>
+                        </div>
+                    </div>
+                    
+                    <!-- BOTÓN DE LLEGADA AL SITIO -->
+                    <div t-if="order.stage == 'in_progress' and not order.arrival_date" class="mt-3">
+                        <form t-attf-action="/tech/order/#{order.id}/arrival" method="post" id="arrival_form">
+                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                            <input type="hidden" name="lat" id="arrival_lat"/>
+                            <input type="hidden" name="lon" id="arrival_lon"/>
+                            <button type="button" class="btn btn-danger btn-lg w-100 fw-bold py-3 shadow-sm" onclick="captureArrivalLocation()">
+                                <i class="fa fa-map-marker me-2"/> LLEGADA AL SITIO
+                            </button>
+                        </form>
+                        <script>
+                            function captureArrivalLocation() {
+                                if (navigator.geolocation) {
+                                    navigator.geolocation.getCurrentPosition(function(position) {
+                                        document.getElementById('arrival_lat').value = position.coords.latitude;
+                                        document.getElementById('arrival_lon').value = position.coords.longitude;
+                                        document.getElementById('arrival_form').submit();
+                                    }, function(error) {
+                                        document.getElementById('arrival_form').submit();
+                                    });
+                                } else { document.getElementById('arrival_form').submit(); }
+                            }
+                        </script>
+                    </div>
+
+                    <div t-if="order.arrival_date" class="alert alert-success py-2 small mb-0 mt-2">
+                        <i class="fa fa-check-circle me-1"/> Llegada reportada: <b t-field="order.arrival_date" t-options='{"widget": "datetime", "format": "HH:mm:ss"}'/>
+                    </div>
+
+                    <!-- PANEL DE DATOS DE LA CUENTA -->
+                    <div class="mt-3">
+                        <div class="accordion" id="accEmergency">
+                            <div class="accordion-item border-0">
+                                <h2 class="accordion-header">
+                                    <button class="accordion-button bg-light py-2 small fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#colZones">
+                                        <i class="fa fa-list me-2"/> ZONAS Y CONTACTOS
+                                    </button>
+                                </h2>
+                                <div id="colZones" class="accordion-collapse collapse show">
+                                    <div class="accordion-body p-2 bg-white small">
+                                        <div class="data-label">Cuenta: <b class="text-dark" t-esc="order.alarm_event_id.account_number"/></div>
+                                        
+                                        <h6 class="mt-2 fw-bold border-bottom pb-1">Zonas Activas / Config</h6>
+                                        <div class="list-group list-group-flush mb-3">
+                                            <t t-foreach="order.alarm_event_id.device_id.zone_ids" t-as="z">
+                                                <div class="list-group-item px-0 py-1 d-flex justify-content-between">
+                                                    <span><b t-esc="z.zone_number"/>. <t t-esc="z.name"/></span>
+                                                    <span class="badge bg-secondary opacity-50"><t t-esc="z.zone_type"/></span>
+                                                </div>
+                                            </t>
+                                        </div>
+
+                                        <h6 class="fw-bold border-bottom pb-1">Contactos de Emergencia</h6>
+                                        <div class="list-group list-group-flush mb-2">
+                                            <t t-foreach="order.alarm_event_id.device_id.contact_ids" t-as="c">
+                                                <div class="list-group-item px-0 py-2 d-flex justify-content-between align-items-center">
+                                                    <div>
+                                                        <div class="fw-bold" t-esc="c.name"/>
+                                                        <div class="extra-small text-muted" t-esc="c.relation"/>
+                                                    </div>
+                                                    <a t-attf-href="tel:#{c.phone}" class="btn btn-sm btn-success rounded-pill px-3"><i class="fa fa-phone me-1"/> LLAMAR</a>
+                                                </div>
+                                            </t>
+                                        </div>
+                                        
+                                        <div class="bg-dark text-warning p-2 rounded mt-2 text-center">
+                                            <div class="extra-small text-uppercase">Palabras Clave</div>
+                                            <div class="fw-bold fs-6" t-esc="order.alarm_event_id.subscription_id.keyword or 'SIN PALABRA CLAVE'"/>
+                                        </div>
+
+                                        <!-- PROTOCOLO 360 (NUEVO) -->
+                                        <div class="mt-4 p-3 border rounded bg-white shadow-sm">
+                                            <h6 class="fw-bold text-primary"><i class="fa fa-shield me-2"/> PROTOCOLO SENTINELA 360</h6>
+                                            <p class="extra-small text-muted mb-3">Complete la inspección perimetral antes de dictaminar.</p>
+                                            
+                                            <div class="mb-3">
+                                                <label class="data-label">Dictamen de Situación</label>
+                                                <select name="patrol_result" class="form-select form-select-sm fw-bold border-primary">
+                                                    <option value="">-- Seleccione Resultado --</option>
+                                                    <t t-foreach="request.env['sentinela.fsm.order']._fields['patrol_result'].selection" t-as="opt">
+                                                        <option t-att-value="opt[0]" t-att-selected="'selected' if order.patrol_result == opt[0] else None">
+                                                            <t t-esc="opt[1]"/>
+                                                        </option>
+                                                    </t>
+                                                </select>
+                                            </div>
+
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" name="is_forced_entry" id="swForced" t-att-checked="'checked' if order.is_forced_entry else None"/>
+                                                <label class="form-check-label small fw-bold text-danger" for="swForced">¿Hay señales de intrusión forzada?</label>
+                                            </div>
+
+                                            <div class="form-check form-switch mb-3">
+                                                <input class="form-check-input" type="checkbox" name="police_notified" id="swPolice" t-att-checked="'checked' if order.police_notified else None"/>
+                                                <label class="form-check-label small fw-bold" for="swPolice">¿Se dio aviso a la Policía / 911?</label>
+                                            </div>
+
+                                            <button type="button" class="btn btn-outline-danger btn-sm w-100 fw-bold" onclick="alert('🆘 ALERTA ENVIADA A CENTRAL: El operador está coordinando apoyo ahora mismo.')">
+                                                <i class="fa fa-bullhorn me-2"/> SOLICITAR APOYO / POLICÍA
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </t>
+
+            <div class="tech-card p-3 shadow-sm bg-white border-start border-4 border-info">
+                <div class="data-label">Detalles del Servicio</div>
+                <div class="mb-2">
+                    <span t-if="order.service_type == 'install'" class="badge bg-success">INSTALACIÓN</span>
+                    <span t-if="order.service_type == 'repair'" class="badge bg-warning text-dark">REPARACIÓN</span>
+                    <span t-if="order.service_type == 'transfer'" class="badge bg-info">TRASLADO</span>
+                    <span t-if="order.service_type == 'removal'" class="badge bg-danger">RETIRO</span>
+                    <span t-if="order.service_type == 'patrol'" class="badge bg-dark">PATRULLAJE</span>
+                </div>
+                <div class="data-value mt-2" style="font-size: 14px; line-height: 1.4;">
+                    <t t-out="order.description"/>
+                </div>
+            </div>
+
             <!-- FLUJO DE ESTADO -->
             <div t-if="order.stage == 'assigned'" class="tech-card p-4 text-center">
-                <p>Haz Check-In para iniciar el trabajo y obtener coordenadas de arribo.</p>
+                <p>Haz Check-In para iniciar el trabajo.</p>
                 <form t-attf-action="/tech/order/#{order.id}/start" method="post">
                     <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                     <button type="submit" class="btn btn-primary btn-lg w-100 btn-action shadow">
@@ -101,84 +280,414 @@
                 </form>
             </div>
 
+            <div t-if="order.stage == 'paused'" class="tech-card p-4 text-center border-warning">
+                <p class="text-warning fw-bold mb-1"><i class="fa fa-pause-circle me-1"/> TRABAJO PAUSADO</p>
+                <p class="small text-muted mb-3" t-esc="order.pause_notes or 'Sin notas de pausa.'"/>
+                <form t-attf-action="/tech/order/#{order.id}/resume" method="post">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <button type="submit" class="btn btn-warning btn-lg w-100 btn-action shadow text-white">
+                        <i class="fa fa-play me-2"/> REANUDAR TRABAJO
+                    </button>
+                </form>
+            </div>
+
             <!-- TRABAJO EN PROCESO -->
             <div t-if="order.stage == 'in_progress'" class="tech-card p-3">
-                <form t-attf-action="/tech/order/#{order.id}/save" method="post" id="tech_form">
+                <form t-attf-action="/tech/order/#{order.id}/save" method="post" id="tech_form" enctype="multipart/form-data">
                     <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                     <input type="hidden" name="lat" id="lat"/>
                     <input type="hidden" name="lon" id="lon"/>
 
                     <ul class="nav nav-pills nav-justified mb-3 small" id="pills-tab" role="tablist">
                         <li class="nav-item">
-                            <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-tech">DATOS TÉCNICOS</button>
+                            <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-res" type="button">RESOLUCIÓN</button>
                         </li>
                         <li class="nav-item">
-                            <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-res">RESOLUCIÓN</button>
+                            <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-check" type="button">CHECKLIST</button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-tech" type="button">DATOS TÉCNICOS</button>
                         </li>
                     </ul>
 
                     <div class="tab-content" id="pills-tabContent">
-                        <!-- Pestaña Datos Técnicos -->
-                        <div class="tab-pane fade show active" id="tab-tech">
-                            <!-- Si es ALARMA -->
-                            <div t-if="order.subscription_id.service_type == 'alarm'" class="mb-3">
-                                <div class="alert alert-info py-2 small">
-                                    <b>Cuenta de Monitoreo:</b> <span class="h5 mb-0 d-block" t-esc="order.subscription_id.monitoring_account_number or 'Por asignar'"/>
+                        <!-- Pestaña Resolución -->
+                        <div class="tab-pane fade show active" id="tab-res" role="tabpanel">
+                            <label class="form-label small fw-bold">Reporte de lo Realizado</label>
+                            <textarea name="resolution_notes" class="form-control mb-3" rows="4" placeholder="Explique qué se reparó o instaló..."><t t-esc="order.resolution_notes"/></textarea>
+                            
+                            <div class="tech-card p-3 bg-light border-0">
+                                <h6 class="fw-bold small mb-3 text-primary"><i class="fa fa-user-check me-1"/> FORMALIZACIÓN DE ENTREGA</h6>
+                                <label class="data-label">Nombre de quien recibe</label>
+                                <input type="text" name="received_by_name" class="form-control form-control-sm mb-2" t-att-value="order.received_by_name" placeholder="Nombre completo"/>
+                                
+                                <label class="data-label">Parentesco / Cargo</label>
+                                <input type="text" name="received_by_relationship" class="form-control form-control-sm mb-3" t-att-value="order.received_by_relationship" placeholder="Ej. Titular, Vigilante, Esposa..."/>
+
+                                <label class="data-label">Firma de Conformidad</label>
+                                <div class="bg-white border rounded" style="touch-action: none;">
+                                    <canvas id="signature-pad" class="w-100" height="150" style="border-radius: 8px;"></canvas>
+                                    <input type="hidden" name="customer_signature" id="customer_signature"/>
                                 </div>
-                                <label class="form-label small fw-bold">Listado de Zonas</label>
-                                <textarea name="alarm_zones" class="form-control form-control-sm" rows="4" placeholder="Zona 1: Puerta..."><t t-esc="order.alarm_zones"/></textarea>
+                                <button type="button" class="btn btn-link btn-sm text-danger p-0 mt-1" onclick="clearSignature()">Borrar Firma</button>
                             </div>
 
-                            <!-- Si es GPS -->
-                            <div t-if="order.subscription_id.service_type == 'gps'" class="mb-3">
-                                <label class="form-label small fw-bold">Serie / IMEI del Equipo</label>
-                                <div class="input-group">
-                                    <input type="text" name="vehicle_plate" class="form-control" t-att-value="order.vehicle_plate" placeholder="Placas"/>
-                                    <button class="btn btn-outline-secondary" type="button"><i class="fa fa-barcode"/></button>
+                            <div class="mt-3">
+                                <label class="form-label small fw-bold">Evidencias Fotográficas</label>
+                                <div class="d-grid">
+                                    <input type="file" name="evidence_files" id="evidence_files" class="d-none" accept="image/*" multiple="multiple"/>
+                                    <button type="button" class="btn btn-outline-dark shadow-sm" onclick="document.getElementById('evidence_files').click();">
+                                        <i class="fa fa-camera me-2"/> SUBIR FOTOS
+                                    </button>
+                                    <div id="file_list" class="mt-2 small text-muted"></div>
                                 </div>
-                                <div class="row mt-2">
-                                    <div class="col-6">
-                                        <input type="text" name="vehicle_brand" class="form-control form-control-sm" placeholder="Marca" t-att-value="order.vehicle_brand"/>
+                            </div>
+
+                            <!-- BITÁCORA CRONOLÓGICA (PARA EL TÉCNICO) -->
+                            <hr class="my-4"/>
+                            <h6 class="fw-bold small text-muted mb-3"><i class="fa fa-history me-1"/> BITÁCORA DE AVANCES</h6>
+                            <div class="border-start ms-2 ps-3">
+                                <t t-foreach="order.work_log_ids" t-as="log">
+                                    <div class="mb-3 position-relative">
+                                        <div class="position-absolute bg-primary rounded-circle" style="width: 8px; height: 8px; left: -17px; top: 6px;"></div>
+                                        <div class="fw-bold extra-small text-muted" t-field="log.date" t-options='{"widget": "datetime", "format": "dd MMM, HH:mm"}'/>
+                                        <div class="small text-dark" t-esc="log.notes"/>
                                     </div>
-                                    <div class="col-6">
-                                        <input type="text" name="vehicle_model" class="form-control form-control-sm" placeholder="Modelo" t-att-value="order.vehicle_model"/>
-                                    </div>
-                                </div>
-                                <div class="mt-2">
-                                    <label class="form-label small fw-bold">ICCID de la SIM (TNF)</label>
-                                    <input type="text" name="sim_iccid" class="form-control form-control-sm" t-att-value="order.sim_iccid"/>
-                                </div>
+                                </t>
+                                <t t-if="not order.work_log_ids">
+                                    <p class="text-muted extra-small italic">No hay registros previos en la bitácora.</p>
+                                </t>
                             </div>
                         </div>
 
-                        <!-- Pestaña Resolución -->
-                        <div class="tab-pane fade" id="tab-res">
-                            <label class="form-label small fw-bold">Reporte de lo Realizado</label>
-                            <textarea name="resolution_notes" class="form-control" rows="5" placeholder="Explique qué se reparó o instaló..."><t t-esc="order.resolution_notes"/></textarea>
+                        <!-- Pestaña CHECKLIST (NUEVA) -->
+                        <div class="tab-pane fade" id="tab-check" role="tabpanel">
+                            <h6 class="fw-bold mb-3">Protocolo de Servicio</h6>
+                            <div t-foreach="order.checklist_ids" t-as="line" class="tech-card p-3 mb-2 d-flex align-items-center justify-content-between">
+                                <div class="flex-grow-1 pe-2">
+                                    <span class="small" t-esc="line.name"/>
+                                </div>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" t-attf-name="checklist_#{line.id}" t-att-checked="'checked' if line.is_done else None" style="width: 2.5em; height: 1.2em;"/>
+                                </div>
+                            </div>
+                            <t t-if="not order.checklist_ids">
+                                <p class="text-muted small text-center italic">No hay tareas programadas para este servicio.</p>
+                            </t>
+                        </div>
+
+                        <!-- Pestaña Datos Técnicos (INTELIGENTE) -->
+                        <div class="tab-pane fade" id="tab-tech" role="tabpanel">
+                            <!-- Si no hay tipo definido, permitir seleccionar para mostrar los campos -->
+                            <div class="alert alert-secondary py-2 small mb-3">
+                                <b>Categoría Técnica:</b>
+                                <t t-set="tech_type" t-value="order.subscription_id.service_type or 'generic'"/>
+                                <span class="badge bg-dark ms-2"><t t-esc="tech_type.upper()"/></span>
+                            </div>
+
+                            <!-- 1. ALARMAS -->
+                            <div t-if="tech_type == 'alarm'" class="mb-3">
+                                <label class="data-label">Datos del Panel</label>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-6"><input type="text" name="alarm_panel_brand" class="form-control form-control-sm" placeholder="Marca" t-att-value="order.alarm_panel_brand"/></div>
+                                    <div class="col-6"><input type="text" name="alarm_panel_model" class="form-control form-control-sm" placeholder="Modelo" t-att-value="order.alarm_panel_model"/></div>
+                                </div>
+                                <label class="data-label">Cuenta Monitoreo</label>
+                                <input type="text" name="monitoring_account_number" class="form-control form-control-sm mb-2" placeholder="Núm. de Cuenta" t-att-value="order.monitoring_account_number"/>
+                                <label class="data-label">Listado de Zonas (Crítico)</label>
+                                <textarea name="alarm_zones" class="form-control form-control-sm" rows="6" placeholder="Z1: Puerta Principal, Z2: Sensor Movimiento..."><t t-esc="order.alarm_zones"/></textarea>
+                            </div>
+
+                            <!-- 2. GPS / RASTREO -->
+                            <div t-if="tech_type == 'gps'" class="mb-3">
+                                <label class="data-label">Datos de la Unidad</label>
+                                <input type="text" name="vehicle_plate" class="form-control mb-2" t-att-value="order.vehicle_plate" placeholder="Placas (Ej. ABC-123)"/>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-6"><input type="text" name="vehicle_brand" class="form-control form-control-sm" placeholder="Marca" t-att-value="order.vehicle_brand"/></div>
+                                    <div class="col-6"><input type="text" name="vehicle_model" class="form-control form-control-sm" placeholder="Modelo" t-att-value="order.vehicle_model"/></div>
+                                </div>
+                                <label class="data-label">Conectividad</label>
+                                <input type="text" name="sim_iccid" class="form-control mb-2" t-att-value="order.sim_iccid" placeholder="ICCID de la SIM / IMEI"/>
+                            </div>
+
+                            <!-- 3. CÁMARAS / CCTV (NUEVO) -->
+                            <div t-if="tech_type == 'cctv' or tech_type == 'generic'" class="mb-3">
+                                <label class="data-label">Grabador DVR/NVR</label>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-6"><input type="text" name="cctv_dvr_brand" class="form-control form-control-sm" placeholder="Marca" t-att-value="order.cctv_dvr_brand"/></div>
+                                    <div class="col-6"><input type="text" name="cctv_dvr_model" class="form-control form-control-sm" placeholder="Modelo" t-att-value="order.cctv_dvr_model"/></div>
+                                </div>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-6">
+                                        <label class="data-label">Núm. Cámaras</label>
+                                        <input type="number" name="cctv_num_cameras" class="form-control form-control-sm" t-att-value="order.cctv_num_cameras"/>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="data-label">Disco Duro</label>
+                                        <input type="text" name="cctv_storage" class="form-control form-control-sm" placeholder="Ej. 2TB" t-att-value="order.cctv_storage"/>
+                                    </div>
+                                </div>
+                                <label class="data-label">Acceso Remoto</label>
+                                <div class="row g-2">
+                                    <div class="col-6"><input type="text" name="cctv_remote_user" class="form-control form-control-sm" placeholder="Usuario" t-att-value="order.cctv_remote_user"/></div>
+                                    <div class="col-6"><input type="password" name="cctv_remote_pass" class="form-control form-control-sm" placeholder="Clave" t-att-value="order.cctv_remote_pass"/></div>
+                                </div>
+                            </div>
+
+                            <!-- 4. INTERNET -->
+                            <div t-if="tech_type == 'internet'" class="mb-3">
+                                <label class="data-label">Antena / Radio</label>
+                                <input type="text" name="internet_antenna_mac" class="form-control mb-2" t-att-value="order.internet_antenna_mac" placeholder="MAC Address"/>
+                                <input type="text" name="internet_signal_dbm" class="form-control mb-2" t-att-value="order.internet_signal_dbm" placeholder="Nivel de Señal (dBm)"/>
+                                <label class="data-label">Configuración Router</label>
+                                <input type="text" name="internet_pppoe_user" class="form-control mb-2" t-att-value="order.internet_pppoe_user" placeholder="Usuario PPPoE"/>
+                                <input type="text" name="internet_router_serial" class="form-control" t-att-value="order.internet_router_serial" placeholder="Serie del Router"/>
+                            </div>
+
+                            <hr class="my-3"/>
+                            <h6 class="fw-bold small mb-2"><i class="fa fa-cubes me-1"/> EQUIPOS / MATERIALES USADOS</h6>
+                            <div class="bg-light p-2 rounded mb-2 border">
+                                <t t-foreach="order.equipment_ids" t-as="eq">
+                                    <div class="d-flex justify-content-between small border-bottom py-1">
+                                        <span><t t-esc="eq.product_id.name"/></span>
+                                        <span class="fw-bold">x<t t-esc="int(eq.quantity)"/></span>
+                                    </div>
+                                </t>
+                                <t t-if="not order.equipment_ids">
+                                    <p class="text-muted extra-small mb-0">No se han registrado materiales aún.</p>
+                                </t>
+                            </div>
+                            <p class="extra-small text-muted italic">* El registro masivo de materiales se realiza al FINALIZAR la orden o vía Central.</p>
                             
-                            <div class="mt-3 text-center border p-3 bg-light rounded">
-                                <i class="fa fa-camera fa-2x text-muted"/>
-                                <p class="small mb-0">Adjuntar Evidencias</p>
+                            <hr class="my-3"/>
+                            <div class="bg-warning-light p-3 rounded border border-warning shadow-sm">
+                                <h6 class="fw-bold small mb-2"><i class="fa fa-shopping-cart me-1"/> REQUISICIÓN ADICIONAL</h6>
+                                <p class="extra-small text-muted mb-2">¿El cliente solicitó algo extra? Escríbelo aquí para que Ventas cotice:</p>
+                                <form t-attf-action="/tech/order/#{order.id}/quote" method="post">
+                                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                    <textarea name="quote_notes" class="form-control form-control-sm mb-2" rows="3" placeholder="Ej. 2 conectores extra, 1 cámara bala..."></textarea>
+                                    <button type="submit" class="btn btn-warning btn-sm w-100 fw-bold">ENVIAR A VENTAS</button>
+                                </form>
                             </div>
                         </div>
                     </div>
 
                     <div class="d-flex gap-2 mt-4">
-                        <button type="submit" name="action" value="save" class="btn btn-outline-primary w-50">Guardar</button>
-                        <button type="submit" name="action" value="finish" class="btn btn-success w-50 shadow" onclick="return confirm('¿Seguro que deseas finalizar el trabajo?');">FINALIZAR</button>
+                        <button type="button" class="btn btn-outline-primary w-50" onclick="captureLocationAndSubmit('save')">Guardar</button>
+                        <button type="button" class="btn btn-success w-50 shadow" onclick="captureLocationAndSubmit('finish')">FINALIZAR</button>
+                        <input type="hidden" name="action" id="form_action" value="save"/>
                     </div>
                 </form>
             </div>
 
+            <!-- MODAL PAUSA -->
+            <div class="modal fade" id="modalPause" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <form t-attf-action="/tech/order/#{order.id}/pause" method="post">
+                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                            <div class="modal-header">
+                                <h5 class="modal-title">Pausar Trabajo</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <label class="data-label">Motivo de Pausa</label>
+                                <select name="pause_reason_id" class="form-select mb-3">
+                                    <t t-foreach="request.env['sentinela.fsm.pause.reason'].search([])" t-as="reason">
+                                        <option t-att-value="reason.id"><t t-esc="reason.name"/></option>
+                                    </t>
+                                </select>
+                                <label class="data-label">Notas Adicionales</label>
+                                <textarea name="pause_notes" class="form-control" rows="3" placeholder="Detalle por qué se pausa la orden..."></textarea>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="submit" class="btn btn-warning fw-bold">PAUSAR AHORA</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
             <script>
-                // Geolocalización automática para el Check-out
-                if (navigator.geolocation) {
-                    navigator.geolocation.getCurrentPosition(function(position) {
-                        document.getElementById('lat').value = position.coords.latitude;
-                        document.getElementById('lon').value = position.coords.longitude;
+                // LÓGICA DE FIRMA
+                var canvas = document.getElementById('signature-pad');
+                var ctx = canvas ? canvas.getContext('2d') : null;
+                var drawing = false;
+
+                if (canvas) {
+                    canvas.addEventListener('touchstart', function(e) { drawing = true; ctx.beginPath(); var rect = canvas.getBoundingClientRect(); ctx.moveTo(e.touches[0].clientX - rect.left, e.touches[0].clientY - rect.top); e.preventDefault(); });
+                    canvas.addEventListener('touchmove', function(e) { if (!drawing) return; var rect = canvas.getBoundingClientRect(); ctx.lineTo(e.touches[0].clientX - rect.left, e.touches[0].clientY - rect.top); ctx.stroke(); e.preventDefault(); });
+                    canvas.addEventListener('touchend', function() { drawing = false; });
+                    ctx.lineWidth = 2;
+                    ctx.lineCap = 'round';
+                    ctx.strokeStyle = '#1a237e';
+                }
+
+                function clearSignature() {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    document.getElementById('customer_signature').value = '';
+                }
+
+                function captureLocationAndSubmit(action) {
+                    document.getElementById('form_action').value = action;
+                    if (action == 'finish') {
+                        if(!confirm('¿Seguro que deseas finalizar el trabajo?')) return;
+                    }
+                    
+                    // Capturar firma antes de enviar
+                    if (canvas) {
+                        var dataURL = canvas.toDataURL();
+                        // Solo guardar si hay algo dibujado (aproximación simple)
+                        document.getElementById('customer_signature').value = dataURL;
+                    }
+
+                    if (navigator.geolocation) {
+                        navigator.geolocation.getCurrentPosition(function(position) {
+                            if(document.getElementById('lat')) document.getElementById('lat').value = position.coords.latitude;
+                            if(document.getElementById('lon')) document.getElementById('lon').value = position.coords.longitude;
+                            document.getElementById('tech_form').submit();
+                        }, function(error) {
+                            console.error("Error capturando ubicación", error);
+                            document.getElementById('tech_form').submit();
+                        }, {enableHighAccuracy: true, timeout: 5000});
+                    } else {
+                        document.getElementById('tech_form').submit();
+                    }
+                }
+
+                // Listado de archivos seleccionados
+                if(document.getElementById('evidence_files')) {
+                    document.getElementById('evidence_files').addEventListener('change', function(e) {
+                        var list = document.getElementById('file_list');
+                        list.innerHTML = e.target.files.length + " fotos seleccionadas";
                     });
                 }
             </script>
+        </t>
+    </template>
+
+    <!-- VISTA PÚBLICA DE RASTREO (CLIENTE) -->
+    <template id="customer_tracking_map" name="SentiCar: Rastreo en Vivo">
+        &lt;!DOCTYPE html&gt;
+        <html lang="es">
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no"/>
+                <title>SentiCar: Rastrear mi Técnico</title>
+                <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+                <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+                <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+                <style>
+                    #map { height: 70vh; width: 100%; border-radius: 0 0 20px 20px; }
+                    .info-card { padding: 20px; background: white; border-radius: 20px; margin-top: -20px; position: relative; z-index: 1000; box-shadow: 0 -5px 15px rgba(0,0,0,0.1); }
+                    .tech-avatar { width: 50px; height: 50px; background: #eee; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #1a237e; border: 2px solid #1a237e; }
+                    .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #4caf50; display: inline-block; margin-right: 5px; }
+                </style>
+            </head>
+            <body class="bg-light">
+                <div id="map"></div>
+                
+                <div class="container">
+                    <div class="info-card">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="tech-avatar me-3">
+                                <t t-esc="order.technician_id.name[0]"/>
+                            </div>
+                            <div>
+                                <h6 class="mb-0">
+                                    <t t-if="order.service_type == 'patrol'">Oficial: </t>
+                                    <t t-else="">Técnico: </t>
+                                    <t t-esc="order.technician_id.name"/>
+                                </h6>
+                                <p class="text-muted small mb-0">
+                                    <span class="status-dot"></span> 
+                                    <t t-if="order.service_type == 'patrol'"><b class="text-danger">Respuesta de Emergencia</b></t>
+                                    <t t-else="">En camino por <b>SentiCar</b></t>
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div class="row text-center border-top pt-3">
+                            <div class="col-6 border-end">
+                                <small class="text-muted d-block">Folio</small>
+                                <span class="fw-bold"><t t-esc="order.name"/></span>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted d-block">Estatus</small>
+                                <span t-attf-class="fw-bold #{'text-danger' if order.service_type == 'patrol' else 'text-primary'}">
+                                    <t t-if="order.service_type == 'patrol'">SentiCar Security by Sentinela</t>
+                                    <t t-else="">SentiCar Service by Sentinela</t>
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4 text-center">
+                            <a href="https://SentiCar.com" target="_blank" class="text-decoration-none">
+                                <img src="/sentinela_fsm/static/src/logo_senticar.png" height="50" alt="SentiCar" class="mb-2"/>
+                                <div class="btn btn-outline-primary btn-sm w-100 fw-bold mt-2">
+                                    🌐 VISITAR SENTICAR.COM
+                                </div>
+                                <p class="small text-muted mt-3">
+                                    Tecnología de Seguridad Inteligente <br/>
+                                    <b>SentiCar by Sentinela</b>
+                                </p>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <script t-inline="javascript">
+                    var token = "<t t-esc="order.tracking_token"/>";
+                    var destLat = <t t-esc="order.service_address_id.partner_latitude or 0"/>;
+                    var destLon = <t t-esc="order.service_address_id.partner_longitude or 0"/>;
+                    
+                    var map = L.map('map').setView([destLat, destLon], 13);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+                    var techMarker = L.marker([0, 0], {
+                        icon: L.icon({
+                            iconUrl: 'https://cdn-icons-png.flaticon.com/512/2554/2554978.png',
+                            iconSize: [40, 40],
+                            iconAnchor: [20, 20]
+                        })
+                    }).addTo(map);
+
+                    var destMarker = L.marker([destLat, destLon]).addTo(map).bindPopup('Su Domicilio').openPopup();
+
+                    function updatePosition() {
+                        fetch('/rastreo/' + token + '/data', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({params: {}})
+                        }).then(res => res.json()).then(data => {
+                            if (data.result &amp;&amp; data.result.lat) {
+                                var newPos = [data.result.lat, data.result.lon];
+                                techMarker.setLatLng(newPos);
+                                // Ajustar mapa si es la primera vez
+                                if (techMarker.getLatLng().lat === 0) {
+                                    var group = new L.featureGroup([techMarker, destMarker]);
+                                    map.fitBounds(group.getBounds().pad(0.2));
+                                }
+                            }
+                        });
+                    }
+
+                    updatePosition();
+                    setInterval(updatePosition, 5000);
+                </script>
+            </body>
+        </html>
+    </template>
+
+    <template id="tracking_expired" name="Rastreo Finalizado">
+        <t t-call="sentinela_fsm.tech_layout">
+            <div class="text-center py-5">
+                <i class="fa fa-check-circle fa-4x text-success mb-4"/>
+                <h3>Servicio Completado</h3>
+                <p class="text-muted">El rastreo ya no está disponible porque el técnico ha finalizado el servicio o la orden ha expirado.</p>
+                <a href="/" class="btn btn-primary mt-3">Ir al Inicio</a>
+            </div>
         </t>
     </template>
 </odoo>

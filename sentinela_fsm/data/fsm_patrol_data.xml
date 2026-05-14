@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="task_patrol_doors" model="sentinela.fsm.task.template">
+            <field name="name">Revisión de Puertas y Cerraduras</field>
+            <field name="sequence">10</field>
+            <field name="service_type">patrol</field>
+        </record>
+        <record id="task_patrol_windows" model="sentinela.fsm.task.template">
+            <field name="name">Revisión de Ventanas y Cristales</field>
+            <field name="sequence">20</field>
+            <field name="service_type">patrol</field>
+        </record>
+        <record id="task_patrol_perimeter" model="sentinela.fsm.task.template">
+            <field name="name">Inspección Perimetral (Bardas/Cercas)</field>
+            <field name="sequence">30</field>
+            <field name="service_type">patrol</field>
+        </record>
+        <record id="task_patrol_lighting" model="sentinela.fsm.task.template">
+            <field name="name">Verificación de Iluminación Exterior</field>
+            <field name="sequence">40</field>
+            <field name="service_type">patrol</field>
+        </record>
+        <record id="task_patrol_suspicious" model="sentinela.fsm.task.template">
+            <field name="name">Búsqueda de Vehículos/Personas Sospechosas</field>
+            <field name="sequence">50</field>
+            <field name="service_type">patrol</field>
+        </record>
+    </data>
+</odoo>
