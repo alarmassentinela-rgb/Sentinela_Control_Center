@@ -7,6 +7,19 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.4.1] - 2026-05-14
+
+### Added — Glosario en tarjeta de salida
+
+- Bloque pequeño entre la sección de firmas y el footer con definiciones cortas para jugadores nuevos:
+  - **HCP**: Handicap Index — tu hándicap WHS general
+  - **C-HCP**: Course Handicap — ajustado al campo/tee (CR & Slope)
+  - **SI**: Stroke Index — dificultad del hoyo (1 = más difícil, 18 = más fácil). Recibes strokes en los SI bajos según tu C-HCP
+  - **Marker**: otro jugador del grupo que verifica y firma tu tarjeta al final
+- Layout: grid 2 columnas, fuente 7.5pt, sutil borde discontinuo arriba para separarlo de las firmas
+
+---
+
 ## [1.4.0] - 2026-05-14
 
 Hoja de salida imprimible profesional. Tarjetas individuales por grupo + vista maestra. Diseñado para que un torneo pueda imprimir las tarjetas oficiales, entregarlas a cada grupo, y tener una maestra para el tablón del clubhouse.
