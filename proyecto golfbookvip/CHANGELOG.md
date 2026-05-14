@@ -7,6 +7,44 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.3.0] - 2026-05-14
+
+Grupos de salida preparados para torneo. Cap subido de 6 → 18 grupos (capacidad para 72 jugadores en campo lleno), auto-asignación por hándicap, shotgun start automático y mejoras UX. Diseñado para que la lógica se reutilice cuando el módulo de Clubs convoque torneos.
+
+### Added — Capacidad torneo
+
+- Tope de grupos: 6 → **18 grupos** (capacidad para campo lleno: 18 grupos × 4 jugadores = 72 jugadores)
+- Selector numérico stepper [-] [N] [+] reemplaza los botones [1-6] anteriores
+- Helper "hasta N jugadores (4/grupo)" debajo del stepper
+
+### Added — Acciones rápidas (creator only)
+
+- 🎯 **Auto por hándicap**: ordena jugadores por `course_handicap` ascendente y los distribuye en bandas de `ceil(total / numGroups)` jugadores. Low HCP juntos, mid juntos, high juntos. Útil para flights de torneo.
+- ⛳ **Shotgun start**: cada grupo arranca en su mismo número de hoyo (Grupo 1 → Hoyo 1, Grupo 18 → Hoyo 18). Estándar de torneos profesionales donde todos salen al mismo tiempo desde hoyos distintos.
+- 🧹 **Vaciar grupos**: limpia toda la asignación con confirmación, regresa numGroups a 1.
+- Contador "X/Y jugadores asignados" siempre visible
+
+### Added — UI escalable
+
+- Si numGroups ≤ 6 → botones (UI clásica)
+- Si numGroups > 6 → **dropdown selector** por jugador (más manejable con muchos grupos)
+- Lista de jugadores con `max-h-96 overflow-y-auto` para que no se haga infinita
+- Grid de hoyos de salida pasa a 4 columnas si numGroups > 9
+
+### Added — Validación visual
+
+- Badge "X/4" por grupo en la sección de hoyos de salida
+- Color: gris (incompleto) · emerald (lleno = 4) · rojo (sobrecargado >4)
+- Warning visual, NO bloqueo — admite 5 jugadores ocasionales
+
+### Notes
+
+- Las acciones rápidas (auto-HCP, shotgun, vaciar) son client-side por simplicidad — modifican el `teeGroupDraft` state y el usuario presiona "Guardar grupos" para commitear vía PUT existente
+- Cuando el módulo Clubs llegue, puede reutilizar la misma lógica desde su propia UI invocando PUT /rounds/{id}/tee-groups (sin cambios al backend)
+- Backend acepta tee_group como Integer sin tope — no requirió migración
+
+---
+
 ## [1.2.0] - 2026-05-14
 
 Captura única por grupo + validación de tarjetas al cierre. Feedback de la ronda real del 12-may: necesitamos un único capturista por grupo (no cualquiera del grupo), modo observador para los demás, transferencia ante imprevistos en campo (batería muerta, retiro), y firma electrónica de cada jugador antes del cierre definitivo.

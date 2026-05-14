@@ -2297,38 +2297,134 @@ export default function RoundDetailPage() {
                 )}
 
                 {/* Edit mode */}
-                {amCreator && editingTeeGroups && (
+                {amCreator && editingTeeGroups && (() => {
+                  const allPlayers = [
+                    ...(teeGroupsData?.groups.flatMap(g => g.players) ?? []),
+                    ...(teeGroupsData?.ungrouped ?? []),
+                  ]
+                  // Conteo de jugadores por grupo en el draft actual
+                  const groupSizes: Record<number, number> = {}
+                  Object.values(teeGroupDraft).forEach(d => {
+                    if (d.tee_group !== null) {
+                      groupSizes[d.tee_group] = (groupSizes[d.tee_group] ?? 0) + 1
+                    }
+                  })
+                  const totalAssigned = Object.values(groupSizes).reduce((s, n) => s + n, 0)
+                  const totalPlayers = allPlayers.length
+
+                  const autoAssignByHcp = () => {
+                    // Ordena por course_handicap asc (los de menos HCP primero), nulls al final
+                    const sorted = [...allPlayers].sort((a, b) => {
+                      const ah = a.course_handicap ?? 999
+                      const bh = b.course_handicap ?? 999
+                      return ah - bh
+                    })
+                    const perGroup = Math.ceil(sorted.length / Math.max(1, numTeeGroups))
+                    const next: typeof teeGroupDraft = {}
+                    sorted.forEach((p, i) => {
+                      const group = Math.min(numTeeGroups, Math.floor(i / perGroup) + 1)
+                      const existing = Object.values(teeGroupDraft).find(d => d.tee_group === group)
+                      next[p.player_id] = { tee_group: group, starting_hole: existing?.starting_hole ?? 1 }
+                    })
+                    setTeeGroupDraft(next)
+                  }
+
+                  const shotgunStart = () => {
+                    // Cada grupo arranca en su número de hoyo (grupo 1 → hoyo 1, etc.)
+                    setTeeGroupDraft(prev => {
+                      const next: typeof prev = {}
+                      Object.entries(prev).forEach(([pid, d]) => {
+                        next[pid] = d.tee_group !== null
+                          ? { ...d, starting_hole: Math.min(round.holes_to_play, d.tee_group) }
+                          : d
+                      })
+                      return next
+                    })
+                  }
+
+                  const clearGroups = () => {
+                    if (!confirm(lbl(
+                      '¿Vaciar todos los grupos? Los jugadores quedarán sin asignar.',
+                      'Clear all groups? Players will be unassigned.'
+                    ))) return
+                    setTeeGroupDraft(prev => {
+                      const cleared: typeof prev = {}
+                      Object.keys(prev).forEach(pid => {
+                        cleared[pid] = { tee_group: null, starting_hole: 1 }
+                      })
+                      setNumTeeGroups(1)
+                      return cleared
+                    })
+                  }
+
+                  return (
                   <div className="space-y-4">
-                    {/* Number of groups selector */}
+                    {/* Quick actions */}
+                    <div className="bg-orange-500/5 border border-orange-500/20 rounded-xl p-3 space-y-2">
+                      <p className="text-xs text-orange-300/80 font-semibold uppercase tracking-wide">{lbl('Acciones rápidas', 'Quick actions')}</p>
+                      <div className="flex flex-wrap gap-2">
+                        <button onClick={autoAssignByHcp}
+                          title={lbl('Ordena por hándicap y distribuye en grupos (HCP bajos juntos)', 'Sort by handicap and distribute (low HCPs together)')}
+                          className="flex items-center gap-1.5 text-xs bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 text-orange-200 px-3 py-2 rounded-lg transition-colors">
+                          🎯 {lbl('Auto por hándicap', 'Auto by handicap')}
+                        </button>
+                        <button onClick={shotgunStart}
+                          title={lbl('Cada grupo arranca en su mismo número de hoyo (Grupo N → Hoyo N)', 'Each group starts at its own hole number (Group N → Hole N)')}
+                          className="flex items-center gap-1.5 text-xs bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-200 px-3 py-2 rounded-lg transition-colors">
+                          ⛳ {lbl('Shotgun start', 'Shotgun start')}
+                        </button>
+                        <button onClick={clearGroups}
+                          className="flex items-center gap-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-400 hover:text-red-400 px-3 py-2 rounded-lg transition-colors">
+                          🧹 {lbl('Vaciar grupos', 'Clear groups')}
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-zinc-500">
+                        {lbl(
+                          `${totalAssigned}/${totalPlayers} jugadores asignados`,
+                          `${totalAssigned}/${totalPlayers} players assigned`
+                        )}
+                      </p>
+                    </div>
+
+                    {/* Number of groups selector (1-18, stepper) */}
                     <div>
-                      <p className="text-xs text-zinc-500 mb-2">{lbl('Número de grupos', 'Number of groups')}</p>
-                      <div className="flex gap-2 flex-wrap">
-                        {[1,2,3,4,5,6].map(n => (
-                          <button key={n} onClick={() => setNumTeeGroups(n)}
-                            className={`w-9 h-9 rounded-xl text-sm font-bold border transition-all ${
-                              numTeeGroups === n
-                                ? 'bg-orange-500/20 border-orange-400/50 text-orange-300'
-                                : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-500'
-                            }`}>
-                            {n}
-                          </button>
-                        ))}
+                      <p className="text-xs text-zinc-500 mb-2">{lbl('Número de grupos (máx 18)', 'Number of groups (max 18)')}</p>
+                      <div className="flex items-center gap-3">
+                        <button onClick={() => setNumTeeGroups(Math.max(1, numTeeGroups - 1))}
+                          className="w-9 h-9 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition-colors">
+                          −
+                        </button>
+                        <input type="number" min="1" max="18" value={numTeeGroups}
+                          onChange={e => setNumTeeGroups(Math.max(1, Math.min(18, parseInt(e.target.value) || 1)))}
+                          className="w-16 bg-zinc-800 border border-orange-400/50 text-orange-300 text-center font-bold text-lg rounded-xl py-1.5 focus:outline-none focus:border-orange-400" />
+                        <button onClick={() => setNumTeeGroups(Math.min(18, numTeeGroups + 1))}
+                          className="w-9 h-9 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition-colors">
+                          +
+                        </button>
+                        <span className="text-xs text-zinc-500 ml-2">
+                          {lbl(`hasta ${numTeeGroups * 4} jugadores (4/grupo)`, `up to ${numTeeGroups * 4} players (4/group)`)}
+                        </span>
                       </div>
                     </div>
 
-                    {/* Starting holes per group */}
+                    {/* Starting holes per group con conteo */}
                     <div>
-                      <p className="text-xs text-zinc-500 mb-2">{lbl('Hoyo de salida por grupo', 'Starting hole per group')}</p>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      <p className="text-xs text-zinc-500 mb-2">{lbl('Hoyo de salida y ocupación por grupo', 'Starting hole and occupancy per group')}</p>
+                      <div className={`grid gap-2 ${numTeeGroups > 9 ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4' : 'grid-cols-2 sm:grid-cols-3'}`}>
                         {Array.from({length: numTeeGroups}, (_, i) => i+1).map(g => {
-                          // Derive the starting hole from the first player assigned to this group
                           const startHole = Object.values(teeGroupDraft).find(d => d.tee_group === g)?.starting_hole ?? 1
+                          const count = groupSizes[g] ?? 0
+                          const isFull = count >= 4
+                          const isOver = count > 4
                           return (
                             <div key={g} className="flex items-center gap-2 bg-zinc-800 rounded-xl px-3 py-2">
-                              <span className="text-xs font-bold text-orange-400 w-16 flex-shrink-0">
-                                {lbl(`Grupo ${g}`, `Group ${g}`)}
-                              </span>
-                              <span className="text-xs text-zinc-500">{lbl('Hoyo', 'Hole')}</span>
+                              <span className="text-xs font-bold text-orange-400 flex-shrink-0">G{g}</span>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono flex-shrink-0 ${
+                                isOver ? 'bg-red-500/20 text-red-300 border border-red-500/40'
+                                : isFull ? 'bg-emerald-500/15 text-emerald-300'
+                                : 'bg-zinc-700 text-zinc-400'
+                              }`}>{count}/4</span>
+                              <span className="text-xs text-zinc-500 ml-auto">H</span>
                               <input
                                 type="number" min="1" max={round.holes_to_play} value={startHole}
                                 onChange={e => {
@@ -2341,7 +2437,7 @@ export default function RoundDetailPage() {
                                     return updated
                                   })
                                 }}
-                                className="w-12 bg-zinc-700 border border-zinc-600 rounded-lg px-2 py-1 text-white text-xs text-center focus:outline-none focus:border-orange-400"
+                                className="w-12 bg-zinc-700 border border-zinc-600 rounded-lg px-1 py-1 text-white text-xs text-center focus:outline-none focus:border-orange-400"
                               />
                             </div>
                           )
@@ -2349,14 +2445,11 @@ export default function RoundDetailPage() {
                       </div>
                     </div>
 
-                    {/* Player assignment */}
+                    {/* Player assignment — botones si ≤6 grupos, dropdown si >6 */}
                     <div>
                       <p className="text-xs text-zinc-500 mb-2">{lbl('Asignar jugadores a grupos', 'Assign players to groups')}</p>
-                      <div className="space-y-1.5">
-                        {[
-                          ...teeGroupsData?.groups.flatMap(g => g.players) ?? [],
-                          ...teeGroupsData?.ungrouped ?? [],
-                        ].map(p => {
+                      <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
+                        {allPlayers.map(p => {
                           const current = teeGroupDraft[p.player_id]
                           return (
                             <div key={p.player_id} className="flex items-center gap-3 bg-zinc-800/50 rounded-xl px-3 py-2.5">
@@ -2364,35 +2457,61 @@ export default function RoundDetailPage() {
                                 <p className="text-sm font-medium text-white truncate">{p.name}</p>
                                 <p className="text-xs text-zinc-500">HCP {p.course_handicap ?? '—'}</p>
                               </div>
-                              <div className="flex gap-1 flex-wrap justify-end">
-                                {Array.from({length: numTeeGroups}, (_, i) => i+1).map(g => {
-                                  const startHole = Object.values(teeGroupDraft).find(d => d.tee_group === g)?.starting_hole ?? 1
-                                  return (
-                                    <button key={g}
+                              {numTeeGroups <= 6 ? (
+                                <div className="flex gap-1 flex-wrap justify-end">
+                                  {Array.from({length: numTeeGroups}, (_, i) => i+1).map(g => {
+                                    const startHole = Object.values(teeGroupDraft).find(d => d.tee_group === g)?.starting_hole ?? 1
+                                    return (
+                                      <button key={g}
+                                        onClick={() => setTeeGroupDraft(prev => ({
+                                          ...prev,
+                                          [p.player_id]: { tee_group: current?.tee_group === g ? null : g, starting_hole: startHole }
+                                        }))}
+                                        className={`w-8 h-8 rounded-lg text-xs font-bold border transition-all ${
+                                          current?.tee_group === g
+                                            ? 'bg-orange-500/25 border-orange-400/60 text-orange-300'
+                                            : 'bg-zinc-700 border-zinc-600 text-zinc-400 hover:border-zinc-400'
+                                        }`}>
+                                        {g}
+                                      </button>
+                                    )
+                                  })}
+                                  {current?.tee_group !== null && current?.tee_group !== undefined && (
+                                    <button
                                       onClick={() => setTeeGroupDraft(prev => ({
                                         ...prev,
-                                        [p.player_id]: { tee_group: current?.tee_group === g ? null : g, starting_hole: startHole }
+                                        [p.player_id]: { ...prev[p.player_id], tee_group: null }
                                       }))}
-                                      className={`w-8 h-8 rounded-lg text-xs font-bold border transition-all ${
-                                        current?.tee_group === g
-                                          ? 'bg-orange-500/25 border-orange-400/60 text-orange-300'
-                                          : 'bg-zinc-700 border-zinc-600 text-zinc-400 hover:border-zinc-400'
-                                      }`}>
-                                      {g}
+                                      className="w-8 h-8 rounded-lg text-xs border border-zinc-700 bg-zinc-800 text-zinc-500 hover:text-red-400 hover:border-red-400/30 transition-all">
+                                      <X size={12} className="mx-auto" />
                                     </button>
-                                  )
-                                })}
-                                {current?.tee_group !== null && (
-                                  <button
-                                    onClick={() => setTeeGroupDraft(prev => ({
+                                  )}
+                                </div>
+                              ) : (
+                                <select
+                                  value={current?.tee_group ?? ''}
+                                  onChange={e => {
+                                    const v = e.target.value
+                                    const newGroup = v === '' ? null : parseInt(v)
+                                    const startHole = newGroup !== null
+                                      ? (Object.values(teeGroupDraft).find(d => d.tee_group === newGroup)?.starting_hole ?? 1)
+                                      : 1
+                                    setTeeGroupDraft(prev => ({
                                       ...prev,
-                                      [p.player_id]: { ...prev[p.player_id], tee_group: null }
-                                    }))}
-                                    className="w-8 h-8 rounded-lg text-xs border border-zinc-700 bg-zinc-800 text-zinc-500 hover:text-red-400 hover:border-red-400/30 transition-all">
-                                    <X size={12} className="mx-auto" />
-                                  </button>
-                                )}
-                              </div>
+                                      [p.player_id]: { tee_group: newGroup, starting_hole: startHole }
+                                    }))
+                                  }}
+                                  className={`bg-zinc-800 border rounded-lg px-2 py-1.5 text-sm font-bold min-w-[100px] focus:outline-none ${
+                                    current?.tee_group != null
+                                      ? 'border-orange-400/60 text-orange-300'
+                                      : 'border-zinc-700 text-zinc-500'
+                                  }`}>
+                                  <option value="">{lbl('Sin grupo', 'No group')}</option>
+                                  {Array.from({length: numTeeGroups}, (_, i) => i+1).map(g => (
+                                    <option key={g} value={g}>{lbl(`Grupo ${g}`, `Group ${g}`)}</option>
+                                  ))}
+                                </select>
+                              )}
                             </div>
                           )
                         })}
@@ -2412,7 +2531,8 @@ export default function RoundDetailPage() {
                       </button>
                     </div>
                   </div>
-                )}
+                  )
+                })()}
 
                 {/* Groups display (non-edit mode) */}
                 {!editingTeeGroups && teeGroupsData?.has_groups && (
