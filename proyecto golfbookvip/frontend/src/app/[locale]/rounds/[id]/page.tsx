@@ -1614,14 +1614,24 @@ export default function RoundDetailPage() {
   const [showResetModal, setShowResetModal] = useState(false)
   const [resetConfirmText, setResetConfirmText] = useState('')
   const [resetting, setResetting] = useState(false)
+  const [resetClearTeeGroups, setResetClearTeeGroups] = useState(false)
+  const [resetClearTeams, setResetClearTeams] = useState(false)
+  const [resetClearScorers, setResetClearScorers] = useState(false)
 
   const handleResetRound = async () => {
     if (resetConfirmText !== 'RESETEAR') return
     setResetting(true)
     try {
-      await api.post(`/rounds/${id}/reset`)
+      const params: Record<string, string> = {}
+      if (resetClearTeeGroups) params.clear_tee_groups = 'true'
+      if (resetClearTeams) params.clear_teams = 'true'
+      if (resetClearScorers) params.clear_scorers = 'true'
+      await api.post(`/rounds/${id}/reset`, null, Object.keys(params).length ? { params } : undefined)
       setShowResetModal(false)
       setResetConfirmText('')
+      setResetClearTeeGroups(false)
+      setResetClearTeams(false)
+      setResetClearScorers(false)
       setResetting(false)
       load().catch(() => { /* el refresh manual cubre */ })
       return
@@ -1739,17 +1749,50 @@ export default function RoundDetailPage() {
                 <p className="text-xs text-zinc-500">{lbl('Acción destructiva — no se puede deshacer', 'Destructive — cannot be undone')}</p>
               </div>
             </div>
-            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 mb-4 text-xs text-red-300 space-y-1">
-              <p className="font-semibold mb-1">{lbl('Esta acción borrará:', 'This will delete:')}</p>
+            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 mb-3 text-xs text-red-300 space-y-1">
+              <p className="font-semibold mb-1">{lbl('Esta acción siempre borra:', 'This always deletes:')}</p>
               <ul className="list-disc list-inside space-y-0.5">
                 <li>{lbl('Todos los scores capturados', 'All captured scores')}</li>
                 <li>{lbl('Balances y resultados de apuestas', 'Balances and bet results')}</li>
-                <li>{lbl('Firmas de validación de tarjeta', 'Scorecard signatures')}</li>
+                <li>{lbl('Firmas de validación', 'Scorecard signatures')}</li>
                 <li>{lbl('Retiros y modos observador', 'Withdrawals and observer modes')}</li>
-                <li>{lbl('Differentials de hándicap (los HCP afectados se recalculan)', 'Handicap differentials (affected HCPs recalculated)')}</li>
+                <li>{lbl('Differentials de hándicap (HCP recalculado)', 'HCP differentials (recalculated)')}</li>
               </ul>
-              <p className="font-semibold mt-2">{lbl('Se mantienen:', 'Will keep:')}</p>
-              <p className="text-zinc-400">{lbl('Jugadores invitados, grupos de salida, capturistas, apuestas, formato, course', 'Invited players, tee groups, scorers, bets, format, course')}</p>
+            </div>
+
+            <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-3 mb-4 space-y-2.5">
+              <p className="text-xs font-semibold text-zinc-300">
+                {lbl('Limpieza opcional (para cambiar de formato):', 'Optional cleanup (when switching format):')}
+              </p>
+              <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer hover:text-white">
+                <input type="checkbox" checked={resetClearTeeGroups}
+                  onChange={e => setResetClearTeeGroups(e.target.checked)}
+                  className="w-4 h-4 accent-red-500" />
+                <span>{lbl('Borrar grupos de salida y hoyos de inicio', 'Clear tee groups and starting holes')}</span>
+              </label>
+              <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer hover:text-white">
+                <input type="checkbox" checked={resetClearTeams}
+                  onChange={e => setResetClearTeams(e.target.checked)}
+                  className="w-4 h-4 accent-red-500" />
+                <span>{lbl('Borrar equipos (Florida) y pairings (Match)', 'Clear teams (Florida) and pairings (Match)')}</span>
+              </label>
+              <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer hover:text-white">
+                <input type="checkbox" checked={resetClearScorers}
+                  onChange={e => setResetClearScorers(e.target.checked)}
+                  className="w-4 h-4 accent-red-500" />
+                <span>{lbl('Borrar capturistas designados', 'Clear designated scorers')}</span>
+              </label>
+              <p className="text-[10px] text-zinc-500 mt-1">
+                {lbl(
+                  'Si dejas todo sin marcar: solo limpia scores (iteración rápida del MISMO formato).',
+                  'If all unchecked: only scores cleared (fast iteration of SAME format).'
+                )}
+              </p>
+            </div>
+
+            <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-2.5 mb-4 text-xs text-emerald-300/80">
+              <p className="font-semibold mb-0.5">{lbl('Siempre se mantienen:', 'Always preserved:')}</p>
+              <p className="text-emerald-300/60">{lbl('Jugadores invitados, course, apuestas, formato', 'Invited players, course, bets, format')}</p>
             </div>
             <p className="text-sm text-zinc-300 mb-2">
               {lbl('Escribe ', 'Type ')}

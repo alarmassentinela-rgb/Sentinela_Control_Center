@@ -7,6 +7,29 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.7.2] - 2026-05-14
+
+### Added — Reset con limpiezas opcionales
+
+Hasta ahora el reset solo borraba scores y mantenía grupos/equipos/capturistas. Para probar diferentes formatos (Stroke → Florida → Match) hay que limpiar también esos elementos. Agregamos 3 checkboxes opcionales al modal de reset:
+
+- ☐ **Borrar grupos de salida y hoyos de inicio** (tee_group + starting_hole por jugador)
+- ☐ **Borrar equipos (Florida) y pairings (Match)** (team_number + tee_order + match_order + flag teams_published)
+- ☐ **Borrar capturistas designados** (is_group_scorer)
+
+Si dejas todo sin marcar → comportamiento previo (solo scores, iteración rápida del MISMO formato).
+
+Backend: `POST /rounds/{id}/reset?clear_tee_groups=true&clear_teams=true&clear_scorers=true` — flags independientes, combinables.
+
+WS `round_reset` broadcast incluye el objeto `cleared` con los flags aplicados.
+
+### Notes
+
+- Lo que siempre se mantiene: jugadores invitados, course, apuestas, formato, HCP por jugador (sigue intacto, solo se borra el course_handicap si ese tee_group se borra)
+- Caso de uso típico: terminé prueba de Florida, quiero probar Stroke → reset con checkbox "equipos" marcado limpia el setup de equipos sin tocar grupos de salida (que sí siguen sirviendo)
+
+---
+
 ## [1.7.1] - 2026-05-14
 
 ### Added — Vista Matriz en "Tarjeta en curso"

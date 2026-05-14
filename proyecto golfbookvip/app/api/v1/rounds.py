@@ -823,10 +823,17 @@ async def reopen_round(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
 
 
 @router.post("/{round_id}/reset")
-async def reset_round(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
+async def reset_round(
+    round_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: DB,
+    clear_tee_groups: bool = False,
+    clear_teams: bool = False,
+    clear_scorers: bool = False,
+):
     """Reset agresivo de una ronda (solo creator). Para iteración de pruebas.
 
-    Borra:
+    Borra siempre:
     - Todos los scores de la ronda
     - Resultados de apuestas por hoyo
     - Balances de jugadores
@@ -834,15 +841,17 @@ async def reset_round(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
     - Estados de retiro/observer (regresan a playing)
     - ScoreDifferential generados por la ronda (recalcula HCP afectados)
 
-    Mantiene:
-    - Jugadores invitados (incluyendo invited/confirmed status)
-    - Grupos de salida y capturistas designados
-    - Configuración de apuestas
-    - Formato del juego, course, etc.
+    Opcionalmente (flags):
+    - clear_tee_groups: borra tee_group y starting_hole de todos los jugadores
+    - clear_teams: borra team_number, tee_order y match_order de todos los jugadores
+    - clear_scorers: borra is_group_scorer de todos los jugadores
+
+    Siempre mantiene:
+    - Jugadores invitados, course, formato, apuestas, HCP, tee color
+    - Plantillas de teams_published se respeta (no toca)
 
     Reset:
-    - status → scheduled
-    - started_at / finished_at → null
+    - status → scheduled, started_at / finished_at → null
     """
     from sqlalchemy import update as sql_update
     from app.models.score import Score as ScoreModel, HoleBetResult, RoundPlayerBalance
@@ -860,23 +869,36 @@ async def reset_round(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
     )
     affected_user_ids = [row[0] for row in diffs_res.all()]
 
-    # Borrar datos generados durante la ronda
+    # Borrar datos generados durante la ronda (siempre)
     await db.execute(delete(ScoreModel).where(ScoreModel.round_id == round_id))
     await db.execute(delete(HoleBetResult).where(HoleBetResult.round_id == round_id))
     await db.execute(delete(RoundPlayerBalance).where(RoundPlayerBalance.round_id == round_id))
     await db.execute(delete(ScoreDifferential).where(ScoreDifferential.round_id == round_id))
 
-    # Resetear flags por jugador (mantiene grupos, capturistas, tee colors, hcp)
+    # Resetear flags por jugador (mantiene grupos, capturistas, tee colors, hcp por defecto)
+    base_values = dict(
+        score_validated_at=None,
+        withdrawn_at=None,
+        withdrawn_reason=None,
+        participant_mode="playing",
+    )
+    # Limpiezas opcionales según flags
+    if clear_tee_groups:
+        base_values.update(tee_group=None, starting_hole=None)
+    if clear_teams:
+        base_values.update(team_number=None, tee_order=None, match_order=None)
+    if clear_scorers:
+        base_values.update(is_group_scorer=False)
+
     await db.execute(
         sql_update(RoundPlayer)
         .where(RoundPlayer.round_id == round_id)
-        .values(
-            score_validated_at=None,
-            withdrawn_at=None,
-            withdrawn_reason=None,
-            participant_mode="playing",
-        )
+        .values(**base_values)
     )
+
+    # Si se vaciaron teams y la ronda los tenía publicados, marcar como no publicados
+    if clear_teams and getattr(round_, "teams_published", False):
+        round_.teams_published = False
 
     # Recrear balance vacío por jugador (mantiene contrato del modelo)
     players_res = await db.execute(
@@ -897,13 +919,26 @@ async def reset_round(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
 
     await manager.broadcast_to_round(
         round_id=str(round_id),
-        message={"event": "round_reset", "round_id": str(round_id)},
+        message={
+            "event": "round_reset",
+            "round_id": str(round_id),
+            "cleared": {
+                "tee_groups": clear_tee_groups,
+                "teams": clear_teams,
+                "scorers": clear_scorers,
+            },
+        },
     )
 
     return {
         "message": "Ronda reseteada al estado inicial",
         "round_id": str(round_id),
         "handicaps_recalculated": len(affected_user_ids),
+        "cleared": {
+            "tee_groups": clear_tee_groups,
+            "teams": clear_teams,
+            "scorers": clear_scorers,
+        },
     }
 
 
