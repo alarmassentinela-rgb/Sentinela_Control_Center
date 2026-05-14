@@ -1270,7 +1270,10 @@ export default function RoundDetailPage() {
     setFinishing(true)
     try {
       await api.post(`/rounds/${id}/finish`, null, force ? { params: { force: true } } : undefined)
-      await load()
+      // Apagar spinner inmediato — el reload corre en background
+      setFinishing(false)
+      load().catch(() => { /* el refresh manual del usuario lo cubre */ })
+      return
     } catch (e: unknown) {
       type IncompletePlayer = { name: string; holes_logged: number; holes_total: number }
       type PendingPlayer = { name: string; user_id: string }
@@ -1314,7 +1317,10 @@ export default function RoundDetailPage() {
     setFinishing(true)
     try {
       await api.post(`/rounds/${id}/reopen`)
-      await load()
+      // Apagar spinner inmediato — la acción ya funcionó; el reload va en background
+      setFinishing(false)
+      load().catch(() => { /* el refresh manual del usuario lo cubre */ })
+      return
     } catch (e: unknown) {
       const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       if (detail) alert(typeof detail === 'string' ? detail : JSON.stringify(detail))
@@ -1334,7 +1340,9 @@ export default function RoundDetailPage() {
       await api.post(`/rounds/${id}/reset`)
       setShowResetModal(false)
       setResetConfirmText('')
-      await load()
+      setResetting(false)
+      load().catch(() => { /* el refresh manual cubre */ })
+      return
     } catch (e: unknown) {
       const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       alert(detail ? (typeof detail === 'string' ? detail : JSON.stringify(detail)) : lbl('Error al resetear', 'Error resetting'))
@@ -1356,7 +1364,9 @@ export default function RoundDetailPage() {
         `✓ Scores generados: ${res.data.total_scores} (${res.data.players} jugadores × ${res.data.holes_per_player} hoyos)`,
         `✓ Scores generated: ${res.data.total_scores} (${res.data.players} players × ${res.data.holes_per_player} holes)`
       ))
-      await load()
+      setAutoFilling(false)
+      load().catch(() => { /* el refresh manual cubre */ })
+      return
     } catch (e: unknown) {
       const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       alert(detail ? (typeof detail === 'string' ? detail : JSON.stringify(detail)) : lbl('Error al auto-rellenar', 'Error auto-filling'))

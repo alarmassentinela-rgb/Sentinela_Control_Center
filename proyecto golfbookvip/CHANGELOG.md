@@ -7,6 +7,17 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.5.2] - 2026-05-14
+
+### Fixed — Spinner colgado en acciones de ronda
+
+- `handleFinishRound`, `handleReopenRound`, `handleResetRound`, `handleAutoFill` ahora apagan el spinner del botón **inmediatamente** después del 200 OK del POST, antes de hacer el `load()` que recarga los datos
+- El reload corre en background con `.catch()` silencioso
+- **Por qué:** con 58 jugadores, el reload de `/scoreboard` + `/players` + otros endpoints puede tomar varios segundos. Si la red flaqueaba durante el reload, el spinner quedaba colgado aunque el servidor ya había completado la acción
+- **Comportamiento ahora:** el botón se libera de inmediato; si el reload falla, el usuario solo necesita refrescar la página (la acción del servidor ya está confirmada)
+
+---
+
 ## [1.5.1] - 2026-05-14
 
 ### Added — Creator override en captura
