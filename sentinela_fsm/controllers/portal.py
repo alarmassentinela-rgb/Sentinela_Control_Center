@@ -6,12 +6,10 @@ class CustomerPortalFSM(CustomerPortal):
 
     def _prepare_home_portal_values(self, counters):
         values = super()._prepare_home_portal_values(counters)
-        partner = request.env.user.partner_id
-        
-        # Count only orders belonging to this customer
-        FsmOrder = request.env['sentinela.fsm.order']
-        values['fsm_count'] = FsmOrder.search_count([('partner_id', '=', partner.id)])
-        
+        if 'fsm_count' in counters:
+            partner = request.env.user.partner_id
+            FsmOrder = request.env['sentinela.fsm.order']
+            values['fsm_count'] = FsmOrder.search_count([('partner_id', '=', partner.id)])
         return values
 
     @http.route(['/my/services', '/my/services/page/<int:page>'], type='http', auth="user", website=True)
