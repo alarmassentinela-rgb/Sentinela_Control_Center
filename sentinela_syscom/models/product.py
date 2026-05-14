@@ -46,23 +46,59 @@ class ProductTemplate(models.Model):
             if not token: return
 
             headers = {'Authorization': f'Bearer {token}'}
-            products = self.search([('syscom_id', '!=', False), ('active', '=', True)])
+            # Search for linked products OR products with price <= 1.0 to rescue them
+            products = self.search([
+                '|', ('syscom_id', '!=', False), ('list_price', '<=', 1.0),
+                ('active', '=', True),
+                ('default_code', '!=', False)
+            ])
             stats['total'] = len(products)
             tc = 17.26
-            margin = 1.30
             
+            # Fetch actual TC if possible
+            try:
+                res_tc = requests.get('https://developers.syscom.mx/api/v1/tipocambio', headers=headers, timeout=10)
+                tc_val = res_tc.json().get('normal')
+                if tc_val: tc = float(tc_val)
+            except: pass
+
             for p in products:
                 try:
-                    url_prod = f'https://developers.syscom.mx/api/v1/productos/{p.syscom_id}'
+                    sys_id = p.syscom_id
+                    if not sys_id:
+                        search_url = f'https://developers.syscom.mx/api/v1/productos?busqueda={p.default_code}'
+                        res_search = requests.get(search_url, headers=headers, timeout=10).json()
+                        prods = res_search.get('productos', [])
+                        if prods:
+                            sys_id = str(prods[0].get('producto_id'))
+                        else:
+                            continue
+
+                    url_prod = f'https://developers.syscom.mx/api/v1/productos/{sys_id}'
                     res_prod = requests.get(url_prod, headers=headers, timeout=10).json()
-                    costo_usd = float(res_prod.get('precio_lista', 0))
+                    
+                    precios = res_prod.get('precios', {})
+                    # MSRP / Precio al Público
+                    msrp_usd = float(precios.get('precio_lista') or res_prod.get('precio_lista', 0))
+                    # Tu Costo / Precio Distribuidor
+                    costo_usd = float(precios.get('precio_descuento') or res_prod.get('precio_descuento', 0))
+                    
                     if costo_usd > 0:
-                        p.write({
+                        vals = {
+                            'syscom_id': sys_id,
+                            'syscom_price_usd': costo_usd,
+                            'syscom_list_price_usd': msrp_usd,
                             'standard_price': costo_usd * tc,
-                            'list_price': costo_usd * tc * margin,
                             'syscom_stock': float(res_prod.get('existencia', {}).get('nuevo', 0)),
                             'syscom_last_update': fields.Datetime.now(),
-                        })
+                        }
+                        # El list_price (Venta) se basa en MSRP. Si no hay MSRP, usamos costo * 1.30 como fallback
+                        if msrp_usd > 0:
+                            vals['list_price'] = msrp_usd * tc
+                        else:
+                            vals['list_price'] = (costo_usd * tc) * 1.30
+                            
+                        p.write(vals)
                         stats['success'] += 1
                     else: stats['errors'] += 1
                 except: stats['errors'] += 1
