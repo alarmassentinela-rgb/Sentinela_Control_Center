@@ -7,6 +7,43 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.7.0] - 2026-05-14
+
+Responsive desktop layouts en las pantallas más usadas. Mobile sin cambios — solo se agregan estilos que aplican a partir de ≥1024px (lg:) y ≥1280px (xl:). Se aprovecha pantalla grande sin sacrificar la experiencia móvil.
+
+### Fixed — Leaderboard sin scroll interno colgado
+
+- Removido `max-h-72 overflow-y-auto` del leaderboard de jugadores en round detail
+- Antes: lista clipped a 288px → solo se veían 5-6 de 22, los demás escondidos en scroll interno (confuso)
+- Ahora: lista vertical completa, todos los 22 visibles, scroll normal de la página
+
+### Changed — Round detail: layout 2 columnas en lg
+
+- Main container `max-w-4xl` → `max-w-4xl lg:max-w-7xl` (de 896px a 1280px en escritorios grandes)
+- Sección "Tarjeta en curso" en lg: **grid 3 columnas con divider**:
+  - Col 1 (1/3): Leaderboard vertical con los 22 jugadores
+  - Cols 2-3 (2/3): Scorecard detallado del jugador seleccionado, hoyo por hoyo
+- Mobile: stack vertical idéntico al actual (leaderboard arriba, scorecard abajo)
+- Hint contextual cambia según device: "Click para ver detalle →" (desktop), "Toca uno" (móvil)
+
+### Changed — Dashboard responsive
+
+- Stats cards: 1 columna móvil → 3 columnas desktop (sin cambio en este release)
+- Quick access cards (Canchas, Clubs, Activity, Players, Groups): 2 cols móvil → **3 cols en lg, 4 cols en xl** (mejor aprovechamiento de pantallas anchas)
+
+### Changed — Round list responsive
+
+- Container `max-w-4xl` → `max-w-4xl lg:max-w-7xl`
+- Lista de rondas: stack móvil → **grid 2 cols en lg, 3 cols en xl** — ver más rondas al mismo tiempo en escritorios
+
+### Notes
+
+- Patrón aplicado consistentemente: `mobile-default lg:desktop-style` (Tailwind responsive breakpoints)
+- Cero cambios visuales en móvil — verificado con typecheck + build
+- Print CSS y rutas `/tee-cards` `/results` no afectadas (esas son hojas A4/Letter independientes)
+
+---
+
 ## [1.6.0] - 2026-05-14
 
 Resultados pro + visibilidad de jugadores en scorecard. Bundle pensado para torneos de 22+ jugadores donde se necesita ver a todos al mismo tiempo y poder imprimir resultados con detalle profesional.

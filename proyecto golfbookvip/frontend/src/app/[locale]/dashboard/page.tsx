@@ -159,7 +159,7 @@ export default function DashboardPage() {
         )}
 
         {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-3 gap-4 mb-8">
           {stats.map((s) => (
             <div key={s.label} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
               <div className="flex items-center justify-between mb-3">
@@ -187,7 +187,7 @@ export default function DashboardPage() {
             <ChevronRight size={18} className="text-white/60" />
           </Link>
         </div>
-        <div className="grid grid-cols-2 gap-4 mb-6">
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-6">
           <Link href={`/${locale}/courses`}
             className="bg-zinc-900 border border-zinc-800 hover:border-emerald-500/40 rounded-2xl p-5 flex items-center justify-between group transition-all">
             <div className="flex items-center gap-3">

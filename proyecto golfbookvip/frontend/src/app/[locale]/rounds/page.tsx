@@ -41,7 +41,7 @@ export default function RoundsPage() {
   return (
     <div className="min-h-screen bg-zinc-950">
       <header className="bg-zinc-900 border-b border-zinc-800 px-4 py-4">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
+        <div className="max-w-4xl lg:max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href={`/${locale}/dashboard`} className="text-zinc-400 hover:text-white transition-colors">
               <ArrowLeft size={20} />
@@ -60,7 +60,7 @@ export default function RoundsPage() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 py-8">
+      <main className="max-w-4xl lg:max-w-7xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold text-white mb-6">{lbl('Mis rondas', 'My rounds')}</h1>
 
         {loading ? (
@@ -78,7 +78,7 @@ export default function RoundsPage() {
             </Link>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-3 lg:space-y-0 lg:grid lg:grid-cols-2 xl:grid-cols-3 lg:gap-4">
             {rounds.map((r) => {
               const fmt = FORMAT_LABEL[r.game_format]
               const date = new Date(r.scheduled_at).toLocaleDateString(locale === 'es' ? 'es-MX' : 'en-US', { dateStyle: 'medium' })

@@ -497,18 +497,24 @@ function RoundScorecard({
         )}
       </div>
 
+      {/* Mobile: leaderboard arriba, scorecard abajo. Desktop (lg): lado a lado en grid 1+2. */}
+      <div className="lg:grid lg:grid-cols-3 lg:divide-x lg:divide-zinc-800">
+
       {/* Leaderboard vertical — todos los jugadores visibles con totales */}
       {board.length > 1 && (
-        <div className="border-b border-zinc-800">
+        <div className="border-b border-zinc-800 lg:border-b-0 lg:col-span-1">
           <div className="px-5 py-2 bg-zinc-800/40 flex items-center justify-between">
             <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
               {lbl(`Jugadores (${board.length})`, `Players (${board.length})`)}
             </span>
-            <span className="text-[10px] text-zinc-600">
-              {lbl('Toca uno para ver su tarjeta', 'Tap to view scorecard')}
+            <span className="text-[10px] text-zinc-600 hidden lg:inline">
+              {lbl('Click para ver detalle →', 'Click for detail →')}
+            </span>
+            <span className="text-[10px] text-zinc-600 lg:hidden">
+              {lbl('Toca uno', 'Tap one')}
             </span>
           </div>
-          <div className="max-h-72 overflow-y-auto divide-y divide-zinc-800/40">
+          <div className="divide-y divide-zinc-800/40">
             {board.map((b, i) => {
               const total = b.total_gross || 0
               const pl = players.find(pl => pl.user_id === b.user_id)
@@ -559,8 +565,8 @@ function RoundScorecard({
         </div>
       )}
 
-      {/* Table — hoyo vertical */}
-      <div className="overflow-x-auto">
+      {/* Table — hoyo vertical (col-span-2 en desktop) */}
+      <div className="overflow-x-auto lg:col-span-2">
         <div className="min-w-[380px] px-1 py-2">
           {sections.map(({ label, hs }) => (
             <div key={label} className="mb-2">
@@ -665,6 +671,8 @@ function RoundScorecard({
           )}
         </div>
       </div>
+
+      </div>{/* /lg:grid wrapper */}
     </div>
   )
 }
@@ -1601,7 +1609,7 @@ export default function RoundDetailPage() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 py-8 space-y-5">
+      <main className="max-w-4xl lg:max-w-7xl mx-auto px-4 py-8 space-y-5">
         {/* Round header */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
 
