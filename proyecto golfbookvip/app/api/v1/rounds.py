@@ -472,13 +472,16 @@ async def submit_score(round_id: uuid.UUID, data: ScoreSubmit, current_user: Cur
             raise HTTPException(status_code=404, detail="Jugador objetivo no encontrado en la ronda")
 
         # Si existen tee_groups en la ronda, validar mismo grupo.
-        # Si NO existen (ronda legacy o sin grupos asignados), permitir libremente.
+        # Excepción: el creator de la ronda puede capturar para cualquier grupo
+        # (override de organizador, útil para torneos y resolución de problemas).
+        # Si NO existen tee_groups (legacy), permitir libremente.
         any_group_result = await db.execute(
             select(func.count()).select_from(RoundPlayer)
             .where(RoundPlayer.round_id == round_id, RoundPlayer.tee_group.isnot(None))
         )
         has_any_group = (any_group_result.scalar() or 0) > 0
-        if has_any_group:
+        is_creator = str(round_.created_by) == str(current_user.id)
+        if has_any_group and not is_creator:
             if my_rp.tee_group is None or target_rp.tee_group is None or my_rp.tee_group != target_rp.tee_group:
                 raise HTTPException(status_code=403, detail="Solo puedes capturar scores de jugadores en tu mismo grupo de salida")
         rp = target_rp
@@ -488,6 +491,9 @@ async def submit_score(round_id: uuid.UUID, data: ScoreSubmit, current_user: Cur
     # Enforcement de capturista único: si el grupo del jugador tiene un scorer
     # designado, SOLO ese scorer puede capturar (incluso sus propios scores).
     # Si el grupo no tiene scorer designado, captura libre como antes (compat legacy).
+    # Excepción: el CREATOR de la ronda siempre puede capturar (override de organizador
+    # — útil cuando el scorer designado no responde o en torneos donde el organizador
+    # captura desde la mesa de control).
     if rp.tee_group is not None:
         scorer_res = await db.execute(
             select(RoundPlayer).where(
@@ -497,7 +503,8 @@ async def submit_score(round_id: uuid.UUID, data: ScoreSubmit, current_user: Cur
             )
         )
         scorer = scorer_res.scalar_one_or_none()
-        if scorer and str(scorer.user_id) != str(current_user.id):
+        is_creator = str(round_.created_by) == str(current_user.id)
+        if scorer and str(scorer.user_id) != str(current_user.id) and not is_creator:
             raise HTTPException(
                 status_code=403,
                 detail=f"Solo el capturista designado del grupo puede registrar scores. Si necesitas tomar el control, usa el botón 'Tomar captura'.",
@@ -2257,4 +2264,130 @@ async def get_florida_scores(round_id: uuid.UUID, current_user: CurrentUser, db:
         "teams": teams,
         "hole_results": hole_results,
         "holes_to_play": round_.holes_to_play,
+    }
+
+
+# ─── Dev/Testing: Auto-fill scores ────────────────────────────────────────────
+
+@router.post("/{round_id}/dev/fill-scores")
+async def dev_fill_scores(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
+    """Genera scores aleatorios realistas para todos los jugadores activos.
+    Solo creator. Borra los scores existentes antes de regenerar (idempotente).
+
+    Distribución por hoyo (depende del C-HCP del jugador):
+    - HCP bajo (≤9):  birdie 12% · par 45% · bogey 30% · doble 10% · otros 3%
+    - HCP medio (10-18): birdie 6% · par 35% · bogey 40% · doble 15% · otros 4%
+    - HCP alto (≥19): birdie 3% · par 25% · bogey 38% · doble 25% · otros 9%
+
+    Solo para testing. NO usar en ronda real.
+    """
+    import random
+    from app.models.score import Score as ScoreModel
+
+    result = await db.execute(
+        select(Round).where(Round.id == round_id, Round.created_by == current_user.id)
+    )
+    round_ = result.scalar_one_or_none()
+    if not round_:
+        raise HTTPException(status_code=403, detail="Solo el creador puede usar auto-fill")
+    if round_.status not in ("active", "scheduled"):
+        raise HTTPException(status_code=400, detail="La ronda debe estar en 'active' o 'scheduled' para auto-fill")
+
+    # Hoyos del campo
+    holes_res = await db.execute(
+        select(CourseHole).where(CourseHole.course_id == round_.course_id).order_by(CourseHole.hole_number)
+    )
+    holes = holes_res.scalars().all()
+    if not holes:
+        raise HTTPException(status_code=400, detail="El campo no tiene hoyos configurados")
+    holes_to_play = round_.holes_to_play
+    target_holes = [h for h in holes if h.hole_number <= holes_to_play]
+
+    # Jugadores activos (excluye withdrawn y observers)
+    players_res = await db.execute(
+        select(RoundPlayer).where(
+            RoundPlayer.round_id == round_id,
+            RoundPlayer.status.in_(["confirmed", "playing", "finished"]),
+            RoundPlayer.participant_mode == "playing",
+        )
+    )
+    players = players_res.scalars().all()
+
+    if not players:
+        raise HTTPException(status_code=400, detail="No hay jugadores activos en la ronda")
+
+    # Borrar scores existentes (idempotente)
+    await db.execute(delete(ScoreModel).where(ScoreModel.round_id == round_id))
+    await db.flush()
+
+    # Si la ronda está en 'scheduled', moverla a 'active' para que el flujo siga
+    if round_.status == "scheduled":
+        from datetime import datetime, timezone
+        round_.status = "active"
+        round_.started_at = datetime.now(timezone.utc)
+
+    def generate_gross(par: int, c_hcp: int) -> int:
+        """Genera gross realista con sesgo según hándicap."""
+        r = random.random()
+        if c_hcp <= 9:
+            # Buen jugador
+            if r < 0.12: return max(1, par - 1)        # birdie
+            elif r < 0.57: return par                   # par
+            elif r < 0.87: return par + 1               # bogey
+            elif r < 0.97: return par + 2               # doble
+            else: return par + 3                        # triple+
+        elif c_hcp <= 18:
+            # Intermedio
+            if r < 0.06: return max(1, par - 1)
+            elif r < 0.41: return par
+            elif r < 0.81: return par + 1
+            elif r < 0.96: return par + 2
+            else: return par + 3
+        else:
+            # Alto hándicap
+            if r < 0.03: return max(1, par - 1)
+            elif r < 0.28: return par
+            elif r < 0.66: return par + 1
+            elif r < 0.91: return par + 2
+            else: return par + 3
+
+    inserted = 0
+    for p in players:
+        c_hcp = p.course_handicap or 18
+        for h in target_holes:
+            par = h.par or 4
+            si = h.stroke_index or h.hole_number
+            gross = generate_gross(par, c_hcp)
+            # Putts aproximados según resultado vs par
+            diff = gross - par
+            if diff < 0: putts = 1
+            elif diff == 0: putts = 2
+            elif diff == 1: putts = random.choice([2, 3])
+            else: putts = random.choice([2, 3, 4])
+
+            score = ScoreModel(
+                round_id=round_id,
+                user_id=p.user_id,
+                hole_number=h.hole_number,
+                entered_by=current_user.id,
+            )
+            db.add(score)
+            # Reusar scoring_svc para que net/stableford/flags se calculen igual
+            data = ScoreSubmit(hole_number=h.hole_number, gross_score=gross, putts=putts)
+            scoring_svc.apply_score_to_model(score, data, par, si, c_hcp, round_.game_format)
+            inserted += 1
+
+    await db.flush()
+
+    await manager.broadcast_to_round(
+        round_id=str(round_id),
+        message={"event": "scores_autofilled", "round_id": str(round_id), "scores_inserted": inserted},
+    )
+
+    return {
+        "message": "Scores generados",
+        "round_id": str(round_id),
+        "players": len(players),
+        "holes_per_player": len(target_holes),
+        "total_scores": inserted,
     }

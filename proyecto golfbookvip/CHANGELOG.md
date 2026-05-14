@@ -7,6 +7,36 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.5.1] - 2026-05-14
+
+### Added — Creator override en captura
+
+- `POST /scores` ahora permite al **creador de la ronda** capturar para CUALQUIER jugador, incluso si el grupo tiene scorer designado y el grupo es distinto al suyo. Override de organizador (útil para torneos: la mesa de control puede capturar por cualquiera ante emergencias)
+- En el Play page, si `amCreator`, los inputs siempre quedan habilitados y NO aparece banner azul de observador
+
+### Added — Auto-fill de scores (testing)
+
+- `POST /rounds/{id}/dev/fill-scores` — creator only, status `active` o `scheduled`:
+  - Borra scores existentes (idempotente)
+  - Por cada jugador activo (excluye withdrawn/observers) genera un gross por cada hoyo
+  - Distribución sesgada por hándicap del jugador:
+    - HCP ≤9: birdie 12% · par 45% · bogey 30% · doble 10% · otros 3%
+    - HCP 10-18: birdie 6% · par 35% · bogey 40% · doble 15% · otros 4%
+    - HCP ≥19: birdie 3% · par 25% · bogey 38% · doble 25% · otros 9%
+  - Putts estimados por diferencia vs par
+  - Calcula net + flags + stableford via `scoring_svc.apply_score_to_model`
+  - Si la ronda estaba `scheduled`, la mueve a `active`
+  - Broadcast WS `scores_autofilled`
+- Botón amarillo "🎲 Auto-rellenar scores (prueba)" en round detail (creator, active/scheduled). Confirmación previa con texto explícito
+
+### Notes
+
+- Auto-fill es para iteración de pruebas — permite generar 58 × 18 = 1044 scores en segundos
+- Combinado con el reset de v1.5.0, el flujo de testing queda: configurar 1 vez → auto-fill → finalizar → ver leaderboard/balance/etc. → reset → repetir
+- El creator override es feature **de producción** también (no solo testing)
+
+---
+
 ## [1.5.0] - 2026-05-14
 
 Testing toolkit: reset agresivo + cambio de formato sobre la marcha. Diseñado para que el creator pueda iterar pruebas con la misma ronda (ej. "58 primaveras") y probar todos los formatos sin tener que crear rondas nuevas para cada caso.

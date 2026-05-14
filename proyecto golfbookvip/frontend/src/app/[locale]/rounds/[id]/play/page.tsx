@@ -2116,10 +2116,11 @@ export default function PlayRoundPage() {
               const anyDirty = Object.values(rowInputs).some(v => v.dirty)
               // Capturista único: si el grupo tiene scorer asignado, solo ese puede capturar.
               // Sin scorer asignado (compat legacy) → todos pueden (canCapture=true).
+              // Excepción: el creator de la ronda puede capturar siempre (organizer override).
               const hasScorer = scorerUserId !== null
               const isScorer = hasScorer && scorerUserId === myUserId
-              const isObserver = hasScorer && !isScorer
-              const canCapture = !hasScorer || isScorer
+              const isObserver = hasScorer && !isScorer && !amCreator
+              const canCapture = !hasScorer || isScorer || amCreator
               return (
                 <>
                   {/* Banner de rol — capturista o observador */}

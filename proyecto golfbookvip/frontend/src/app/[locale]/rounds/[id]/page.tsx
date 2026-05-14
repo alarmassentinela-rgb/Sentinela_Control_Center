@@ -1343,6 +1343,26 @@ export default function RoundDetailPage() {
     }
   }
 
+  const [autoFilling, setAutoFilling] = useState(false)
+  const handleAutoFill = async () => {
+    if (!confirm(lbl(
+      'Auto-rellenar scores aleatorios realistas para todos los jugadores activos.\n\nESTO BORRA los scores actuales y los regenera. Solo para testing. ¿Continuar?',
+      'Auto-fill realistic random scores for all active players.\n\nTHIS DELETES current scores and regenerates them. Testing only. Continue?'
+    ))) return
+    setAutoFilling(true)
+    try {
+      const res = await api.post(`/rounds/${id}/dev/fill-scores`)
+      alert(lbl(
+        `✓ Scores generados: ${res.data.total_scores} (${res.data.players} jugadores × ${res.data.holes_per_player} hoyos)`,
+        `✓ Scores generated: ${res.data.total_scores} (${res.data.players} players × ${res.data.holes_per_player} holes)`
+      ))
+      await load()
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      alert(detail ? (typeof detail === 'string' ? detail : JSON.stringify(detail)) : lbl('Error al auto-rellenar', 'Error auto-filling'))
+    } finally { setAutoFilling(false) }
+  }
+
   const [changingFormat, setChangingFormat] = useState(false)
   const handleChangeFormat = async (newFormat: string) => {
     if (newFormat === round?.game_format) return
@@ -1762,6 +1782,14 @@ export default function RoundDetailPage() {
                 <AlertTriangle size={15} />
                 {lbl('Firmar tarjeta', 'Sign scorecard')}
               </Link>
+            )}
+            {amCreator && (round.status === 'active' || round.status === 'scheduled') && (
+              <button onClick={handleAutoFill} disabled={autoFilling}
+                title={lbl('Genera scores aleatorios realistas para todos los jugadores. Solo testing.', 'Generates realistic random scores for all players. Testing only.')}
+                className="flex items-center gap-2 bg-yellow-500/10 hover:bg-yellow-500/20 disabled:opacity-60 text-yellow-400 border border-yellow-500/40 font-medium px-5 py-2.5 rounded-full transition-colors text-sm">
+                {autoFilling ? <Loader2 size={15} className="animate-spin" /> : <span>🎲</span>}
+                {lbl('Auto-rellenar scores (prueba)', 'Auto-fill scores (test)')}
+              </button>
             )}
             {amCreator && round.status !== 'scheduled' && (
               <button onClick={() => setShowResetModal(true)} disabled={resetting}
