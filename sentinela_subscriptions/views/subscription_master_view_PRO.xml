@@ -84,19 +84,36 @@
                                     <field name="technical_state" readonly="1"/>
                                     <field name="technical_state_date" readonly="1"/>
                                 </group>
+                                <group string="Panel / Equipo">
+                                    <field name="equipment_brand" string="Marca Panel"/>
+                                    <field name="equipment_model" string="Modelo Panel"/>
+                                    <field name="equipment_serial" string="Número de Serie"/>
+                                </group>
+                                <group string="Coordenadas de Sitio">
+                                    <field name="latitude"/>
+                                    <field name="longitude"/>
+                                    <field name="location_notes" placeholder="Referencias de acceso, llaves, etc."/>
+                                </group>
                             </group>
                         </page>
 
-                        <!-- ═══ GPS ═══ -->
+                        <!-- ═══ GPS / SENTICAR ═══ -->
                         <page string="🚗 GPS" name="gps" invisible="service_type != 'gps'">
                             <group>
-                                <group string="Dispositivo">
+                                <group string="Dispositivo GPS">
+                                    <field name="gps_imei"/>
                                     <field name="sim_iccid"/>
+                                    <field name="equipment_brand" string="Marca Rastreador"/>
+                                    <field name="equipment_model" string="Modelo Rastreador"/>
                                     <field name="equipment_serial" string="Número de Serie"/>
                                 </group>
                                 <group string="Vehículo">
-                                    <field name="equipment_brand" string="Marca"/>
-                                    <field name="equipment_model" string="Modelo"/>
+                                    <field name="vehicle_brand" string="Marca"/>
+                                    <field name="vehicle_model" string="Modelo"/>
+                                    <field name="vehicle_year" string="Año"/>
+                                    <field name="vehicle_color" string="Color"/>
+                                    <field name="vehicle_plate" string="Placa"/>
+                                    <field name="vehicle_vin" string="VIN / NIV"/>
                                 </group>
                             </group>
                         </page>
@@ -108,14 +125,25 @@
                                     <field name="start_date"/>
                                     <field name="next_billing_date"/>
                                     <field name="recurring_interval"/>
+                                    <field name="payment_day" string="Día del Mes a Cobrar"/>
+                                    <field name="payment_term_id" options="{'no_create': True}"/>
                                     <field name="extension_due_date" invisible="not extension_due_date"/>
                                 </group>
                                 <group string="Preferencias">
                                     <field name="auto_invoice" widget="boolean_toggle"/>
+                                    <field name="auto_send_mail" widget="boolean_toggle"/>
                                     <field name="contract_mode"/>
                                     <field name="is_forced_contract" widget="boolean_toggle"/>
                                     <field name="commitment_period" invisible="not is_forced_contract"/>
+                                    <field name="commitment_end_date" readonly="1" invisible="not is_forced_contract"/>
                                     <field name="early_termination_fee" invisible="not is_forced_contract"/>
+                                    <field name="penalty_amount" invisible="not is_forced_contract"/>
+                                </group>
+                                <group string="Equipo / Propiedad">
+                                    <field name="equipment_ownership"/>
+                                    <field name="plan_after_leasing_id" options="{'no_create': True}"
+                                        invisible="equipment_ownership != 'leasing'"
+                                        required="equipment_ownership == 'leasing'"/>
                                 </group>
                             </group>
                         </page>
@@ -126,6 +154,8 @@
                                 <!-- CONECTIVIDAD INTERNET -->
                                 <group string="Conectividad" invisible="service_type != 'internet'">
                                     <field name="router_id" options="{'no_create': True}" required="service_type == 'internet'"/>
+                                    <field name="mikrotik_profile_id" options="{'no_create': True}"
+                                        required="service_type == 'internet' and internet_mgmt_mode == 'pppoe'"/>
                                     <field name="internet_mgmt_mode"/>
                                     <field name="ip_address" string="IP Asignada"/>
                                     <field name="gateway_address" invisible="internet_mgmt_mode != 'static'"/>

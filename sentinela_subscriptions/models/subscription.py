@@ -2,6 +2,7 @@ from odoo import models, fields, api, _
 from odoo.exceptions import UserError, ValidationError
 from dateutil.relativedelta import relativedelta
 from datetime import date, timedelta
+import base64
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -230,10 +231,10 @@ class SentinelaSubscription(models.Model):
         return {
             'type': 'ir.actions.act_window',
             'name': 'Órdenes Técnicas (FSM)',
-            'res_model': 'sale.order', # Placeholder for SO/FSM logic
+            'res_model': 'sentinela.fsm.order',
             'view_mode': 'list,form',
             'domain': [('subscription_id', '=', self.id)],
-            'context': {'default_subscription_id': self.id}
+            'context': {'default_subscription_id': self.id, 'default_partner_id': self.partner_id.id}
         }
 
     def action_request_signature(self):
@@ -669,6 +670,26 @@ class SentinelaSubscription(models.Model):
                 sub.commitment_end_date = sub.start_date + relativedelta(months=sub.commitment_period)
             else:
                 sub.commitment_end_date = False
+
+    @api.onchange('product_id')
+    def _onchange_product_id(self):
+        for sub in self:
+            if not sub.product_id:
+                continue
+            if not sub.price_unit:
+                sub.price_unit = sub.product_id.list_price
+            if sub.product_id.default_recurring_interval and not sub.recurring_interval:
+                sub.recurring_interval = sub.product_id.default_recurring_interval
+            if sub.product_id.mikrotik_profile_id and not sub.mikrotik_profile_id:
+                sub.mikrotik_profile_id = sub.product_id.mikrotik_profile_id
+            if sub.product_id.service_type and not sub.service_type:
+                sub.service_type = sub.product_id.service_type
+
+    @api.onchange('start_date', 'recurring_interval')
+    def _onchange_start_date(self):
+        for sub in self:
+            if sub.start_date and sub.recurring_interval and not sub.next_billing_date:
+                sub.next_billing_date = sub.start_date + relativedelta(months=int(sub.recurring_interval))
 
     @api.model_create_multi
     def create(self, vals_list):
