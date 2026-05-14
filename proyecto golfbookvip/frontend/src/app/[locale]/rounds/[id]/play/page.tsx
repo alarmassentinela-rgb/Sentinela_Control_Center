@@ -613,6 +613,11 @@ export default function PlayRoundPage() {
   const [gpsError, setGpsError] = useState<string | null>(null)
   const gpsWatchIdRef = useRef<number | null>(null)
   const [groupMates, setGroupMates] = useState<GroupMate[]>([])
+  const [myTeeGroup, setMyTeeGroup] = useState<number | null>(null)
+  const [scorerUserId, setScorerUserId] = useState<string | null>(null)
+  const [scorerName, setScorerName] = useState<string>('')
+  const [showScorerMenu, setShowScorerMenu] = useState(false)
+  const [claimingScorer, setClaimingScorer] = useState(false)
   const [conflicts, setConflicts] = useState<ConflictItem[]>([])
   const [resolvingFor, setResolvingFor] = useState<ConflictItem | null>(null)
   const [resolvingValue, setResolvingValue] = useState<number>(0)
@@ -626,6 +631,7 @@ export default function PlayRoundPage() {
     Promise.all([api.get(`/rounds/${id}`), api.get(`/rounds/${id}/players`), api.get('/users/me')]).then(async ([rRes, playersRes, meRes]) => {
       const round = rRes.data
       setHolesTotal(round.holes_to_play)
+      if (round.status === 'pending_validation') { router.push(`/${locale}/rounds/${id}/validate`); return }
       if (round.status !== 'active') { router.push(`/${locale}/rounds/${id}`); return }
       const me = meRes.data
       setMyUserId(me.id)
@@ -658,12 +664,18 @@ export default function PlayRoundPage() {
         const tgRes = await api.get(`/rounds/${id}/tee-groups`)
         const tg = tgRes.data
         if (tg.has_groups) {
-          type TGP = { user_id: string; name: string; username: string; course_handicap: number | null }
-          type TGG = { group_number: number; starting_hole: number | null; players: TGP[] }
+          type TGP = { user_id: string; name: string; username: string; course_handicap: number | null; is_group_scorer?: boolean }
+          type TGG = { group_number: number; starting_hole: number | null; players: TGP[]; scorer_user_id: string | null }
           const myGroup = (tg.groups as TGG[]).find(g => g.players.some(p => p.user_id === me.id))
           if (myGroup) {
             usedGroups = true
             setMyStartingHole(myGroup.starting_hole ?? null)
+            setMyTeeGroup(myGroup.group_number)
+            setScorerUserId(myGroup.scorer_user_id)
+            if (myGroup.scorer_user_id) {
+              const scorer = myGroup.players.find(p => p.user_id === myGroup.scorer_user_id)
+              setScorerName(scorer?.name ?? '')
+            }
             setGroupMates(myGroup.players.filter(p => p.user_id !== me.id))
             if (myGroup.starting_hole && myGroup.starting_hole > 1) {
               setCurrentHole(myGroup.starting_hole)
@@ -738,6 +750,25 @@ export default function PlayRoundPage() {
                 const cRes = await api.get(`/rounds/${id}/conflicts`)
                 setConflicts(cRes.data ?? [])
               } catch { /* ignore */ }
+            } else if (msg.event === 'scorer_changed') {
+              // Otro jugador del grupo (o creator) cambió el scorer
+              if (msg.tee_group !== null && msg.tee_group !== undefined) {
+                // Refetch tee groups para actualizar nombre + ID
+                try {
+                  const tgRes = await api.get(`/rounds/${id}/tee-groups`)
+                  type TGP = { user_id: string; name: string }
+                  type TGG = { group_number: number; players: TGP[]; scorer_user_id: string | null }
+                  const myGroup = (tgRes.data.groups as TGG[]).find(g => g.players.some(p => p.user_id === me.id))
+                  if (myGroup) {
+                    setScorerUserId(myGroup.scorer_user_id)
+                    const scorer = myGroup.players.find(p => p.user_id === myGroup.scorer_user_id)
+                    setScorerName(scorer?.name ?? '')
+                  }
+                } catch { /* ignore */ }
+              }
+            } else if (msg.event === 'pending_validation') {
+              // Scorer marcó la ronda como lista para validar — redirigir a pantalla de firma
+              router.push(`/${locale}/rounds/${id}/validate`)
             } else if (msg.event === 'conflict_resolved') {
               setConflicts(prev => prev.filter(c => !(c.user_id === msg.user_id && c.hole_number === msg.hole)))
               setConflictBanner(prev => (prev && prev.user_id === msg.user_id && prev.hole === msg.hole) ? null : prev)
@@ -2083,8 +2114,66 @@ export default function PlayRoundPage() {
                 ...groupMates.map(m => ({ user_id: m.user_id, name: m.name, course_handicap: m.course_handicap, isMe: false })),
               ]
               const anyDirty = Object.values(rowInputs).some(v => v.dirty)
+              // Capturista único: si el grupo tiene scorer asignado, solo ese puede capturar.
+              // Sin scorer asignado (compat legacy) → todos pueden (canCapture=true).
+              const hasScorer = scorerUserId !== null
+              const isScorer = hasScorer && scorerUserId === myUserId
+              const isObserver = hasScorer && !isScorer
+              const canCapture = !hasScorer || isScorer
               return (
                 <>
+                  {/* Banner de rol — capturista o observador */}
+                  {hasScorer && (
+                    <div className={`mb-4 rounded-2xl p-3 border ${
+                      isScorer
+                        ? 'bg-emerald-500/10 border-emerald-500/40'
+                        : 'bg-blue-500/10 border-blue-500/40'
+                    }`}>
+                      {isScorer ? (
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">🎯</span>
+                            <div>
+                              <p className="text-sm font-semibold text-emerald-300">{lbl('Eres el capturista del grupo', 'You are the group scorer')}</p>
+                              <p className="text-xs text-emerald-300/70">{lbl('Capturas para todos los del grupo', 'You capture scores for everyone')}</p>
+                            </div>
+                          </div>
+                          <button onClick={() => setShowScorerMenu(true)}
+                            className="text-xs bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0">
+                            {lbl('Ceder', 'Transfer')}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">👁</span>
+                            <div>
+                              <p className="text-sm font-semibold text-blue-300">{lbl(`Observando captura de ${scorerName}`, `Observing capture by ${scorerName}`)}</p>
+                              <p className="text-xs text-blue-300/70">{lbl('Solo el capturista puede registrar scores', 'Only the scorer can record scores')}</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={async () => {
+                              if (claimingScorer) return
+                              if (!confirm(lbl(
+                                `¿Tomar control de la captura? Esto quitará el rol a ${scorerName}.`,
+                                `Take control of scoring? This will remove ${scorerName} from the scorer role.`
+                              ))) return
+                              setClaimingScorer(true)
+                              try {
+                                await api.post(`/rounds/${id}/players/me/claim-scorer`)
+                              } catch {
+                                alert(lbl('Error al tomar control', 'Error claiming scorer role'))
+                              } finally { setClaimingScorer(false) }
+                            }}
+                            disabled={claimingScorer}
+                            className="text-xs bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0">
+                            {claimingScorer ? <Loader2 size={12} className="inline animate-spin" /> : lbl('Tomar control', 'Take over')}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className="w-full space-y-3 mb-5">
                     {roster.map(p => {
                       const row = rowInputs[p.user_id] ?? { gross: hole?.par ?? 4, putts: null, dirty: false }
@@ -2151,7 +2240,8 @@ export default function PlayRoundPage() {
                                 ...prev,
                                 [p.user_id]: { ...row, gross: Math.max(1, row.gross - 1), dirty: true },
                               }))}
-                              className="w-12 h-12 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-white hover:bg-zinc-700 active:scale-95">
+                              disabled={!canCapture}
+                              className="w-12 h-12 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-white hover:bg-zinc-700 active:scale-95 disabled:opacity-40 disabled:hover:bg-zinc-800 disabled:cursor-not-allowed">
                               <Minus size={20} />
                             </button>
                             <div className="flex-1 text-center">
@@ -2165,12 +2255,13 @@ export default function PlayRoundPage() {
                                 ...prev,
                                 [p.user_id]: { ...row, gross: row.gross + 1, dirty: true },
                               }))}
-                              className="w-12 h-12 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-white hover:bg-zinc-700 active:scale-95">
+                              disabled={!canCapture}
+                              className="w-12 h-12 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-white hover:bg-zinc-700 active:scale-95 disabled:opacity-40 disabled:hover:bg-zinc-800 disabled:cursor-not-allowed">
                               <Plus size={20} />
                             </button>
                           </div>
                           {/* Pickup button — recoge bola, score = Net Double Bogey (WHS) */}
-                          {ndb !== null && (
+                          {ndb !== null && canCapture && (
                             <div className="flex justify-center mt-2">
                               <button
                                 onClick={() => setRowInputs(prev => ({
@@ -2216,22 +2307,68 @@ export default function PlayRoundPage() {
                     </p>
                   )}
                   {/* Submit */}
-                  <button onClick={submitScore} disabled={submitting}
-                    className={`w-full flex items-center justify-center gap-2 disabled:opacity-60 text-white font-semibold py-4 rounded-2xl transition-colors text-base active:scale-95 ${
-                      anyDirty
-                        ? 'bg-emerald-500 hover:bg-emerald-400'
-                        : 'bg-zinc-700 hover:bg-zinc-600'
-                    }`}>
-                    {submitting ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
-                    {anyDirty
-                      ? lbl('Guardar hoyo', 'Save hole')
-                      : lbl('Siguiente hoyo', 'Next hole')}
-                  </button>
+                  {canCapture ? (
+                    <button onClick={submitScore} disabled={submitting}
+                      className={`w-full flex items-center justify-center gap-2 disabled:opacity-60 text-white font-semibold py-4 rounded-2xl transition-colors text-base active:scale-95 ${
+                        anyDirty
+                          ? 'bg-emerald-500 hover:bg-emerald-400'
+                          : 'bg-zinc-700 hover:bg-zinc-600'
+                      }`}>
+                      {submitting ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+                      {anyDirty
+                        ? lbl('Guardar hoyo', 'Save hole')
+                        : lbl('Siguiente hoyo', 'Next hole')}
+                    </button>
+                  ) : (
+                    <div className="w-full flex items-center justify-center gap-2 bg-zinc-800 border border-zinc-700 text-zinc-400 font-medium py-4 rounded-2xl text-sm">
+                      <Loader2 size={14} className="animate-spin" />
+                      {lbl(`Esperando captura de ${scorerName}…`, `Waiting for ${scorerName} to capture…`)}
+                    </div>
+                  )}
                 </>
               )
             })()}
           </div>
 
+          {/* Transferencia de capturista — modal */}
+          {showScorerMenu && (
+            <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center px-4"
+                 onClick={() => setShowScorerMenu(false)}>
+              <div onClick={e => e.stopPropagation()}
+                   className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-base">🎯</span>
+                  <h3 className="font-bold text-white text-sm">{lbl('Ceder captura a', 'Transfer scorer to')}</h3>
+                </div>
+                <p className="text-xs text-zinc-400 mb-4">{lbl(
+                  'Pasarás el rol de capturista a otro miembro del grupo. Tú quedarás como observador.',
+                  'You will transfer the scorer role to another group member. You will become an observer.'
+                )}</p>
+                <div className="space-y-2 mb-4">
+                  {groupMates.map(m => (
+                    <button key={m.user_id}
+                      onClick={async () => {
+                        try {
+                          await api.patch(`/rounds/${id}/players/${m.user_id}/set-scorer`)
+                          setShowScorerMenu(false)
+                        } catch (e: unknown) {
+                          const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+                          alert(detail ?? lbl('Error al ceder captura', 'Error transferring scorer'))
+                        }
+                      }}
+                      className="w-full flex items-center justify-between bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-xl px-4 py-3 transition-colors text-left">
+                      <span className="text-white font-medium text-sm">{m.name}</span>
+                      <span className="text-emerald-400 text-xs">{lbl('Asignar →', 'Assign →')}</span>
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => setShowScorerMenu(false)}
+                  className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 py-2.5 rounded-xl text-sm transition-colors">
+                  {lbl('Cancelar', 'Cancel')}
+                </button>
+              </div>
+            </div>
+          )}
           {/* Stroke Index help modal */}
           {/* Withdraw player modal */}
           {withdrawingFor && (

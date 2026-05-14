@@ -459,6 +459,24 @@ async def submit_score(round_id: uuid.UUID, data: ScoreSubmit, current_user: Cur
     else:
         rp = my_rp
 
+    # Enforcement de capturista único: si el grupo del jugador tiene un scorer
+    # designado, SOLO ese scorer puede capturar (incluso sus propios scores).
+    # Si el grupo no tiene scorer designado, captura libre como antes (compat legacy).
+    if rp.tee_group is not None:
+        scorer_res = await db.execute(
+            select(RoundPlayer).where(
+                RoundPlayer.round_id == round_id,
+                RoundPlayer.tee_group == rp.tee_group,
+                RoundPlayer.is_group_scorer == True,
+            )
+        )
+        scorer = scorer_res.scalar_one_or_none()
+        if scorer and str(scorer.user_id) != str(current_user.id):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Solo el capturista designado del grupo puede registrar scores. Si necesitas tomar el control, usa el botón 'Tomar captura'.",
+            )
+
     # Obtener par y stroke_index del hoyo
     hole_result = await db.execute(
         select(CourseHole).where(
@@ -543,8 +561,15 @@ async def submit_score(round_id: uuid.UUID, data: ScoreSubmit, current_user: Cur
 
 @router.post("/{round_id}/finish")
 async def finish_round(round_id: uuid.UUID, current_user: CurrentUser, db: DB, force: bool = False):
+    """Cierra una ronda. Dos comportamientos según contexto:
+
+    - Si hay capturistas designados (is_group_scorer=True) → mueve a `pending_validation`
+      y cada jugador debe firmar su tarjeta antes de poder finalizar definitivamente.
+      Una segunda llamada al endpoint con status='pending_validation' hace el cierre real.
+    - Si no hay capturistas (ronda legacy) → cierra directamente a `finished` (comportamiento previo).
+    """
     result = await db.execute(
-        select(Round).where(Round.id == round_id, Round.created_by == current_user.id, Round.status == "active")
+        select(Round).where(Round.id == round_id, Round.created_by == current_user.id, Round.status.in_(["active", "pending_validation"]))
     )
     round_ = result.scalar_one_or_none()
     if not round_:
@@ -595,6 +620,53 @@ async def finish_round(round_id: uuid.UUID, current_user: CurrentUser, db: DB, f
             )
 
     from datetime import datetime, timezone
+
+    # ¿Esta ronda usa el flujo de validación con capturista único?
+    has_scorer_res = await db.execute(
+        select(func.count()).select_from(RoundPlayer)
+        .where(RoundPlayer.round_id == round_id, RoundPlayer.is_group_scorer == True)
+    )
+    has_scorer = (has_scorer_res.scalar() or 0) > 0
+
+    # Fase 1: ronda 'active' con capturista → mover a 'pending_validation'
+    if round_.status == "active" and has_scorer:
+        round_.status = "pending_validation"
+        await db.flush()
+        await manager.broadcast_to_round(
+            round_id=str(round_id),
+            message={"event": "pending_validation", "round_id": str(round_id)},
+        )
+        return {
+            "status": "pending_validation",
+            "message": "Ronda lista para validación. Cada jugador debe firmar su tarjeta.",
+        }
+
+    # Fase 2: ronda 'pending_validation' → verificar firmas pendientes
+    if round_.status == "pending_validation":
+        pending_res = await db.execute(
+            select(RoundPlayer, User)
+            .join(User, User.id == RoundPlayer.user_id)
+            .where(
+                RoundPlayer.round_id == round_id,
+                RoundPlayer.status.in_(["confirmed", "playing", "finished"]),
+                RoundPlayer.participant_mode == "playing",
+                RoundPlayer.score_validated_at.is_(None),
+            )
+        )
+        pending = [
+            {"user_id": str(rp.user_id), "name": f"{u.first_name} {u.last_name}"}
+            for rp, u in pending_res.all()
+        ]
+        if pending and not force:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "pending_validations",
+                    "message": "Faltan firmas de jugadores. Reenvía con force=true para cerrar sin esperar.",
+                    "pending": pending,
+                },
+            )
+
     round_.status = "finished"
     round_.finished_at = datetime.now(timezone.utc)
 
@@ -1454,6 +1526,8 @@ async def get_tee_groups(round_id: uuid.UUID, current_user: CurrentUser, db: DB)
             "course_handicap": rp.course_handicap,
             "tee_group": rp.tee_group,
             "starting_hole": rp.starting_hole,
+            "is_group_scorer": rp.is_group_scorer,
+            "score_validated_at": rp.score_validated_at.isoformat() if rp.score_validated_at else None,
         }
         if rp.tee_group is not None:
             if rp.tee_group not in groups:
@@ -1461,8 +1535,11 @@ async def get_tee_groups(round_id: uuid.UUID, current_user: CurrentUser, db: DB)
                     "group_number": rp.tee_group,
                     "starting_hole": rp.starting_hole,
                     "players": [],
+                    "scorer_user_id": None,
                 }
             groups[rp.tee_group]["players"].append(p)
+            if rp.is_group_scorer:
+                groups[rp.tee_group]["scorer_user_id"] = str(rp.user_id)
         else:
             ungrouped.append(p)
 
@@ -1530,6 +1607,116 @@ async def set_tee_groups(
     return {"has_groups": len(groups) > 0,
             "groups": sorted(groups.values(), key=lambda g: g["group_number"]),
             "ungrouped": ungrouped}
+
+
+# ─── Scorer único por grupo: designar, ceder, tomar control ──────────────────
+
+async def _designate_scorer(db, round_id: uuid.UUID, target_user_id: uuid.UUID):
+    """Helper: marca target_user como scorer del grupo y quita el flag al resto del mismo tee_group."""
+    target_res = await db.execute(
+        select(RoundPlayer).where(
+            RoundPlayer.round_id == round_id,
+            RoundPlayer.user_id == target_user_id,
+        )
+    )
+    target = target_res.scalar_one_or_none()
+    if not target:
+        raise HTTPException(status_code=404, detail="Jugador no está en la ronda")
+    if target.tee_group is None:
+        raise HTTPException(status_code=400, detail="El jugador debe estar asignado a un grupo de salida")
+
+    # Quitar el flag a los otros del mismo grupo
+    from sqlalchemy import update as sql_update
+    await db.execute(
+        sql_update(RoundPlayer)
+        .where(
+            RoundPlayer.round_id == round_id,
+            RoundPlayer.tee_group == target.tee_group,
+            RoundPlayer.user_id != target_user_id,
+        )
+        .values(is_group_scorer=False)
+    )
+    target.is_group_scorer = True
+    await db.flush()
+    return target
+
+
+@router.patch("/{round_id}/players/{user_id}/set-scorer")
+async def set_scorer(round_id: uuid.UUID, user_id: uuid.UUID, current_user: CurrentUser, db: DB):
+    """Creator designa al capturista único del grupo donde está el jugador target."""
+    round_res = await db.execute(
+        select(Round).where(Round.id == round_id, Round.created_by == current_user.id)
+    )
+    if not round_res.scalar_one_or_none():
+        raise HTTPException(status_code=403, detail="Solo el creador puede designar capturistas")
+
+    target = await _designate_scorer(db, round_id, user_id)
+
+    await manager.broadcast_to_round(
+        round_id=str(round_id),
+        message={
+            "event": "scorer_changed",
+            "tee_group": target.tee_group,
+            "scorer_user_id": str(user_id),
+            "changed_by": "creator",
+            "changed_by_user_id": str(current_user.id),
+        },
+    )
+    return {"user_id": str(user_id), "tee_group": target.tee_group, "is_group_scorer": True}
+
+
+@router.post("/{round_id}/players/me/claim-scorer")
+async def claim_scorer(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
+    """Cualquier miembro del grupo se autoasigna como capturista. Útil cuando al scorer
+    se le acaba la batería o se retira y otro del grupo debe tomar el control."""
+    target = await _designate_scorer(db, round_id, current_user.id)
+
+    await manager.broadcast_to_round(
+        round_id=str(round_id),
+        message={
+            "event": "scorer_changed",
+            "tee_group": target.tee_group,
+            "scorer_user_id": str(current_user.id),
+            "changed_by": "self",
+            "changed_by_user_id": str(current_user.id),
+        },
+    )
+    return {"user_id": str(current_user.id), "tee_group": target.tee_group, "is_group_scorer": True}
+
+
+@router.post("/{round_id}/players/me/validate-scorecard")
+async def validate_scorecard(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
+    """Jugador firma su tarjeta al final de la ronda. Solo válido si round.status == 'pending_validation'."""
+    round_res = await db.execute(select(Round).where(Round.id == round_id))
+    round_ = round_res.scalar_one_or_none()
+    if not round_:
+        raise HTTPException(status_code=404, detail="Ronda no encontrada")
+    if round_.status != "pending_validation":
+        raise HTTPException(status_code=400, detail="La ronda no está en estado de validación")
+
+    rp_res = await db.execute(
+        select(RoundPlayer).where(
+            RoundPlayer.round_id == round_id,
+            RoundPlayer.user_id == current_user.id,
+        )
+    )
+    rp = rp_res.scalar_one_or_none()
+    if not rp:
+        raise HTTPException(status_code=404, detail="No estás en esta ronda")
+
+    from datetime import datetime, timezone
+    rp.score_validated_at = datetime.now(timezone.utc)
+    await db.flush()
+
+    await manager.broadcast_to_round(
+        round_id=str(round_id),
+        message={
+            "event": "scorecard_validated",
+            "user_id": str(current_user.id),
+            "validated_at": rp.score_validated_at.isoformat(),
+        },
+    )
+    return {"user_id": str(current_user.id), "validated_at": rp.score_validated_at.isoformat()}
 
 
 @router.get("/{round_id}/conflicts")

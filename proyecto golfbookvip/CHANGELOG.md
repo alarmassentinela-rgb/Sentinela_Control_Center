@@ -7,6 +7,59 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.2.0] - 2026-05-14
+
+Captura única por grupo + validación de tarjetas al cierre. Feedback de la ronda real del 12-may: necesitamos un único capturista por grupo (no cualquiera del grupo), modo observador para los demás, transferencia ante imprevistos en campo (batería muerta, retiro), y firma electrónica de cada jugador antes del cierre definitivo.
+
+### Added — Capturista único por grupo
+
+- DB: `round_players.is_group_scorer BOOLEAN DEFAULT FALSE` + unique index `(round_id, tee_group) WHERE is_group_scorer = TRUE` (máximo 1 scorer por grupo)
+- `PATCH /rounds/{id}/players/{user_id}/set-scorer` — creator designa al capturista (quita el flag a los otros del mismo grupo)
+- `POST /rounds/{id}/players/me/claim-scorer` — cualquier miembro del grupo toma el control (caso "se le acabó la batería al scorer")
+- `POST /scores` enforcement: si el grupo tiene scorer designado, solo ese scorer puede capturar (incluso sus propios scores)
+- Broadcast WS `scorer_changed` para que toda la UI del grupo se actualice en tiempo real
+
+### Added — Vista observador en Play page
+
+- Banner azul `👁 Observando captura de {nombre}` para no-scorers
+- Inputs ± deshabilitados (visualmente atenuados, cursor not-allowed)
+- Pickup oculto en modo observador
+- Botón "Guardar hoyo" reemplazado por `⏳ Esperando captura de {nombre}…`
+- Banner verde `🎯 Eres el capturista del grupo` para el scorer, con botón "Ceder"
+- Modal de transferencia: el scorer cede el rol a otro miembro del grupo (lista de mates con botón Asignar →)
+- Botón "Tomar control" para observadores (caso emergencia, con confirmación)
+
+### Added — UI tee-groups con designación de capturista
+
+- En `/rounds/[id]` sección "Grupos de salida": botón 🎯 por jugador (creator-only) para designarlo capturista
+- Badge `🎯 Capturista` junto al nombre del scorer actual
+- Refresh automático al cambiar scorer
+
+### Added — Validación de tarjeta al cierre (firma electrónica)
+
+- DB: `round_players.score_validated_at TIMESTAMPTZ NULL`
+- Nuevo status `pending_validation` entre `active` y `finished`
+- `POST /rounds/{id}/finish` con flujo nuevo:
+  - Si hay scorer designado y status='active' → mueve a `pending_validation` + broadcast WS `pending_validation`
+  - Si status='pending_validation' → verifica firmas; HTTP 409 con `code:pending_validations` si faltan; con `force=true` cierra de todos modos
+  - Si NO hay scorer (ronda legacy) → cierra directo (comportamiento previo)
+- `POST /rounds/{id}/players/me/validate-scorecard` — jugador firma su tarjeta, broadcast WS `scorecard_validated`
+- Nueva ruta `/rounds/[id]/validate`: muestra resumen Gross/Net/vs par + scorecard hoyo-a-hoyo + estado de firmas del grupo + botones "Firmar tarjeta" / "Reportar diferencia"
+- En el detalle de la ronda: botón "Cerrar definitivo" reemplaza a "Terminar ronda" cuando status='pending_validation' + link "Firmar tarjeta" prominente
+- Auto-redirect a `/validate` cuando los jugadores reciben el WS `pending_validation` (estaban en Play page)
+
+### Changed — Round detail
+
+- Botón "Finalizar ronda" → "Terminar ronda" (en `active`) o "Cerrar definitivo" (en `pending_validation`) con estilo emerald
+- Manejo nuevo de error 409 `pending_validations` con confirmación
+
+### Notes
+
+- Backward compatible: rondas sin scorer designado siguen funcionando como antes (cualquiera del grupo captura, finish va directo a finished)
+- Migración aplicada en producción con `ALTER TABLE` directo
+
+---
+
 ## [1.1.2] - 2026-05-13
 
 Fix UX: el creador no podía modificar las apuestas una vez iniciada la ronda. El backend lo permitía, pero la UI tenía gating innecesario contra `status === 'scheduled'`.

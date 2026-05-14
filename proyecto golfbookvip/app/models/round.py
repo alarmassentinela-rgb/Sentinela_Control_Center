@@ -77,6 +77,8 @@ class RoundPlayer(Base):
     match_order: Mapped[Optional[int]] = mapped_column(Integer)
     tee_group: Mapped[Optional[int]] = mapped_column(Integer)       # grupo de salida (1, 2, 3…)
     starting_hole: Mapped[Optional[int]] = mapped_column(Integer)   # hoyo donde arranca el grupo
+    is_group_scorer: Mapped[bool] = mapped_column(Boolean, default=False)  # único capturista por grupo
+    score_validated_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))  # firma del jugador al final
     handicap_index: Mapped[Optional[float]] = mapped_column(Numeric(4, 1))
     course_handicap: Mapped[Optional[int]] = mapped_column(Integer)
     tee_color: Mapped[Optional[str]] = mapped_column(String(10))  # black, blue, white, red

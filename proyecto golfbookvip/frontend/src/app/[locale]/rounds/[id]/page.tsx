@@ -153,11 +153,13 @@ interface TeeGroupPlayer {
   course_handicap: number | null
   tee_group: number | null
   starting_hole: number | null
+  is_group_scorer?: boolean
 }
 interface TeeGroup {
   group_number: number
   starting_hole: number | null
   players: TeeGroupPlayer[]
+  scorer_user_id?: string | null
 }
 interface TeeGroupsData {
   has_groups: boolean
@@ -1260,13 +1262,19 @@ export default function RoundDetailPage() {
   }
 
   const handleFinishRound = async (force = false) => {
-    if (!force && !confirm(lbl('¿Finalizar la ronda? Esta acción no se puede deshacer.', 'Finish the round? This cannot be undone.'))) return
+    const isPendingValidation = round?.status === 'pending_validation'
+    const confirmMsg = isPendingValidation
+      ? lbl('¿Cerrar la ronda definitivamente?', 'Close the round definitively?')
+      : lbl('¿Terminar la ronda? Cada jugador deberá firmar su tarjeta antes del cierre definitivo (si hay capturista).', 'End the round? Each player will need to sign their scorecard before the final close (if there is a scorer).')
+    if (!force && !confirm(confirmMsg)) return
     setFinishing(true)
     try {
       await api.post(`/rounds/${id}/finish`, null, force ? { params: { force: true } } : undefined)
       await load()
     } catch (e: unknown) {
-      type FinishErrDetail = string | { code?: string; message?: string; incomplete?: { name: string; holes_logged: number; holes_total: number }[] }
+      type IncompletePlayer = { name: string; holes_logged: number; holes_total: number }
+      type PendingPlayer = { name: string; user_id: string }
+      type FinishErrDetail = string | { code?: string; message?: string; incomplete?: IncompletePlayer[]; pending?: PendingPlayer[] }
       const detail = (e as { response?: { status?: number; data?: { detail?: FinishErrDetail } } })?.response?.data?.detail
       const status = (e as { response?: { status?: number } })?.response?.status
       if (status === 409 && typeof detail === 'object' && detail?.code === 'incomplete_players') {
@@ -1274,8 +1282,17 @@ export default function RoundDetailPage() {
           .map(p => `• ${p.name} (${p.holes_logged}/${p.holes_total})`).join('\n')
         const ok = confirm(
           lbl(
-            `Hay jugadores con scorecard incompleto:\n\n${list}\n\n¿Finalizar de todos modos?`,
-            `Players with incomplete scorecard:\n\n${list}\n\nFinish anyway?`
+            `Hay jugadores con scorecard incompleto:\n\n${list}\n\n¿Continuar de todos modos?`,
+            `Players with incomplete scorecard:\n\n${list}\n\nContinue anyway?`
+          )
+        )
+        if (ok) { setFinishing(false); return handleFinishRound(true) }
+      } else if (status === 409 && typeof detail === 'object' && detail?.code === 'pending_validations') {
+        const list = (detail.pending ?? []).map(p => `• ${p.name}`).join('\n')
+        const ok = confirm(
+          lbl(
+            `Faltan firmas de:\n\n${list}\n\n¿Cerrar la ronda sin esperar?`,
+            `Missing signatures from:\n\n${list}\n\nClose round without waiting?`
           )
         )
         if (ok) { setFinishing(false); return handleFinishRound(true) }
@@ -1609,12 +1626,25 @@ export default function RoundDetailPage() {
                 {lbl('Continuar ronda', 'Continue round')}
               </Link>
             )}
-            {amCreator && round.status === 'active' && (
+            {amCreator && (round.status === 'active' || round.status === 'pending_validation') && (
               <button onClick={() => handleFinishRound(false)} disabled={finishing}
-                className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-60 text-zinc-300 hover:text-white font-medium px-5 py-2.5 rounded-full transition-colors text-sm border border-zinc-700">
+                className={`flex items-center gap-2 disabled:opacity-60 font-medium px-5 py-2.5 rounded-full transition-colors text-sm ${
+                  round.status === 'pending_validation'
+                    ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/40'
+                    : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-700'
+                }`}>
                 {finishing ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
-                {lbl('Finalizar ronda', 'Finish round')}
+                {round.status === 'pending_validation'
+                  ? lbl('Cerrar definitivo', 'Finalize')
+                  : lbl('Terminar ronda', 'End round')}
               </button>
+            )}
+            {round.status === 'pending_validation' && (
+              <Link href={`/${locale}/rounds/${id}/validate`}
+                className="flex items-center gap-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 font-medium px-5 py-2.5 rounded-full transition-colors text-sm">
+                <AlertTriangle size={15} />
+                {lbl('Firmar tarjeta', 'Sign scorecard')}
+              </Link>
             )}
             {amCreator && round.status === 'finished' && (
               <button onClick={handleReopenRound} disabled={finishing}
@@ -2413,13 +2443,36 @@ export default function RoundDetailPage() {
                               <div className="w-7 h-7 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-orange-400 flex-shrink-0">
                                 {p.name.charAt(0)}
                               </div>
-                              <div>
-                                <p className="text-sm font-medium text-white">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-white truncate">
                                   {p.name}
                                   {p.user_id === myUserId && <span className="ml-1.5 text-xs text-emerald-400">{lbl('(tú)', '(you)')}</span>}
+                                  {p.is_group_scorer && (
+                                    <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded-md">
+                                      🎯 {lbl('Capturista', 'Scorer')}
+                                    </span>
+                                  )}
                                 </p>
                                 <p className="text-xs text-zinc-500">HCP {p.course_handicap ?? '—'}</p>
                               </div>
+                              {amCreator && !p.is_group_scorer && round.status !== 'finished' && (
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      await api.patch(`/rounds/${id}/players/${p.user_id}/set-scorer`)
+                                      // Refresca tee-groups
+                                      const tgRes = await api.get(`/rounds/${id}/tee-groups`)
+                                      setTeeGroupsData(tgRes.data)
+                                    } catch (e: unknown) {
+                                      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+                                      alert(detail ?? lbl('Error al designar capturista', 'Error designating scorer'))
+                                    }
+                                  }}
+                                  title={lbl('Designar como capturista', 'Make this player the scorer')}
+                                  className="text-zinc-500 hover:text-emerald-400 text-xs px-2 py-1 rounded-md hover:bg-emerald-500/10 transition-colors">
+                                  🎯
+                                </button>
+                              )}
                             </div>
                           ))}
                         </div>
