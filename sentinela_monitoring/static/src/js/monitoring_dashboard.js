@@ -6,76 +6,58 @@ import { Component, useState, onWillStart, onMounted, onWillUnmount } from "@odo
 
 export class MonitoringDashboard extends Component {
     setup() {
-        this.luxon = window.luxon || luxon || { DateTime: { now: () => new Date() } };
         this.state = useState({
             currentTab: 'alarms',
+            trafficFilter: 'live',
             events: [],
+            pendingEvents: [],
             signals: [],
             receiverStatus: 'offline', 
             lastHeartbeat: '---',
-            priorities: {},
-            now: this.luxon.DateTime.now(),
             alarmCount: 0,
             pendingCount: 0,
-            isSounding: false,
+            loading: false,
+            lastUpdate: new Date().toLocaleTimeString(),
         });
         
         this.orm = useService("orm");
         this.action = useService("action");
         this.busService = useService("bus_service");
-        this.alarmSound = useService("sentinela_alarm_sound");
         
         onWillStart(async () => { 
-            await this.loadPriorities();
             await this.loadData(); 
         });
 
         onMounted(() => {
-            // Refresco de seguridad cada 10s por si falla el bus
-            this.refreshInterval = setInterval(() => this.loadData(), 10000);
-            this.timerInterval = setInterval(() => { 
-                this.state.now = this.luxon.DateTime.now();
-                this.state.isSounding = this.alarmSound.isSounding && this.alarmSound.isSounding();
-            }, 1000);
-            
-            // ESCUCHAR EL BUS EN TIEMPO REAL
+            this.refreshInterval = setInterval(() => this.loadData(), 60000);
             this.busService.addChannel("sentinela_monitoring");
-            this.busService.subscribe("sentinela_monitoring", (payload) => {
-                console.log("SENTINELA: Señal de refresco recibida vía BUS", payload);
-                this.loadData(); // Refresco INSTANTÁNEO
+            this.busDebounce = null;
+            
+            this.busService.subscribe("notification", (notifications) => {
+                if (!Array.isArray(notifications)) return;
+                
+                let found = false;
+                for (const notif of notifications) {
+                    if (notif.type === "sentinela_monitoring") {
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (found) {
+                    if (this.busDebounce) clearTimeout(this.busDebounce);
+                    // ACELERACIÓN: Solo 200ms de espera
+                    this.busDebounce = setTimeout(() => {
+                        if (!this.state.loading) this.loadData();
+                    }, 200);
+                }
             });
         });
 
         onWillUnmount(() => {
             clearInterval(this.refreshInterval);
-            clearInterval(this.timerInterval);
+            if (this.busDebounce) clearTimeout(this.busDebounce);
         });
-    }
-
-    async loadActiveEvents() {
-        return this.loadData();
-    }
-
-    stopAllSounds() {
-        if (this.alarmSound && this.alarmSound.stopAll) {
-            this.alarmSound.stopAll();
-        }
-    }
-
-    async viewHistory(account) {
-        this.action.doAction({
-            type: 'ir.actions.act_window',
-            res_model: 'sentinela.alarm.signal',
-            name: `Historial de Cuenta ${account}`,
-            view_mode: 'list,form',
-            domain: [['device_id.name', 'ilike', account]],
-            target: 'current'
-        });
-    }
-
-    async loadPriorities() {
-        const pData = await this.orm.searchRead("sentinela.alarm.priority", [], ["id", "name", "color_hex", "text_color_hex", "blink"]);
-        pData.forEach(p => { this.state.priorities[p.id] = p; });
     }
 
     async setTab(tab) {
@@ -83,80 +65,55 @@ export class MonitoringDashboard extends Component {
         await this.loadData();
     }
 
+    async setTrafficFilter(filter) {
+        this.state.trafficFilter = filter;
+        await this.loadData();
+    }
+
     async loadData() {
+        if (this.state.loading) return;
+        this.state.loading = true;
+        
         try {
-            // 1. CARGA DE CONTADORES GLOBALES (Independiente de la pestaña)
-            const counts = await this.orm.call("sentinela.alarm.event", "read_group", [
-                [["status", "in", ["active", "escalated", "paused", "in_progress"]]],
-                ["status"],
-                ["status"]
-            ]);
-            
-            let active = 0;
-            let pending = 0;
-            counts.forEach(c => {
-                if (c.status === 'active') active += c.status_count;
-                else pending += c.status_count;
+            const data = await this.orm.call("sentinela.alarm.event", "get_dashboard_data", [], {
+                current_tab: this.state.currentTab,
+                traffic_filter: this.state.trafficFilter
             });
-            
-            this.state.alarmCount = active;
-            this.state.pendingCount = pending;
+            if (!data) return;
 
-            // 2. Cargar Estado Receptor
-            const status = await this.orm.call("sentinela.receiver.status", "get_status", []);
-            this.state.receiverStatus = status.state;
-            this.state.lastHeartbeat = status.last_seen;
+            Object.assign(this.state, {
+                receiverStatus: data.receiver ? data.receiver.state : 'offline',
+                lastHeartbeat: data.receiver ? data.receiver.last_seen : '---',
+                alarmCount: data.counts ? data.counts.alarms : 0,
+                pendingCount: data.counts ? data.counts.pending : 0,
+                events: (data.events || []).map(e => this._safeMap(e)),
+                pendingEvents: (data.pending_events || []).map(e => this._safeMap(e)),
+                signals: (data.signals || []),
+                lastUpdate: new Date().toLocaleTimeString()
+            });
 
-            // 3. Cargar Datos de la Tabla
-            let domain = [];
-            if (this.state.currentTab === 'alarms') {
-                domain = [["status", "=", "active"]];
-            } else if (this.state.currentTab === 'pending') {
-                domain = [["status", "in", ["in_progress", "paused", "escalated"]]];
-            }
-            
-            if (domain.length > 0) {
-                const rawEvents = await this.orm.searchRead("sentinela.alarm.event", domain, 
-                    ["id", "status", "priority_id", "name", "device_id", "partner_id", "alarm_code_id", "description", "start_date", "zone"],
-                    { order: "id desc", limit: 50 });
+        } catch (e) { 
+            console.error("Dashboard Load Error:", e); 
+        } finally { 
+            this.state.loading = false; 
+        }
+    }
 
-                this.state.events = rawEvents.map(e => {
-                    const p = this.state.priorities[e.priority_id[0]] || {};
-                    return {
-                        id: e.id,
-                        status: e.status,
-                        account: e.device_id[1].split(' ')[0],
-                        partner_name: e.partner_id ? e.partner_id[1] : 'Desconocido',
-                        device_name: e.device_id[1],
-                        style: `background-color: ${p.color_hex || '#fff'} !important; color: ${p.text_color_hex || '#000'} !important;`,
-                        blink_class: p.blink ? 'fa-beat' : '',
-                        priority_class: p.name ? p.name.toLowerCase() : 'normal',
-                        time: e.start_date,
-                        time_formatted: e.start_date,
-                        code_display: e.alarm_code_id ? `[${e.alarm_code_id[1]}]` : '[---]',
-                        description: e.description || '',
-                        zone: e.zone || '000',
-                        location: 'Ver Mapa'
-                    };
-                });
-            } else if (this.state.currentTab === 'traffic') {
-                const rawSignals = await this.orm.searchRead("sentinela.alarm.signal", [], 
-                    ["id", "name", "device_id", "received_date", "signal_type", "description"],
-                    { order: "id desc", limit: 50 });
-                this.state.signals = rawSignals.map(s => ({
-                    id: s.id,
-                    account: s.device_id[1].split(' ')[0],
-                    device_name: s.device_id[1],
-                    time: s.received_date,
-                    type: s.signal_type,
-                    description: s.description || ''
-                }));
-            }
-        } catch (e) { console.error("SENTINELA: Load Error", e); }
+    _safeMap(e) {
+        return {
+            id: e.id,
+            partner_name: e.partner_name || 'Desconocido',
+            account: e.account || '0000',
+            code_display: e.code_display || '---',
+            zone: e.zone || '000',
+            status: e.status || 'active',
+            is_blocked: e.is_blocked || false,
+            start_date: e.start_date || '---'
+        };
     }
 
     async handleAlarm(eventId) {
-        this.alarmSound.stopAll();
+        if (!eventId) return;
         await this.orm.write("sentinela.alarm.event", [eventId], { status: 'in_progress' });
         this.action.doAction({
             type: 'ir.actions.act_window',
@@ -166,19 +123,6 @@ export class MonitoringDashboard extends Component {
             target: 'new',
             context: { 'default_alarm_event_id': eventId }
         }, { onClose: () => this.loadData() });
-    }
-
-    getRelativeTime(ts) {
-        if (!ts) return '---';
-        const date = this.luxon.DateTime.fromISO(ts.replace(' ', 'T'), { zone: 'utc' });
-        const diff = this.state.now.toUTC().diff(date, ['minutes', 'seconds']);
-        return `${Math.floor(Math.abs(diff.minutes))}m ${Math.floor(Math.abs(diff.seconds))}s`;
-    }
-
-    isOverdue(ts) {
-        if (!ts) return false;
-        const date = this.luxon.DateTime.fromISO(ts.replace(' ', 'T'), { zone: 'utc' });
-        return this.state.now.toUTC().diff(date, 'minutes').minutes > 2;
     }
 }
 

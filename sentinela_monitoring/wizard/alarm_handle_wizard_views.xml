@@ -28,9 +28,10 @@
                             <group string="👥 Contactos del Cliente">
                                 <field name="contact_ids" readonly="1" nolabel="1">
                                     <list>
+                                        <field name="user_number" string="ID"/>
                                         <field name="name" string="Nombre"/>
-                                        <field name="phone" widget="phone"/>
-                                        <field name="mobile" widget="phone"/>
+                                        <field name="phone" widget="phone" string="Teléfono"/>
+                                        <field name="relation" string="Relación"/>
                                     </list>
                                 </field>
                             </group>
@@ -64,7 +65,8 @@
                     </div>
                 </sheet>
                 <footer>
-                    <button name="action_dispatch_patrol" string="🚨 DESPACHAR PATRULLA" type="object" class="btn-danger" icon="fa-shield"/>
+                    <button name="action_request_patrol_from_wizard" string="💰 SOLICITAR AUTORIZACION PATRULLA" type="object" class="btn-warning" icon="fa-telegram" invisible="extra_service_authorized"/>
+                    <button name="action_dispatch_patrol" string="🚨 DESPACHAR PATRULLA" type="object" class="btn-danger" icon="fa-shield" invisible="not extra_service_authorized and not patrol_included"/>
                     <button name="action_create_technical_ticket" string="🔧 FALLA TECNICA" type="object" class="btn-warning" icon="fa-wrench"/>
                     <button name="action_pause_event" string="⏸️ PONER EN PAUSA" type="object" class="btn-secondary" icon="fa-pause"/>
                     <button name="action_close_event" string="✅ FINALIZAR Y CERRAR" type="object" class="btn-primary" icon="fa-check-circle"/>

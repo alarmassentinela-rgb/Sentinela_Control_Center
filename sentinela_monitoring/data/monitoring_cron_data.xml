@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="action_sync_ucm_recordings" model="ir.actions.server">
+            <field name="name">Sync UCM Recordings</field>
+            <field name="model_id" ref="model_sentinela_alarm_event"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_fetch_ucm_recordings()</field>
+        </record>
+
+        <record id="ir_cron_sync_ucm_recordings" model="ir.cron">
+            <field name="name">Sentinela: Sincronización Automática de Grabaciones UCM</field>
+            <field name="ir_actions_server_id" ref="action_sync_ucm_recordings"/>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">10</field>
+            <field name="interval_type">minutes</field>
+            <field name="active" eval="True"/>
+        </record>
+    </data>
+</odoo>

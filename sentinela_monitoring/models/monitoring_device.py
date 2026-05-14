@@ -29,7 +29,36 @@ class MonitoringDevice(models.Model):
     ], string='Tipo de Dispositivo', required=True)
     
     partner_id = fields.Many2one('res.partner', string='Cliente', required=True)
-    subscription_id = fields.Many2one('sentinela.subscription', string='Suscripción')
+    
+    # INTEGRACIÓN CON INVENTARIO (IMEI)
+    lot_id = fields.Many2one('stock.lot', string='Número de Serie / IMEI', 
+                            help="Seleccione el IMEI desde el inventario físico.")
+    
+    subscription_id = fields.Many2one(
+        'sentinela.subscription', 
+        string='Suscripción',
+        domain="[('partner_id', '=', partner_id)]",
+        help="Vincule este dispositivo con el contrato de servicio correspondiente."
+    )
+
+    @api.onchange('lot_id')
+    def _onchange_lot_id(self):
+        """Si se selecciona un IMEI del inventario, usarlo como número de cuenta"""
+        if self.lot_id:
+            self.account_number = self.lot_id.name
+            if not self.location and self.lot_id.product_id:
+                self.notes = f"Equipo: {self.lot_id.product_id.display_name}"
+
+    @api.onchange('partner_id')
+    def _onchange_partner_id_filter(self):
+        """Refuerza el filtro de suscripciones al cambiar el cliente"""
+        if self.partner_id:
+            # Si hay un cliente, solo mostrar sus suscripciones
+            return {'domain': {'subscription_id': [('partner_id', '=', self.partner_id.id)]}}
+        else:
+            # Si no hay cliente, no mostrar ninguna suscripción
+            self.subscription_id = False
+            return {'domain': {'subscription_id': [('id', '=', 0)]}}
     
     location = fields.Char(string='Ubicación')
     latitude = fields.Float(string='Latitud', digits=(10, 7))
@@ -61,6 +90,26 @@ class MonitoringDevice(models.Model):
     # NUEVO: Configuracion personalizada de codigos por cuenta
     template_id = fields.Many2one('sentinela.alarm.code.template', string='Plantilla de Reacción')
     alarm_config_ids = fields.One2many('sentinela.device.alarm.config', 'device_id', string='Configuración de Eventos')
+
+    # INTEGRACIÓN DE VIDEO (CCTV)
+    has_video = fields.Boolean(string='Tiene Video Integrado', default=False)
+    connection_mode = fields.Selection([
+        ('direct', 'Directo (IP/Dominio)'),
+        ('cloud', 'Nube (Número de Serie)')
+    ], string='Modo de Conexión', default='cloud')
+    
+    dvr_brand = fields.Selection([
+        ('hikvision', 'Hikvision / Epcom'),
+        ('dahua', 'Dahua / Lorex'),
+        ('generic', 'Genérico (RTSP)')
+    ], string='Marca del DVR/NVR')
+    
+    dvr_serial = fields.Char(string='Número de Serie', help="ID único del equipo para conexión por nube.")
+    dvr_ip = fields.Char(string='IP Pública / Dominio', help="Ej. 187.123.4.5 o sentinela.ddns.net")
+    dvr_port = fields.Integer(string='Puerto HTTP/ISAPI', default=80)
+    dvr_user = fields.Char(string='Usuario DVR')
+    dvr_password = fields.Char(string='Password DVR')
+    dvr_rtsp_port = fields.Integer(string='Puerto RTSP', default=554)
 
     _sql_constraints = [
         ('account_number_uniq', 'unique(account_number)', 'El número de cuenta del panel debe ser único.')

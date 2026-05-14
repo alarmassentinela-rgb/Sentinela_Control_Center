@@ -31,6 +31,9 @@ class AlarmSignal(models.Model):
     
     priority_id = fields.Many2one('sentinela.alarm.priority', string='Prioridad', required=True)
     
+    alarm_code = fields.Char(string='Código de Alarma', help="Ej. E130")
+    zone = fields.Char(string='Zona', help="Ej. 001")
+    
     description = fields.Text(string='Descripción')
     raw_data = fields.Text(string='Datos Crudos')
     
@@ -58,12 +61,20 @@ class AlarmSignal(models.Model):
     
     # Relación con eventos de alarma
     alarm_event_id = fields.Many2one('sentinela.alarm.event', string='Evento de Alarma')
+    operator_notes = fields.Text(string='Notas del Operador')
     
-    @api.model
-    def create(self, vals):
-        if vals.get('name', 'Nuevo') == 'Nuevo':
-            vals['name'] = self.env['ir.sequence'].next_by_code('sentinela.alarm.signal') or 'SIG-0000'
-        return super().create(vals)
+    @api.model_create_multi
+    def create(self, vals_list):
+        if not vals_list: return super().create(vals_list)
+        for vals in vals_list:
+            if vals.get('name', 'Nuevo') == 'Nuevo':
+                vals['name'] = self.env['ir.sequence'].next_by_code('sentinela.alarm.signal') or 'SIG-0000'
+        
+        signals = super().create(vals_list)
+        # Notificar al Dashboard que hay tráfico nuevo
+        if signals:
+            self.env['bus.bus']._sendone('sentinela_monitoring', 'notification', {'type': 'refresh'})
+        return signals
 
     def action_acknowledge(self):
         """Reconocer la señal"""

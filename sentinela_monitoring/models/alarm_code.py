@@ -24,6 +24,14 @@ class AlarmCode(models.Model):
         ('open_close', 'Apertura / Cierre')
     ], string='Categoría de Evento', required=True, default='alarm')
 
+    priority = fields.Selection([
+        ('0', 'Informativo'),
+        ('1', 'Baja'),
+        ('2', 'Media'),
+        ('3', 'Alta'),
+        ('4', 'Crítica')
+    ], string='Prioridad (Legacy)', default='2')
+
     priority_id = fields.Many2one('sentinela.alarm.priority', string='Nivel de Prioridad')
     
     # --- NUEVOS CAMPOS DE INTELIGENCIA ---
@@ -35,6 +43,13 @@ class AlarmCode(models.Model):
     
     color_hex = fields.Char(string='Color Visual', default='#FFFFFF', 
         help="Color de fondo para la tarjeta en el dashboard.")
+    
+    point_type = fields.Selection([
+        ('zone', 'Zona (Sensor)'),
+        ('user', 'Usuario (Persona)'),
+        ('system', 'Sistema (Panel)')
+    ], string='Tipo de Origen', default='zone', required=True, 
+       help="Define si los últimos 3 dígitos de la trama son una Zona o un Usuario.")
     # -------------------------------------
 
     is_billable = fields.Boolean(string='Generable Cobro?', help="Si es True, este evento podría generar un cargo por evento.")

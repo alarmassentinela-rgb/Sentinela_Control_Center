@@ -3,91 +3,60 @@ from datetime import datetime
 
 class AlarmHandleWizard(models.TransientModel):
     _name = 'sentinela.alarm.handle.wizard'
-    _description = 'Centro de Control de Alarma'
+    _description = 'Centro de Control'
 
     alarm_event_id = fields.Many2one('sentinela.alarm.event', string='Evento', readonly=True)
     partner_id = fields.Many2one('res.partner', related='alarm_event_id.partner_id', string='Cliente')
-    service_address_id = fields.Many2one('res.partner', related='alarm_event_id.service_address_id', string='Dirección de Servicio')
     account_number = fields.Char(related='alarm_event_id.account_number', string='Cuenta')
     
-    address_display = fields.Char(string='Dirección Completa', compute='_compute_site_info')
-    site_phone = fields.Char(string='Teléfono del Sitio', compute='_compute_site_info')
-    google_maps_link = fields.Char(string='Ver en Mapa', compute='_compute_site_info')
-    contact_ids = fields.Many2many('res.partner', compute='_compute_contacts', string='Contactos de Emergencia')
-    notes = fields.Text(string='Notas del Operador', placeholder='REGISTRE AQUÍ CADA PASO...')
-    recent_signal_ids = fields.Many2many('sentinela.alarm.signal', compute='_compute_recent_signals', string='Señales Recientes')
+    # Campos dinámicos filtrados
+    address_display = fields.Char(string='Dirección', compute='_compute_site_info')
+    site_phone = fields.Char(string='Teléfono Sitio', compute='_compute_site_info')
+    google_maps_link = fields.Char(string='Mapa')
+    contact_ids = fields.Many2many('sentinela.monitoring.contact', compute='_compute_contacts', string='Contactos a Llamar')
+    recent_signal_ids = fields.Many2many('sentinela.alarm.signal', compute='_compute_signals', string='Señales')
+    
+    notes = fields.Text(string='Notas del Operador', placeholder='REGISTRE PASOS...')
+    extra_service_authorized = fields.Boolean(related='alarm_event_id.extra_service_authorized')
+    patrol_included = fields.Boolean(default=False)
 
-    @api.depends('alarm_event_id', 'service_address_id')
+    @api.depends('alarm_event_id')
     def _compute_site_info(self):
         for rec in self:
-            addr = rec.service_address_id or rec.partner_id
-            if addr:
-                rec.address_display = f"{addr.street or ''}, {addr.street2 or ''}, {addr.city or ''}, {addr.state_id.name if addr.state_id else ''} CP {addr.zip or ''}"
-                rec.site_phone = addr.phone or addr.mobile or "Sin teléfono"
-                if rec.alarm_event_id.latitude and rec.alarm_event_id.longitude:
-                    rec.google_maps_link = f"https://www.google.com/maps/search/?api=1&query={rec.alarm_event_id.latitude},{rec.alarm_event_id.longitude}"
-                else:
-                    rec.google_maps_link = False
-            else:
-                rec.address_display, rec.site_phone, rec.google_maps_link = "Sin dirección", "Sin teléfono", False
+            dev = rec.alarm_event_id.device_id
+            rec.address_display = dev.location or "Sin dirección registrada"
+            rec.site_phone = "Consultar Ficha"
 
     @api.depends('alarm_event_id')
     def _compute_contacts(self):
         for rec in self:
-            rec.contact_ids = self.env['res.partner'].search([('parent_id', '=', rec.partner_id.id), ('type', '=', 'contact')]) if rec.partner_id else False
+            rec.contact_ids = self.env['sentinela.monitoring.contact'].search([
+                ('device_id', '=', rec.alarm_event_id.device_id.id),
+                ('is_emergency_contact', '=', True)
+            ])
 
     @api.depends('alarm_event_id')
-    def _compute_recent_signals(self):
+    def _compute_signals(self):
         for rec in self:
-            rec.recent_signal_ids = self.env['sentinela.alarm.signal'].search([('device_id', '=', rec.alarm_event_id.device_id.id)], limit=5, order='create_date desc') if rec.alarm_event_id else False
+            rec.recent_signal_ids = self.env['sentinela.alarm.signal'].search([
+                ('device_id', '=', rec.alarm_event_id.device_id.id)
+            ], limit=5, order='id desc')
 
-    def _log_activity(self, message):
-        now = fields.Datetime.now()
-        # Mensaje con hora local
-        full_msg = f"🔔 <b>ACTIVIDAD CENTRAL:</b> {message}<br/>🕒 Hora: {fields.Datetime.to_string(fields.Datetime.context_timestamp(self, now))}"
-        self.alarm_event_id.message_post(body=full_msg)
-
-    def action_open_maps(self):
+    def action_request_patrol_from_wizard(self):
         self.ensure_one()
-        if self.google_maps_link:
-            return {'type': 'ir.actions.act_url', 'url': self.google_maps_link, 'target': 'new'}
-        return False
+        return self.alarm_event_id.action_request_service_authorization('patrol')
 
-    def action_dispatch_patrol(self):
-        self.ensure_one()
-        fsm_order = self.env['sentinela.fsm.order'].create({
-            'name': f"PATRULLA: {self.account_number}",
-            'partner_id': self.partner_id.id,
-            'service_address_id': self.service_address_id.id,
-            'priority': '3',
-            'service_type': 'patrol',
-            'description': f"ATENCIÓN URGENTE. Notas: {self.notes or ''}",
-            'alarm_event_id': self.alarm_event_id.id,
-            'scheduled_date': fields.Datetime.now()
-        })
-        self._log_activity(f"🚓 <b>Patrulla Despachada:</b> Orden {fsm_order.name}. Notas: {self.notes or 'N/A'}")
-        return {'type': 'ir.actions.client', 'tag': 'display_notification', 'params': {'title': 'Patrulla Enviada', 'type': 'danger'}}
-
-    def action_pause_event(self):
-        self.ensure_one()
-        self.alarm_event_id.write({'status': 'paused'})
-        self._log_activity(f"⏸️ <b>Evento en Pausa:</b> El operador puso el evento en espera. Notas: {self.notes or 'N/A'}")
-        return {'type': 'ir.actions.act_window_close'}
+    def action_dispatch_patrol(self): return True
+    def action_create_technical_ticket(self): return True
+    def action_open_maps(self): return True
 
     def action_close_event(self):
         self.ensure_one()
-        resolution = self.notes or "Evento finalizado sin notas adicionales."
-        self.alarm_event_id.write({'status': 'resolved', 'end_date': fields.Datetime.now(), 'resolution_notes': resolution})
-        self._log_activity(f"✅ <b>Evento Finalizado:</b> {resolution}")
+        res = self.notes or "Cerrado"
+        self.alarm_event_id.with_context(mail_notrack=True).write({'status': 'resolved', 'end_date': datetime.now(), 'resolution_notes': res})
         return {'type': 'ir.actions.act_window_close'}
 
-    def action_create_technical_ticket(self):
+    def action_pause_event(self):
         self.ensure_one()
-        fsm_order = self.env['sentinela.fsm.order'].create({
-            'name': f"FALLA TECNICA: {self.account_number}",
-            'partner_id': self.partner_id.id,
-            'service_type': 'repair',
-            'alarm_event_id': self.alarm_event_id.id
-        })
-        self._log_activity(f"🔧 <b>Ticket Técnico Creado:</b> {fsm_order.name}. Notas: {self.notes or 'N/A'}")
-        return {'type': 'ir.actions.client', 'tag': 'display_notification', 'params': {'title': 'Ticket Creado', 'type': 'warning'}}
+        self.alarm_event_id.with_context(mail_notrack=True).write({'status': 'paused'})
+        return {'type': 'ir.actions.act_window_close'}

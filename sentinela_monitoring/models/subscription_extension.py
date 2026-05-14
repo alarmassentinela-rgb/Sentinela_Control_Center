@@ -7,6 +7,8 @@ class SentinelaSubscription(models.Model):
     _inherit = 'sentinela.subscription'
 
     monitoring_device_ids = fields.One2many('sentinela.monitoring.device', 'subscription_id', string='Dispositivos de Monitoreo')
+    alarm_event_ids = fields.One2many('sentinela.alarm.event', 'subscription_id', string='Historial de Alarmas')
+    monitoring_call_ids = fields.One2many('sentinela.monitoring.call', 'subscription_id', string='Historial de Llamadas')
 
     def action_activate(self):
         res = super(SentinelaSubscription, self).action_activate()

@@ -10,6 +10,7 @@ class MonitoringZone(models.Model):
     partition = fields.Integer(string='Partición', default=1, help="Área o partición del sistema (Ej. 1=Casa, 2=Garage)")
     
     name = fields.Char(string='Descripción / Ubicación', required=True, help="Ej. Sensor Puerta Principal")
+    camera_channel = fields.Integer(string='Cámara Asociada (Canal)', help="Número de cámara en el DVR para videoverificación.")
     
     zone_type = fields.Selection([
         ('entry_exit', 'Entrada / Salida'),

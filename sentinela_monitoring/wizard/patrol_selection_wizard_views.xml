@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_sentinela_patrol_selection_wizard_form" model="ir.ui.view">
+        <field name="name">sentinela.patrol.selection.wizard.form</field>
+        <field name="model">sentinela.patrol.selection.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Enviar Solicitud de Cobro Patrullaje">
+                <p class="alert alert-info">
+                    Seleccione las personas que recibirán el mensaje de autorización de cobro en su Telegram.
+                </p>
+                <group>
+                    <field name="alarm_event_id" readonly="1"/>
+                    <field name="partner_id" readonly="1"/>
+                </group>
+                <field name="line_ids" nolabel="1">
+                    <list editable="bottom" create="false" delete="false">
+                        <field name="selected" widget="boolean_toggle"/>
+                        <field name="name" readonly="1"/>
+                        <field name="role" readonly="1"/>
+                        <field name="telegram_id" readonly="1"/>
+                    </list>
+                </field>
+                <footer>
+                    <button name="action_send_requests" string="ENVIAR A TELEGRAM" type="object" class="btn-primary" icon="fa-paper-plane"/>
+                    <button string="CANCELAR" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

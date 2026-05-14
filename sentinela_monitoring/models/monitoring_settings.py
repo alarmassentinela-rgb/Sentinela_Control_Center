@@ -9,6 +9,13 @@ class MonitoringSettings(models.TransientModel):
         help="El número que se asignará a la próxima instalación de alarma nueva."
     )
 
+    traccar_url = fields.Char(
+        string='URL de Radar Senticar (Traccar)',
+        config_parameter='sentinela.traccar_url',
+        default='https://senticar.com',
+        help="La URL que se incrustará en el Radar del Dashboard."
+    )
+
     @api.model
     def get_values(self):
         res = super(MonitoringSettings, self).get_values()

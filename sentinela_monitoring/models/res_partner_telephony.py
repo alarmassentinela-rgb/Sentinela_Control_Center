@@ -101,25 +101,24 @@ class ResPartner(models.Model):
             s.recv(1024)
             
             s.send(("Action: Login\r\nUsername: " + user + "\r\nSecret: " + pw + "\r\n\r\n").encode())
-            time.sleep(1.0) # Aumentado a 1 segundo
+            time.sleep(1.0)
             s.recv(1024)
             
-            # Comando ultra-simple
+            # VARIANTE 1: Primero suena el operador, al descolgar marca afuera
             dial_cmd = "Action: Originate\r\n"
-            dial_cmd += "Channel: Local/" + target_number + "@from-internal\r\n"
-            dial_cmd += "Exten: " + str(operator_extension) + "\r\n"
+            dial_cmd += "Channel: Local/" + str(operator_extension) + "@from-internal\r\n"
+            dial_cmd += "Exten: " + target_number + "\r\n"
             dial_cmd += "Context: from-internal\r\n"
             dial_cmd += "Priority: 1\r\n"
+            dial_cmd += "CallerID: Sentinela <" + str(operator_extension) + ">\r\n"
             dial_cmd += "Async: yes\r\n\r\n"
             
-            print("Enviando comando AMI: " + dial_cmd)
             s.send(dial_cmd.encode())
-            time.sleep(1.0) # Aumentado a 1 segundo
+            time.sleep(1.0)
             s.send(b"Action: Logoff\r\n\r\n")
-            time.sleep(0.5)
             s.close()
 
-            self.message_post(body=f"📞 <b>Llamada:</b> Marcando al {target_number} para conectar con Ext. {operator_extension}")
+            self.message_post(body=f"📞 <b>Llamada:</b> Conectando Ext. {operator_extension} con el número {target_number}")
             return {
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',

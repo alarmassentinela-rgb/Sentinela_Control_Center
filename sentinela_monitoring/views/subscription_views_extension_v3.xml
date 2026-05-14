@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="view_subscription_form_monitoring_inherit" model="ir.ui.view">
-        <field name="name">sentinela.subscription.form.monitoring.inherit</field>
+    <record id="view_subscription_form_monitoring_inherit_v3" model="ir.ui.view">
+        <field name="name">sentinela.subscription.form.monitoring.inherit.v3</field>
         <field name="model">sentinela.subscription</field>
         <field name="inherit_id" ref="sentinela_subscriptions.view_sentinela_subscription_form"/>
         <field name="arch" type="xml">
@@ -12,18 +12,16 @@
                             <field name="account_number"/>
                             <field name="name"/>
                             <field name="device_type"/>
-                            <field name="status" widget="badge"/>
                         </list>
                     </field>
                 </page>
                 <page string="🚨 Historial de Alarmas" name="alarm_history" invisible="service_type != 'alarm'">
                     <field name="alarm_event_ids" readonly="1">
-                        <list decoration-danger="priority == 'critical'" decoration-warning="priority == 'high'">
-                            <field name="date"/>
+                        <list>
+                            <field name="start_date"/>
                             <field name="account_number"/>
-                            <field name="event_code"/>
+                            <field name="priority_id"/>
                             <field name="description"/>
-                            <field name="priority" widget="badge"/>
                         </list>
                     </field>
                 </page>
@@ -33,8 +31,6 @@
                             <field name="date"/>
                             <field name="phone_number"/>
                             <field name="duration" widget="float_time"/>
-                            <field name="status" widget="badge"/>
-                            <field name="recording_url" widget="url" text="Escuchar"/>
                         </list>
                     </field>
                 </page>

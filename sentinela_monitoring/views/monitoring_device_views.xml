@@ -29,10 +29,11 @@
                             <field name="warranty_expiration"/>
                         </group>
                         <group string="Cliente">
-                            <field name="partner_id" groups="base.group_system"/>
-                            <field name="partner_id" groups="!base.group_system" readonly="1"/>
-                            <field name="subscription_id" groups="base.group_system"/>
-                            <field name="subscription_id" groups="!base.group_system" readonly="1"/>
+                            <field name="partner_id"/>
+                            <field name="subscription_id" 
+                                   domain="[('partner_id', '=', partner_id)]"
+                                   context="{'default_partner_id': partner_id}"
+                                   options="{'no_create_edit': False}"/>
                         </group>
                     </group>
                     <group string="Ubicación">
@@ -57,15 +58,43 @@
                                     <field name="partition" groups="base.group_system"/>
                                     <field name="partition" groups="!base.group_system" readonly="1"/>
                                     <field name="name"/>
+                                    <field name="camera_channel" string="Cámara"/>
                                     <field name="zone_type"/>
                                     <field name="is_bypassed"/>
                                 </list>
                             </field>
                         </page>
+                        <page string="Videoverificación" name="video_integration">
+                            <group>
+                                <group string="Configuración del DVR/NVR">
+                                    <field name="has_video"/>
+                                    <field name="connection_mode" invisible="not has_video"/>
+                                    <field name="dvr_brand" invisible="not has_video" required="has_video"/>
+                                    <field name="dvr_serial" invisible="connection_mode != 'cloud' or not has_video" required="connection_mode == 'cloud' and has_video"/>
+                                    <field name="dvr_ip" invisible="connection_mode != 'direct' or not has_video" required="connection_mode == 'direct' and has_video"/>
+                                    <field name="dvr_port" invisible="connection_mode != 'direct' or not has_video" required="connection_mode == 'direct' and has_video"/>
+                                </group>
+                                <group string="Credenciales y Acceso" invisible="not has_video">
+                                    <field name="dvr_user" required="has_video"/>
+                                    <field name="dvr_password" password="True" required="has_video"/>
+                                    <field name="dvr_rtsp_port" invisible="connection_mode != 'direct'"/>
+                                </group>
+                            </group>
+                            <div class="alert alert-success shadow-sm mt-3" role="alert" invisible="connection_mode != 'cloud' or not has_video">
+                                <i class="fa fa-cloud me-2"/> <b>Modo Nube Activo:</b> 
+                                No es necesario abrir puertos en el módem. La conexión se realizará vía P2P usando el número de serie.
+                            </div>
+                            <div class="alert alert-warning shadow-sm mt-3" role="alert" invisible="connection_mode != 'direct' or not has_video">
+                                <i class="fa fa-warning me-2"/> <b>Nota de Seguridad:</b> 
+                                Asegúrese de que el puerto HTTP esté redireccionado en el router del cliente.
+                            </div>
+                        </page>
                         <page string="Contactos de Emergencia">
                             <field name="contact_ids">
                                 <list editable="bottom">
                                     <field name="sequence" widget="handle"/>
+                                    <field name="user_number" string="ID Panel"/>
+                                    <field name="is_emergency_contact" string="Llamar?"/>
                                     <field name="name"/>
                                     <field name="phone"/>
                                     <field name="relation"/>

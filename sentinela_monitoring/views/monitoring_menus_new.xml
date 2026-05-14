@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- TOP LEVEL -->
+    <menuitem id="menu_sentinela_monitoring_root"
+        name="Central de Monitoreo"
+        web_icon="sentinela_monitoring,static/description/icon.png"
+        sequence="6"/>
+
+    <!-- DASHBOARD (Primer Item) -->
+    <menuitem id="menu_monitoring_dashboard" 
+              name="Dashboard en Vivo" 
+              parent="menu_sentinela_monitoring_root" 
+              sequence="1" 
+              action="action_monitoring_dashboard_client"/>
+
+    <!-- OPERACIONES -->
+    <menuitem id="menu_sentinela_monitoring_operations"
+        name="Operaciones"
+        parent="menu_sentinela_monitoring_root"
+        sequence="10"/>
+
+    <menuitem id="menu_sentinela_alarm_event"
+        name="Eventos Activos"
+        parent="menu_sentinela_monitoring_operations"
+        action="action_alarm_event"
+        sequence="10"/>
+
+    <menuitem id="menu_alarm_event_history"
+              name="Historial de Eventos"
+              parent="menu_sentinela_monitoring_root"
+              action="action_alarm_event_history"
+              sequence="20"/>
+
+    <menuitem id="menu_sentinela_alarm_signal"
+        name="Historial de Señales"
+        parent="menu_sentinela_monitoring_operations"
+        action="action_alarm_signal"
+        sequence="30"/>
+
+    <!-- DISPOSITIVOS -->
+    <menuitem id="menu_sentinela_monitoring_devices"
+        name="Dispositivos / Cuentas"
+        parent="menu_sentinela_monitoring_root"
+        action="action_monitoring_device"
+        sequence="30"/>
+
+    <!-- CONFIGURACION -->
+    <menuitem id="menu_sentinela_monitoring_config"
+        name="Configuración"
+        parent="menu_sentinela_monitoring_root"
+        sequence="100"/>
+
+    <menuitem id="menu_sentinela_response_team"
+        name="Equipos de Respuesta"
+        parent="menu_sentinela_monitoring_config"
+        action="action_response_team"
+        sequence="10"/>
+
+    <menuitem id="menu_sentinela_alarm_code"
+        name="Códigos de Alarma (Contact ID)"
+        parent="menu_sentinela_monitoring_config"
+        action="action_sentinela_alarm_code"
+        sequence="20"/>
+
+    <menuitem id="menu_sentinela_alarm_code_template"
+        name="Plantillas de Códigos"
+        parent="menu_sentinela_monitoring_config"
+        action="action_alarm_code_template"
+        sequence="25"/>
+
+    <menuitem id="menu_sentinela_alarm_priority"
+        name="Niveles de Prioridad"
+        parent="menu_sentinela_monitoring_config"
+        action="action_alarm_priority"
+        sequence="30"/>
+
+    <menuitem id="menu_sentinela_monitoring_settings"
+        name="Ajustes de Central"
+        parent="menu_sentinela_monitoring_config"
+        action="action_monitoring_config_settings"
+        sequence="100"/>
+</odoo>

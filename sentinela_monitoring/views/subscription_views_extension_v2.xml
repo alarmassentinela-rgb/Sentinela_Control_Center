@@ -19,7 +19,7 @@
                 <page string="🚨 Historial de Alarmas" name="alarm_history" invisible="service_type != 'alarm'">
                     <field name="alarm_event_ids" readonly="1">
                         <list decoration-danger="priority == 'critical'" decoration-warning="priority == 'high'">
-                            <field name="date"/>
+                            <field name="event_date"/>
                             <field name="account_number"/>
                             <field name="event_code"/>
                             <field name="description"/>
@@ -30,7 +30,7 @@
                 <page string="📞 Bitácora de Llamadas" name="call_logs" invisible="service_type != 'alarm'">
                     <field name="monitoring_call_ids" readonly="1">
                         <list>
-                            <field name="date"/>
+                            <field name="event_date"/>
                             <field name="phone_number"/>
                             <field name="duration" widget="float_time"/>
                             <field name="status" widget="badge"/>
