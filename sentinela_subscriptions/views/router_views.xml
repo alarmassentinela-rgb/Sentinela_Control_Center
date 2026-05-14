@@ -42,11 +42,4 @@
         <field name="res_model">sentinela.router</field>
         <field name="view_mode">list,form</field>
     </record>
-
-    <!-- MENU -->
-    <menuitem id="menu_sentinela_router"
-        name="Routers"
-        parent="menu_sentinela_subscription_config"
-        action="action_sentinela_router"
-        sequence="20"/>
 </odoo>

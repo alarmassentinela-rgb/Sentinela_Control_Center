@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- SEARCH VIEW -->
+    <record id="view_sentinela_subscription_search" model="ir.ui.view">
+        <field name="name">sentinela.subscription.search</field>
+        <field name="model">sentinela.subscription</field>
+        <field name="arch" type="xml">
+            <search string="Buscar Contratos">
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="product_id"/>
+                <field name="monitoring_account_number"/>
+                <field name="gps_imei"/>
+                <field name="sim_iccid"/>
+                <field name="equipment_serial"/>
+                <separator/>
+                <filter string="Activos" name="active" domain="[('state', '=', 'active')]"/>
+                <filter string="Suspendidos" name="suspension" domain="[('state', '=', 'suspension')]"/>
+                <filter string="Borrador" name="draft" domain="[('state', '=', 'draft')]"/>
+                <separator/>
+                <filter string="Alarma" name="type_alarm" domain="[('service_type', '=', 'alarm')]"/>
+                <filter string="GPS" name="type_gps" domain="[('service_type', '=', 'gps')]"/>
+                <filter string="Internet" name="type_internet" domain="[('service_type', '=', 'internet')]"/>
+                <group expand="0" string="Agrupar Por">
+                    <filter string="Cliente" name="group_partner" context="{'group_by': 'partner_id'}"/>
+                    <filter string="Tipo de Servicio" name="group_type" context="{'group_by': 'service_type'}"/>
+                    <filter string="Estado" name="group_state" context="{'group_by': 'state'}"/>
+                    <filter string="Plan" name="group_product" context="{'group_by': 'product_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- LIST VIEW -->
+    <record id="view_sentinela_subscription_list" model="ir.ui.view">
+        <field name="name">sentinela.subscription.list</field>
+        <field name="model">sentinela.subscription</field>
+        <field name="arch" type="xml">
+            <list string="Contratos de Suscripción" decoration-warning="state == 'suspension'" decoration-danger="state == 'cancelled'" decoration-success="state == 'active'">
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="service_type"/>
+                <field name="product_id"/>
+                <field name="price_total" string="Total c/IVA"/>
+                <field name="next_billing_date"/>
+                <field name="state" widget="badge" decoration-success="state == 'active'" decoration-warning="state == 'suspension'" decoration-danger="state == 'cancelled'" decoration-info="state == 'confirmed'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- FORM VIEW -->
+    <record id="view_sentinela_subscription_form" model="ir.ui.view">
+        <field name="name">sentinela.subscription.form</field>
+        <field name="model">sentinela.subscription</field>
+        <field name="priority">1</field>
+        <field name="arch" type="xml">
+            <form string="Contrato de Suscripción">
+                <header>
+                    <button name="action_confirm" string="Confirmar Contrato" type="object" class="oe_highlight" invisible="state != 'draft'"/>
+                    <button name="action_activate" string="Activar Servicio" type="object" class="oe_highlight" invisible="state != 'confirmed'"/>
+                    <button name="action_suspend" string="Suspender Servicio" type="object" class="btn-warning" invisible="state != 'active' or technical_state == 'suspended'"/>
+                    <button name="action_activate" string="Re-Activar Servicio" type="object" class="btn-success" invisible="technical_state != 'suspended'"/>
+                    <button name="action_cancel" string="Cancelar Contrato" type="object" class="btn-danger" invisible="state in ['draft', 'cancelled']"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,confirmed,active,suspension,cancelled"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_invoices" type="object" class="oe_stat_button" icon="fa-pencil-square-o">
+                            <field name="invoice_count" widget="statinfo" string="Facturas"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group string="Titular y Ubicación" name="main_info">
+                            <field name="partner_id" options="{'no_create': True}" readonly="is_contract_locked"/>
+                            <field name="service_address_id" string="Dirección de Servicio" domain="[('parent_id', '=', partner_id)]" readonly="is_contract_locked"/>
+                            <div class="o_address_format" colspan="2">
+                                <field name="address_street" placeholder="Calle..."/>
+                                <field name="address_street2" placeholder="Colonia..."/>
+                                <div class="o_row">
+                                    <field name="address_city" placeholder="Ciudad"/>
+                                    <field name="address_state_id" placeholder="Estado" options="{'no_open': True, 'no_create': True}"/>
+                                    <field name="address_zip" placeholder="CP"/>
+                                </div>
+                            </div>
+                        </group>
+                        <group string="Detalles de la Suscripción" name="plan_info">
+                            <field name="service_type" widget="radio" options="{'horizontal': true}" readonly="is_contract_locked"/>
+                            <field name="product_id" string="Plan Contratado" domain="[('is_subscription', '=', True)]" readonly="is_contract_locked"/>
+                            <field name="price_unit" widget="monetary" readonly="is_contract_locked"/>
+                            <field name="price_total" widget="monetary" class="fw-bold text-success fs-5"/>
+                            <field name="recurring_interval" readonly="is_contract_locked"/>
+                            <field name="is_contract_locked" invisible="1"/>
+                        </group>
+                    </group>
+                    
+                    <notebook>
+                        <page string="📡 Monitoreo y Alarma" name="monitoring" invisible="service_type != 'alarm'">
+                            <group>
+                                <group string="Parámetros de Central">
+                                    <field name="monitoring_account_number" readonly="is_contract_locked"/>
+                                    <field name="security_code" password="True" readonly="is_contract_locked"/>
+                                    <field name="master_password" password="True" readonly="is_contract_locked"/>
+                                </group>
+                                <group string="Estado Técnico">
+                                    <field name="technical_state" readonly="1"/>
+                                    <field name="technical_state_date" readonly="1"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="🚗 Rastreo GPS (Senticar)" name="gps" invisible="service_type != 'gps'">
+                            <group>
+                                <group string="Identificación">
+                                    <field name="gps_imei" readonly="is_contract_locked"/>
+                                    <field name="sim_iccid" readonly="is_contract_locked"/>
+                                    <field name="serial_number_id" readonly="is_contract_locked"/>
+                                </group>
+                                <group string="Software">
+                                    <!-- <field name="gps_platform_id" readonly="is_contract_locked"/> -->
+                                </group>
+                            </group>
+                        </page>
+                        <page string="🔧 Datos Técnicos del Equipo" name="hardware">
+                            <group>
+                                <group string="Equipo">
+                                    <field name="equipment_ownership" readonly="is_contract_locked"/>
+                                    <field name="equipment_brand" readonly="is_contract_locked"/>
+                                    <field name="equipment_model" readonly="is_contract_locked"/>
+                                </group>
+                                <group string="Seriales">
+                                    <field name="equipment_serial" readonly="is_contract_locked"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="📶 MikroTik / Internet" name="mikrotik" invisible="service_type != 'internet'">
+                            <group>
+                                <group string="Conexión">
+                                    <field name="router_id" readonly="is_contract_locked"/>
+                                    <field name="mikrotik_profile_id" readonly="is_contract_locked"/>
+                                    <field name="ip_address" readonly="is_contract_locked"/>
+                                </group>
+                                <group string="Acceso PPPoE">
+                                    <field name="pppoe_user" readonly="is_contract_locked"/>
+                                    <field name="pppoe_password" password="True" readonly="is_contract_locked"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="📅 Facturación y Plazos" name="billing">
+                            <group>
+                                <group string="Calendario">
+                                    <field name="start_date" readonly="is_contract_locked"/>
+                                    <field name="next_billing_date" readonly="is_contract_locked"/>
+                                    <field name="payment_term_id" readonly="is_contract_locked"/>
+                                </group>
+                                <group string="Contrato Forzoso">
+                                    <field name="is_forced_contract" readonly="is_contract_locked"/>
+                                    <field name="commitment_period" invisible="not is_forced_contract" readonly="is_contract_locked"/>
+                                    <field name="commitment_end_date" invisible="not is_forced_contract" readonly="is_contract_locked"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="📍 Ubicación y Notas" name="location">
+                            <group>
+                                <group string="Coordenadas">
+                                    <field name="latitude" readonly="is_contract_locked"/>
+                                    <field name="longitude" readonly="is_contract_locked"/>
+                                </group>
+                                <group string="Referencias">
+                                    <field name="location_notes" readonly="is_contract_locked"/>
+                                </group>
+                            </group>
+                            <group string="Notas Internas">
+                                <field name="description" readonly="is_contract_locked" nolabel="1"/>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </div>
+            </form>
+        </field>
+    </record>
+</odoo>

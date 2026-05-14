@@ -5,9 +5,20 @@ class SentinelaMikrotikProfile(models.Model):
     _name = 'sentinela.mikrotik.profile'
     _description = 'Mikrotik PPPoE Profile'
 
-    name = fields.Char(string='Profile Name', required=True, help="Name as it will appear in Mikrotik")
-    upload_speed = fields.Integer(string='Upload Speed (Mbps)', required=True, default=5)
-    download_speed = fields.Integer(string='Download Speed (Mbps)', required=True, default=20)
+    name = fields.Char(string='Nombre en MikroTik', required=True, help="Nombre exacto del perfil en el router (ej: argusblack_plan_841_1798)")
+    description = fields.Char(string='Descripción', help="Nombre legible del plan (ej: Plan 15Mb / 5Mb)")
+    upload_speed = fields.Integer(string='Subida (Mbps)', required=True, default=5)
+    download_speed = fields.Integer(string='Bajada (Mbps)', required=True, default=20)
+
+    def name_get(self):
+        result = []
+        for rec in self:
+            if rec.description:
+                display = f"{rec.description} ({rec.download_speed}↓/{rec.upload_speed}↑ Mbps)"
+            else:
+                display = f"{rec.name} ({rec.download_speed}↓/{rec.upload_speed}↑ Mbps)"
+            result.append((rec.id, display))
+        return result
     
     local_address = fields.Char(string='Local Address', help="IP of the gateway (optional)")
     remote_address = fields.Char(string='Remote Address Pool', help="Name of the IP Pool in Mikrotik")

@@ -11,6 +11,7 @@ class SentinelaRouter(models.Model):
     api_port = fields.Integer(string='API Port', default=8728)
     
     # PPPoE Automation
+    pppoe_server_name = fields.Char(string='Nombre Servidor PPPoE', help="Nombre del Servidor PPPoE configurado en el Mikrotik (Ej: pppoe-out1)")
     pppoe_prefix = fields.Char(string='User Prefix', default='cta', help="Prefix for PPPoE users (e.g. cta)")
     next_pppoe_sequence = fields.Integer(string='Next Sequence', default=1000, help="Next number for PPPoE user generation")
     

@@ -1,0 +1,239 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+<data noupdate="1">
+
+    <!-- ============================================================
+         PLANTILLA 1: CONTRATO DE SERVICIO DE INTERNET (WISP)
+         ============================================================ -->
+    <record id="contract_template_internet_wisp" model="sentinela.contract.template">
+        <field name="name">Contrato de Servicio de Internet (WISP)</field>
+        <field name="active" eval="True"/>
+        <field name="content" type="html">
+<![CDATA[
+<div style="font-family: Arial, sans-serif; font-size: 13px; line-height: 1.6; color: #222; text-align: justify;">
+
+<h2 style="text-align: center; font-size: 16px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">
+    CONTRATO DE PRESTACIÓN DE SERVICIOS DE INTERNET
+</h2>
+<p style="text-align: center; font-size: 11px; color: #666; margin-top: 0;">
+    Contrato No. <strong>{{ object.name }}</strong> &nbsp;|&nbsp; Fecha: <strong>{{ object.start_date }}</strong>
+</p>
+
+<hr style="border: 1px solid #333; margin: 10px 0 20px 0;"/>
+
+<p>
+Que celebran por una parte <strong>SENTINELA SEGURIDAD PRIVADA S.A. DE C.V.</strong> (en adelante
+<strong>"EL PROVEEDOR"</strong>), y por la otra <strong>{{ object.partner_id.name }}</strong>,
+con RFC <strong>{{ object.partner_id.vat or 'NO REGISTRADO' }}</strong>
+(en adelante <strong>"EL CLIENTE"</strong>), al tenor de las siguientes:
+</p>
+
+<h3 style="font-size: 13px; text-transform: uppercase; margin-top: 20px;">CLÁUSULAS</h3>
+
+<p><strong>PRIMERA. — OBJETO DEL CONTRATO.</strong><br/>
+EL PROVEEDOR se compromete a proporcionar al CLIENTE el servicio de acceso a Internet de banda ancha en la modalidad
+<strong>{{ object.product_id.name }}</strong>, en el domicilio ubicado en
+<strong>{{ object.contract_domicilio_servicio or object.address_street }}</strong>,
+con una velocidad contratada de acuerdo al plan elegido, sujeta a disponibilidad técnica de la red.</p>
+
+<p><strong>SEGUNDA. — PLAZO Y VIGENCIA.</strong><br/>
+El presente contrato tendrá una vigencia mínima forzosa de
+<strong>{{ object.commitment_months or 12 }} meses</strong>, contados a partir del
+<strong>{{ object.start_date }}</strong>. Al término de dicho periodo, el contrato se renovará
+automáticamente de forma mensual salvo que cualquiera de las partes notifique su deseo de concluirlo
+con al menos 30 días de anticipación.</p>
+
+<p><strong>TERCERA. — COSTO Y FORMA DE PAGO.</strong><br/>
+El CLIENTE pagará mensualmente la cantidad de
+<strong>$\u00a0{{ "%.2f"|format(object.price_total or 0) }} MXN (más IVA)</strong>
+en concepto de renta del servicio. Los pagos deberán realizarse dentro de los primeros
+<strong>{{ object.payment_day or 5 }} días naturales</strong> de cada mes.
+El incumplimiento en el pago faculta al PROVEEDOR a suspender el servicio sin previo aviso.</p>
+
+<p><strong>CUARTA. — EQUIPO E INSTALACIÓN.</strong><br/>
+EL PROVEEDOR proveerá e instalará en el domicilio del CLIENTE el equipo necesario para la prestación
+del servicio. El equipo instalado se detalla a continuación:
+</p>
+<table style="width: 100%; border-collapse: collapse; font-size: 12px; margin: 10px 0;">
+    <thead>
+        <tr style="background-color: #eee;">
+            <th style="border: 1px solid #ccc; padding: 6px; text-align: left;">Equipo</th>
+            <th style="border: 1px solid #ccc; padding: 6px; text-align: left;">Marca</th>
+            <th style="border: 1px solid #ccc; padding: 6px; text-align: left;">Modelo</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td style="border: 1px solid #ccc; padding: 6px;">Antena CPE</td>
+            <td style="border: 1px solid #ccc; padding: 6px;">{{ object.contract_antena_marca or '___________' }}</td>
+            <td style="border: 1px solid #ccc; padding: 6px;">{{ object.contract_antena_modelo or '___________' }}</td>
+        </tr>
+        <tr>
+            <td style="border: 1px solid #ccc; padding: 6px;">Router MikroTik (Nodo)</td>
+            <td style="border: 1px solid #ccc; padding: 6px;" colspan="2">{{ object.contract_router_nombre or '___________' }}</td>
+        </tr>
+    </tbody>
+</table>
+<p style="font-size: 11px;">
+El equipo es propiedad de EL PROVEEDOR. El CLIENTE será responsable de su resguardo y deberá
+devolverlo en buenas condiciones al término del contrato. El daño o pérdida imputables al
+CLIENTE generarán un cargo de reposición a precio de lista.
+</p>
+
+<p><strong>QUINTA. — OBLIGACIONES DEL CLIENTE.</strong><br/>
+El CLIENTE se obliga a: a) Hacer uso del servicio exclusivamente para fines lícitos y personales;
+b) No sublicenciar, revender ni compartir el servicio con terceros sin autorización expresa;
+c) No manipular ni alterar el equipo instalado por EL PROVEEDOR;
+d) Permitir el acceso al domicilio para labores de mantenimiento con previo aviso.</p>
+
+<p><strong>SEXTA. — NIVELES DE SERVICIO (SLA).</strong><br/>
+EL PROVEEDOR garantiza una disponibilidad del servicio del <strong>95%</strong> mensual.
+No se considerarán como indisponibilidad los cortes por mantenimiento programado (notificado con 24 hrs de anticipación),
+causas de fuerza mayor, o incumplimiento de pago.</p>
+
+<p><strong>SÉPTIMA. — RESCISIÓN ANTICIPADA.</strong><br/>
+En caso de que el CLIENTE decida rescindir el contrato antes del término del plazo forzoso,
+deberá cubrir una penalización equivalente a los meses restantes de servicio.
+EL PROVEEDOR podrá rescindir el contrato sin responsabilidad por incumplimiento reiterado de pago
+(más de 15 días de retraso).</p>
+
+<p><strong>OCTAVA. — JURISDICCIÓN.</strong><br/>
+Para la interpretación y cumplimiento del presente contrato, las partes se someten a la jurisdicción
+de los tribunales competentes del Estado de <strong>Nuevo León</strong>, México, renunciando a cualquier
+otro fuero que por razón de su domicilio presente o futuro pudiera corresponderles.</p>
+
+<br/>
+<p>Leído y firmado de conformidad en <strong>Monterrey, N.L.</strong>, a
+<strong>{{ object.start_date }}</strong>.</p>
+
+<br/><br/>
+<table style="width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 30px;">
+    <tr>
+        <td style="width: 45%; text-align: center; vertical-align: bottom; padding-top: 50px; border-top: 1px solid #333;">
+            <strong>EL PROVEEDOR</strong><br/>
+            Sentinela Seguridad Privada S.A. de C.V.<br/>
+            Representante Legal
+        </td>
+        <td style="width: 10%;"></td>
+        <td style="width: 45%; text-align: center; vertical-align: bottom; padding-top: 50px; border-top: 1px solid #333;">
+            <strong>EL CLIENTE</strong><br/>
+            {{ object.partner_id.name }}<br/>
+            RFC: {{ object.partner_id.vat or '___________' }}
+        </td>
+    </tr>
+</table>
+
+</div>
+]]>
+        </field>
+    </record>
+
+    <!-- ============================================================
+         PLANTILLA 2: CONTRATO DE SERVICIO DE MONITOREO
+         ============================================================ -->
+    <record id="contract_template_monitoreo" model="sentinela.contract.template">
+        <field name="name">Contrato de Servicio de Monitoreo de Alarmas</field>
+        <field name="active" eval="True"/>
+        <field name="content" type="html">
+<![CDATA[
+<div style="font-family: Arial, sans-serif; font-size: 13px; line-height: 1.6; color: #222; text-align: justify;">
+
+<h2 style="text-align: center; font-size: 16px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">
+    CONTRATO DE PRESTACIÓN DE SERVICIOS DE MONITOREO DE ALARMAS
+</h2>
+<p style="text-align: center; font-size: 11px; color: #666; margin-top: 0;">
+    Contrato No. <strong>{{ object.name }}</strong> &nbsp;|&nbsp;
+    Cuenta: <strong>{{ object.contract_cuenta_monitoreo or '---' }}</strong> &nbsp;|&nbsp;
+    Fecha: <strong>{{ object.start_date }}</strong>
+</p>
+
+<hr style="border: 1px solid #333; margin: 10px 0 20px 0;"/>
+
+<p>
+Que celebran por una parte <strong>SENTINELA SEGURIDAD PRIVADA S.A. DE C.V.</strong> (en adelante
+<strong>"LA EMPRESA"</strong>), y por la otra <strong>{{ object.partner_id.name }}</strong>,
+con RFC <strong>{{ object.partner_id.vat or 'NO REGISTRADO' }}</strong>
+(en adelante <strong>"EL USUARIO"</strong>), al tenor de las siguientes:
+</p>
+
+<h3 style="font-size: 13px; text-transform: uppercase; margin-top: 20px;">CLÁUSULAS</h3>
+
+<p><strong>PRIMERA. — OBJETO.</strong><br/>
+LA EMPRESA se obliga a prestar al USUARIO el servicio de monitoreo electrónico de alarmas
+<strong>24 horas al día, los 365 días del año</strong>, en el inmueble ubicado en
+<strong>{{ object.contract_domicilio_servicio or object.address_street }}</strong>,
+con número de cuenta asignado <strong>{{ object.contract_cuenta_monitoreo or '___________' }}</strong>.</p>
+
+<p><strong>SEGUNDA. — PLAN CONTRATADO.</strong><br/>
+El USUARIO contrata el plan denominado <strong>{{ object.product_id.name }}</strong>
+con una cuota mensual de <strong>$\u00a0{{ "%.2f"|format(object.price_total or 0) }} MXN (más IVA)</strong>.</p>
+
+<p><strong>TERCERA. — VIGENCIA.</strong><br/>
+El contrato tendrá una vigencia mínima de
+<strong>{{ object.commitment_months or 12 }} meses</strong> a partir del
+<strong>{{ object.start_date }}</strong>, renovándose automáticamente mes a mes
+al término del periodo forzoso.</p>
+
+<p><strong>CUARTA. — PROCEDIMIENTO DE RESPUESTA.</strong><br/>
+Al recibir una señal de alarma, LA EMPRESA realizará el siguiente protocolo:</p>
+<ol style="margin-left: 20px;">
+    <li>Verificación telefónica con los contactos autorizados registrados en la cuenta.</li>
+    <li>En caso de no poder verificar, se procederá a notificar a las autoridades competentes.</li>
+    <li>Se generará un reporte del evento con hora, tipo de señal y acciones tomadas.</li>
+</ol>
+
+<p><strong>QUINTA. — LISTADO DE CONTACTOS DE EMERGENCIA.</strong><br/>
+El USUARIO deberá proporcionar un mínimo de <strong>dos (2) contactos</strong> de verificación
+con número telefónico vigente. El cambio de contactos deberá notificarse a LA EMPRESA por escrito
+con al menos 48 horas de anticipación.</p>
+
+<p><strong>SEXTA. — CLAVES DE SEGURIDAD.</strong><br/>
+Se establecen las siguientes claves confidenciales para la operación de la cuenta:<br/>
+&bull; <strong>Clave de Seguridad (Voz):</strong> La establecida al momento de la activación.<br/>
+&bull; <strong>Clave Maestra (Panel):</strong> La programada en el equipo de alarma.<br/>
+El USUARIO es responsable de la confidencialidad de estas claves.</p>
+
+<p><strong>SÉPTIMA. — EXCLUSIONES DE RESPONSABILIDAD.</strong><br/>
+LA EMPRESA no será responsable por: a) Fallas en la red telefónica o de datos que impidan
+la transmisión de señales; b) Fallas en el suministro de energía eléctrica en el inmueble del
+USUARIO; c) Daños o pérdidas ocasionados por el tiempo de respuesta de las autoridades;
+d) Intrusiones o robos ocurridos mientras el sistema de alarma no esté activado por el USUARIO.</p>
+
+<p><strong>OCTAVA. — PAGO Y MORA.</strong><br/>
+El pago deberá realizarse dentro de los primeros
+<strong>{{ object.payment_day or 5 }} días</strong> de cada mes.
+El retraso mayor a <strong>15 días</strong> faculta a LA EMPRESA a suspender el servicio
+sin previo aviso y sin responsabilidad.</p>
+
+<p><strong>NOVENA. — JURISDICCIÓN.</strong><br/>
+Las partes se someten a la jurisdicción de los tribunales del Estado de
+<strong>Nuevo León</strong>, México.</p>
+
+<br/>
+<p>Leído y firmado en <strong>Monterrey, N.L.</strong>, a
+<strong>{{ object.start_date }}</strong>.</p>
+
+<br/><br/>
+<table style="width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 30px;">
+    <tr>
+        <td style="width: 45%; text-align: center; vertical-align: bottom; padding-top: 50px; border-top: 1px solid #333;">
+            <strong>LA EMPRESA</strong><br/>
+            Sentinela Seguridad Privada S.A. de C.V.<br/>
+            Representante Legal
+        </td>
+        <td style="width: 10%;"></td>
+        <td style="width: 45%; text-align: center; vertical-align: bottom; padding-top: 50px; border-top: 1px solid #333;">
+            <strong>EL USUARIO</strong><br/>
+            {{ object.partner_id.name }}<br/>
+            RFC: {{ object.partner_id.vat or '___________' }}
+        </td>
+    </tr>
+</table>
+
+</div>
+]]>
+        </field>
+    </record>
+
+</data>
+</odoo>

@@ -19,9 +19,11 @@ class ProductTemplate(models.Model):
     service_type = fields.Selection(selection_add=[
         ('internet', 'Internet WISP'),
         ('alarm', 'Monitoring Alarm'),
-        ('gps', 'GPS Tracking'),
+        ('gps', 'Senticar (GPS)'),
         ('maintenance', 'Maintenance Poliza')
     ], ondelete={'internet': 'cascade', 'alarm': 'cascade', 'gps': 'cascade', 'maintenance': 'cascade'})
+
+    service_inclusion_ids = fields.One2many('sentinela.product.service.inclusion', 'product_id', string='Matriz de Servicios Incluidos')
 
     # Contratos
     contract_template_id = fields.Many2one(

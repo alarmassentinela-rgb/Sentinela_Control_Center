@@ -1,14 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Top Level Menu -->
-    <menuitem id="menu_sentinela_subscription_root"
-        name="Servicios Sentinela"
-        web_icon="sentinela_subscriptions,static/description/icon.png"
-        sequence="5"/>
+    <!-- ACCIÓN DE CONTRATOS -->
+    <record id="action_sentinela_subscription" model="ir.actions.act_window">
+        <field name="name">Suscripciones Sentinela</field>
+        <field name="res_model">sentinela.subscription</field>
+        <field name="view_mode">list,form</field>
+    </record>
 
-    <!-- Sub Menus -->
-    <menuitem id="menu_sentinela_subscription_main"
+    <!-- MENÚ RAÍZ -->
+    <menuitem id="menu_sentinela_subscription_root"
         name="Suscripciones"
+        web_icon="sentinela_subscriptions,static/description/icon.png"
+        action="action_sentinela_subscription"
+        sequence="10"/>
+
+    <!-- OPERACIONES -->
+    <menuitem id="menu_sentinela_subscription_main"
+        name="Operaciones"
         parent="menu_sentinela_subscription_root"
         sequence="10"/>
 
@@ -18,45 +26,45 @@
         action="action_sentinela_subscription"
         sequence="10"/>
 
-    <!-- Configuration -->
+    <!-- CONFIGURACIÓN (MENÚS TEMPORALMENTE COMENTADOS PARA DESBLOQUEO) -->
     <menuitem id="menu_sentinela_subscription_config"
         name="Configuración"
         parent="menu_sentinela_subscription_root"
         sequence="100"/>
-        
+
+    <record id="action_sentinela_subscription_products" model="ir.actions.act_window">
+        <field name="name">Planes de Servicio</field>
+        <field name="res_model">product.template</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('is_subscription', '=', True)]</field>
+        <field name="context">{'default_is_subscription': True}</field>
+    </record>
+
     <menuitem id="menu_sentinela_subscription_products"
         name="Planes de Servicio"
         parent="menu_sentinela_subscription_config"
-        action="product.product_normal_action_sell"
+        action="action_sentinela_subscription_products"
+        groups="sentinela_subscriptions.group_subscription_manager"
         sequence="10"/>
 
     <menuitem id="menu_sentinela_router"
         name="Routers MikroTik"
         parent="menu_sentinela_subscription_config"
         action="action_sentinela_router"
+        groups="sentinela_subscriptions.group_subscription_manager"
         sequence="20"/>
 
     <menuitem id="menu_sentinela_mikrotik_profile"
         name="Perfiles MikroTik"
         parent="menu_sentinela_subscription_config"
         action="action_sentinela_mikrotik_profile"
+        groups="sentinela_subscriptions.group_subscription_manager"
         sequence="30"/>
 
     <menuitem id="menu_sentinela_contract_template"
         name="Plantillas de Contratos"
         parent="menu_sentinela_subscription_config"
         action="action_sentinela_contract_template"
+        groups="sentinela_subscriptions.group_subscription_manager"
         sequence="40"/>
-
-    <menuitem id="menu_sentinela_gps_platform"
-        name="Plataformas GPS"
-        parent="menu_sentinela_subscription_config"
-        action="action_sentinela_gps_platform"
-        sequence="50"/>
-
-    <menuitem id="menu_sentinela_subscription_settings"
-        name="Ajustes de Suscripciones"
-        parent="menu_sentinela_subscription_config"
-        action="action_sentinela_subscription_config_settings"
-        sequence="100"/>
 </odoo>

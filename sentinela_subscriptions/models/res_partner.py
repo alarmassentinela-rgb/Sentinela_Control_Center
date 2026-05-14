@@ -52,6 +52,15 @@ class ResPartner(models.Model):
 
     invoice_zip = fields.Char(string='Lugar de Expedición', default='87350')
 
+    # --- Facturación CFDI vs Remisión ---
+    requiere_factura = fields.Boolean(
+        string='Requiere Factura CFDI',
+        default=False,
+        help="Activar si el cliente requiere comprobante fiscal timbrado (CFDI). "
+             "Si no está activado, se emite remisión (documento interno sin timbre SAT). "
+             "Ambos documentos aplican para cobranza y generan saldo pendiente."
+    )
+
     # --- Condiciones CFDI ---
     invoice_cfdi_usage = fields.Selection([
         ('G01', 'Adquisición de mercancías'),
@@ -73,7 +82,7 @@ class ResPartner(models.Model):
         return {
             'type': 'ir.actions.act_window',
             'name': 'Subscriptions',
-            'view_mode': 'list,form',
+            'view_mode': 'kanban,list,form',
             'res_model': 'sentinela.subscription',
             'domain': [('partner_id', '=', self.id)],
             'context': {'default_partner_id': self.id},

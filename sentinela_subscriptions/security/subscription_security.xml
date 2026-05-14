@@ -1,13 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="module_category_sentinela_subscriptions" model="ir.module.category">
-        <field name="name">Suscripciones Sentinela</field>
-        <field name="sequence">10</field>
-    </record>
+    <data noupdate="0">
+        <record id="module_category_sentinela_subscriptions" model="ir.module.category">
+            <field name="name">Suscripciones Sentinela</field>
+            <field name="sequence">10</field>
+        </record>
 
-    <record id="group_subscription_manager" model="res.groups">
-        <field name="name">Gestor de Suscripciones (Puede desbloquear campos)</field>
-        <field name="category_id" ref="module_category_sentinela_subscriptions"/>
-        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
-    </record>
+        <record id="group_subscription_user" model="res.groups">
+            <field name="name">Usuario de Suscripciones</field>
+            <field name="category_id" ref="module_category_sentinela_subscriptions"/>
+            <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+        </record>
+
+        <record id="group_subscription_manager" model="res.groups">
+            <field name="name">Gestor de Suscripciones (Full Access)</field>
+            <field name="category_id" ref="module_category_sentinela_subscriptions"/>
+            <field name="implied_ids" eval="[(4, ref('group_subscription_user'))]"/>
+            <field name="users" eval="[(4, ref('base.user_root')), (4, ref('base.user_admin'))]"/>
+        </record>
+    </data>
 </odoo>

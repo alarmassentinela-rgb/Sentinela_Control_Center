@@ -7,7 +7,7 @@
             <form string="Otorgar Prórroga de Servicio">
                 <group>
                     <field name="subscription_id" invisible="1"/>
-                    <field name="days"/>
+                    <field name="extension_date" string="Prorroga hasta"/>
                     <field name="reason" placeholder="Ej. Cliente promete pago para el viernes..."/>
                 </group>
                 <div class="alert alert-info" role="alert">

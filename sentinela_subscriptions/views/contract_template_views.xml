@@ -98,9 +98,41 @@
                                     <div class="mb-3">
                                         <strong class="text-dark">INTERNET WISP</strong>
                                         <div class="input-group mb-1">
-                                            <input type="text" class="form-control form-control-sm" readonly="1" value="{{ object.pppoe_user }}"/>
+                                            <input type="text" class="form-control form-control-sm" readonly="1" value="{{ object.contract_antena_marca }}"/>
                                         </div>
-                                        <small class="text-muted">Usuario PPPoE</small>
+                                        <small class="text-muted">Marca de la antena CPE</small>
+                                        <div class="input-group mb-1 mt-1">
+                                            <input type="text" class="form-control form-control-sm" readonly="1" value="{{ object.contract_antena_modelo }}"/>
+                                        </div>
+                                        <small class="text-muted">Modelo de la antena CPE</small>
+                                        <div class="input-group mb-1 mt-1">
+                                            <input type="text" class="form-control form-control-sm" readonly="1" value="{{ object.contract_router_nombre }}"/>
+                                        </div>
+                                        <small class="text-muted">Nombre del nodo MikroTik</small>
+                                        <div class="input-group mb-1 mt-1">
+                                            <input type="text" class="form-control form-control-sm" readonly="1" value="{{ object.contract_router_ip }}"/>
+                                        </div>
+                                        <small class="text-muted">IP del router</small>
+                                        <div class="input-group mb-1 mt-1">
+                                            <input type="text" class="form-control form-control-sm" readonly="1" value="{{ object.contract_pppoe_servidor }}"/>
+                                        </div>
+                                        <small class="text-muted">Servidor PPPoE</small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <strong class="text-dark">DIRECCIÓN DE SERVICIO</strong>
+                                        <div class="input-group mb-1">
+                                            <input type="text" class="form-control form-control-sm" readonly="1" value="{{ object.contract_domicilio_servicio }}"/>
+                                        </div>
+                                        <small class="text-muted">Domicilio completo del servicio</small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <strong class="text-dark">MONITOREO</strong>
+                                        <div class="input-group mb-1">
+                                            <input type="text" class="form-control form-control-sm" readonly="1" value="{{ object.contract_cuenta_monitoreo }}"/>
+                                        </div>
+                                        <small class="text-muted">Número de cuenta</small>
                                     </div>
 
                                     <div class="alert alert-warning p-2">

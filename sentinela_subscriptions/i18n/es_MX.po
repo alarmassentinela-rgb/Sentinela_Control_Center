@@ -150,7 +150,7 @@ msgstr "Monitoreo de Alarma"
 #. module: sentinela_subscriptions
 #: model:ir.model.fields,selection:sentinela_subscriptions.selection__sentinela_subscription__service_type__gps
 msgid "GPS Tracking"
-msgstr "Rastreo GPS"
+msgstr "Senticar (GPS)"
 
 #. module: sentinela_subscriptions
 #: model:ir.model.fields,selection:sentinela_subscriptions.selection__sentinela_subscription__service_type__maintenance

@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_sentinela_subscription_form_pro" model="ir.ui.view">
+        <field name="name">sentinela.subscription.form.pro</field>
+        <field name="model">sentinela.subscription</field>
+        <field name="priority">0</field>
+        <field name="arch" type="xml">
+            <form string="Contrato de Servicio">
+                <header>
+                    <!-- FLUJO: Borrador → Pendiente Firma → Confirmado → Activo -->
+                    <button name="action_request_signature" string="Enviar Contrato a Firmar" type="object" class="btn-primary"
+                        invisible="state != 'draft'"/>
+                    <button name="action_mark_contract_signed" string="Contrato Firmado (Papel)" type="object" class="btn-secondary"
+                        invisible="state != 'pending_signature'"/>
+                    <button name="action_activate" string="Activar Servicio" type="object" class="btn-success"
+                        invisible="state != 'confirmed'"/>
+                    <button name="action_generate_contract" string="Redactar Contrato" type="object" class="btn-primary" icon="fa-file-text-o"
+                        invisible="state not in ['draft', 'pending_signature', 'confirmed']"/>
+                    <button name="action_suspend" string="Suspender" type="object" class="btn-warning"
+                        invisible="state != 'active'"/>
+                    <button name="action_reactivate" string="Reconexión" type="object" class="btn-info"
+                        invisible="state != 'suspension'"/>
+                    <button name="action_open_extension_wizard" string="Otorgar Prórroga" type="object" class="btn-info"
+                        invisible="state != 'suspension' or invoice_count == 0"/>
+                    <button name="action_draft" string="Regresar a Borrador" type="object" class="btn-secondary"
+                        invisible="state not in ['pending_signature', 'confirmed']"/>
+                    <field name="state" widget="statusbar"
+                        statusbar_visible="draft,pending_signature,confirmed,active,suspension,cancelled"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_invoices" type="object" class="oe_stat_button" icon="fa-file-text-o">
+                            <field name="invoice_count" widget="statinfo" string="Facturas"/>
+                        </button>
+                        <button name="action_view_fsm_orders" type="object" class="oe_stat_button" icon="fa-wrench">
+                            <div class="o_stat_info"><span class="o_stat_text">Órdenes</span><span class="o_stat_text">Técnicas</span></div>
+                        </button>
+                    </div>
+
+                    <!-- CAMPO OCULTO REQUERIDO POR INVISIBLE CONDITIONS -->
+                    <field name="service_type" invisible="1"/>
+
+                    <div class="oe_title">
+                        <h1>
+                            <span invisible="service_type != 'gps'" style="color: #e91e63;">🚀 SentiCar - </span>
+                            <span invisible="service_type != 'alarm'" style="color: #2196f3;">🚀 Sentinela - </span>
+                            <span invisible="service_type != 'internet'" style="color: #4caf50;">🚀 WavesInternet - </span>
+                            <field name="name" readonly="1" class="oe_inline"/>
+                        </h1>
+                    </div>
+
+                    <group>
+                        <group string="Titular">
+                            <field name="partner_id" options="{'no_create': True}"/>
+                            <field name="service_address_id" domain="['|', ('id', '=', partner_id), ('parent_id', '=', partner_id)]" options="{'no_create': True}"/>
+                            <div class="o_address_format" colspan="2">
+                                <field name="address_street" placeholder="Calle..." readonly="1"/>
+                                <field name="address_street2" placeholder="Colonia..." readonly="1"/>
+                                <div class="o_row">
+                                    <field name="address_city" placeholder="Ciudad" readonly="1"/>
+                                    <field name="address_state_id" options="{'no_open': True, 'no_create': True}" readonly="1"/>
+                                    <field name="address_zip" placeholder="CP" readonly="1"/>
+                                </div>
+                            </div>
+                        </group>
+                        <group string="Configuración">
+                            <field name="service_type"/>
+                            <field name="product_id" options="{'no_create': True}"/>
+                            <field name="price_unit" string="Precio Mensual"/>
+                            <field name="next_billing_date" string="Próximo Cobro"/>
+                        </group>
+                    </group>
+
+                    <notebook>
+                        <!-- ═══ MONITOREO ═══ -->
+                        <page string="📡 Monitoreo" name="monitoring" invisible="service_type != 'alarm'">
+                            <group>
+                                <group string="Central de Alarmas">
+                                    <field name="monitoring_account_number"/>
+                                    <field name="security_code" password="True"/>
+                                    <field name="master_password" password="True"/>
+                                </group>
+                                <group string="Estado Técnico">
+                                    <field name="technical_state" readonly="1"/>
+                                    <field name="technical_state_date" readonly="1"/>
+                                </group>
+                            </group>
+                        </page>
+
+                        <!-- ═══ GPS ═══ -->
+                        <page string="🚗 GPS" name="gps" invisible="service_type != 'gps'">
+                            <group>
+                                <group string="Dispositivo">
+                                    <field name="sim_iccid"/>
+                                    <field name="equipment_serial" string="Número de Serie"/>
+                                </group>
+                                <group string="Vehículo">
+                                    <field name="equipment_brand" string="Marca"/>
+                                    <field name="equipment_model" string="Modelo"/>
+                                </group>
+                            </group>
+                        </page>
+
+                        <!-- ═══ FACTURACIÓN ═══ -->
+                        <page string="📅 Facturación" name="billing">
+                            <group>
+                                <group string="Ciclo de Cobro">
+                                    <field name="start_date"/>
+                                    <field name="next_billing_date"/>
+                                    <field name="recurring_interval"/>
+                                    <field name="extension_due_date" invisible="not extension_due_date"/>
+                                </group>
+                                <group string="Preferencias">
+                                    <field name="auto_invoice" widget="boolean_toggle"/>
+                                    <field name="contract_mode"/>
+                                    <field name="is_forced_contract" widget="boolean_toggle"/>
+                                    <field name="commitment_period" invisible="not is_forced_contract"/>
+                                    <field name="early_termination_fee" invisible="not is_forced_contract"/>
+                                </group>
+                            </group>
+                        </page>
+
+                        <!-- ═══ DATOS TÉCNICOS / EQUIPAMIENTO ═══ -->
+                        <page string="🔧 Datos Técnicos" name="equipment">
+                            <group>
+                                <!-- CONECTIVIDAD INTERNET -->
+                                <group string="Conectividad" invisible="service_type != 'internet'">
+                                    <field name="router_id" options="{'no_create': True}" required="service_type == 'internet'"/>
+                                    <field name="internet_mgmt_mode"/>
+                                    <field name="ip_address" string="IP Asignada"/>
+                                    <field name="gateway_address" invisible="internet_mgmt_mode != 'static'"/>
+                                    <field name="subnet_mask" invisible="internet_mgmt_mode != 'static'"/>
+                                    <field name="vlan_id" invisible="internet_mgmt_mode != 'static'"/>
+                                    <field name="sim_iccid" invisible="internet_mgmt_mode != 'dhcp'"/>
+                                </group>
+                                <!-- CREDENCIALES PPPOE -->
+                                <group string="Credenciales PPPoE" invisible="service_type != 'internet' or internet_mgmt_mode != 'pppoe'">
+                                    <field name="pppoe_server_name" readonly="1"/>
+                                    <label for="pppoe_user"/>
+                                    <div class="o_row">
+                                        <field name="pppoe_user" nolabel="1"/>
+                                        <button name="toggle_pppoe_user_lock" type="object" class="btn-link p-0 ms-1"
+                                            title="Bloquear/Desbloquear" icon="fa-lock" invisible="not pppoe_user_locked"/>
+                                        <button name="toggle_pppoe_user_lock" type="object" class="btn-link p-0 ms-1"
+                                            title="Bloquear/Desbloquear" icon="fa-unlock" invisible="pppoe_user_locked"/>
+                                    </div>
+                                    <label for="pppoe_password"/>
+                                    <div class="o_row">
+                                        <field name="pppoe_password" nolabel="1" password="True"/>
+                                        <button name="toggle_pppoe_password_lock" type="object" class="btn-link p-0 ms-1"
+                                            title="Bloquear/Desbloquear" icon="fa-lock" invisible="not pppoe_password_locked"/>
+                                        <button name="toggle_pppoe_password_lock" type="object" class="btn-link p-0 ms-1"
+                                            title="Bloquear/Desbloquear" icon="fa-unlock" invisible="pppoe_password_locked"/>
+                                    </div>
+                                </group>
+                                <!-- HARDWARE CPE -->
+                                <group string="CPE / Receptor">
+                                    <field name="equipment_brand" string="Marca"/>
+                                    <field name="equipment_model" string="Modelo"/>
+                                    <field name="equipment_serial" string="Número de Serie"/>
+                                </group>
+                                <!-- ANTENA Y MÓDEM -->
+                                <group string="Antena / Radio" invisible="service_type != 'internet'">
+                                    <field name="antenna_brand" string="Marca Antena"/>
+                                    <field name="antenna_model" string="Modelo Antena"/>
+                                </group>
+                                <group string="Módem Cliente" invisible="service_type != 'internet'">
+                                    <field name="modem_user" string="Usuario"/>
+                                    <field name="modem_password" string="Contraseña"/>
+                                </group>
+                            </group>
+                            <div class="o_row mt-2" invisible="service_type != 'internet'">
+                                <button name="action_request_pppoe_credentials" string="Solicitar Credenciales PPPoE"
+                                    type="object" class="btn-secondary me-2"
+                                    invisible="internet_mgmt_mode != 'pppoe' or state not in ['draft','pending_signature','confirmed']"/>
+                                <button name="action_open_ping_wizard" string="Ping / Diagnóstico"
+                                    type="object" class="btn-secondary me-2" invisible="state != 'active'"/>
+                                <button name="action_view_traffic" string="Ver Tráfico"
+                                    type="object" class="btn-secondary me-2" invisible="state != 'active'"/>
+                                <button name="action_check_connection" string="Verificar Conexión"
+                                    type="object" class="btn-secondary" invisible="state != 'active'"/>
+                            </div>
+                        </page>
+
+                        <!-- ═══ INSTALACIÓN ═══ -->
+                        <page string="📍 Instalación" name="installation">
+                            <group>
+                                <group string="Dirección del Servicio">
+                                    <field name="address_street" string="Calle y Número"/>
+                                    <field name="address_street2" string="Colonia / Sector"/>
+                                    <field name="address_city" string="Ciudad"/>
+                                    <field name="address_state_id" string="Estado"/>
+                                    <field name="address_zip" string="Código Postal"/>
+                                </group>
+                                <group string="Coordenadas GPS">
+                                    <field name="latitude" string="Latitud"/>
+                                    <field name="longitude" string="Longitud"/>
+                                </group>
+                            </group>
+                        </page>
+
+                        <!-- ═══ CONTRATO DIGITAL ═══ -->
+                        <page string="📄 Contrato Digital" name="contract">
+                            <group>
+                                <group string="Firma Digital">
+                                    <field name="sign_document_id" readonly="1" options="{'no_create': True}"/>
+                                    <field name="contract_signed" readonly="1" widget="boolean_toggle"/>
+                                </group>
+                            </group>
+                            <field name="contract_body_html" widget="html" options="{'safe': True}"/>
+                        </page>
+
+                        <!-- ═══ NOTAS ═══ -->
+                        <page string="📝 Notas" name="notes">
+                            <field name="description" widget="html" placeholder="Notas internas..."/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+</odoo>

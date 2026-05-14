@@ -39,10 +39,4 @@
         <field name="res_model">sentinela.mikrotik.profile</field>
         <field name="view_mode">list,form</field>
     </record>
-
-    <menuitem id="menu_sentinela_mikrotik_profile"
-        name="Perfiles de Velocidad"
-        parent="menu_sentinela_subscription_config"
-        action="action_sentinela_mikrotik_profile"
-        sequence="30"/>
 </odoo>

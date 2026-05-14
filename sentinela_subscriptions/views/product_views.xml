@@ -20,6 +20,14 @@
                     <group string="Plantilla de Contrato">
                         <field name="contract_template_id" context="{'default_service_type': service_type}"/>
                     </group>
+                    <separator string="Matriz de Servicios (Inclusiones y Costos Extra)"/>
+                    <field name="service_inclusion_ids">
+                        <list editable="bottom">
+                            <field name="service_id"/>
+                            <field name="is_included" widget="boolean_toggle"/>
+                            <field name="extra_price" widget="monetary" invisible="is_included"/>
+                        </list>
+                    </field>
                 </page>
             </page>
         </field>
