@@ -7,6 +7,38 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.5.0] - 2026-05-14
+
+Testing toolkit: reset agresivo + cambio de formato sobre la marcha. Diseñado para que el creator pueda iterar pruebas con la misma ronda (ej. "58 primaveras") y probar todos los formatos sin tener que crear rondas nuevas para cada caso.
+
+### Added — Reset agresivo
+
+- `POST /rounds/{id}/reset` (creator-only, cualquier estado):
+  - Borra: scores, balances, resultados de apuestas por hoyo, firmas de validación
+  - Resetea: withdrawals y participant_mode='playing' por todos los jugadores
+  - Borra: `ScoreDifferential` generados por la ronda y **recalcula HCP de los afectados** (revierte el impacto en tu hándicap de prueba)
+  - Recrea balances vacíos por jugador
+  - `Round.status='scheduled'`, `started_at/finished_at=null`
+  - Mantiene: jugadores invitados, grupos de salida, capturistas designados, config de apuestas, formato, course, plantilla de pares
+  - Broadcast WS `round_reset`
+- Botón rojo "🗑️ Reiniciar (prueba)" en round detail, visible para creator cuando status ≠ 'scheduled'
+- **Modal con doble protección**: requiere tipear literalmente `RESETEAR` para habilitar el botón final + lista clara de qué se borra y qué se mantiene
+
+### Added — Cambio de formato sobre la marcha
+
+- `PATCH /rounds/{id}/format` con body `{game_format: ...}` (creator-only, cualquier estado excepto `finished`)
+- Dropdown selector visible en round detail (donde antes solo había badge con info-tooltip) — para el creator cuando la ronda no está finalizada
+- Confirmación rápida antes de cambiar: "Los scores se preservan; solo cambia cómo se calculan los resultados"
+- Útil para pasar de Stroke → Stableford (mismo gross, diferente cálculo) sin re-capturar
+- Broadcast WS `format_changed`
+
+### Notes
+
+- El reset NO borra a los jugadores invitados ni los grupos/capturistas — perfecto para iteración con el mismo roster
+- El cambio de formato a Match o Florida puede requerir reconfigurar pairings/equipos por separado (esos formatos tienen estructura adicional)
+
+---
+
 ## [1.4.2] - 2026-05-14
 
 ### Changed — Marca de strokes en scorecard impresa

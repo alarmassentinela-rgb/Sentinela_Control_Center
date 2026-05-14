@@ -1323,6 +1323,45 @@ export default function RoundDetailPage() {
     }
   }
 
+  const [showResetModal, setShowResetModal] = useState(false)
+  const [resetConfirmText, setResetConfirmText] = useState('')
+  const [resetting, setResetting] = useState(false)
+
+  const handleResetRound = async () => {
+    if (resetConfirmText !== 'RESETEAR') return
+    setResetting(true)
+    try {
+      await api.post(`/rounds/${id}/reset`)
+      setShowResetModal(false)
+      setResetConfirmText('')
+      await load()
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      alert(detail ? (typeof detail === 'string' ? detail : JSON.stringify(detail)) : lbl('Error al resetear', 'Error resetting'))
+    } finally {
+      setResetting(false)
+    }
+  }
+
+  const [changingFormat, setChangingFormat] = useState(false)
+  const handleChangeFormat = async (newFormat: string) => {
+    if (newFormat === round?.game_format) return
+    if (!confirm(lbl(
+      `¿Cambiar formato a ${newFormat}? Los scores se preservan; solo cambia cómo se calculan los resultados.`,
+      `Change format to ${newFormat}? Scores are preserved; only result calculations change.`
+    ))) return
+    setChangingFormat(true)
+    try {
+      await api.patch(`/rounds/${id}/format`, { game_format: newFormat })
+      await load()
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      alert(detail ? (typeof detail === 'string' ? detail : JSON.stringify(detail)) : lbl('Error al cambiar formato', 'Error changing format'))
+    } finally {
+      setChangingFormat(false)
+    }
+  }
+
   if (loading) return (
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
       <Loader2 size={28} className="animate-spin text-emerald-500" />
@@ -1371,6 +1410,63 @@ export default function RoundDetailPage() {
     <div className="min-h-screen bg-zinc-950">
       {showFormatInfo && (
         <FormatInfoModal format={round.game_format} locale={locale} onClose={() => setShowFormatInfo(false)} />
+      )}
+
+      {/* Reset modal — testing iteration */}
+      {showResetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+             onClick={() => !resetting && setShowResetModal(false)}>
+          <div onClick={e => e.stopPropagation()}
+               className="bg-zinc-900 border border-red-500/30 rounded-2xl w-full max-w-md p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-500/20 border border-red-500/40 flex items-center justify-center">
+                <Trash2 size={18} className="text-red-400" />
+              </div>
+              <div>
+                <h3 className="font-bold text-white">{lbl('Reiniciar ronda (modo prueba)', 'Reset round (test mode)')}</h3>
+                <p className="text-xs text-zinc-500">{lbl('Acción destructiva — no se puede deshacer', 'Destructive — cannot be undone')}</p>
+              </div>
+            </div>
+            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 mb-4 text-xs text-red-300 space-y-1">
+              <p className="font-semibold mb-1">{lbl('Esta acción borrará:', 'This will delete:')}</p>
+              <ul className="list-disc list-inside space-y-0.5">
+                <li>{lbl('Todos los scores capturados', 'All captured scores')}</li>
+                <li>{lbl('Balances y resultados de apuestas', 'Balances and bet results')}</li>
+                <li>{lbl('Firmas de validación de tarjeta', 'Scorecard signatures')}</li>
+                <li>{lbl('Retiros y modos observador', 'Withdrawals and observer modes')}</li>
+                <li>{lbl('Differentials de hándicap (los HCP afectados se recalculan)', 'Handicap differentials (affected HCPs recalculated)')}</li>
+              </ul>
+              <p className="font-semibold mt-2">{lbl('Se mantienen:', 'Will keep:')}</p>
+              <p className="text-zinc-400">{lbl('Jugadores invitados, grupos de salida, capturistas, apuestas, formato, course', 'Invited players, tee groups, scorers, bets, format, course')}</p>
+            </div>
+            <p className="text-sm text-zinc-300 mb-2">
+              {lbl('Escribe ', 'Type ')}
+              <code className="bg-zinc-800 text-red-400 px-2 py-0.5 rounded font-mono text-xs">RESETEAR</code>
+              {lbl(' para confirmar:', ' to confirm:')}
+            </p>
+            <input
+              type="text"
+              value={resetConfirmText}
+              onChange={e => setResetConfirmText(e.target.value)}
+              placeholder="RESETEAR"
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-white text-sm font-mono focus:outline-none focus:border-red-500 mb-4"
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <button onClick={() => { setShowResetModal(false); setResetConfirmText('') }}
+                disabled={resetting}
+                className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50">
+                {lbl('Cancelar', 'Cancel')}
+              </button>
+              <button onClick={handleResetRound}
+                disabled={resetConfirmText !== 'RESETEAR' || resetting}
+                className="flex-1 bg-red-500 hover:bg-red-400 disabled:opacity-30 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-xl text-sm transition-colors flex items-center justify-center gap-2">
+                {resetting && <Loader2 size={14} className="animate-spin" />}
+                {lbl('Resetear ronda', 'Reset round')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Confirm delete modal */}
@@ -1564,11 +1660,32 @@ export default function RoundDetailPage() {
           </div>
 
           <div className="flex flex-wrap gap-3 text-xs text-zinc-500">
-            <button onClick={() => setShowFormatInfo(true)}
-              className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 hover:text-zinc-300 px-3 py-1 rounded-full transition-colors border border-transparent hover:border-zinc-600">
-              {locale === 'es' ? fmt.es : fmt.en}
-              <Info size={11} className="text-zinc-600 hover:text-emerald-400" />
-            </button>
+            {amCreator && round.status !== 'finished' ? (
+              <div className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 px-2 py-0.5 rounded-full border border-transparent hover:border-zinc-600">
+                <select
+                  value={round.game_format}
+                  onChange={e => handleChangeFormat(e.target.value)}
+                  disabled={changingFormat}
+                  title={lbl('Cambiar formato sobre la marcha', 'Change format on the fly')}
+                  className="bg-transparent text-zinc-300 text-xs focus:outline-none disabled:opacity-50 cursor-pointer">
+                  <option value="stroke">{lbl('Stroke Play', 'Stroke Play')}</option>
+                  <option value="stableford">Stableford</option>
+                  <option value="stableford_modified">{lbl('Stableford Mod.', 'Mod. Stableford')}</option>
+                  <option value="match">Match Play</option>
+                  <option value="skins">{lbl('Skines', 'Skins')}</option>
+                  <option value="florida">Florida</option>
+                </select>
+                <button onClick={() => setShowFormatInfo(true)} className="text-zinc-600 hover:text-emerald-400">
+                  <Info size={11} />
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => setShowFormatInfo(true)}
+                className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 hover:text-zinc-300 px-3 py-1 rounded-full transition-colors border border-transparent hover:border-zinc-600">
+                {locale === 'es' ? fmt.es : fmt.en}
+                <Info size={11} className="text-zinc-600 hover:text-emerald-400" />
+              </button>
+            )}
             <span className="bg-zinc-800 px-3 py-1 rounded-full">{round.holes_to_play} {lbl('hoyos', 'holes')}</span>
             {round.game_format === 'florida' && (
               <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-3 py-1 rounded-full">
@@ -1645,6 +1762,14 @@ export default function RoundDetailPage() {
                 <AlertTriangle size={15} />
                 {lbl('Firmar tarjeta', 'Sign scorecard')}
               </Link>
+            )}
+            {amCreator && round.status !== 'scheduled' && (
+              <button onClick={() => setShowResetModal(true)} disabled={resetting}
+                title={lbl('Borra scores, balances, firmas y differentials. Vuelve a configuración inicial. Para iteración de pruebas.', 'Wipes scores, balances, signatures and differentials. Returns to initial config. For testing iteration.')}
+                className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 disabled:opacity-60 text-red-400 border border-red-500/40 font-medium px-5 py-2.5 rounded-full transition-colors text-sm">
+                {resetting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                {lbl('Reiniciar (prueba)', 'Reset (test)')}
+              </button>
             )}
             {amCreator && round.status === 'finished' && (
               <button onClick={handleReopenRound} disabled={finishing}

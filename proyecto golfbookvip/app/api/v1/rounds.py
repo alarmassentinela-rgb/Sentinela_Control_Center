@@ -310,6 +310,32 @@ async def update_round(round_id: uuid.UUID, data: RoundUpdate, current_user: Cur
     return round_
 
 
+@router.patch("/{round_id}/format", response_model=RoundOut)
+async def update_round_format(round_id: uuid.UUID, data: dict, current_user: CurrentUser, db: DB):
+    """Cambia solo el game_format de una ronda. Permitido en cualquier estado excepto 'finished'.
+    Útil para probar diferentes formatos sin resetear scores (stroke ↔ stableford comparten gross)."""
+    new_format = data.get("game_format")
+    if not new_format:
+        raise HTTPException(status_code=422, detail="game_format requerido")
+    if new_format not in ("stroke", "stableford", "stableford_modified", "match", "skins", "florida"):
+        raise HTTPException(status_code=422, detail=f"Formato inválido: {new_format}")
+    result = await db.execute(
+        select(Round).where(Round.id == round_id, Round.created_by == current_user.id)
+    )
+    round_ = result.scalar_one_or_none()
+    if not round_:
+        raise HTTPException(status_code=403, detail="Solo el creador puede cambiar el formato")
+    if round_.status == "finished":
+        raise HTTPException(status_code=400, detail="No se puede cambiar el formato de una ronda finalizada")
+    round_.game_format = new_format
+    await db.flush()
+    await manager.broadcast_to_round(
+        round_id=str(round_id),
+        message={"event": "format_changed", "round_id": str(round_id), "game_format": new_format},
+    )
+    return round_
+
+
 @router.delete("/{round_id}", status_code=204)
 async def delete_round(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
     result = await db.execute(
@@ -786,6 +812,91 @@ async def reopen_round(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
         "message": "Ronda reabierta",
         "round_id": str(round_id),
         "differentials_removed": len(affected_user_ids),
+    }
+
+
+@router.post("/{round_id}/reset")
+async def reset_round(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
+    """Reset agresivo de una ronda (solo creator). Para iteración de pruebas.
+
+    Borra:
+    - Todos los scores de la ronda
+    - Resultados de apuestas por hoyo
+    - Balances de jugadores
+    - Firmas de validación
+    - Estados de retiro/observer (regresan a playing)
+    - ScoreDifferential generados por la ronda (recalcula HCP afectados)
+
+    Mantiene:
+    - Jugadores invitados (incluyendo invited/confirmed status)
+    - Grupos de salida y capturistas designados
+    - Configuración de apuestas
+    - Formato del juego, course, etc.
+
+    Reset:
+    - status → scheduled
+    - started_at / finished_at → null
+    """
+    from sqlalchemy import update as sql_update
+    from app.models.score import Score as ScoreModel, HoleBetResult, RoundPlayerBalance
+
+    result = await db.execute(
+        select(Round).where(Round.id == round_id, Round.created_by == current_user.id)
+    )
+    round_ = result.scalar_one_or_none()
+    if not round_:
+        raise HTTPException(status_code=403, detail="Solo el creador puede resetear esta ronda")
+
+    # Capturar usuarios con differentials para recalcular HCP después
+    diffs_res = await db.execute(
+        select(ScoreDifferential.user_id).where(ScoreDifferential.round_id == round_id)
+    )
+    affected_user_ids = [row[0] for row in diffs_res.all()]
+
+    # Borrar datos generados durante la ronda
+    await db.execute(delete(ScoreModel).where(ScoreModel.round_id == round_id))
+    await db.execute(delete(HoleBetResult).where(HoleBetResult.round_id == round_id))
+    await db.execute(delete(RoundPlayerBalance).where(RoundPlayerBalance.round_id == round_id))
+    await db.execute(delete(ScoreDifferential).where(ScoreDifferential.round_id == round_id))
+
+    # Resetear flags por jugador (mantiene grupos, capturistas, tee colors, hcp)
+    await db.execute(
+        sql_update(RoundPlayer)
+        .where(RoundPlayer.round_id == round_id)
+        .values(
+            score_validated_at=None,
+            withdrawn_at=None,
+            withdrawn_reason=None,
+            participant_mode="playing",
+        )
+    )
+
+    # Recrear balance vacío por jugador (mantiene contrato del modelo)
+    players_res = await db.execute(
+        select(RoundPlayer.user_id).where(RoundPlayer.round_id == round_id)
+    )
+    for (uid,) in players_res.all():
+        db.add(RoundPlayerBalance(round_id=round_id, user_id=uid))
+
+    # Resetear el round
+    round_.status = "scheduled"
+    round_.started_at = None
+    round_.finished_at = None
+    await db.flush()
+
+    # Recalcular HCP de los afectados
+    for uid in affected_user_ids:
+        await hcp_svc.recalculate_handicap(str(uid), db)
+
+    await manager.broadcast_to_round(
+        round_id=str(round_id),
+        message={"event": "round_reset", "round_id": str(round_id)},
+    )
+
+    return {
+        "message": "Ronda reseteada al estado inicial",
+        "round_id": str(round_id),
+        "handicaps_recalculated": len(affected_user_ids),
     }
 
 
