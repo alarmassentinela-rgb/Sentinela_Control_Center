@@ -7,6 +7,53 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.4.0] - 2026-05-14
+
+Hoja de salida imprimible profesional. Tarjetas individuales por grupo + vista maestra. Diseñado para que un torneo pueda imprimir las tarjetas oficiales, entregarlas a cada grupo, y tener una maestra para el tablón del clubhouse.
+
+### Added — Página `/rounds/[id]/tee-cards`
+
+- **Vista "Tarjetas"** (default): una tarjeta por grupo, A4/Letter, lista para imprimir:
+  - Header: GolfBookVIP brand · fecha legible
+  - Nombre del torneo en titular grande
+  - Curso + ciudad/estado · formato · hoyos · par total · CR/Slope
+  - Banner del grupo: GRUPO N + SALIDA hoyo X
+  - Línea del capturista designado (🎯)
+  - Tabla de jugadores: nombre · HCP index · Course HCP · color de tee (con punto visual) · línea para firma
+  - Scorecard grid completa: Salida 1-9 + Vuelta 10-18, par y SI por hoyo
+  - **Strokes recibidos marcados con puntos rojos** según `floor(C-HCP/18) + ((C-HCP mod 18) >= SI ? 1 : 0)`
+  - Totales: par salida + par vuelta + par total
+  - Espacios para reglas locales y firma del jugador / marker
+  - Footer con timestamp de generación
+
+- **Vista "Maestra"**: una sola hoja con tabla compacta de TODOS los grupos:
+  - Para el organizador / tablón del clubhouse
+  - Columnas: Grupo · Hoyo · Jugadores (con HCP/C-HCP) · Capturista
+  - 1 fila por grupo, todos en una sola hoja
+
+- **Toolbar (no se imprime)**: switch entre vistas + botón "🖨️ Imprimir" + tip para desactivar headers del navegador
+
+- **Print CSS**: `@page { size: letter; margin: 0 }`, `page-break-after: always` entre tarjetas, oculta toolbar/nav, fondos blancos limpios
+
+### Added — Botón en round detail
+
+- En sección "Grupos de salida" (vista no-edit), botón "🖨️ Imprimir hoja de salida" navega a `/tee-cards`. Visible solo cuando hay grupos configurados.
+
+### Changed — Backend
+
+- `GET /rounds/{id}/tee-groups` y respuesta del `PUT` ahora incluyen:
+  - `handicap_index` (de RoundPlayer.handicap_index o User.handicap_index como fallback)
+  - `tee_color` por jugador
+  - Sin cambios al schema, ya existían los datos
+
+### Notes
+
+- Implementación HTML + print CSS (no PDF server-side). El usuario imprime desde el navegador y puede "Guardar como PDF" para archivar
+- Funciona en cualquier impresora (no requiere fonts custom)
+- Bonus: la maestra también se imprime con la misma acción
+
+---
+
 ## [1.3.0] - 2026-05-14
 
 Grupos de salida preparados para torneo. Cap subido de 6 → 18 grupos (capacidad para 72 jugadores en campo lleno), auto-asignación por hándicap, shotgun start automático y mejoras UX. Diseñado para que la lógica se reutilice cuando el módulo de Clubs convoque torneos.

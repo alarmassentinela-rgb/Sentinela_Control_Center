@@ -2534,6 +2534,16 @@ export default function RoundDetailPage() {
                   )
                 })()}
 
+                {/* Botón Imprimir hoja de salida — visible cuando hay grupos */}
+                {!editingTeeGroups && teeGroupsData?.has_groups && (
+                  <div className="mb-3 flex justify-end">
+                    <Link href={`/${locale}/rounds/${id}/tee-cards`}
+                      className="inline-flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-emerald-500/50 text-zinc-300 hover:text-emerald-300 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors">
+                      🖨️ {lbl('Imprimir hoja de salida', 'Print tee sheet')}
+                    </Link>
+                  </div>
+                )}
+
                 {/* Groups display (non-edit mode) */}
                 {!editingTeeGroups && teeGroupsData?.has_groups && (
                   <div className="space-y-3">

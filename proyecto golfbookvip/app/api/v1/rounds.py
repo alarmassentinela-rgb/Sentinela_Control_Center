@@ -1523,7 +1523,9 @@ async def get_tee_groups(round_id: uuid.UUID, current_user: CurrentUser, db: DB)
             "user_id": str(rp.user_id),
             "name": f"{u.first_name} {u.last_name}",
             "username": u.username,
+            "handicap_index": float(rp.handicap_index) if rp.handicap_index is not None else (float(u.handicap_index) if u.handicap_index is not None else None),
             "course_handicap": rp.course_handicap,
+            "tee_color": rp.tee_color,
             "tee_group": rp.tee_group,
             "starting_hole": rp.starting_hole,
             "is_group_scorer": rp.is_group_scorer,
@@ -1595,13 +1597,19 @@ async def set_tee_groups(
     for rp, u in rows:
         p = {"player_id": str(rp.id), "user_id": str(rp.user_id),
              "name": f"{u.first_name} {u.last_name}", "username": u.username,
-             "course_handicap": rp.course_handicap, "tee_group": rp.tee_group,
-             "starting_hole": rp.starting_hole}
+             "handicap_index": float(rp.handicap_index) if rp.handicap_index is not None else (float(u.handicap_index) if u.handicap_index is not None else None),
+             "course_handicap": rp.course_handicap, "tee_color": rp.tee_color,
+             "tee_group": rp.tee_group, "starting_hole": rp.starting_hole,
+             "is_group_scorer": rp.is_group_scorer,
+             "score_validated_at": rp.score_validated_at.isoformat() if rp.score_validated_at else None}
         if rp.tee_group is not None:
             if rp.tee_group not in groups:
                 groups[rp.tee_group] = {"group_number": rp.tee_group,
-                                         "starting_hole": rp.starting_hole, "players": []}
+                                         "starting_hole": rp.starting_hole, "players": [],
+                                         "scorer_user_id": None}
             groups[rp.tee_group]["players"].append(p)
+            if rp.is_group_scorer:
+                groups[rp.tee_group]["scorer_user_id"] = str(rp.user_id)
         else:
             ungrouped.append(p)
     return {"has_groups": len(groups) > 0,
