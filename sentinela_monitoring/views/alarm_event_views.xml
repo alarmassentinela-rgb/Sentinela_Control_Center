@@ -79,12 +79,17 @@
         <field name="name">sentinela.alarm.event.list</field>
         <field name="model">sentinela.alarm.event</field>
         <field name="arch" type="xml">
-            <list string="Eventos de Alarma">
+            <list string="Eventos de Alarma" decoration-danger="subscription_state == 'suspended'">
                 <field name="name"/>
                 <field name="event_type"/>
                 <field name="priority_id" widget="badge"/>
                 <field name="device_id"/>
                 <field name="partner_id"/>
+                <field name="subscription_state" widget="badge"
+                    decoration-danger="subscription_state == 'suspended'"
+                    decoration-success="subscription_state == 'active'"
+                    decoration-muted="subscription_state in ('none','cut')"
+                    string="Cliente"/>
                 <field name="start_date"/>
                 <field name="status"/>
                 <field name="duration"/>
@@ -154,6 +159,7 @@
                 <filter name="priority_high" string="Prioridad Alta" domain="[('priority_id.level', '&gt;=', 8)]"/>
                 <filter name="active" string="Activos" domain="[('status', '=', 'active')]"/>
                 <filter name="in_progress" string="En Progreso" domain="[('status', '=', 'in_progress')]"/>
+                <filter name="client_suspended" string="⚠️ Cliente Suspendido" domain="[('subscription_state', '=', 'suspended')]"/>
                 <filter name="today" string="Hoy" domain="[('start_date', '&gt;=', time.strftime('%%Y-%%m-%%d 00:00:00')), ('start_date', '&lt;=', time.strftime('%%Y-%%m-%%d 23:59:59'))]"/>
                 <group expand="0" string="Agrupar por">
                     <filter name="group_by_account" string="Cuenta" context="{'group_by': 'account_number'}"/>

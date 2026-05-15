@@ -116,11 +116,10 @@ class AlarmEvent(models.Model):
         priority_id = alarm_code.priority_id.id if alarm_code and alarm_code.priority_id else 35
         
         # 3. Determinar si requiere Atencion (Alarma Activa)
+        # v18.0.1.3.5: clientes suspendidos por mora se muestran al operador con bandera
+        # (NO se auto-archivan como antes) — política Opción C definida 16-may-2026.
         requires_attention = alarm_code.requires_attention if alarm_code else True
-        # Suspensión?
-        is_active_sub = device.subscription_id.technical_state == 'active' if device.subscription_id else True
-        
-        status = 'active' if (requires_attention and is_active_sub) else 'resolved'
+        status = 'active' if requires_attention else 'resolved'
 
         # 4. Crear Evento si es necesario
         event = False
