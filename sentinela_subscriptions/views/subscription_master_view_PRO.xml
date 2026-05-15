@@ -66,8 +66,8 @@
                         <group string="Configuración">
                             <field name="service_type"/>
                             <field name="product_id" options="{'no_create': True}"
-                                domain="[('is_subscription', '=', True), ('service_type', '=', service_type)] if service_type else [('is_subscription', '=', True)]"
-                                help="El listado de planes se filtra según el tipo de servicio seleccionado arriba."/>
+                                domain="[('is_subscription', '=', True), ('service_type', '=', service_type)]"
+                                help="Selecciona primero el tipo de servicio arriba para filtrar los planes."/>
                             <field name="price_unit" string="Precio Mensual"/>
                             <field name="next_billing_date" string="Próximo Cobro"/>
                         </group>
