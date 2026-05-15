@@ -19,6 +19,17 @@ class ProductTemplate(models.Model):
     syscom_suggested_price_usd = fields.Float(string='Precio Especial USD')
     syscom_price_usd = fields.Float(string='Precio Distribuidor 1 USD')
     syscom_description = fields.Html(string='Descripción Técnica Syscom')
+    # v18.0.1.3.0: marcado de productos descontinuados
+    syscom_discontinued = fields.Boolean(
+        string='Descontinuado en Syscom',
+        default=False,
+        index=True,
+        help='Se marca automáticamente cuando la API de Syscom devuelve 404 o el flag descontinuado en la sincronización nocturna. Productos descontinuados aún visibles aquí pueden depurarse desde el wizard "Limpiar Productos Descontinuados".',
+    )
+    syscom_discontinued_date = fields.Date(
+        string='Detectado descontinuado',
+        readonly=True,
+    )
 
     @api.model
     def _cron_update_syscom_products(self):
@@ -78,8 +89,25 @@ class ProductTemplate(models.Model):
                             continue
 
                     url_prod = f'https://developers.syscom.mx/api/v1/productos/{sys_id}'
-                    res_prod = requests.get(url_prod, headers=headers, timeout=10).json()
-                    
+                    res_raw = requests.get(url_prod, headers=headers, timeout=10)
+                    # v18.0.1.3.0: detección automática de descontinuados
+                    if res_raw.status_code == 404:
+                        if not p.syscom_discontinued:
+                            p.write({
+                                'syscom_discontinued': True,
+                                'syscom_discontinued_date': fields.Date.today(),
+                            })
+                        stats['errors'] += 1
+                        continue
+                    res_prod = res_raw.json()
+                    # Si Syscom marca explícitamente como descontinuado en el payload
+                    if res_prod.get('descontinuado') is True:
+                        if not p.syscom_discontinued:
+                            p.write({
+                                'syscom_discontinued': True,
+                                'syscom_discontinued_date': fields.Date.today(),
+                            })
+
                     precios = res_prod.get('precios', {})
                     # MSRP / Precio al Público
                     msrp_usd = float(precios.get('precio_lista') or res_prod.get('precio_lista', 0))

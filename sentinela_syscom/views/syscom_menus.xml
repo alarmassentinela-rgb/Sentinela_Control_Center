@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Menú raíz para utilidades Syscom -->
+    <menuitem id="menu_syscom_root"
+              name="Syscom"
+              parent="stock.menu_stock_root"
+              sequence="80"/>
+
+    <menuitem id="menu_syscom_cleanup_wizard"
+              name="🧹 Limpiar Descontinuados"
+              parent="menu_syscom_root"
+              action="action_syscom_cleanup_wizard"
+              sequence="10"/>
+</odoo>

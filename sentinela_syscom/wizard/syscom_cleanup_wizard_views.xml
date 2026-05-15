@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_syscom_cleanup_wizard_form" model="ir.ui.view">
+        <field name="name">syscom.cleanup.wizard.form</field>
+        <field name="model">syscom.cleanup.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Limpieza de Productos Syscom Descontinuados">
+                <sheet>
+                    <div class="alert alert-info" role="alert">
+                        Esta herramienta procesa <strong>solo productos marcados como descontinuados</strong>
+                        por la sincronización nocturna con Syscom. Productos sin movimiento se ELIMINAN
+                        de forma permanente. Productos con movimiento se ARCHIVAN (quedan ocultos pero
+                        se preserva el historial de facturas/inventario).
+                    </div>
+                    <group>
+                        <group string="Resumen">
+                            <field name="total_discontinued"/>
+                            <field name="to_delete_count" string="A Eliminar"/>
+                            <field name="to_archive_count" string="A Archivar"/>
+                        </group>
+                    </group>
+                    <field name="preview_text" widget="text" readonly="1"/>
+                    <separator string="Confirmación"/>
+                    <field name="confirmed" widget="boolean_toggle"/>
+                    <div class="alert alert-warning" role="alert" invisible="not confirmed">
+                        ⚠️ Al confirmar, la operación es <strong>irreversible</strong> para los productos
+                        sin movimiento. Los archivados pueden recuperarse marcando "Activo" nuevamente.
+                    </div>
+                </sheet>
+                <footer>
+                    <button name="action_execute" type="object" string="Ejecutar Limpieza"
+                        class="btn-danger" invisible="not confirmed"/>
+                    <button string="Cerrar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_syscom_cleanup_wizard" model="ir.actions.act_window">
+        <field name="name">Limpiar Productos Descontinuados</field>
+        <field name="res_model">syscom.cleanup.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>

@@ -7,12 +7,18 @@
         <field name="arch" type="xml">
             <xpath expr="//page[@name='inventory']" position="after">
                 <page string="Datos Syscom" name="syscom">
+                    <div class="alert alert-danger" role="alert" invisible="not syscom_discontinued">
+                        ⚠️ <strong>Producto DESCONTINUADO en Syscom</strong>
+                        (detectado el <field name="syscom_discontinued_date" readonly="1" class="oe_inline"/>).
+                        Puede depurarse desde el wizard "Limpiar Productos Descontinuados".
+                    </div>
                     <group>
                         <group string="Información de Integración">
                             <field name="syscom_id" readonly="1"/>
                             <field name="syscom_model"/>
                             <field name="syscom_brand" readonly="1"/>
                             <field name="syscom_stock" decoration-bf="1" decoration-success="syscom_stock &gt; 0" decoration-danger="syscom_stock == 0"/>
+                            <field name="syscom_discontinued" readonly="1"/>
                         </group>
                         <group string="Estado de Sincronización">
                             <field name="syscom_last_update" readonly="1"/>
