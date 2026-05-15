@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Flag, LogOut, User, TrendingUp, Calendar, BarChart2, Settings, MapPin, Users, ChevronRight, Play, Clock, CheckCircle2, UserPlus, Rss, Bell, ShieldCheck } from 'lucide-react'
+import { Flag, LogOut, User, TrendingUp, Calendar, BarChart2, Settings, MapPin, Users, ChevronRight, Play, Clock, CheckCircle2, UserPlus, Rss, Bell, ShieldCheck, Building2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 import AleaCredit from '@/components/layout/AleaCredit'
@@ -44,12 +44,18 @@ export default function DashboardPage() {
   const [roundCount, setRoundCount] = useState<number | null>(null)
   const [bestScore, setBestScore] = useState<number | null>(null)
   const [unreadNotifs, setUnreadNotifs] = useState(0)
+  const [staffClubs, setStaffClubs] = useState<{ club_id: string; club_name: string; club_slug: string; role: string }[]>([])
 
   useEffect(() => {
     const token = localStorage.getItem('access_token')
     if (!token) { router.push(`/${locale}/auth/login`); return }
-    Promise.all([api.get('/users/me'), api.get('/rounds'), api.get('/notifications/unread-count')])
-      .then(([meRes, roundsRes, notifRes]) => {
+    Promise.all([
+      api.get('/users/me'),
+      api.get('/rounds'),
+      api.get('/notifications/unread-count'),
+      api.get('/clubs/staff/mine').catch(() => ({ data: [] })),
+    ])
+      .then(([meRes, roundsRes, notifRes, staffRes]) => {
         setUser(meRes.data)
         const data = roundsRes.data as Round[]
         setRounds(data)
@@ -57,6 +63,7 @@ export default function DashboardPage() {
         const finished = data.filter(r => r.total_gross != null && r.status === 'finished')
         if (finished.length) setBestScore(Math.min(...finished.map(r => r.total_gross!)))
         setUnreadNotifs(notifRes.data.count ?? 0)
+        setStaffClubs(staffRes.data || [])
       })
       .catch(() => { localStorage.removeItem('access_token'); router.push(`/${locale}/auth/login`) })
       .finally(() => setLoading(false))
@@ -156,6 +163,31 @@ export default function DashboardPage() {
               <ChevronRight size={18} className="text-emerald-400/60 group-hover:text-emerald-400 transition-colors flex-shrink-0" />
             </div>
           </Link>
+        )}
+
+        {/* Club shortcut (for users who are staff of any club) */}
+        {staffClubs.length > 0 && (
+          <div className="mb-6 space-y-2">
+            {staffClubs.map(sc => (
+              <Link key={sc.club_id} href={`/${locale}/club/${sc.club_id}`}
+                className="block bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/15 hover:border-blue-500/50 rounded-2xl p-4 transition-all group">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center flex-shrink-0">
+                    <Building2 size={20} className="text-blue-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-white text-sm">
+                      {locale === 'es' ? 'Mi Club: ' : 'My Club: '}{sc.club_name}
+                    </p>
+                    <p className="text-xs text-blue-400/70 truncate">
+                      {locale === 'es' ? `Panel del club · rol: ${sc.role || 'staff'}` : `Club panel · role: ${sc.role || 'staff'}`}
+                    </p>
+                  </div>
+                  <ChevronRight size={18} className="text-blue-400/60 group-hover:text-blue-400 transition-colors flex-shrink-0" />
+                </div>
+              </Link>
+            ))}
+          </div>
         )}
 
         {/* Stats */}

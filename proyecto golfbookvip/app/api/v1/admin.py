@@ -474,36 +474,58 @@ async def update_club(club_id: str, data: ClubPatchPayload, current_user: Curren
     return {"id": str(club.id), "slug": club.slug, "is_active": club.is_active, "plan_id": club.plan_id}
 
 
+class AddStaffPayload(BaseModel):
+    user_id: Optional[str] = None
+    email: Optional[str] = None
+    username: Optional[str] = None
+    role: str = "admin"
+
+
 @router.post("/clubs/{club_id}/staff")
-async def add_club_staff(club_id: str, current_user: CurrentUser, db: DB,
-                          user_id: str, role: str = "admin"):
-    """Asigna un usuario como staff (admin/manager/owner) del club."""
+async def add_club_staff(club_id: str, payload: AddStaffPayload, current_user: CurrentUser, db: DB):
+    """Asigna un usuario como staff del club. Acepta user_id, email o username."""
     _require_admin(current_user)
-    if role not in ("owner", "admin", "manager", "staff"):
+    if payload.role not in ("owner", "admin", "manager", "staff"):
         raise HTTPException(status_code=422, detail="Rol inválido")
     club_uuid = _uuid.UUID(club_id)
-    user_uuid = _uuid.UUID(user_id)
-    # Verificar que el usuario existe
-    user_res = await db.execute(select(User).where(User.id == user_uuid))
-    if not user_res.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
-    # Verificar club
     club_res = await db.execute(select(Club).where(Club.id == club_uuid))
     if not club_res.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Club no encontrado")
-    # Crear o actualizar staff record
+
+    user = None
+    if payload.user_id:
+        user_res = await db.execute(select(User).where(User.id == _uuid.UUID(payload.user_id)))
+        user = user_res.scalar_one_or_none()
+    elif payload.email:
+        user_res = await db.execute(select(User).where(User.email == payload.email.lower().strip()))
+        user = user_res.scalar_one_or_none()
+    elif payload.username:
+        user_res = await db.execute(select(User).where(User.username == payload.username.strip()))
+        user = user_res.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado. Pídele que se registre primero en golfbookvip.com.")
+
     existing = await db.execute(
-        select(ClubStaff).where(ClubStaff.club_id == club_uuid, ClubStaff.user_id == user_uuid)
+        select(ClubStaff).where(ClubStaff.club_id == club_uuid, ClubStaff.user_id == user.id)
     )
     staff = existing.scalar_one_or_none()
     if staff:
-        staff.role = role
+        staff.role = payload.role
         staff.is_active = True
     else:
-        staff = ClubStaff(club_id=club_uuid, user_id=user_uuid, role=role, is_active=True)
+        staff = ClubStaff(club_id=club_uuid, user_id=user.id, role=payload.role, is_active=True)
         db.add(staff)
     await db.flush()
-    return {"club_id": club_id, "user_id": user_id, "role": role}
+    return {
+        "club_id": club_id,
+        "user_id": str(user.id),
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "email": user.email,
+        "username": user.username,
+        "role": payload.role,
+    }
 
 
 @router.delete("/clubs/{club_id}/staff/{user_id}")

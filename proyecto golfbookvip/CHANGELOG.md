@@ -7,6 +7,40 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.10.1] - 2026-05-15
+
+### Added — Clubs SaaS Fase 0.5 — Panel del cliente y gestión de staff
+
+Con v1.10.0 el súper-admin podía crear clubes, pero el administrador del club no tenía dónde entrar. Esta versión cierra ese gap.
+
+**Backend (`/api/v1/clubs/*`):**
+- `GET /clubs/staff/mine` — lista clubes donde el usuario actual es staff activo (owner/admin/manager/staff). Usado por el dashboard del jugador para detectar si tiene panel cliente-admin.
+- `GET /clubs/{club_id}/dashboard` — info completa del club + miembros, staff_count, plan. Requiere ser staff del club o súper-admin.
+- `GET /clubs/{club_id}/staff` — lista el staff del club. Mismo scoping.
+- `POST /admin/clubs/{club_id}/staff` — aceptaba solo `user_id` UUID, ahora también acepta `email` o `username` en el body para facilitar la UI.
+
+**Frontend:**
+- Nueva página `/[locale]/club/[id]` — panel del cliente-admin: hero con nombre/slug/plan, métricas (miembros, staff, moneda, verificado), contacto, plan actual con renovación, lista de staff con roles coloreados, sección "Próximamente" anticipando Fase 1+.
+- Dashboard del jugador (`/[locale]/dashboard`) detecta clubes donde el user es staff via `/clubs/staff/mine` y muestra un bloque azul **"Mi Club: {nombre}"** con su rol → enlaza al panel.
+- `/[locale]/admin/clubs` añade botón **"Staff"** en cada tarjeta de club que abre modal con:
+  - Lista de staff actual con avatar, email, rol (badges Owner/Admin/Manager/Staff coloreados)
+  - Input para agregar staff por email o username + selector de rol → POST `/admin/clubs/{id}/staff`
+  - Botón quitar (UserMinus) → DELETE
+  - Banner explicativo: "el admin debe registrarse primero en golfbookvip.com"
+
+**Flujo end-to-end ya funcional:**
+1. Súper-admin crea el club desde `/admin/clubs`.
+2. El admin del club crea su cuenta normal en `/auth/register`.
+3. Súper-admin va a `/admin/clubs` → botón Staff → escribe email del admin del club + rol Owner → Add.
+4. El admin del club hace login → su dashboard ahora muestra el bloque azul "Mi Club" → click → entra al panel.
+
+### Notes
+
+- Las features de gestión (padrón, tee times, cuentas) NO están en esta versión — solo visualización del club. La Fase 1 se enfocará en CRUD de miembros.
+- El admin del club por ahora no tiene endpoints para crear/editar miembros — sigue siendo súper-admin only para evitar dar permisos antes de validar el modelo.
+
+---
+
 ## [1.10.0] - 2026-05-15
 
 ### Added — Clubs SaaS MVP · Fase 0 — Infraestructura

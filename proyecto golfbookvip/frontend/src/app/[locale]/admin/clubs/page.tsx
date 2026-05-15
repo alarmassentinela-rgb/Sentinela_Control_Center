@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Plus, Building2, Loader2, Search, Power, Edit2, Crown, MapPin, Mail, Phone, X } from 'lucide-react'
+import { ArrowLeft, Plus, Building2, Loader2, Search, Power, Edit2, Crown, MapPin, Mail, Phone, X, Users, UserPlus, UserMinus } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
@@ -49,6 +49,11 @@ export default function AdminClubsPage() {
   const [createForm, setCreateForm] = useState({ name: '', city: '', country: 'MX', phone: '', email: '', plan_id: '' })
   const [creating, setCreating] = useState(false)
   const [editingClub, setEditingClub] = useState<Club | null>(null)
+  const [staffClub, setStaffClub] = useState<Club | null>(null)
+  const [staffList, setStaffList] = useState<{ user_id: string; first_name: string; last_name: string; email: string; username: string; role: string }[]>([])
+  const [staffLoading, setStaffLoading] = useState(false)
+  const [addStaffForm, setAddStaffForm] = useState({ email: '', role: 'admin' })
+  const [addingStaff, setAddingStaff] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -113,6 +118,49 @@ export default function AdminClubsPage() {
       setEditingClub(null)
     } catch {
       alert(lbl('Error al cambiar plan', 'Error changing plan'))
+    }
+  }
+
+  const openStaff = async (club: Club) => {
+    setStaffClub(club)
+    setStaffLoading(true)
+    setStaffList([])
+    setAddStaffForm({ email: '', role: 'admin' })
+    try {
+      const res = await api.get(`/clubs/${club.id}/staff`)
+      setStaffList(res.data || [])
+    } catch {
+      setStaffList([])
+    } finally { setStaffLoading(false) }
+  }
+
+  const handleAddStaff = async () => {
+    if (!staffClub || !addStaffForm.email.trim()) return
+    setAddingStaff(true)
+    try {
+      const value = addStaffForm.email.trim()
+      const payload: Record<string, string> = value.includes('@')
+        ? { email: value, role: addStaffForm.role }
+        : { username: value, role: addStaffForm.role }
+      await api.post(`/admin/clubs/${staffClub.id}/staff`, payload)
+      setAddStaffForm({ email: '', role: 'admin' })
+      await openStaff(staffClub)
+      load()
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      alert(detail || lbl('Error al agregar staff', 'Error adding staff'))
+    } finally { setAddingStaff(false) }
+  }
+
+  const handleRemoveStaff = async (userId: string, name: string) => {
+    if (!staffClub) return
+    if (!confirm(lbl(`¿Quitar a ${name} del staff?`, `Remove ${name} from staff?`))) return
+    try {
+      await api.delete(`/admin/clubs/${staffClub.id}/staff/${userId}`)
+      await openStaff(staffClub)
+      load()
+    } catch {
+      alert(lbl('Error al quitar staff', 'Error removing staff'))
     }
   }
 
@@ -245,6 +293,10 @@ export default function AdminClubsPage() {
                   <button onClick={() => setEditingClub(c)}
                     className="flex-1 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5">
                     <Edit2 size={11} /> {lbl('Plan', 'Plan')}
+                  </button>
+                  <button onClick={() => openStaff(c)}
+                    className="flex-1 text-xs bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-500/30 px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5">
+                    <Users size={11} /> Staff
                   </button>
                   <button onClick={() => handleToggleActive(c)}
                     className={`flex-1 text-xs px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 ${
@@ -391,6 +443,91 @@ export default function AdminClubsPage() {
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Staff management modal */}
+      {staffClub && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center px-4"
+          onClick={() => setStaffClub(null)}>
+          <div onClick={e => e.stopPropagation()}
+            className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-lg p-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-white text-sm flex items-center gap-2">
+                <Users size={14} className="text-blue-400" />
+                Staff: {staffClub.name}
+              </h3>
+              <button onClick={() => setStaffClub(null)} className="text-zinc-500 hover:text-white"><X size={18} /></button>
+            </div>
+
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-4">
+              <p className="text-xs text-blue-200 leading-relaxed">
+                {lbl(
+                  'Para que el administrador del club entre a su panel, primero debe crear cuenta normal en golfbookvip.com. Luego escribe aquí su email o username y asígnale rol.',
+                  'For the club admin to access their panel, they must first register at golfbookvip.com. Then enter their email or username here and assign a role.'
+                )}
+              </p>
+            </div>
+
+            <div className="bg-zinc-800/50 rounded-lg p-3 mb-4 space-y-2">
+              <label className="text-[10px] text-zinc-400 uppercase tracking-wider font-semibold">{lbl('Agregar staff por email o username', 'Add staff by email or username')}</label>
+              <div className="flex gap-2">
+                <input type="text" value={addStaffForm.email}
+                  onChange={e => setAddStaffForm({ ...addStaffForm, email: e.target.value })}
+                  placeholder="admin@club.com"
+                  className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-emerald-500" />
+                <select value={addStaffForm.role}
+                  onChange={e => setAddStaffForm({ ...addStaffForm, role: e.target.value })}
+                  className="bg-zinc-800 border border-zinc-700 rounded-lg px-2 text-white text-xs">
+                  <option value="owner">Owner</option>
+                  <option value="admin">Admin</option>
+                  <option value="manager">Manager</option>
+                  <option value="staff">Staff</option>
+                </select>
+                <button onClick={handleAddStaff} disabled={addingStaff || !addStaffForm.email.trim()}
+                  className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-white text-xs font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5">
+                  {addingStaff ? <Loader2 size={12} className="animate-spin" /> : <UserPlus size={12} />}
+                  {lbl('Agregar', 'Add')}
+                </button>
+              </div>
+            </div>
+
+            <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+              {lbl('Staff actual', 'Current staff')} ({staffList.length})
+            </h4>
+            {staffLoading ? (
+              <div className="flex justify-center py-6"><Loader2 size={20} className="animate-spin text-emerald-500" /></div>
+            ) : staffList.length === 0 ? (
+              <p className="text-xs text-zinc-500 italic text-center py-4">{lbl('Sin staff registrado todavía', 'No staff yet')}</p>
+            ) : (
+              <div className="space-y-2">
+                {staffList.map(s => (
+                  <div key={s.user_id} className="bg-zinc-800/50 rounded-lg p-3 flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
+                      <span className="text-xs font-bold text-emerald-400">{s.first_name.charAt(0)}{s.last_name.charAt(0)}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-white truncate">{s.first_name} {s.last_name}</p>
+                      <p className="text-xs text-zinc-500 truncate">@{s.username} · {s.email}</p>
+                    </div>
+                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${
+                      s.role === 'owner' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' :
+                      s.role === 'admin' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40' :
+                      s.role === 'manager' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40' :
+                      'bg-zinc-700 text-zinc-300'
+                    }`}>
+                      {s.role || 'staff'}
+                    </span>
+                    <button onClick={() => handleRemoveStaff(s.user_id, `${s.first_name} ${s.last_name}`)}
+                      title={lbl('Quitar', 'Remove')}
+                      className="text-zinc-500 hover:text-red-400 transition-colors">
+                      <UserMinus size={15} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
