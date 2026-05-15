@@ -703,6 +703,15 @@ async def finish_round(round_id: uuid.UUID, current_user: CurrentUser, db: DB, f
 
     round_.status = "finished"
     round_.finished_at = datetime.now(timezone.utc)
+    await db.flush()
+
+    # Persistir balances finales en round_player_balance (para historial financiero)
+    try:
+        await balances_svc.persist_balances(str(round_id), db)
+    except Exception as ex:
+        # No-fatal: log y continúa (el cálculo on-demand sigue funcionando si la persistencia falla)
+        import logging
+        logging.warning(f"persist_balances failed for round {round_id}: {ex}")
 
     # Recalcular hándicap si la jugada es válida.
     # Excluye withdrawn y observers — esos jugadores no generan differential.
@@ -800,6 +809,13 @@ async def reopen_round(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
 
     # Borrar diferenciales de esta ronda
     await db.execute(delete(ScoreDifferential).where(ScoreDifferential.round_id == round_id))
+
+    # Borrar balances persistidos (ya no son finales)
+    try:
+        await balances_svc.delete_persisted_balances(str(round_id), db)
+    except Exception as ex:
+        import logging
+        logging.warning(f"delete_persisted_balances failed for round {round_id}: {ex}")
 
     # Reabrir
     round_.status = "active"

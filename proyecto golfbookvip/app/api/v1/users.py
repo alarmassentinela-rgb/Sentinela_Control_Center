@@ -193,6 +193,205 @@ async def get_round_history(current_user: CurrentUser, db: DB):
     return result
 
 
+# ─── Historial financiero (balance de apuestas por ronda) ─────────────────────
+
+@router.get("/me/balance-history")
+async def get_balance_history(
+    current_user: CurrentUser,
+    db: DB,
+    start_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    limit: int = Query(200, ge=1, le=1000),
+):
+    """Lista de rondas finalizadas donde participó el usuario, con su balance final.
+
+    Usa los balances persistidos en `round_player_balance` (escritos al cierre de
+    la ronda). Si una ronda no tiene balance persistido (legacy), se calcula on-demand
+    y se guarda (lazy backfill). Solo rondas con bets activas y total != 0.
+    """
+    from datetime import datetime, date as date_type
+    from app.models.round import Round, RoundPlayer
+    from app.models.course import Course
+    from app.models.score import RoundPlayerBalance
+    from app.services import balances as balances_svc
+
+    # Parse dates
+    start_dt = None
+    end_dt = None
+    if start_date:
+        try:
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(status_code=422, detail="start_date inválido (YYYY-MM-DD)")
+    if end_date:
+        try:
+            end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+            # Incluye todo el día final
+            end_dt = end_dt.replace(hour=23, minute=59, second=59)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="end_date inválido (YYYY-MM-DD)")
+
+    # Buscar todas las rondas finalizadas donde el usuario participó
+    rounds_query = (
+        select(Round, RoundPlayer, Course)
+        .join(RoundPlayer, RoundPlayer.round_id == Round.id)
+        .outerjoin(Course, Course.id == Round.course_id)
+        .where(
+            RoundPlayer.user_id == current_user.id,
+            Round.status == "finished",
+            RoundPlayer.participant_mode == "playing",
+            RoundPlayer.withdrawn_at.is_(None),
+        )
+        .order_by(Round.finished_at.desc())
+    )
+    if start_dt:
+        rounds_query = rounds_query.where(Round.finished_at >= start_dt)
+    if end_dt:
+        rounds_query = rounds_query.where(Round.finished_at <= end_dt)
+    rounds_query = rounds_query.limit(limit)
+
+    rows = (await db.execute(rounds_query)).all()
+
+    items = []
+    for round_, rp, course in rows:
+        # Buscar balance persistido
+        bal_res = await db.execute(
+            select(RoundPlayerBalance).where(
+                RoundPlayerBalance.round_id == round_.id,
+                RoundPlayerBalance.user_id == current_user.id,
+            )
+        )
+        bal = bal_res.scalar_one_or_none()
+
+        # Lazy backfill si no existe
+        if bal is None:
+            try:
+                await balances_svc.persist_balances(str(round_.id), db)
+                bal_res = await db.execute(
+                    select(RoundPlayerBalance).where(
+                        RoundPlayerBalance.round_id == round_.id,
+                        RoundPlayerBalance.user_id == current_user.id,
+                    )
+                )
+                bal = bal_res.scalar_one_or_none()
+            except Exception:
+                bal = None
+
+        if not bal or (
+            float(bal.total_balance or 0) == 0
+            and float(bal.entry_fee or 0) == 0
+            and float(bal.nassau_balance or 0) == 0
+        ):
+            # Sin movimientos para este jugador en esta ronda
+            continue
+
+        items.append({
+            "round_id": str(round_.id),
+            "round_name": round_.name,
+            "course_name": course.name if course else None,
+            "course_city": course.city if course else None,
+            "game_format": round_.game_format,
+            "scheduled_at": round_.scheduled_at.isoformat(),
+            "finished_at": round_.finished_at.isoformat() if round_.finished_at else None,
+            "breakdown": {
+                "entry_fee": float(bal.entry_fee or 0),
+                "nassau": float(bal.nassau_balance or 0),
+                "per_hole": float(bal.other_balance or 0),
+                "prizes": float(bal.birds_earned or 0),
+                "penalties": float(bal.three_putt_loss or 0),
+                "skins": float(bal.skins_balance or 0),
+                "oyes": float(bal.oyes_balance or 0),
+                "total": float(bal.total_balance or 0),
+            },
+        })
+
+    return {"items": items, "count": len(items)}
+
+
+@router.get("/me/balance-summary")
+async def get_balance_summary(
+    current_user: CurrentUser,
+    db: DB,
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+):
+    """Resumen agregado + datos para gráfica mensual del historial financiero del usuario.
+
+    Llama a /me/balance-history internamente para consistencia. Útil para dashboards
+    y el resumen del estado de cuenta.
+    """
+    history = await get_balance_history(current_user=current_user, db=db,
+                                         start_date=start_date, end_date=end_date, limit=1000)
+    items = history["items"]
+
+    # Agregaciones
+    rounds_played = len(items)
+    rounds_won = sum(1 for it in items if it["breakdown"]["total"] > 0.01)
+    rounds_lost = sum(1 for it in items if it["breakdown"]["total"] < -0.01)
+    rounds_tied = rounds_played - rounds_won - rounds_lost
+    net_balance = sum(it["breakdown"]["total"] for it in items)
+    total_won = sum(it["breakdown"]["total"] for it in items if it["breakdown"]["total"] > 0)
+    total_paid = sum(it["breakdown"]["total"] for it in items if it["breakdown"]["total"] < 0)
+
+    biggest_win = None
+    biggest_loss = None
+    if items:
+        sorted_by_total = sorted(items, key=lambda x: x["breakdown"]["total"], reverse=True)
+        top = sorted_by_total[0]
+        bot = sorted_by_total[-1]
+        if top["breakdown"]["total"] > 0:
+            biggest_win = {
+                "round_id": top["round_id"],
+                "round_name": top["round_name"],
+                "amount": top["breakdown"]["total"],
+                "date": top["finished_at"],
+            }
+        if bot["breakdown"]["total"] < 0:
+            biggest_loss = {
+                "round_id": bot["round_id"],
+                "round_name": bot["round_name"],
+                "amount": bot["breakdown"]["total"],
+                "date": bot["finished_at"],
+            }
+
+    # Agregación por mes para gráfica
+    from collections import defaultdict
+    month_totals: dict[str, float] = defaultdict(float)
+    for it in items:
+        if it.get("finished_at"):
+            month_key = it["finished_at"][:7]  # YYYY-MM
+            month_totals[month_key] += it["breakdown"]["total"]
+    chart_monthly = sorted(
+        [{"month": k, "total": round(v, 2)} for k, v in month_totals.items()],
+        key=lambda x: x["month"],
+    )
+
+    # Agregación por tipo de apuesta (cuánto se ganó/perdió neto en cada categoría)
+    by_bet_type = {
+        "entry_fee": sum(it["breakdown"]["entry_fee"] for it in items),
+        "nassau": sum(it["breakdown"]["nassau"] for it in items),
+        "per_hole": sum(it["breakdown"]["per_hole"] for it in items),
+        "prizes": sum(it["breakdown"]["prizes"] for it in items),
+        "penalties": sum(it["breakdown"]["penalties"] for it in items),
+        "skins": sum(it["breakdown"]["skins"] for it in items),
+        "oyes": sum(it["breakdown"]["oyes"] for it in items),
+    }
+
+    return {
+        "rounds_played": rounds_played,
+        "rounds_won": rounds_won,
+        "rounds_lost": rounds_lost,
+        "rounds_tied": rounds_tied,
+        "net_balance": net_balance,
+        "total_won": total_won,
+        "total_paid": total_paid,
+        "biggest_win": biggest_win,
+        "biggest_loss": biggest_loss,
+        "chart_monthly": chart_monthly,
+        "by_bet_type": by_bet_type,
+    }
+
+
 @router.get("/me/feed")
 async def get_feed(current_user: CurrentUser, db: DB):
     from app.models.round import Round, RoundPlayer

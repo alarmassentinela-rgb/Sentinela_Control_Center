@@ -7,6 +7,74 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.9.0] - 2026-05-15
+
+Historial financiero personal — cada jugador ve su estado de cuenta con gráfica, desglose y PDF profesional.
+
+### Added — Backend: persistencia de balances
+
+- `app/services/balances.py` ahora expone `persist_balances(round_id, db)` y `delete_persisted_balances(round_id, db)`
+- `finish_round` ahora persiste balances finales en `round_player_balance` cuando una ronda llega a `finished`
+- `reopen_round` borra los balances persistidos (ya no son finales)
+- Schema existente reusado con mapeo:
+  - `entry_fee` → entry_fee, `nassau_balance` → nassau, `other_balance` → per_hole
+  - `birds_earned` → prizes, `three_putt_loss` → penalties, `skins_balance` → skins
+  - `oyes_balance` → oyes, `total_balance` → total
+- **Lazy backfill**: si una ronda finished antigua no tiene balances persistidos, se calculan y guardan automáticamente la primera vez que se consultan via `/balance-history`
+
+### Added — Endpoints historial financiero
+
+- `GET /users/me/balance-history?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD&limit=N`
+  - Lista de rondas finalizadas donde participó el usuario con balance final
+  - Filtro por fechas opcional
+  - Solo incluye rondas con movimiento ≠ 0
+  - Excluye rondas donde fue withdrawn/observer
+
+- `GET /users/me/balance-summary?start_date=...&end_date=...`
+  - Agregaciones del período:
+    - `net_balance`, `total_won`, `total_paid`
+    - `rounds_played`, `rounds_won`, `rounds_lost`, `rounds_tied`
+    - `biggest_win`, `biggest_loss` (con detalle de ronda)
+    - `chart_monthly`: array de `{month: YYYY-MM, total: float}` para gráfica
+    - `by_bet_type`: acumulado neto por categoría (entry_fee, nassau, etc.)
+
+### Added — Página `/profile/finances`
+
+Nueva página accesible desde el botón "💰 Mi cuenta — Historial financiero" en `/profile`:
+
+- **Filtros de fecha**: 6 presets (Todo, Este mes, Mes pasado, 3 meses, Año actual, Personalizado) + 2 date pickers
+- **Banner de balance neto** prominente (verde si positivo, rojo si negativo, monto en 5xl)
+- **8 stat cards**: rondas ganadas/perdidas/empate/total, total ganado/pagado, mejor jugada, peor jugada
+- **Gráfica SVG mensual** de barras: verde positivas, rojo negativas, etiqueta de mes y monto
+- **Desglose por tipo de apuesta**: acumulado neto del período por categoría
+- **Tabla de historial**: filas clickeables, navega al detalle de la ronda
+- **Botón PDF** que abre la versión imprimible
+- Privacidad: cada usuario solo ve su propio historial
+
+### Added — Página `/profile/finances/print` (PDF profesional)
+
+Versión imprimible estilo estado de cuenta bancario:
+
+- Header con brand + fecha de generación
+- Título "Estado de cuenta" + nombre/email/username
+- Línea de período seleccionado
+- **Balance Banner grande** verde sólido si positivo, rojo sólido si negativo
+- Tabla "Resumen" con 8 métricas
+- **Gráfica SVG** de barras por mes con valores
+- Tabla "Acumulado por tipo de apuesta" con fila TOTAL destacada amarillo
+- Tabla "Historial por jugada" con fecha, torneo, curso, formato, balance
+- Footer con timestamp y nota "Documento personal — confidencial"
+- Print CSS Letter, page-break automático si excede
+- Auto-print con `?autoprint=true`
+
+### Notes
+
+- Stats calculadas client-side desde el endpoint para máxima flexibilidad
+- Las rondas ya finalizadas se backfillan en su primera consulta (sin script manual)
+- Esto sienta base para futuras features: ranking de tesorero, alertas de pago pendiente, integración con métodos de pago
+
+---
+
 ## [1.8.0] - 2026-05-15
 
 Print modular + privacidad por jugador. Cada sección puede mandarse a imprimir/PDF de forma individual para compartir por WhatsApp/email, y los jugadores regulares ahora solo ven SU ticket personal — los detalles de otros jugadores quedan ocultos.

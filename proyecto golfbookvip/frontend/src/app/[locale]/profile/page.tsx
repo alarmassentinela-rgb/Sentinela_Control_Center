@@ -520,6 +520,23 @@ export default function ProfilePage() {
           </div>
         )}
 
+        {/* ── Mi cuenta / Historial financiero ── */}
+        <Link href={`/${locale}/profile/finances`}
+          className="block bg-gradient-to-br from-emerald-500/15 to-yellow-500/10 border border-emerald-500/30 hover:border-emerald-500/60 rounded-2xl px-5 py-4 transition-colors">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center flex-shrink-0">
+              <span className="text-xl">💰</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-white text-sm">{lbl('Mi cuenta — Historial financiero', 'My account — Financial history')}</p>
+              <p className="text-xs text-emerald-300/80 truncate">
+                {lbl('Pérdidas y ganancias por jugada · estado de cuenta · gráfica · PDF', 'Gains & losses per round · statement · chart · PDF')}
+              </p>
+            </div>
+            <ChevronDown size={16} className="text-emerald-400 -rotate-90 flex-shrink-0" />
+          </div>
+        </Link>
+
         {/* ── Historial de rondas ── */}
         {rounds.length > 0 && (
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">

@@ -26,11 +26,11 @@ Reglas implementadas (estándares de la mayoría de ligas):
 """
 
 from typing import Any
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.round import Round, RoundPlayer, RoundBetConfig
-from app.models.score import Score
+from app.models.score import Score, RoundPlayerBalance
 from app.models.course import CourseHole
 from app.models.user import User
 
@@ -375,3 +375,57 @@ async def compute_balances(round_id: str, db: AsyncSession) -> dict[str, Any]:
             "skins_value": float(bc.skins_value) if bc.skins_enabled else 0,
         },
     }
+
+
+async def persist_balances(round_id: str, db: AsyncSession) -> int:
+    """Calcula y persiste balances en round_player_balance.
+
+    Usar cuando una ronda llega a 'finished'. Si ya hay balances guardados para
+    esa ronda, los borra y reescribe (idempotente). Devuelve número de jugadores
+    persistidos.
+
+    Mapeo de campos (compute_balances → schema):
+    - entry_fee     → entry_fee
+    - nassau        → nassau_balance
+    - per_hole      → other_balance
+    - prizes        → birds_earned
+    - penalties     → three_putt_loss
+    - skins         → skins_balance
+    - oyes          → oyes_balance
+    - total         → total_balance
+    """
+    result = await compute_balances(round_id, db)
+    if not result.get("has_bets"):
+        return 0
+
+    # Borrar persistencia previa (idempotente)
+    await db.execute(delete(RoundPlayerBalance).where(RoundPlayerBalance.round_id == round_id))
+    await db.flush()
+
+    import uuid as _uuid
+    count = 0
+    for p in result["players"]:
+        b = p["breakdown"]
+        rpb = RoundPlayerBalance(
+            round_id=_uuid.UUID(round_id),
+            user_id=_uuid.UUID(p["user_id"]),
+            entry_fee=b["entry_fee"],
+            nassau_balance=b["nassau"],
+            other_balance=b["per_hole"],
+            birds_earned=b["prizes"],
+            three_putt_loss=b["penalties"],
+            skins_balance=b["skins"],
+            oyes_balance=b["oyes"],
+            total_balance=b["total"],
+        )
+        db.add(rpb)
+        count += 1
+
+    await db.flush()
+    return count
+
+
+async def delete_persisted_balances(round_id: str, db: AsyncSession) -> int:
+    """Borra balances persistidos. Usar cuando una ronda se reabre."""
+    res = await db.execute(delete(RoundPlayerBalance).where(RoundPlayerBalance.round_id == round_id))
+    return res.rowcount or 0
