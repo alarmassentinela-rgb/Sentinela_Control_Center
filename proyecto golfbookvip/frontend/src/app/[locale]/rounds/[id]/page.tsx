@@ -1239,6 +1239,115 @@ function FormatInfoModal({ format, locale, onClose }: { format: string; locale: 
   )
 }
 
+// ─── Reglas de apuestas — modal explicativo ───────────────────────────────────
+
+type BetRuleTopic = 'entry_fee' | 'nassau' | 'per_hole' | 'prizes' | 'penalty' | 'oyes' | 'skins'
+
+const BET_RULES: Record<BetRuleTopic, { titleEs: string; titleEn: string; icon: string; descEs: string; descEn: string; exampleEs: string; exampleEn: string }> = {
+  entry_fee: {
+    icon: '🎫',
+    titleEs: 'Entrada (Entry Fee)',
+    titleEn: 'Entry Fee',
+    descEs: 'Cada jugador paga la cantidad configurada al inicio. El pot total se divide entre los 3 mejores NET de la ronda completa: 60% para el 1° lugar, 30% para el 2°, 10% para el 3°.\n\n• Todos pagan, los 3 primeros recuperan + más\n• Empate al 1° NET = split entre los empatados\n• Si solo hay 2 o 1 ganadores, el resto del pot se reparte proporcionalmente',
+    descEn: 'Each player pays the configured amount upfront. Total pot is split among the top 3 NET of the full round: 60% to 1st, 30% to 2nd, 10% to 3rd.\n\n• Everyone pays, top 3 recover more\n• Tie at 1st NET = split between tied players',
+    exampleEs: 'Ejemplo con $20 entry fee y 22 jugadores:\nPot total = 22 × $20 = $440\n• 1° lugar NET recibe $264 (60% × $440)\n• 2° lugar NET recibe $132\n• 3° lugar NET recibe $44\n• Resto: pagaron $20 cada uno, recibieron $0',
+    exampleEn: 'Example with $20 entry fee and 22 players:\nTotal pot = 22 × $20 = $440\n• 1st NET gets $264 (60%)\n• 2nd NET gets $132\n• 3rd NET gets $44\n• Rest: paid $20 each, got $0',
+  },
+  nassau: {
+    icon: '🎯',
+    titleEs: 'Nassau',
+    titleEn: 'Nassau',
+    descEs: 'Son TRES apuestas independientes en una sola ronda: Salida (hoyos 1-9), Vuelta (hoyos 10-18) y Total (1-18). Cada una con su propio pot.\n\n• Cada jugador aporta el monto a cada uno de los 3 pots\n• En cada segmento, el low NET toma TODO el pot\n• Puedes perder 1 pot y ganar otro\n• Empate en un segmento = split entre los empatados',
+    descEn: 'THREE independent bets in one round: Front 9, Back 9, Total. Each with its own pot.\n\n• Each player contributes to each of the 3 pots\n• Low NET of each segment takes the full pot\n• Can lose one and win another\n• Tie = split between tied players',
+    exampleEs: 'Ejemplo con Nassau $20/$20/$20 y 22 jugadores:\nPot F9 = $440 (ganador low NET F9 toma)\nPot B9 = $440 (ganador low NET B9 toma)\nPot Total = $440 (ganador low NET 18h toma)\n\nCada jugador arriesga $60. Si ganas 1 de 3 pots: -$60 + $440 = +$380 neto.\nSi pierdes los 3: -$60 neto.',
+    exampleEn: 'Example Nassau $20/$20/$20 with 22 players:\nF9 pot = $440 · B9 pot = $440 · Total pot = $440\nEach player risks $60. Winning 1 of 3 = +$380 net.',
+  },
+  per_hole: {
+    icon: '⛳',
+    titleEs: 'Por hoyo ganado',
+    titleEn: 'Per hole won',
+    descEs: 'En cada hoyo, el jugador con low NET cobra el monto configurado a TODOS los que perdieron en ese hoyo. Empate entre ganadores = split del pot del hoyo.\n\n• Aplica a los 18 hoyos\n• Empate = split entre ganadores empatados\n• Si TODOS empatan en un hoyo, no se mueve dinero (carry-over no aplicable aquí)',
+    descEn: 'Each hole, player with low NET charges the amount to all players who lost that hole. Tied winners split the hole pot.',
+    exampleEs: 'Ejemplo con $5 por hoyo y 4 jugadores:\nHoyo 1: Vidal gana low net 3, los otros 3 hicieron 4,5,5\n• Vidal recibe $5 × 3 = $15\n• Los otros 3 pagan $5 cada uno\n\nSi hoyo 2 Vidal y Leo empatan low net:\n• Ambos reciben ($5 × 2) / 2 = $5 cada uno\n• Los otros 2 pagan $5',
+    exampleEn: 'Example $5/hole, 4 players:\nHole 1: Vidal low net 3, others 4/5/5\nVidal gets $15, others pay $5 each.',
+  },
+  prizes: {
+    icon: '🏅',
+    titleEs: 'Premios especiales (birdie/eagle/HIO)',
+    titleEn: 'Special prizes (birdie/eagle/HIO)',
+    descEs: 'Cada vez que un jugador hace un birdie, eagle, albatross o hoyo en uno, cada OTRO jugador le paga el premio configurado. Multiplica por cantidad de eventos.\n\n• Se cuenta cada birdie, no solo el primero\n• Pay-each-other: pago directo entre jugadores\n• El que lo hace recibe (monto × N-1 otros jugadores) por cada evento',
+    descEn: 'Each time a player makes a birdie/eagle/albatross/HIO, every OTHER player pays them the configured prize. Multiplied by number of events.',
+    exampleEs: 'Ejemplo con $10 birdie y 22 jugadores:\nSi Vidal hace 4 birdies en la ronda:\n• Vidal recibe $10 × 21 × 4 = $840 total\n• Cada otro jugador paga $10 × 4 = $40\n\nLas pérdidas/ganancias se suman al balance.',
+    exampleEn: 'Example $10 birdie, 22 players:\nIf Vidal makes 4 birdies:\nVidal gets $840 total, each other pays $40.',
+  },
+  penalty: {
+    icon: '⚠️',
+    titleEs: 'Castigo de 3 putts',
+    titleEn: '3-putt penalty',
+    descEs: 'Cuando un jugador hace 3 (o más) putts en un hoyo, paga el monto configurado a CADA OTRO jugador. Es el inverso de los premios — el penalizado pierde, los demás ganan.\n\n• Se cuenta cada 3-putt individual\n• Pay-each-other inverso',
+    descEn: 'When a player makes 3 (or more) putts on a hole, pays the configured amount to EACH other player. Inverse of prizes.',
+    exampleEs: 'Ejemplo con $5 castigo y 22 jugadores:\nSi Enrique tiene 3 three-putts en la ronda:\n• Enrique paga $5 × 21 × 3 = $315 total\n• Cada otro jugador recibe $5 × 3 = $15',
+    exampleEn: 'Example $5 penalty, 22 players:\nEnrique has 3 three-putts: pays $315 total, each other gets $15.',
+  },
+  skins: {
+    icon: '💎',
+    titleEs: 'Skines (con carry-over)',
+    titleEn: 'Skins (with carry-over)',
+    descEs: 'Un skin se gana por hacer el low score (gross o net según config) en un hoyo, SIN empate. Si hay empate, el skin se acumula al siguiente hoyo (carry-over) y multiplica su valor.\n\n• Solo se gana sin empate (outright low)\n• Empate → carry-over al siguiente hoyo\n• Skin acumulado = monto base × hoyos carry\n• Skins sin ganar al final del 18 = forfeit (se pierden)\n\nCada skin ganado paga `monto × (N-1 jugadores)` al ganador.',
+    descEn: 'A skin is won for the outright low score on a hole. Ties carry over to next hole. Unwon skins at the end forfeit.',
+    exampleEs: 'Ejemplo con $5 skin y 22 jugadores, 18 hoyos:\n• Hoyos 1-3: empates → carry, valor acumulado = 3 skins\n• Hoyo 4: Vidal hace el outright low → gana 3 skins = $5 × 21 × 3 = $315\n• Si hay 14 skins ganados totales, los otros 4 hoyos con empate al final = forfeit',
+    exampleEn: 'Example $5 skin, 22 players:\nHoles 1-3 tied (carry), hole 4 Vidal outright low → wins 3 accumulated skins = $315.',
+  },
+  oyes: {
+    icon: '🎲',
+    titleEs: 'Oyes (regional)',
+    titleEn: 'Oyes (regional)',
+    descEs: 'Apuesta regional mexicana — actualmente NO implementada en el cálculo.\n\nReglas pendientes de confirmar:\n• ¿El más cercano al hoyo en pares 3?\n• ¿El primero en embocar?\n• ¿Acumula entre hoyos cuando no hay claro ganador?\n\nUna vez confirmadas las reglas se agregará al motor.',
+    descEn: 'Mexican regional bet — currently NOT implemented in the calculation.\n\nRules pending confirmation.',
+    exampleEs: 'Configuración guardada pero $0 en el balance hasta que se defina la regla.',
+    exampleEn: 'Configuration saved but $0 in balance until rule is defined.',
+  },
+}
+
+function BetRulesModal({ topic, onClose, locale }: { topic: BetRuleTopic; onClose: () => void; locale: string }) {
+  const r = BET_RULES[topic]
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
+      onClick={onClose}>
+      <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-md max-h-[85vh] overflow-y-auto"
+        onClick={e => e.stopPropagation()}>
+        <div className="sticky top-0 bg-zinc-900 border-b border-zinc-700 px-5 py-3 flex items-center justify-between z-10">
+          <h3 className="text-base font-bold text-white flex items-center gap-2">
+            <span className="text-xl">{r.icon}</span>
+            {locale === 'es' ? r.titleEs : r.titleEn}
+          </h3>
+          <button onClick={onClose} className="text-zinc-500 hover:text-white">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="px-5 py-4 space-y-4">
+          <div>
+            <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-wide mb-1.5">
+              {locale === 'es' ? 'Cómo funciona' : 'How it works'}
+            </p>
+            <p className="text-sm text-zinc-300 whitespace-pre-line leading-relaxed">
+              {locale === 'es' ? r.descEs : r.descEn}
+            </p>
+          </div>
+          <div className="bg-zinc-800 border border-zinc-700 rounded-xl p-3">
+            <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wide mb-1.5">
+              {locale === 'es' ? 'Ejemplo' : 'Example'}
+            </p>
+            <p className="text-sm text-zinc-300 whitespace-pre-line font-mono leading-relaxed">
+              {locale === 'es' ? r.exampleEs : r.exampleEn}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Balances (pérdidas y ganancias) ──────────────────────────────────────────
 
 type BalBreak = { entry_fee: number; nassau: number; per_hole: number; prizes: number; penalties: number; skins: number; oyes: number; total: number }
@@ -1249,6 +1358,77 @@ type BalData = { has_bets: boolean; players: BalPlayer[]; lines: BalLine[]; note
 function fmtMoney(n: number, locale: string): string {
   const sign = n >= 0 ? '+' : ''
   return `${sign}$${n.toFixed(2)}`
+}
+
+// Mini-tabla por tipo de apuesta — muestra solo jugadores con movimiento ≠ 0
+function BetLineTable({
+  title, icon, lines, players, locale, color,
+}: {
+  title: string; icon: string; lines: BalLine[]; players: BalPlayer[]; locale: string; color: string
+}) {
+  if (lines.length === 0) return null
+  const playerName = (uid: string) => players.find(p => p.user_id === uid)?.name ?? uid.slice(0, 8)
+
+  return (
+    <div className={`bg-zinc-900 border ${color} rounded-xl overflow-hidden`}>
+      <div className={`px-4 py-2.5 border-b ${color} bg-zinc-800/30`}>
+        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+          <span>{icon}</span>
+          {title}
+        </h3>
+      </div>
+      <div className="divide-y divide-zinc-800/40">
+        {lines.map((line, idx) => {
+          const moved = Object.entries(line.amounts).filter(([, v]) => Math.abs(v) > 0.01)
+          const winners = moved.filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1])
+          const losers = moved.filter(([, v]) => v < 0).sort((a, b) => a[1] - b[1])
+          return (
+            <div key={idx} className="px-4 py-2.5">
+              <p className="text-[11px] text-zinc-400 mb-1.5 leading-snug">
+                <span className="text-zinc-500">→</span> {line.detail}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 text-xs">
+                {winners.length > 0 && (
+                  <div>
+                    <p className="text-[10px] text-emerald-400/70 font-semibold uppercase mb-0.5">{locale === 'es' ? 'Ganaron' : 'Won'}</p>
+                    {winners.map(([uid, v]) => (
+                      <div key={uid} className="flex justify-between gap-2">
+                        <span className="text-zinc-300 truncate">{playerName(uid)}</span>
+                        <span className="text-emerald-400 font-bold tabular-nums">+${v.toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {losers.length > 0 && (
+                  <div>
+                    <p className="text-[10px] text-red-400/70 font-semibold uppercase mb-0.5">{locale === 'es' ? 'Pagaron' : 'Paid'}</p>
+                    {/* Si todos pagan lo mismo, agrupar para no saturar */}
+                    {(() => {
+                      const sameAmount = losers.length > 3 && losers.every(([, v]) => Math.abs(v - losers[0][1]) < 0.01)
+                      if (sameAmount) {
+                        return (
+                          <div className="flex justify-between gap-2">
+                            <span className="text-zinc-400">{losers.length} {locale === 'es' ? 'jugadores' : 'players'}</span>
+                            <span className="text-red-400 font-bold tabular-nums">−${Math.abs(losers[0][1]).toFixed(2)} {locale === 'es' ? 'c/u' : 'each'}</span>
+                          </div>
+                        )
+                      }
+                      return losers.map(([uid, v]) => (
+                        <div key={uid} className="flex justify-between gap-2">
+                          <span className="text-zinc-300 truncate">{playerName(uid)}</span>
+                          <span className="text-red-400 font-bold tabular-nums">−${Math.abs(v).toFixed(2)}</span>
+                        </div>
+                      ))
+                    })()}
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 function BalancesSection({ balances, lbl, locale }: { balances: BalData; lbl: (es: string, en: string) => string; locale: string }) {
@@ -1267,63 +1447,120 @@ function BalancesSection({ balances, lbl, locale }: { balances: BalData; lbl: (e
       </div>
     )
   }
+
+  // Agrupar líneas por tipo de apuesta
+  const byKind: Record<string, BalLine[]> = {}
+  for (const l of balances.lines) {
+    byKind[l.kind] = byKind[l.kind] ?? []
+    byKind[l.kind].push(l)
+  }
+
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
-      <div className="px-5 pt-5 pb-3 border-b border-zinc-800 flex items-center justify-between">
-        <h2 className="font-semibold text-white text-sm flex items-center gap-2">
-          <span>💰</span>
-          {lbl('Pérdidas y ganancias', 'Gains & losses')}
-        </h2>
-        <span className="text-[10px] text-zinc-500">
-          {lbl(`${balances.players.length} jugadores`, `${balances.players.length} players`)}
-        </span>
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl px-5 py-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold text-white text-base flex items-center gap-2">
+            <span className="text-xl">💰</span>
+            {lbl('Pérdidas y ganancias — desglose detallado', 'Gains & losses — detailed breakdown')}
+          </h2>
+          <span className="text-[10px] text-zinc-500">
+            {lbl(`${balances.players.length} jugadores`, `${balances.players.length} players`)}
+          </span>
+        </div>
+        <p className="text-xs text-zinc-500 mt-1">
+          {lbl(
+            'Cada apuesta calculada de forma independiente. Al final, gran total por jugador.',
+            'Each bet calculated independently. Grand total per player at the end.'
+          )}
+        </p>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-zinc-800/40 text-[10px] uppercase tracking-wide text-zinc-500">
-              <th className="text-left px-3 py-2 font-semibold sticky left-0 bg-zinc-800/40">{lbl('Jugador', 'Player')}</th>
-              <th className="text-right px-2 py-2 font-semibold">{lbl('Entrada', 'Entry')}</th>
-              <th className="text-right px-2 py-2 font-semibold">Nassau</th>
-              <th className="text-right px-2 py-2 font-semibold">{lbl('Por hoyo', 'Per hole')}</th>
-              <th className="text-right px-2 py-2 font-semibold">{lbl('Premios', 'Prizes')}</th>
-              <th className="text-right px-2 py-2 font-semibold">{lbl('Castigos', 'Penalties')}</th>
-              <th className="text-right px-2 py-2 font-semibold">{lbl('Skines', 'Skins')}</th>
-              <th className="text-right px-3 py-2 font-bold text-zinc-300 border-l border-zinc-700">TOTAL</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-800/40">
-            {balances.players.map((p, i) => {
-              const t = p.breakdown.total
-              const tCls = Math.abs(t) < 0.01 ? 'text-zinc-500' : t > 0 ? 'text-emerald-400' : 'text-red-400'
-              const cellCls = (v: number) => Math.abs(v) < 0.01 ? 'text-zinc-700' : v > 0 ? 'text-emerald-400' : 'text-red-400'
-              const medalCls = i === 0 ? 'text-yellow-400' : i === 1 ? 'text-zinc-300' : i === 2 ? 'text-amber-700' : 'text-zinc-600'
-              return (
-                <tr key={p.user_id} className="hover:bg-zinc-800/30">
-                  <td className="px-3 py-2 sticky left-0 bg-zinc-900">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className={`text-[10px] font-mono font-bold ${medalCls}`}>#{i+1}</span>
-                      <span className="text-xs text-zinc-200 font-medium truncate">{p.name}</span>
-                    </div>
-                  </td>
-                  <td className={`text-right px-2 py-2 text-xs tabular-nums ${cellCls(p.breakdown.entry_fee)}`}>{fmtMoney(p.breakdown.entry_fee, locale)}</td>
-                  <td className={`text-right px-2 py-2 text-xs tabular-nums ${cellCls(p.breakdown.nassau)}`}>{fmtMoney(p.breakdown.nassau, locale)}</td>
-                  <td className={`text-right px-2 py-2 text-xs tabular-nums ${cellCls(p.breakdown.per_hole)}`}>{fmtMoney(p.breakdown.per_hole, locale)}</td>
-                  <td className={`text-right px-2 py-2 text-xs tabular-nums ${cellCls(p.breakdown.prizes)}`}>{fmtMoney(p.breakdown.prizes, locale)}</td>
-                  <td className={`text-right px-2 py-2 text-xs tabular-nums ${cellCls(p.breakdown.penalties)}`}>{fmtMoney(p.breakdown.penalties, locale)}</td>
-                  <td className={`text-right px-2 py-2 text-xs tabular-nums ${cellCls(p.breakdown.skins)}`}>{fmtMoney(p.breakdown.skins, locale)}</td>
-                  <td className={`text-right px-3 py-2 text-sm font-bold tabular-nums ${tCls} border-l border-zinc-700 bg-zinc-800/30`}>{fmtMoney(t, locale)}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-      <div className="px-5 py-3 border-t border-zinc-800 text-[10px] text-zinc-500">
-        {lbl(
-          'Cálculo según reglas estándar: entry fee 60/30/10 a low net · Nassau pot al low net del segmento · Por hoyo low net cobra a los demás · Premios y castigos pay-each-other · Skines con carry-over.',
-          'Standard rules: entry fee 60/30/10 low net · Nassau pot to segment low net · Per hole low net charges others · Prizes/penalties pay-each-other · Skins with carry-over.'
-        )}
+
+      {/* Tablas por tipo */}
+      {byKind.entry_fee && (
+        <BetLineTable title={lbl('Entrada (Entry Fee)', 'Entry Fee')} icon="🎫"
+          lines={byKind.entry_fee} players={balances.players} locale={locale}
+          color="border-blue-500/30" />
+      )}
+      {byKind.nassau && (
+        <BetLineTable title="Nassau" icon="🎯"
+          lines={byKind.nassau} players={balances.players} locale={locale}
+          color="border-orange-500/30" />
+      )}
+      {byKind.per_hole && (
+        <BetLineTable title={lbl('Por hoyo ganado', 'Per hole won')} icon="⛳"
+          lines={byKind.per_hole} players={balances.players} locale={locale}
+          color="border-cyan-500/30" />
+      )}
+      {byKind.prize && (
+        <BetLineTable title={lbl('Premios (birdie/eagle/HIO)', 'Prizes (birdie/eagle/HIO)')} icon="🏅"
+          lines={byKind.prize} players={balances.players} locale={locale}
+          color="border-emerald-500/30" />
+      )}
+      {byKind.penalty && (
+        <BetLineTable title={lbl('Castigos (3 putts)', 'Penalties (3-putts)')} icon="⚠️"
+          lines={byKind.penalty} players={balances.players} locale={locale}
+          color="border-red-500/30" />
+      )}
+      {byKind.skins && (
+        <BetLineTable title={lbl('Skines (con carry-over)', 'Skins (with carry-over)')} icon="💎"
+          lines={byKind.skins} players={balances.players} locale={locale}
+          color="border-purple-500/30" />
+      )}
+
+      {/* GRAN TOTAL */}
+      <div className="bg-gradient-to-br from-emerald-500/10 to-yellow-500/10 border border-yellow-500/40 rounded-2xl overflow-hidden">
+        <div className="px-5 py-3 bg-yellow-500/10 border-b border-yellow-500/30">
+          <h2 className="font-bold text-white text-base flex items-center gap-2">
+            <span className="text-xl">🏆</span>
+            {lbl('GRAN TOTAL POR JUGADOR', 'GRAND TOTAL PER PLAYER')}
+          </h2>
+          <p className="text-[10px] text-zinc-400 mt-0.5">
+            {lbl('Suma de todas las apuestas. Ordenados de mayor ganancia a mayor pérdida.', 'Sum of all bets. Sorted from biggest gain to biggest loss.')}
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-zinc-800/40 text-[10px] uppercase tracking-wide text-zinc-500">
+                <th className="text-left px-3 py-2 font-semibold">#</th>
+                <th className="text-left px-3 py-2 font-semibold">{lbl('Jugador', 'Player')}</th>
+                <th className="text-right px-2 py-2 font-semibold hidden sm:table-cell">{lbl('Entr.', 'Entry')}</th>
+                <th className="text-right px-2 py-2 font-semibold hidden sm:table-cell">Nassau</th>
+                <th className="text-right px-2 py-2 font-semibold hidden md:table-cell">{lbl('x Hoyo', 'Hole')}</th>
+                <th className="text-right px-2 py-2 font-semibold hidden md:table-cell">{lbl('Prem.', 'Prizes')}</th>
+                <th className="text-right px-2 py-2 font-semibold hidden md:table-cell">{lbl('Cast.', 'Pen.')}</th>
+                <th className="text-right px-2 py-2 font-semibold hidden sm:table-cell">{lbl('Skines', 'Skins')}</th>
+                <th className="text-right px-3 py-2 font-bold text-zinc-200 border-l border-zinc-700">TOTAL</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-800/40">
+              {balances.players.map((p, i) => {
+                const t = p.breakdown.total
+                const tCls = Math.abs(t) < 0.01 ? 'text-zinc-500' : t > 0 ? 'text-emerald-400' : 'text-red-400'
+                const cellCls = (v: number) => Math.abs(v) < 0.01 ? 'text-zinc-700' : v > 0 ? 'text-emerald-400' : 'text-red-400'
+                const medalCls = i === 0 ? 'text-yellow-400' : i === 1 ? 'text-zinc-300' : i === 2 ? 'text-amber-700' : 'text-zinc-600'
+                return (
+                  <tr key={p.user_id} className={`hover:bg-zinc-800/30 ${i === 0 ? 'bg-yellow-500/5' : ''}`}>
+                    <td className={`px-3 py-2 text-xs font-mono font-bold ${medalCls}`}>
+                      {i === 0 ? '🏆' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`}
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className="text-xs text-zinc-200 font-medium">{p.name}</span>
+                    </td>
+                    <td className={`text-right px-2 py-2 text-xs tabular-nums hidden sm:table-cell ${cellCls(p.breakdown.entry_fee)}`}>{fmtMoney(p.breakdown.entry_fee, locale)}</td>
+                    <td className={`text-right px-2 py-2 text-xs tabular-nums hidden sm:table-cell ${cellCls(p.breakdown.nassau)}`}>{fmtMoney(p.breakdown.nassau, locale)}</td>
+                    <td className={`text-right px-2 py-2 text-xs tabular-nums hidden md:table-cell ${cellCls(p.breakdown.per_hole)}`}>{fmtMoney(p.breakdown.per_hole, locale)}</td>
+                    <td className={`text-right px-2 py-2 text-xs tabular-nums hidden md:table-cell ${cellCls(p.breakdown.prizes)}`}>{fmtMoney(p.breakdown.prizes, locale)}</td>
+                    <td className={`text-right px-2 py-2 text-xs tabular-nums hidden md:table-cell ${cellCls(p.breakdown.penalties)}`}>{fmtMoney(p.breakdown.penalties, locale)}</td>
+                    <td className={`text-right px-2 py-2 text-xs tabular-nums hidden sm:table-cell ${cellCls(p.breakdown.skins)}`}>{fmtMoney(p.breakdown.skins, locale)}</td>
+                    <td className={`text-right px-3 py-2 text-sm font-black tabular-nums ${tCls} border-l border-zinc-700 bg-zinc-800/30`}>{fmtMoney(t, locale)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   )
@@ -1346,6 +1583,7 @@ export default function RoundDetailPage() {
   type BalanceLine = { kind: string; detail: string; amounts: Record<string, number> }
   type BalancesData = { has_bets: boolean; players: BalancePlayer[]; lines: BalanceLine[]; note?: string }
   const [balances, setBalances] = useState<BalancesData | null>(null)
+  const [betRuleTopic, setBetRuleTopic] = useState<BetRuleTopic | null>(null)
   const [holes, setHoles] = useState<Hole[]>([])
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
@@ -1839,6 +2077,9 @@ export default function RoundDetailPage() {
     <div className="min-h-screen bg-zinc-950">
       {showFormatInfo && (
         <FormatInfoModal format={round.game_format} locale={locale} onClose={() => setShowFormatInfo(false)} />
+      )}
+      {betRuleTopic && (
+        <BetRulesModal topic={betRuleTopic} locale={locale} onClose={() => setBetRuleTopic(null)} />
       )}
 
       {/* Reset modal — testing iteration */}
@@ -3284,7 +3525,13 @@ export default function RoundDetailPage() {
                 )}
                 {/* Entry fee */}
                 <div className="flex items-center justify-between">
-                  <label className="text-sm text-zinc-300">{lbl('Entrada (por jugador)', 'Entry fee (per player)')}</label>
+                  <label className="text-sm text-zinc-300 flex items-center gap-1.5">
+                    🎫 {lbl('Entrada (por jugador)', 'Entry fee (per player)')}
+                    <button type="button" onClick={() => setBetRuleTopic('entry_fee')} title={lbl('Cómo funciona', 'How it works')}
+                      className="text-zinc-500 hover:text-emerald-400 transition-colors">
+                      <Info size={13} />
+                    </button>
+                  </label>
                   <div className="flex items-center gap-1">
                     <span className="text-zinc-500 text-sm">$</span>
                     <input type="number" min="0" step="1" value={betForm.entry_fee}
@@ -3296,7 +3543,13 @@ export default function RoundDetailPage() {
                 {/* Nassau */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm text-zinc-300">Nassau</label>
+                    <label className="text-sm text-zinc-300 flex items-center gap-1.5">
+                      🎯 Nassau
+                      <button type="button" onClick={() => setBetRuleTopic('nassau')} title={lbl('Cómo funciona', 'How it works')}
+                        className="text-zinc-500 hover:text-emerald-400 transition-colors">
+                        <Info size={13} />
+                      </button>
+                    </label>
                     <input type="checkbox" checked={betForm.nassau_enabled}
                       onChange={bf('nassau_enabled')} disabled={round.status === 'finished' || !amCreator}
                       className="w-4 h-4 accent-emerald-500" />
@@ -3324,7 +3577,13 @@ export default function RoundDetailPage() {
 
                 {/* Por hoyo */}
                 <div className="flex items-center justify-between">
-                  <label className="text-sm text-zinc-300">{lbl('Por hoyo ganado', 'Per hole won')}</label>
+                  <label className="text-sm text-zinc-300 flex items-center gap-1.5">
+                    ⛳ {lbl('Por hoyo ganado', 'Per hole won')}
+                    <button type="button" onClick={() => setBetRuleTopic('per_hole')} title={lbl('Cómo funciona', 'How it works')}
+                      className="text-zinc-500 hover:text-emerald-400 transition-colors">
+                      <Info size={13} />
+                    </button>
+                  </label>
                   <div className="flex items-center gap-1">
                     <span className="text-zinc-500 text-sm">$</span>
                     <input type="number" min="0" step="1" value={betForm.per_hole_bet}
@@ -3335,7 +3594,19 @@ export default function RoundDetailPage() {
 
                 {/* Premios especiales */}
                 <div className="bg-zinc-800 rounded-xl p-3 space-y-2">
-                  <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-2">{lbl('Premios especiales', 'Special prizes')}</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wide flex items-center gap-1.5">
+                      🏅 {lbl('Premios especiales', 'Special prizes')}
+                      <button type="button" onClick={() => setBetRuleTopic('prizes')} title={lbl('Cómo funcionan', 'How they work')}
+                        className="text-zinc-500 hover:text-emerald-400 transition-colors">
+                        <Info size={13} />
+                      </button>
+                    </p>
+                    <button type="button" onClick={() => setBetRuleTopic('penalty')} title={lbl('Cómo funciona el castigo', 'How penalty works')}
+                      className="text-[10px] text-zinc-500 hover:text-amber-400 transition-colors flex items-center gap-1">
+                      <Info size={11} /> {lbl('castigo 3 putts', '3-putt penalty')}
+                    </button>
+                  </div>
                   {[
                     ['birdie_prize',        lbl('Birdie', 'Birdie'),          false],
                     ['eagle_prize',         lbl('Eagle', 'Eagle'),            false],
@@ -3357,7 +3628,13 @@ export default function RoundDetailPage() {
                 {/* Oyes */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm text-zinc-300">Oyes</label>
+                    <label className="text-sm text-zinc-300 flex items-center gap-1.5">
+                      🎲 Oyes
+                      <button type="button" onClick={() => setBetRuleTopic('oyes')} title={lbl('Cómo funciona', 'How it works')}
+                        className="text-zinc-500 hover:text-emerald-400 transition-colors">
+                        <Info size={13} />
+                      </button>
+                    </label>
                     <input type="checkbox" checked={betForm.oyes_enabled}
                       onChange={bf('oyes_enabled')} disabled={round.status === 'finished' || !amCreator}
                       className="w-4 h-4 accent-emerald-500" />
@@ -3379,7 +3656,13 @@ export default function RoundDetailPage() {
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <div>
-                      <label className="text-sm text-zinc-300">Skines</label>
+                      <label className="text-sm text-zinc-300 flex items-center gap-1.5">
+                        💎 Skines
+                        <button type="button" onClick={() => setBetRuleTopic('skins')} title={lbl('Cómo funciona', 'How it works')}
+                          className="text-zinc-500 hover:text-emerald-400 transition-colors">
+                          <Info size={13} />
+                        </button>
+                      </label>
                       <p className="text-xs text-zinc-600">{lbl('Un skin por hoyo, carry-over en empates', 'One skin per hole, carry-over on ties')}</p>
                     </div>
                     <input type="checkbox" checked={betForm.skins_enabled}

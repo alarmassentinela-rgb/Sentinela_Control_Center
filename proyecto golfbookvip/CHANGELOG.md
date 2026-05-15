@@ -7,6 +7,48 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.7.4] - 2026-05-15
+
+Transparencia total en las apuestas — el jugador puede ver las reglas de cada formato Y el desglose detallado de cómo se calculó su pérdida/ganancia.
+
+### Added — Modal "Cómo funciona" en cada apuesta
+
+En la sección de configuración de apuestas, cada tipo (Entry Fee, Nassau, Por hoyo, Premios, Castigos, Skines, Oyes) tiene un botón ℹ️ que abre un modal con:
+
+- **Descripción detallada** de cómo opera la apuesta
+- **Reglas específicas**: empates, carry-over, etc.
+- **Ejemplo numérico** con cantidades reales para que se entienda visualmente
+- Versión bilingüe ES/EN
+
+Para que ningún jugador tenga duda de qué está aceptando.
+
+### Changed — Tabla de balances reestructurada
+
+Antes era una sola tabla con columnas. Ahora es:
+
+1. **Header explicativo** "Pérdidas y ganancias — desglose detallado"
+2. **Mini-tabla por cada tipo de apuesta** con:
+   - Detalle textual de la línea (ej. "Nassau Salida (1-9) $20: pot $440 → ganador net 35")
+   - Sección "Ganaron" (verde) con jugadores y montos
+   - Sección "Pagaron" (rojo) — agrupada cuando son varios al mismo monto ("18 jugadores · −$20 c/u")
+3. **GRAN TOTAL POR JUGADOR** al final — tabla con medallas 🏆🥈🥉, columnas con cada tipo y total resaltado, fondo dorado
+
+### Changed — Print balances pro detallado
+
+Misma estructura en `/results` vista maestra para impresión:
+- Grid 2 columnas con mini-bloques por tipo de apuesta
+- Cada bloque con detalle de movimientos
+- Tabla "GRAN TOTAL" al final con columna de cada tipo y suma resaltada
+- Imprimible junto con leaderboard y premios especiales
+
+### Notes
+
+- Los modals usan el array `lines` que ya devolvía el backend en `/balances` — sin cambios al motor
+- Detalles textuales generados en backend (`detail` field): cada línea explica QUÉ ganó/perdió cada jugador y por qué
+- "Oyes" tiene su modal con la nota de pendiente regla regional
+
+---
+
 ## [1.7.3] - 2026-05-15
 
 Motor de pérdidas y ganancias + fix de spinner stale al finalizar.
