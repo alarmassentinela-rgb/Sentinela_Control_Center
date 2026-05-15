@@ -133,6 +133,8 @@
                                 <group string="Preferencias de Facturación">
                                     <field name="auto_invoice" widget="boolean_toggle"/>
                                     <field name="auto_send_mail" widget="boolean_toggle"/>
+                                    <field name="days_to_suspend"
+                                        help="Después de cuántos días vencida la factura el sistema corta el servicio. Default 5."/>
                                     <field name="is_forced_contract" widget="boolean_toggle"/>
                                     <field name="commitment_period" invisible="not is_forced_contract"/>
                                     <field name="commitment_end_date" readonly="1" invisible="not is_forced_contract"/>

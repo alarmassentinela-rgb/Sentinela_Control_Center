@@ -235,6 +235,11 @@ class SentinelaSubscription(models.Model):
     payment_term_id = fields.Many2one('account.payment.term', string='Plazos de Pago')
     auto_invoice = fields.Boolean(string='Generar Factura (No Remisión)', default=False)
     auto_send_mail = fields.Boolean(string='Enviar automáticamente por Correo', default=False)
+    days_to_suspend = fields.Integer(
+        string='Días para Auto-Suspensión',
+        default=5,
+        help='Días después del vencimiento de una factura tras los cuales el sistema suspende automáticamente el servicio. Default: 5 días. Editable por suscripción para casos especiales (VIPs, clientes morosos crónicos, etc).'
+    )
 
     # --- Methods ---
     def action_view_invoices(self):
@@ -410,6 +415,35 @@ class SentinelaSubscription(models.Model):
             sub.message_post(body="⚠️ <b>Prórroga Vencida:</b> Suspendiendo servicio automáticamente.")
             sub.action_suspend()
             sub.extension_due_date = False
+
+    def _cron_auto_suspend_overdue(self):
+        """ Suspende automáticamente suscripciones con facturas vencidas más allá
+        de su umbral configurado (days_to_suspend, default 5 días). """
+        today = fields.Date.today()
+        active_subs = self.search([('state', '=', 'active')])
+        suspended_count = 0
+        for sub in active_subs:
+            # Si tiene prórroga vigente, no aplica auto-suspensión por mora
+            if sub.extension_due_date and sub.extension_due_date >= today:
+                continue
+            days_threshold = sub.days_to_suspend or 5
+            cutoff = today - timedelta(days=days_threshold)
+            overdue_invoices = sub.invoice_ids.filtered(
+                lambda i: i.move_type == 'out_invoice'
+                and i.state == 'posted'
+                and i.payment_state in ('not_paid', 'partial')
+                and i.invoice_date_due
+                and i.invoice_date_due <= cutoff
+            )
+            if overdue_invoices:
+                names = ', '.join(overdue_invoices.mapped('name'))
+                sub.message_post(
+                    body=f"⚠️ <b>Auto-Suspensión por Mora:</b> Facturas vencidas hace más de {days_threshold} días: {names}"
+                )
+                sub.action_suspend()
+                suspended_count += 1
+        _logger.info(f"AUTO-SUSPEND: {suspended_count} suscripciones suspendidas por facturas vencidas.")
+        return suspended_count
 
     def action_monitor_traffic(self):
         self.ensure_one()
