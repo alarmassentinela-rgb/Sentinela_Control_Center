@@ -1668,21 +1668,21 @@ function BalancesSection({ balances, lbl, locale }: { balances: BalData; lbl: (e
         </div>
       )}
 
-      {/* GRAN TOTAL */}
-      <div className="bg-gradient-to-br from-emerald-500/10 to-yellow-500/10 border border-yellow-500/40 rounded-2xl overflow-hidden">
-        <div className="px-5 py-3 bg-yellow-500/10 border-b border-yellow-500/30">
-          <h2 className="font-bold text-white text-base flex items-center gap-2">
+      {/* GRAN TOTAL — fondo blanco estilo recibo contable */}
+      <div className="bg-white border border-yellow-500/60 rounded-2xl overflow-hidden shadow-xl">
+        <div className="px-5 py-3 bg-yellow-500/20 border-b border-yellow-500/40">
+          <h2 className="font-bold text-gray-900 text-base flex items-center gap-2">
             <span className="text-xl">🏆</span>
             {lbl('GRAN TOTAL POR JUGADOR', 'GRAND TOTAL PER PLAYER')}
           </h2>
-          <p className="text-[10px] text-zinc-400 mt-0.5">
+          <p className="text-[10px] text-gray-700 mt-0.5">
             {lbl('Suma de todas las apuestas. Ordenados de mayor ganancia a mayor pérdida.', 'Sum of all bets. Sorted from biggest gain to biggest loss.')}
           </p>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto bg-white">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-zinc-800/60 text-[10px] uppercase tracking-wide text-white">
+              <tr className="bg-gray-800 text-[10px] uppercase tracking-wide text-white">
                 <th className="text-left px-3 py-2 font-bold">#</th>
                 <th className="text-left px-3 py-2 font-bold">{lbl('Jugador', 'Player')}</th>
                 <th className="text-right px-2 py-2 font-bold hidden sm:table-cell">{lbl('Entrada', 'Entry')}</th>
@@ -1691,30 +1691,31 @@ function BalancesSection({ balances, lbl, locale }: { balances: BalData; lbl: (e
                 <th className="text-right px-2 py-2 font-bold hidden md:table-cell">{lbl('Premio', 'Prize')}</th>
                 <th className="text-right px-2 py-2 font-bold hidden md:table-cell">{lbl('Castigo', 'Penalty')}</th>
                 <th className="text-right px-2 py-2 font-bold hidden sm:table-cell">{lbl('Skines', 'Skins')}</th>
-                <th className="text-right px-3 py-2 font-bold border-l border-zinc-700">TOTAL</th>
+                <th className="text-right px-3 py-2 font-bold border-l border-gray-600 bg-gray-900">TOTAL</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-800/40">
+            <tbody className="divide-y divide-gray-200">
               {balances.players.map((p, i) => {
                 const t = p.breakdown.total
-                const tCls = Math.abs(t) < 0.01 ? 'text-zinc-500' : t > 0 ? 'text-zinc-100' : 'text-red-400'
-                const cellCls = (v: number) => Math.abs(v) < 0.01 ? 'text-zinc-500' : v > 0 ? 'text-zinc-100' : 'text-red-400'
-                const medalCls = i === 0 ? 'text-yellow-400' : i === 1 ? 'text-zinc-300' : i === 2 ? 'text-amber-700' : 'text-zinc-600'
+                // Patrón contable: positivos NEGRO sobre blanco, negativos ROJO, cero gris
+                const tCls = Math.abs(t) < 0.01 ? 'text-gray-400' : t > 0 ? 'text-black' : 'text-red-600'
+                const cellCls = (v: number) => Math.abs(v) < 0.01 ? 'text-gray-400' : v > 0 ? 'text-black' : 'text-red-600'
+                const medalCls = i === 0 ? 'text-yellow-600' : i === 1 ? 'text-gray-500' : i === 2 ? 'text-amber-700' : 'text-gray-400'
                 return (
-                  <tr key={p.user_id} className={`hover:bg-zinc-800/30 ${i === 0 ? 'bg-yellow-500/5' : ''}`}>
+                  <tr key={p.user_id} className={`hover:bg-yellow-50 ${i === 0 ? 'bg-yellow-100' : 'bg-white'}`}>
                     <td className={`px-3 py-2 text-xs font-mono font-bold ${medalCls}`}>
                       {i === 0 ? '🏆' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`}
                     </td>
                     <td className="px-3 py-2">
-                      <span className="text-xs text-zinc-200 font-medium">{p.name}</span>
+                      <span className="text-xs text-gray-900 font-medium">{p.name}</span>
                     </td>
-                    <td className={`text-right px-2 py-2 text-xs tabular-nums hidden sm:table-cell ${cellCls(p.breakdown.entry_fee)}`}>{fmtMoney(p.breakdown.entry_fee, locale)}</td>
-                    <td className={`text-right px-2 py-2 text-xs tabular-nums hidden sm:table-cell ${cellCls(p.breakdown.nassau)}`}>{fmtMoney(p.breakdown.nassau, locale)}</td>
-                    <td className={`text-right px-2 py-2 text-xs tabular-nums hidden md:table-cell ${cellCls(p.breakdown.per_hole)}`}>{fmtMoney(p.breakdown.per_hole, locale)}</td>
-                    <td className={`text-right px-2 py-2 text-xs tabular-nums hidden md:table-cell ${cellCls(p.breakdown.prizes)}`}>{fmtMoney(p.breakdown.prizes, locale)}</td>
-                    <td className={`text-right px-2 py-2 text-xs tabular-nums hidden md:table-cell ${cellCls(p.breakdown.penalties)}`}>{fmtMoney(p.breakdown.penalties, locale)}</td>
-                    <td className={`text-right px-2 py-2 text-xs tabular-nums hidden sm:table-cell ${cellCls(p.breakdown.skins)}`}>{fmtMoney(p.breakdown.skins, locale)}</td>
-                    <td className={`text-right px-3 py-2 text-sm font-black tabular-nums ${tCls} border-l border-zinc-700 bg-zinc-800/30`}>{fmtMoney(t, locale)}</td>
+                    <td className={`text-right px-2 py-2 text-xs tabular-nums hidden sm:table-cell font-medium ${cellCls(p.breakdown.entry_fee)}`}>{fmtMoney(p.breakdown.entry_fee, locale)}</td>
+                    <td className={`text-right px-2 py-2 text-xs tabular-nums hidden sm:table-cell font-medium ${cellCls(p.breakdown.nassau)}`}>{fmtMoney(p.breakdown.nassau, locale)}</td>
+                    <td className={`text-right px-2 py-2 text-xs tabular-nums hidden md:table-cell font-medium ${cellCls(p.breakdown.per_hole)}`}>{fmtMoney(p.breakdown.per_hole, locale)}</td>
+                    <td className={`text-right px-2 py-2 text-xs tabular-nums hidden md:table-cell font-medium ${cellCls(p.breakdown.prizes)}`}>{fmtMoney(p.breakdown.prizes, locale)}</td>
+                    <td className={`text-right px-2 py-2 text-xs tabular-nums hidden md:table-cell font-medium ${cellCls(p.breakdown.penalties)}`}>{fmtMoney(p.breakdown.penalties, locale)}</td>
+                    <td className={`text-right px-2 py-2 text-xs tabular-nums hidden sm:table-cell font-medium ${cellCls(p.breakdown.skins)}`}>{fmtMoney(p.breakdown.skins, locale)}</td>
+                    <td className={`text-right px-3 py-2 text-sm font-black tabular-nums ${tCls} border-l border-gray-300 bg-yellow-50`}>{fmtMoney(t, locale)}</td>
                   </tr>
                 )
               })}

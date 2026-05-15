@@ -7,6 +7,24 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.7.10] - 2026-05-15
+
+### Changed — Tabla "Gran Total" estilo recibo contable (fondo blanco)
+
+Para que los positivos se vean en **negro literal** y los negativos en **rojo literal**, la tabla Gran Total ahora tiene fondo blanco como un recibo contable o estado de cuenta — el resto del dashboard mantiene el tema oscuro, la tabla destaca como un documento financiero.
+
+- Fondo de la tabla: `bg-white` (era zinc-900 con gradiente verde/amarillo)
+- Texto positivo: `text-black` sobre fondo blanco
+- Texto negativo: `text-red-600` (rojo accounting clásico)
+- Texto cero: `text-gray-400` (gris muted)
+- Filas alternas: blanco/amarillo claro para top 1
+- Header: fondo gris oscuro con texto blanco (alto contraste)
+- Banner del título: amarillo dorado destacando el "GRAN TOTAL POR JUGADOR"
+
+Visualmente queda como un ticket de caja en medio del dashboard — máxima legibilidad para auditar quién paga qué.
+
+---
+
 ## [1.7.9] - 2026-05-15
 
 ### Changed — Color de valores en tabla Gran Total
