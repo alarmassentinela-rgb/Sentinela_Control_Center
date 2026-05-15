@@ -991,7 +991,7 @@ export default function ResultsPage() {
         .balances-table td.pos { font-weight: 700; }
         .balances-table td.player-name { text-align: left; font-weight: 600; color: #111; }
         .balances-table td.num { font-size: 8pt; }
-        .balances-table td.num.plus { color: #047857; }
+        .balances-table td.num.plus { color: #111; }
         .balances-table td.num.minus { color: #b91c1c; }
         .balances-table td.total { font-size: 9pt; border-left: 1px solid #ccc; background: #fef3c7; }
         .balances-table tr.top td { background: #fef3c7; font-weight: 700; }

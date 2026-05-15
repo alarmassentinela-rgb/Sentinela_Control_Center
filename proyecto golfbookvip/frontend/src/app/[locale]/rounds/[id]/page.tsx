@@ -1697,8 +1697,8 @@ function BalancesSection({ balances, lbl, locale }: { balances: BalData; lbl: (e
             <tbody className="divide-y divide-zinc-800/40">
               {balances.players.map((p, i) => {
                 const t = p.breakdown.total
-                const tCls = Math.abs(t) < 0.01 ? 'text-zinc-500' : t > 0 ? 'text-emerald-400' : 'text-red-400'
-                const cellCls = (v: number) => Math.abs(v) < 0.01 ? 'text-zinc-500' : v > 0 ? 'text-emerald-400' : 'text-red-400'
+                const tCls = Math.abs(t) < 0.01 ? 'text-zinc-500' : t > 0 ? 'text-zinc-100' : 'text-red-400'
+                const cellCls = (v: number) => Math.abs(v) < 0.01 ? 'text-zinc-500' : v > 0 ? 'text-zinc-100' : 'text-red-400'
                 const medalCls = i === 0 ? 'text-yellow-400' : i === 1 ? 'text-zinc-300' : i === 2 ? 'text-amber-700' : 'text-zinc-600'
                 return (
                   <tr key={p.user_id} className={`hover:bg-zinc-800/30 ${i === 0 ? 'bg-yellow-500/5' : ''}`}>

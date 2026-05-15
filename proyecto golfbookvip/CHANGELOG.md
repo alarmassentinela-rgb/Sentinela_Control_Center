@@ -7,6 +7,26 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.7.9] - 2026-05-15
+
+### Changed — Color de valores en tabla Gran Total
+
+Patrón financiero estándar: solo las pérdidas se resaltan, ganancias en color neutro.
+
+- **Positivos** (ganaron): color neutro (`text-zinc-100` en pantalla / `#111` en impresión)
+- **Negativos** (perdieron): rojo (`text-red-400` / `#b91c1c`)
+- **Cero**: gris medio (`text-zinc-500`)
+
+Antes los positivos estaban en verde llamativo, lo que hacía que TODAS las celdas con movimiento llamaran atención por igual. Ahora solo las pérdidas saltan visualmente — más fácil identificar quién debe pagar.
+
+Aplicado en:
+- Tabla "Gran total por jugador" del round detail (columnas + columna TOTAL)
+- Tabla impresa en `/results` vista maestra
+
+Las tarjetas "Por jugador" (ledger personal) mantienen GANÓ en verde y PAGÓ en rojo porque ahí la división por columna es deliberada y útil.
+
+---
+
 ## [1.7.8] - 2026-05-15
 
 ### Fixed — Header de tabla Gran Total ilegible
