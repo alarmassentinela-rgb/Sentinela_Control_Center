@@ -118,6 +118,31 @@ class SentinelaSubscription(models.Model):
     ], string='Estado Técnico', default='active', tracking=True)
 
     technical_state_date = fields.Datetime(string='Estado Técnico Desde', default=fields.Datetime.now, readonly=True)
+    days_suspended = fields.Integer(
+        string='Días en Suspensión',
+        compute='_compute_days_suspended',
+        search='_search_days_suspended',
+        help='Días que lleva la suscripción en estado Suspensión, contados desde la fecha del último cambio de estado técnico.',
+    )
+
+    @api.depends('state', 'technical_state_date')
+    def _compute_days_suspended(self):
+        today = fields.Date.today()
+        for sub in self:
+            if sub.state == 'suspension' and sub.technical_state_date:
+                sub.days_suspended = (today - sub.technical_state_date.date()).days
+            else:
+                sub.days_suspended = 0
+
+    def _search_days_suspended(self, operator, value):
+        """Permite filtrar por días en suspensión usando dominios SQL sobre technical_state_date."""
+        if operator not in ('=', '!=', '>', '>=', '<', '<='):
+            return []
+        today = fields.Date.today()
+        cutoff_date = today - timedelta(days=int(value))
+        # 'days_suspended > 30' ↔ 'technical_state_date < hoy - 30 días'
+        op_map = {'>': '<', '>=': '<=', '<': '>', '<=': '>=', '=': '=', '!=': '!='}
+        return [('state', '=', 'suspension'), ('technical_state_date', op_map[operator], cutoff_date)]
 
     description = fields.Html(string='Notas Internas')
 

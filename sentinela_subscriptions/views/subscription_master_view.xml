@@ -18,6 +18,13 @@
                 <filter string="Suspendidos" name="suspension" domain="[('state', '=', 'suspension')]"/>
                 <filter string="Borrador" name="draft" domain="[('state', '=', 'draft')]"/>
                 <separator/>
+                <filter string="Suspendidos +30 días" name="suspended_30"
+                        domain="[('state', '=', 'suspension'), ('days_suspended', '&gt;=', 30)]"/>
+                <filter string="Suspendidos +60 días" name="suspended_60"
+                        domain="[('state', '=', 'suspension'), ('days_suspended', '&gt;=', 60)]"/>
+                <filter string="Suspendidos +90 días" name="suspended_90"
+                        domain="[('state', '=', 'suspension'), ('days_suspended', '&gt;=', 90)]"/>
+                <separator/>
                 <filter string="Alarma" name="type_alarm" domain="[('service_type', '=', 'alarm')]"/>
                 <filter string="GPS" name="type_gps" domain="[('service_type', '=', 'gps')]"/>
                 <filter string="Internet" name="type_internet" domain="[('service_type', '=', 'internet')]"/>
@@ -43,6 +50,7 @@
                 <field name="product_id"/>
                 <field name="price_total" string="Total c/IVA"/>
                 <field name="next_billing_date"/>
+                <field name="days_suspended" string="Días Susp." optional="show"/>
                 <field name="state" widget="badge" decoration-success="state == 'active'" decoration-warning="state == 'suspension'" decoration-danger="state == 'cancelled'" decoration-info="state == 'confirmed'"/>
             </list>
         </field>
