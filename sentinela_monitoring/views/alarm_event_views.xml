@@ -159,7 +159,7 @@
                 <filter name="priority_high" string="Prioridad Alta" domain="[('priority_id.level', '&gt;=', 8)]"/>
                 <filter name="active" string="Activos" domain="[('status', '=', 'active')]"/>
                 <filter name="in_progress" string="En Progreso" domain="[('status', '=', 'in_progress')]"/>
-                <filter name="client_suspended" string="⚠️ Cliente Suspendido" domain="[('subscription_state', '=', 'suspended')]"/>
+                <filter name="client_suspended" string="⚠️ Cliente Suspendido" domain="[('subscription_id.technical_state', '=', 'suspended')]"/>
                 <filter name="today" string="Hoy" domain="[('start_date', '&gt;=', time.strftime('%%Y-%%m-%%d 00:00:00')), ('start_date', '&lt;=', time.strftime('%%Y-%%m-%%d 23:59:59'))]"/>
                 <group expand="0" string="Agrupar por">
                     <filter name="group_by_account" string="Cuenta" context="{'group_by': 'account_number'}"/>
