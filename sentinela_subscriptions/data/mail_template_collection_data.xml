@@ -71,4 +71,54 @@
         </field>
     </record>
 
+    <!-- Aviso 30 días ANTES del fin de leasing -->
+    <record id="mail_template_subscription_leasing_30_days" model="mail.template">
+        <field name="name">Suscripción: Aviso 30 días fin de leasing</field>
+        <field name="model_id" ref="model_sentinela_subscription"/>
+        <field name="subject">Tu equipo será tuyo en 30 días — {{ object.name }}</field>
+        <field name="email_from">{{ (user.email_formatted or user.company_id.email) }}</field>
+        <field name="partner_to">{{ object.partner_id.id }}</field>
+        <field name="body_html" type="html">
+            <div style="margin: 0px; padding: 0px; font-family: Arial, sans-serif; font-size: 13px; color: #333;">
+                <p>Hola <strong><t t-out="object.partner_id.name or ''"/></strong>,</p>
+                <p>¡Buenas noticias! Tu contrato de arrendamiento con opción a compra está por concluir.</p>
+                <p>El día <strong><t t-out="object.commitment_end_date"/></strong> finalizará el plazo
+                forzoso de tu contrato actual <strong><t t-out="object.product_id.name or ''"/></strong>,
+                y tu equipo pasará a ser <strong>de tu propiedad</strong>.</p>
+                <p>A partir de ese día, tu contrato se actualizará automáticamente al plan
+                <strong><t t-out="ctx.get('new_plan_name','')"/></strong>
+                con un nuevo costo mensual de
+                <strong>$<t t-out="'{:,.2f}'.format(ctx.get('new_plan_price',0))"/> MXN</strong>
+                (ya sin la renta del equipo).</p>
+                <p>No necesitas hacer nada, el cambio es automático. Si tienes dudas, contáctanos.</p>
+                <p>Atentamente,<br/>El equipo de <strong>Sentinela</strong></p>
+            </div>
+        </field>
+    </record>
+
+    <!-- Aviso el DÍA del cambio de plan (leasing completado) -->
+    <record id="mail_template_subscription_leasing_completed" model="mail.template">
+        <field name="name">Suscripción: Leasing completado, equipo es tuyo</field>
+        <field name="model_id" ref="model_sentinela_subscription"/>
+        <field name="subject">¡Felicidades! Tu equipo ya es tuyo — {{ object.name }}</field>
+        <field name="email_from">{{ (user.email_formatted or user.company_id.email) }}</field>
+        <field name="partner_to">{{ object.partner_id.id }}</field>
+        <field name="body_html" type="html">
+            <div style="margin: 0px; padding: 0px; font-family: Arial, sans-serif; font-size: 13px; color: #333;">
+                <p>Hola <strong><t t-out="object.partner_id.name or ''"/></strong>,</p>
+                <p style="background-color: #d1e7dd; padding: 10px; border-left: 4px solid #198754;">
+                    🎉 <strong>¡Felicidades!</strong> Has completado exitosamente tu contrato de
+                    arrendamiento. <strong>El equipo instalado en tu domicilio ya es de tu propiedad</strong>.
+                </p>
+                <p>A partir de hoy, tu contrato cambió automáticamente al plan
+                <strong><t t-out="object.product_id.name or ''"/></strong> con un nuevo costo mensual de
+                <strong>$<t t-out="'{:,.2f}'.format(object.price_unit or 0)"/> MXN</strong> (sin renta de equipo).</p>
+                <p>Contrato: <strong><t t-out="object.name"/></strong><br/>
+                Próxima renovación: <strong><t t-out="object.next_billing_date"/></strong></p>
+                <p>Gracias por confiar en nosotros.</p>
+                <p>Atentamente,<br/>El equipo de <strong>Sentinela</strong></p>
+            </div>
+        </field>
+    </record>
+
 </odoo>

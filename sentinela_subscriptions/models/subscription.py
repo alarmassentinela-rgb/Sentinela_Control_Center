@@ -453,6 +453,80 @@ class SentinelaSubscription(models.Model):
         _logger.info(f"AUTO-SUSPEND: {suspended_count} suscripciones suspendidas por facturas vencidas.")
         return suspended_count
 
+    def _cron_check_leasing_end(self):
+        """Punto 7: gestión automática del fin de leasing.
+        - 30 días antes del Fin de Plazo: notifica al cliente y crea activity para Cobranza.
+        - Al cumplirse Fin de Plazo: cambia product_id a plan_after_leasing_id, ajusta price_unit,
+          cambia equipment_ownership='customer', limpia plan_after_leasing_id, manda mail al cliente.
+        """
+        today = fields.Date.today()
+        in_30_days = today + timedelta(days=30)
+        tpl_notice = self.env.ref(
+            'sentinela_subscriptions.mail_template_subscription_leasing_30_days',
+            raise_if_not_found=False,
+        )
+        tpl_done = self.env.ref(
+            'sentinela_subscriptions.mail_template_subscription_leasing_completed',
+            raise_if_not_found=False,
+        )
+        # Buscar leasings activos con plan post-leasing configurado
+        leasing_subs = self.search([
+            ('state', '=', 'active'),
+            ('equipment_ownership', '=', 'leasing'),
+            ('plan_after_leasing_id', '!=', False),
+            ('commitment_end_date', '!=', False),
+        ])
+        notices_sent = 0
+        switches_done = 0
+        for sub in leasing_subs:
+            # Notice 30 days before
+            if sub.commitment_end_date == in_30_days and tpl_notice:
+                ctx = {
+                    'new_plan_name': sub.plan_after_leasing_id.name,
+                    'new_plan_price': sub.plan_after_leasing_id.list_price,
+                }
+                try:
+                    tpl_notice.with_context(**ctx).send_mail(sub.id, force_send=True)
+                    sub.message_post(
+                        body=(f"📅 <b>Aviso de Fin de Leasing (30 días):</b> "
+                              f"El {sub.commitment_end_date} cambia automáticamente al plan "
+                              f"<b>{sub.plan_after_leasing_id.name}</b> "
+                              f"(${sub.plan_after_leasing_id.list_price:,.2f}).")
+                    )
+                    sub.activity_schedule(
+                        'mail.mail_activity_data_todo',
+                        date_deadline=sub.commitment_end_date,
+                        summary=f'Fin de leasing — cambio de plan automático {sub.name}',
+                        note=(f'Cambio programado: {sub.product_id.name} → '
+                              f'{sub.plan_after_leasing_id.name}'),
+                    )
+                    notices_sent += 1
+                except Exception as e:
+                    _logger.error(f"Leasing notice failed for {sub.name}: {e}")
+            # Auto-switch on or after the end date
+            if sub.commitment_end_date <= today:
+                new_plan = sub.plan_after_leasing_id
+                old_plan_name = sub.product_id.name
+                sub.write({
+                    'product_id': new_plan.id,
+                    'price_unit': new_plan.list_price,
+                    'equipment_ownership': 'customer',
+                    'plan_after_leasing_id': False,
+                })
+                sub.message_post(
+                    body=(f"✅ <b>Leasing completado:</b> Plan cambiado de "
+                          f"<b>{old_plan_name}</b> a <b>{new_plan.name}</b> "
+                          f"(${new_plan.list_price:,.2f}). Equipo ahora propiedad del cliente.")
+                )
+                if tpl_done:
+                    try:
+                        tpl_done.send_mail(sub.id, force_send=True)
+                    except Exception as e:
+                        _logger.error(f"Leasing completion mail failed for {sub.name}: {e}")
+                switches_done += 1
+        _logger.info(f"LEASING: notices={notices_sent} switches={switches_done}")
+        return {'notices': notices_sent, 'switches': switches_done}
+
     def _cron_send_payment_reminders(self):
         """Recordatorios de cobranza al cliente (siempre se mandan, no respetan auto_send_mail):
         - Día +1 vencida la factura  → recordatorio SUAVE
