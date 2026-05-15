@@ -217,32 +217,42 @@ async def compute_balances(round_id: str, db: AsyncSession) -> dict[str, Any]:
             add_line("per_hole", f"Por hoyo ganado ${per_hole}: low net por hoyo cobra a los que pierden", total_per_hole)
 
     # ─── PRIZES: Birdie / Eagle / Albatross / HIO (pay-each-other) ────────────
-    def prize_event(label: str, flag: str, prize_amount: float):
+    # Genera UNA línea por (jugador, tipo de evento) para que el desglose muestre
+    # exactamente cuántos hizo cada uno.
+    def prize_event(label_es: str, label_en: str, flag: str, prize_amount: float):
         if not prize_amount or prize_amount <= 0:
             return
         amount = float(prize_amount)
-        total_prize: dict[str, float] = {p["user_id"]: 0.0 for p in players}
+        # Contar eventos por jugador
+        events_by_player: list[tuple[str, str, int]] = []  # (uid, name, count)
         for p in players:
             uid = p["user_id"]
             ps = scores_by.get(uid, {})
             count = sum(1 for h in range(1, holes_played + 1) if h in ps and ps[h].get(flag))
             if count > 0:
-                # Cada birdie: este jugador cobra `amount` de cada uno de los otros (N-1) jugadores
-                # = +amount × (N-1) para él, y -amount para cada otro, por cada birdie
-                gain_per_event = amount * (n - 1)
-                total_prize[uid] += gain_per_event * count
-                for other in players:
-                    if other["user_id"] != uid:
-                        total_prize[other["user_id"]] -= amount * count
-        if any(abs(v) > 0.01 for v in total_prize.values()):
-            for uid, amt in total_prize.items():
-                bal[uid]["prizes"] += amt
-            add_line("prize", f"{label} ${amount}: cada uno paga al que lo hizo", total_prize)
+                events_by_player.append((uid, p["name"], count))
+        if not events_by_player:
+            return
+        # Por cada jugador con eventos, agregar línea individual
+        for uid, name, count in events_by_player:
+            gain = amount * (n - 1) * count
+            line_amounts: dict[str, float] = {p["user_id"]: 0.0 for p in players}
+            line_amounts[uid] = gain
+            for other in players:
+                if other["user_id"] != uid:
+                    line_amounts[other["user_id"]] = -amount * count
+            bal[uid]["prizes"] += gain
+            for other in players:
+                if other["user_id"] != uid:
+                    bal[other["user_id"]]["prizes"] -= amount * count
+            plural_es = "s" if count > 1 else ""
+            detail = f"{name} hizo {count} {label_es.lower()}{plural_es} (${amount:.0f} c/u) → cobra ${amount:.0f} × {n - 1} otros × {count} = ${gain:.2f}"
+            add_line("prize", detail, line_amounts)
 
-    prize_event("Birdies", "is_birdie", float(bc.birdie_prize))
-    prize_event("Eagles", "is_eagle", float(bc.eagle_prize))
-    prize_event("Albatross", "is_albatross", float(bc.albatross_prize or 0))
-    prize_event("Hoyo en uno", "is_hole_in_one", float(bc.hole_in_one_prize))
+    prize_event("Birdie", "Birdies", "is_birdie", float(bc.birdie_prize))
+    prize_event("Eagle", "Eagles", "is_eagle", float(bc.eagle_prize))
+    prize_event("Albatross", "Albatross", "is_albatross", float(bc.albatross_prize or 0))
+    prize_event("Hoyo en uno", "Holes in one", "is_hole_in_one", float(bc.hole_in_one_prize))
 
     # ─── 3-PUTT PENALTY (pay-each-other reverso) ──────────────────────────────
     if bc.three_putt_penalty and float(bc.three_putt_penalty) > 0:
@@ -263,12 +273,16 @@ async def compute_balances(round_id: str, db: AsyncSession) -> dict[str, Any]:
                 bal[uid]["penalties"] += amt
             add_line("penalty", f"Penalidad 3 putts ${penalty}: paga al resto cada 3-putt", total_pen)
 
-    # ─── SKINS con carry-over ─────────────────────────────────────────────────
+    # ─── SKINS con carry-over (detalle hoyo por hoyo) ─────────────────────────
     if bc.skins_enabled and bc.skins_value and float(bc.skins_value) > 0:
         skin_val = float(bc.skins_value)
         use_net = bool(bc.skins_use_net)
-        carry = 1  # carry start = 1 (cada hoyo vale 1 skin base)
-        skins_won: dict[str, int] = {p["user_id"]: 0 for p in players}
+        kind_label = "net" if use_net else "gross"
+        carry = 1
+        carry_holes: list[int] = []
+        # Tracks: cada evento ganado → (winner_uid, hole, skins_won, carry_from_holes)
+        won_events: list[tuple[str, int, int, list[int]]] = []
+
         for h in range(1, holes_played + 1):
             scores_h = []
             for p in players:
@@ -282,26 +296,48 @@ async def compute_balances(round_id: str, db: AsyncSession) -> dict[str, Any]:
             min_s = min(s for _, s in scores_h)
             winners = [uid for uid, s in scores_h if s == min_s]
             if len(winners) == 1:
-                skins_won[winners[0]] += carry
+                won_events.append((winners[0], h, carry, list(carry_holes)))
+                carry_holes = []
                 carry = 1
             else:
-                # empate → carry-over
+                carry_holes.append(h)
                 carry += 1
 
-        if any(skins_won.values()):
-            total_skins: dict[str, float] = {p["user_id"]: 0.0 for p in players}
-            # Cada skin ganado vale skins_value × (N-1) para el ganador,
-            # y costa skins_value a cada otro jugador
-            for winner_uid, count in skins_won.items():
-                if count > 0:
-                    total_skins[winner_uid] += skin_val * (n - 1) * count
-                    for other in players:
-                        if other["user_id"] != winner_uid:
-                            total_skins[other["user_id"]] -= skin_val * count
-            for uid, amt in total_skins.items():
-                bal[uid]["skins"] += amt
-            kind_label = "net" if use_net else "gross"
-            add_line("skins", f"Skines ${skin_val} ({kind_label}, carry en empate): cada skin paga ${skin_val} de cada otro", total_skins)
+        forfeit_holes = carry_holes
+        forfeit_skins = carry - 1 if forfeit_holes else 0
+
+        # Generar una línea por evento ganado
+        for winner_uid, hole, skins_won_count, carry_from in won_events:
+            winner_name = next((p["name"] for p in players if p["user_id"] == winner_uid), winner_uid)
+            gain = skin_val * (n - 1) * skins_won_count
+            line_amounts: dict[str, float] = {p["user_id"]: 0.0 for p in players}
+            line_amounts[winner_uid] = gain
+            for other in players:
+                if other["user_id"] != winner_uid:
+                    line_amounts[other["user_id"]] = -skin_val * skins_won_count
+            bal[winner_uid]["skins"] += gain
+            for other in players:
+                if other["user_id"] != winner_uid:
+                    bal[other["user_id"]]["skins"] -= skin_val * skins_won_count
+
+            if carry_from:
+                holes_str = ", ".join(f"H{h}" for h in carry_from)
+                detail = (
+                    f"Hoyo {hole}: {winner_name} low {kind_label} outright → "
+                    f"+{skins_won_count} skins acumulados (carry desde {holes_str}) = ${gain:.2f}"
+                )
+            else:
+                detail = (
+                    f"Hoyo {hole}: {winner_name} low {kind_label} outright → "
+                    f"+1 skin = ${gain:.2f}"
+                )
+            add_line("skins", detail, line_amounts)
+
+        # Resumen de forfeits si los hay (línea informativa, sin movimiento)
+        if forfeit_holes:
+            holes_str = ", ".join(f"H{h}" for h in forfeit_holes)
+            zero_line: dict[str, float] = {p["user_id"]: 0.0 for p in players}
+            add_line("skins", f"📋 {forfeit_skins} skins forfeit (sin ganador al final del 18): empates en {holes_str}", zero_line)
 
     # ─── Sumar totales ────────────────────────────────────────────────────────
     for uid in bal:

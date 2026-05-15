@@ -7,6 +7,44 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.7.5] - 2026-05-15
+
+Más granularidad en el desglose de premios y skines.
+
+### Changed — Premios desglosados por jugador
+
+Antes: una sola línea agregada `"Birdies $10: cada uno paga al que lo hizo"` con el total.
+
+Ahora: **una línea por cada jugador que hizo el evento**, con conteo explícito:
+- `"Vidal Garza hizo 4 birdies ($10 c/u) → cobra $10 × 21 otros × 4 = $840.00"`
+- `"Leo Glz hizo 2 birdies ($10 c/u) → cobra $10 × 21 otros × 2 = $420.00"`
+- `"Enrique hizo 1 birdie ($10 c/u) → cobra $10 × 21 otros × 1 = $210.00"`
+- (Aplica a Birdies, Eagles, Albatross, Hoyos en uno)
+
+Cada línea muestra ganadores y pagadores con el monto exacto correspondiente a ese evento.
+
+### Changed — Skines hoyo por hoyo
+
+Antes: una sola línea agregada con todos los skines.
+
+Ahora: **una línea por cada skin ganado** con detalle de carry-over:
+- `"Hoyo 5: Vidal Garza low net outright → +1 skin = $105.00"`
+- `"Hoyo 8: Leo Glz low net outright → +3 skins acumulados (carry desde H6, H7) = $315.00"`
+- `"📋 2 skins forfeit (sin ganador al final del 18): empates en H17, H18"` (línea informativa, sin movimiento)
+
+Ahora se ve exactamente:
+- Qué hoyos generaron skins ganados
+- Qué hoyos hubo empate (carry-over)
+- Cuántos skins se acumularon antes del win
+- Cuántos quedaron forfeit al final
+
+### Notes
+
+- Solo cambio backend (`app/services/balances.py`). El frontend ya manejaba múltiples líneas y líneas informativas naturalmente.
+- El desglose hace MÁS LARGA la sección de premios y skines (ahora 1 línea por jugador/evento) pero la información antes era opaca.
+
+---
+
 ## [1.7.4] - 2026-05-15
 
 Transparencia total en las apuestas — el jugador puede ver las reglas de cada formato Y el desglose detallado de cómo se calculó su pérdida/ganancia.
