@@ -1239,6 +1239,169 @@ function FormatInfoModal({ format, locale, onClose }: { format: string; locale: 
   )
 }
 
+// ─── Menú de impresión modular ────────────────────────────────────────────────
+
+function PrintMenu({
+  roundId, locale, lbl, canSeeAll, viewerUserId, allPlayers,
+}: {
+  roundId: string
+  locale: string
+  lbl: (es: string, en: string) => string
+  canSeeAll: boolean
+  viewerUserId: string
+  allPlayers: { user_id: string; name: string }[]
+}) {
+  const [open, setOpen] = useState(false)
+  const [selectedPlayer, setSelectedPlayer] = useState(viewerUserId || '')
+
+  const openPrint = (section: string, extra?: string) => {
+    const url = `/${locale}/rounds/${roundId}/results?section=${section}&autoprint=true${extra ? '&' + extra : ''}`
+    window.open(url, '_blank', 'noopener')
+  }
+
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+      <button onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-zinc-800/50 transition-colors">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">🖨️</span>
+          <span className="font-semibold text-white text-sm">{lbl('Imprimir / PDF para enviar', 'Print / PDF to share')}</span>
+        </div>
+        {open ? <ChevronUp size={16} className="text-zinc-500" /> : <ChevronDown size={16} className="text-zinc-500" />}
+      </button>
+      {open && (
+        <div className="border-t border-zinc-800 px-5 py-4 space-y-4">
+          <p className="text-[10px] text-zinc-500 leading-relaxed">
+            {lbl(
+              'Cada botón abre una pestaña nueva con esa sección lista para imprimir o guardar como PDF (luego compartir por WhatsApp/email).',
+              'Each button opens a new tab with that section ready to print or save as PDF (then share via WhatsApp/email).'
+            )}
+          </p>
+
+          {/* SECCIONES PÚBLICAS — todos las pueden imprimir */}
+          <div>
+            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+              {lbl('Para tablón / grupo', 'For board / group')}
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => openPrint('leaderboard')}
+                className="text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-emerald-500/40 text-zinc-200 px-3 py-2 rounded-lg transition-colors flex items-center gap-2">
+                🏆 {lbl('Leaderboard', 'Leaderboard')}
+              </button>
+              <button onClick={() => openPrint('premios')}
+                className="text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-emerald-500/40 text-zinc-200 px-3 py-2 rounded-lg transition-colors flex items-center gap-2">
+                🏅 {lbl('Premios especiales', 'Special awards')}
+              </button>
+            </div>
+          </div>
+
+          {/* TICKET PERSONAL — todos pueden imprimir el suyo */}
+          <div>
+            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+              {lbl('Ticket personal', 'Personal ticket')}
+            </p>
+            <div className="grid grid-cols-1 gap-2">
+              <button onClick={() => openPrint('ticket', `player=${viewerUserId}`)}
+                className="text-xs bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/40 text-blue-200 px-3 py-2 rounded-lg transition-colors flex items-center gap-2">
+                👤 {lbl('Mi ticket (ganó / pagó / total)', 'My ticket (won / paid / total)')}
+              </button>
+            </div>
+          </div>
+
+          {/* GRAN TOTAL — todos pueden ver para liquidación */}
+          <div>
+            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+              {lbl('Liquidación grupal', 'Group settlement')}
+            </p>
+            <div className="grid grid-cols-1 gap-2">
+              <button onClick={() => openPrint('gran-total')}
+                className="text-xs bg-yellow-500/15 hover:bg-yellow-500/25 border border-yellow-500/40 text-yellow-200 px-3 py-2 rounded-lg transition-colors flex items-center gap-2">
+                💰 {lbl('Gran total por jugador', 'Grand total per player')}
+              </button>
+            </div>
+          </div>
+
+          {/* SECCIONES SOLO PARA CREATOR */}
+          {canSeeAll && (
+            <>
+              <div>
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                  {lbl('Por apuesta específica (auditoría)', 'By specific bet (audit)')}
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <button onClick={() => openPrint('bet-entry_fee')}
+                    className="text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 px-3 py-2 rounded-lg transition-colors">
+                    🎫 Entry Fee
+                  </button>
+                  <button onClick={() => openPrint('bet-nassau')}
+                    className="text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 px-3 py-2 rounded-lg transition-colors">
+                    🎯 Nassau
+                  </button>
+                  <button onClick={() => openPrint('bet-per_hole')}
+                    className="text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 px-3 py-2 rounded-lg transition-colors">
+                    ⛳ {lbl('Por hoyo', 'Per hole')}
+                  </button>
+                  <button onClick={() => openPrint('bet-prize')}
+                    className="text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 px-3 py-2 rounded-lg transition-colors">
+                    🏅 {lbl('Premios', 'Prizes')}
+                  </button>
+                  <button onClick={() => openPrint('bet-penalty')}
+                    className="text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 px-3 py-2 rounded-lg transition-colors">
+                    ⚠️ {lbl('Castigos', 'Penalties')}
+                  </button>
+                  <button onClick={() => openPrint('bet-skins')}
+                    className="text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 px-3 py-2 rounded-lg transition-colors">
+                    💎 Skines
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                  {lbl('Tickets personales (todos / individual)', 'Personal tickets (all / individual)')}
+                </p>
+                <div className="space-y-2">
+                  <button onClick={() => openPrint('ticket')}
+                    className="w-full text-xs bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/40 text-purple-200 px-3 py-2 rounded-lg transition-colors flex items-center gap-2 justify-center">
+                    👥 {lbl(`Imprimir TODOS los tickets (${allPlayers.length} jugadores)`, `Print ALL tickets (${allPlayers.length} players)`)}
+                  </button>
+                  <div className="flex gap-2">
+                    <select
+                      value={selectedPlayer}
+                      onChange={e => setSelectedPlayer(e.target.value)}
+                      className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-zinc-200 text-xs focus:outline-none focus:border-purple-500">
+                      <option value="">{lbl('-- Selecciona jugador --', '-- Select player --')}</option>
+                      {allPlayers.map(p => (
+                        <option key={p.user_id} value={p.user_id}>{p.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => selectedPlayer && openPrint('ticket', `player=${selectedPlayer}`)}
+                      disabled={!selectedPlayer}
+                      className="text-xs bg-purple-500 hover:bg-purple-400 disabled:opacity-40 text-white font-semibold px-4 py-2 rounded-lg transition-colors">
+                      🖨️ PDF
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                  {lbl('Paquete completo', 'Full package')}
+                </p>
+                <button onClick={() => openPrint('all')}
+                  className="w-full text-xs bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-200 px-3 py-2 rounded-lg transition-colors">
+                  📦 {lbl('Imprimir TODO (master + tickets)', 'Print EVERYTHING (master + tickets)')}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Reglas de apuestas — modal explicativo ───────────────────────────────────
 
 type BetRuleTopic = 'entry_fee' | 'nassau' | 'per_hole' | 'prizes' | 'penalty' | 'oyes' | 'skins'
@@ -1353,7 +1516,15 @@ function BetRulesModal({ topic, onClose, locale }: { topic: BetRuleTopic; onClos
 type BalBreak = { entry_fee: number; nassau: number; per_hole: number; prizes: number; penalties: number; skins: number; oyes: number; total: number }
 type BalPlayer = { user_id: string; name: string; course_handicap: number | null; breakdown: BalBreak }
 type BalLine = { kind: string; detail: string; amounts: Record<string, number> }
-type BalData = { has_bets: boolean; players: BalPlayer[]; lines: BalLine[]; note?: string }
+type BalData = {
+  has_bets: boolean
+  players: BalPlayer[]
+  lines: BalLine[]
+  note?: string
+  viewer_is_creator?: boolean
+  viewer_is_superadmin?: boolean
+  viewer_user_id?: string
+}
 
 function fmtMoney(n: number, locale: string): string {
   void locale
@@ -1562,7 +1733,12 @@ function PlayerLedger({ player, lines, locale, lbl }: {
 }
 
 function BalancesSection({ balances, lbl, locale }: { balances: BalData; lbl: (es: string, en: string) => string; locale: string }) {
-  const [bView, setBView] = useState<'bet' | 'player' | 'summary'>('bet')
+  // Detectar rol — si es creator/admin ve todo; si es regular solo ve su ticket + gran total
+  const canSeeAll = balances.viewer_is_creator || balances.viewer_is_superadmin
+  const viewerUid = balances.viewer_user_id
+  const myPlayer = viewerUid ? balances.players.find(p => p.user_id === viewerUid) : undefined
+
+  const [bView, setBView] = useState<'bet' | 'player' | 'summary'>(canSeeAll ? 'bet' : 'player')
   const allZero = balances.players.every(p => Math.abs(p.breakdown.total) < 0.01)
   if (allZero) {
     return (
@@ -1588,43 +1764,64 @@ function BalancesSection({ balances, lbl, locale }: { balances: BalData; lbl: (e
 
   return (
     <div className="space-y-4">
-      {/* Header con toggle */}
+      {/* Header con toggle (creator) o título simple (regular) */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl px-5 py-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <h2 className="font-semibold text-white text-base flex items-center gap-2">
             <span className="text-xl">💰</span>
             {lbl('Pérdidas y ganancias', 'Gains & losses')}
+            {!canSeeAll && (
+              <span className="text-[10px] text-zinc-500 bg-zinc-800 border border-zinc-700 px-2 py-0.5 rounded-full">
+                {lbl('vista jugador', 'player view')}
+              </span>
+            )}
           </h2>
-          <div className="flex gap-1 bg-zinc-800 border border-zinc-700 rounded-lg p-0.5">
-            <button onClick={() => setBView('bet')}
-              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                bView === 'bet' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-zinc-300'
-              }`}>
-              {lbl('Por apuesta', 'By bet')}
-            </button>
-            <button onClick={() => setBView('player')}
-              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                bView === 'player' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-zinc-300'
-              }`}>
-              {lbl('Por jugador', 'By player')}
-            </button>
-            <button onClick={() => setBView('summary')}
-              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                bView === 'summary' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-zinc-300'
-              }`}>
-              {lbl('Resumen', 'Summary')}
-            </button>
-          </div>
+          {canSeeAll && (
+            <div className="flex gap-1 bg-zinc-800 border border-zinc-700 rounded-lg p-0.5">
+              <button onClick={() => setBView('bet')}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                  bView === 'bet' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-zinc-300'
+                }`}>
+                {lbl('Por apuesta', 'By bet')}
+              </button>
+              <button onClick={() => setBView('player')}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                  bView === 'player' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-zinc-300'
+                }`}>
+                {lbl('Por jugador', 'By player')}
+              </button>
+              <button onClick={() => setBView('summary')}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                  bView === 'summary' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-zinc-300'
+                }`}>
+                {lbl('Resumen', 'Summary')}
+              </button>
+            </div>
+          )}
         </div>
         <p className="text-xs text-zinc-500 mt-1">
-          {bView === 'bet' && lbl('Mini-tabla por tipo de apuesta. Auditoría general.', 'Mini-table per bet type. General audit.')}
-          {bView === 'player' && lbl('Una tarjeta por jugador con su ledger personal (ganó vs pagó).', 'One card per player with personal ledger (won vs paid).')}
-          {bView === 'summary' && lbl('Tabla compacta — solo gran total por jugador.', 'Compact table — grand total per player only.')}
+          {canSeeAll && bView === 'bet' && lbl('Mini-tabla por tipo de apuesta. Auditoría general.', 'Mini-table per bet type. General audit.')}
+          {canSeeAll && bView === 'player' && lbl('Una tarjeta por jugador con su ledger personal (ganó vs pagó).', 'One card per player with personal ledger (won vs paid).')}
+          {canSeeAll && bView === 'summary' && lbl('Tabla compacta — solo gran total por jugador.', 'Compact table — grand total per player only.')}
+          {!canSeeAll && lbl('Tu ledger personal + tabla general. Los detalles de otros jugadores están ocultos.', 'Your personal ledger + general table. Other players\' details are hidden.')}
         </p>
       </div>
 
-      {/* VISTA POR JUGADOR */}
-      {bView === 'player' && (
+      {/* VISTA REGULAR (no creator) — solo SU ticket */}
+      {!canSeeAll && myPlayer && (
+        <PlayerLedger player={myPlayer} lines={balances.lines} locale={locale} lbl={lbl} />
+      )}
+      {!canSeeAll && !myPlayer && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+          <p className="text-xs text-zinc-500">{lbl(
+            'No participas en las apuestas o no hay movimiento para ti.',
+            'You are not in the bets or no movement for you.'
+          )}</p>
+        </div>
+      )}
+
+      {/* VISTA POR JUGADOR (creator only) */}
+      {canSeeAll && bView === 'player' && (
         <div className="space-y-3 lg:grid lg:grid-cols-2 lg:space-y-0 lg:gap-3">
           {balances.players.map(p => (
             <PlayerLedger key={p.user_id} player={p} lines={balances.lines} locale={locale} lbl={lbl} />
@@ -1632,8 +1829,8 @@ function BalancesSection({ balances, lbl, locale }: { balances: BalData; lbl: (e
         </div>
       )}
 
-      {/* VISTA POR APUESTA */}
-      {bView === 'bet' && (
+      {/* VISTA POR APUESTA (creator only) */}
+      {canSeeAll && bView === 'bet' && (
         <div className="space-y-3">
           {byKind.entry_fee && (
             <BetLineTable title={lbl('Entrada (Entry Fee)', 'Entry Fee')} icon="🎫"
@@ -1742,7 +1939,15 @@ export default function RoundDetailPage() {
   }
   type BalancePlayer = { user_id: string; name: string; course_handicap: number | null; breakdown: BalanceBreakdown }
   type BalanceLine = { kind: string; detail: string; amounts: Record<string, number> }
-  type BalancesData = { has_bets: boolean; players: BalancePlayer[]; lines: BalanceLine[]; note?: string }
+  type BalancesData = {
+    has_bets: boolean
+    players: BalancePlayer[]
+    lines: BalanceLine[]
+    note?: string
+    viewer_is_creator?: boolean
+    viewer_is_superadmin?: boolean
+    viewer_user_id?: string
+  }
   const [balances, setBalances] = useState<BalancesData | null>(null)
   const [betRuleTopic, setBetRuleTopic] = useState<BetRuleTopic | null>(null)
   const [holes, setHoles] = useState<Hole[]>([])
@@ -3975,6 +4180,18 @@ export default function RoundDetailPage() {
         {/* Balance de apuestas (pérdidas y ganancias) */}
         {balances && balances.has_bets && balances.players.length > 0 && (
           <BalancesSection balances={balances} lbl={lbl} locale={locale} />
+        )}
+
+        {/* Menú de impresión modular */}
+        {balances && balances.has_bets && (
+          <PrintMenu
+            roundId={id}
+            locale={locale}
+            lbl={lbl}
+            canSeeAll={!!(balances.viewer_is_creator || balances.viewer_is_superadmin)}
+            viewerUserId={balances.viewer_user_id ?? ''}
+            allPlayers={balances.players.map(p => ({ user_id: p.user_id, name: p.name }))}
+          />
         )}
       </main>
     </div>

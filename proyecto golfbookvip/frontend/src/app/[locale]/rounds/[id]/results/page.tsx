@@ -1,6 +1,6 @@
 'use client'
-import { useEffect, useState } from 'react'
-import { useRouter, useParams } from 'next/navigation'
+import { useEffect, useState, Suspense } from 'react'
+import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Printer, ArrowLeft, Loader2, Trophy } from 'lucide-react'
 import { api } from '@/lib/api'
@@ -200,10 +200,19 @@ type BalPlayer = { user_id: string; name: string; course_handicap: number | null
 type BalData = { has_bets: boolean; players: BalPlayer[]; lines: { kind: string; detail: string; amounts: Record<string, number> }[] }
 
 function MasterResults({
-  round, course, board, players, gameFormat, locale, balances,
+  round, course, board, players, gameFormat, locale, balances, printSection = 'all', playerParam,
 }: {
-  round: Round; course: Course; board: BoardEntry[]; players: TeeGroupPlayer[]; gameFormat: string; locale: string; balances: BalData | null
+  round: Round; course: Course; board: BoardEntry[]; players: TeeGroupPlayer[]
+  gameFormat: string; locale: string; balances: BalData | null
+  printSection?: string
+  playerParam?: string | null
 }) {
+  // Si printSection != 'all', solo renderizamos esa sección específica
+  const showLeaderboard = printSection === 'all' || printSection === 'leaderboard'
+  const showAwards = printSection === 'all' || printSection === 'premios'
+  const showWinnerBanner = printSection === 'all' || printSection === 'leaderboard'
+  const showBalances = printSection === 'all' || printSection === 'balances' || printSection === 'gran-total' || printSection === 'ticket' || printSection.startsWith('bet-')
+  const showFooter = true
   const lbl = (es: string, en: string) => locale === 'es' ? es : en
 
   const playerNameByUid = (uid: string) => {
@@ -248,7 +257,7 @@ function MasterResults({
       </p>
 
       {/* Winner banner */}
-      {winner && winner.total_gross > 0 && (
+      {showWinnerBanner && winner && winner.total_gross > 0 && (
         <div className="winner-banner">
           <div className="trophy">🏆</div>
           <div>
@@ -263,6 +272,7 @@ function MasterResults({
         </div>
       )}
 
+      {showLeaderboard && (<>
       <h2 className="section-title">{lbl('Tabla de posiciones', 'Leaderboard')}</h2>
       <table className="leaderboard">
         <thead>
@@ -300,7 +310,10 @@ function MasterResults({
         </tbody>
       </table>
 
+      </>)}
+
       {/* Pro stats — "Best of" awards */}
+      {showAwards && (<>
       <h2 className="section-title">{lbl('Premios especiales', 'Special awards')}</h2>
       <div className="awards-grid">
         {stats.lowest_gross && (
@@ -343,10 +356,11 @@ function MasterResults({
           <div className="award award-hio"><span className="lbl">⛳ {lbl('¡HOYO EN UNO!', 'HOLE IN ONE!')}</span><span className="val">{stats.holes_in_one.map(h => `${h.user} (H${h.hole})`).join(' · ')}</span></div>
         )}
       </div>
+      </>)}
 
       {/* Balance de apuestas — solo se imprime si hay bets */}
-      {balances && balances.has_bets && balances.players.length > 0 && balances.players.some(p => Math.abs(p.breakdown.total) > 0.01) && (
-        <PrintableBalances balances={balances} locale={locale} />
+      {showBalances && balances && balances.has_bets && balances.players.length > 0 && balances.players.some(p => Math.abs(p.breakdown.total) > 0.01) && (
+        <PrintableBalances balances={balances} locale={locale} printSection={printSection} playerParam={playerParam} />
       )}
 
       <p className="footer-note">
@@ -484,9 +498,23 @@ function PlayerLedgerCard({ player, lines, locale, position }: {
 
 // ── Printable balances detallados por tipo + gran total ─────────────
 
-function PrintableBalances({ balances, locale }: { balances: BalData; locale: string }) {
+function PrintableBalances({ balances, locale, printSection = 'all', playerParam }: {
+  balances: BalData; locale: string; printSection?: string; playerParam?: string | null
+}) {
   const lbl = (es: string, en: string) => locale === 'es' ? es : en
   const playerName = (uid: string) => balances.players.find(p => p.user_id === uid)?.name ?? uid.slice(0, 8)
+
+  // Filtros por sección
+  const showAllBets = printSection === 'all' || printSection === 'balances'
+  const showBetEntryFee = showAllBets || printSection === 'bet-entry_fee'
+  const showBetNassau = showAllBets || printSection === 'bet-nassau'
+  const showBetPerHole = showAllBets || printSection === 'bet-per_hole'
+  const showBetPrize = showAllBets || printSection === 'bet-prize'
+  const showBetPenalty = showAllBets || printSection === 'bet-penalty'
+  const showBetSkins = showAllBets || printSection === 'bet-skins'
+  const showAnyBet = showBetEntryFee || showBetNassau || showBetPerHole || showBetPrize || showBetPenalty || showBetSkins
+  const showGranTotal = printSection === 'all' || printSection === 'balances' || printSection === 'gran-total'
+  const showTickets = printSection === 'all' || printSection === 'ticket'
 
   // Agrupar lines por kind
   const byKind: Record<string, { detail: string; amounts: Record<string, number> }[]> = {}
@@ -541,18 +569,26 @@ function PrintableBalances({ balances, locale }: { balances: BalData; locale: st
     )
   }
 
+  // Filtrar jugadores para tickets si se pidió uno específico
+  const ticketPlayers = playerParam
+    ? balances.players.filter(p => p.user_id === playerParam)
+    : balances.players
+
   return (
     <>
-      <h2 className="section-title">{lbl('Pérdidas y ganancias — Desglose', 'Gains & losses — Breakdown')}</h2>
-      <div className="balances-detailed">
-        {renderBetSection('entry_fee', 'Entrada (Entry Fee)', 'Entry Fee', '🎫')}
-        {renderBetSection('nassau', 'Nassau', 'Nassau', '🎯')}
-        {renderBetSection('per_hole', 'Por hoyo ganado', 'Per hole won', '⛳')}
-        {renderBetSection('prize', 'Premios (birdie/eagle/HIO)', 'Prizes (birdie/eagle/HIO)', '🏅')}
-        {renderBetSection('penalty', 'Castigos (3 putts)', 'Penalties (3-putts)', '⚠️')}
-        {renderBetSection('skins', 'Skines (carry-over)', 'Skins (carry-over)', '💎')}
-      </div>
+      {showAnyBet && (<>
+        <h2 className="section-title">{lbl('Pérdidas y ganancias — Desglose', 'Gains & losses — Breakdown')}</h2>
+        <div className="balances-detailed">
+          {showBetEntryFee && renderBetSection('entry_fee', 'Entrada (Entry Fee)', 'Entry Fee', '🎫')}
+          {showBetNassau && renderBetSection('nassau', 'Nassau', 'Nassau', '🎯')}
+          {showBetPerHole && renderBetSection('per_hole', 'Por hoyo ganado', 'Per hole won', '⛳')}
+          {showBetPrize && renderBetSection('prize', 'Premios (birdie/eagle/HIO)', 'Prizes (birdie/eagle/HIO)', '🏅')}
+          {showBetPenalty && renderBetSection('penalty', 'Castigos (3 putts)', 'Penalties (3-putts)', '⚠️')}
+          {showBetSkins && renderBetSection('skins', 'Skines (carry-over)', 'Skins (carry-over)', '💎')}
+        </div>
+      </>)}
 
+      {showGranTotal && (<>
       <h2 className="section-title">🏆 {lbl('GRAN TOTAL POR JUGADOR', 'GRAND TOTAL PER PLAYER')}</h2>
       <table className="balances-table">
         <thead>
@@ -594,13 +630,19 @@ function PrintableBalances({ balances, locale }: { balances: BalData; locale: st
           'Each bet calculated independently and summed. Entry fee 60/30/10 low net · Nassau pot to segment low net · Per hole low net charges others · Prizes/penalties pay-each-other · Skins with carry-over.'
         )}
       </p>
+      </>)}
 
       {/* Tickets personales por jugador — 1 por hoja al imprimir */}
-      <div className="player-ledger-container">
-        {balances.players.map((p, i) => (
-          <PlayerLedgerCard key={p.user_id} player={p} lines={balances.lines} locale={locale} position={i + 1} />
-        ))}
-      </div>
+      {showTickets && (
+        <div className="player-ledger-container">
+          {ticketPlayers.map((p) => {
+            const originalPos = balances.players.findIndex(pp => pp.user_id === p.user_id) + 1
+            return (
+              <PlayerLedgerCard key={p.user_id} player={p} lines={balances.lines} locale={locale} position={originalPos} />
+            )
+          })}
+        </div>
+      )}
     </>
   )
 }
@@ -774,11 +816,25 @@ function PlayerResultCard({
 // ── Main page ───────────────────────────────────────────────────────
 
 export default function ResultsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-zinc-950 flex items-center justify-center"><Loader2 size={28} className="animate-spin text-emerald-500" /></div>}>
+      <ResultsContent />
+    </Suspense>
+  )
+}
+
+function ResultsContent() {
   const router = useRouter()
   const params = useParams()
+  const searchParams = useSearchParams()
   const id = params.id as string
   const locale = useLocale()
   const lbl = (es: string, en: string) => locale === 'es' ? es : en
+
+  // URL params para modo "imprimir sección específica"
+  const section = searchParams.get('section') ?? 'all'  // all, leaderboard, premios, balances, gran-total, ticket
+  const autoprint = searchParams.get('autoprint') === 'true'
+  const playerParam = searchParams.get('player')  // user_id para ticket específico
 
   const [loading, setLoading] = useState(true)
   const [round, setRound] = useState<Round | null>(null)
@@ -823,6 +879,14 @@ export default function ResultsPage() {
     }
     load()
   }, [id, locale, router])
+
+  // Auto-disparar diálogo de impresión cuando la data ya cargó (modo print)
+  useEffect(() => {
+    if (autoprint && !loading && round && course) {
+      const t = setTimeout(() => window.print(), 600)
+      return () => clearTimeout(t)
+    }
+  }, [autoprint, loading, round, course])
 
   if (loading) return (
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
@@ -894,7 +958,7 @@ export default function ResultsPage() {
 
       <main className="print-area bg-zinc-950 text-zinc-100">
         {view === 'master' ? (
-          <MasterResults round={round} course={course} board={board} players={players} gameFormat={round.game_format} locale={locale} balances={balances} />
+          <MasterResults round={round} course={course} board={board} players={players} gameFormat={round.game_format} locale={locale} balances={balances} printSection={section} playerParam={playerParam} />
         ) : (
           sortedBoard.map((b, i) => {
             const player = players.find(p => p.user_id === b.user_id) ?? {

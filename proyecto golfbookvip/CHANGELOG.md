@@ -7,6 +7,72 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.8.0] - 2026-05-15
+
+Print modular + privacidad por jugador. Cada sección puede mandarse a imprimir/PDF de forma individual para compartir por WhatsApp/email, y los jugadores regulares ahora solo ven SU ticket personal — los detalles de otros jugadores quedan ocultos.
+
+### Added — Privacidad por jugador (backend)
+
+`GET /rounds/{id}/balances` ahora detecta el rol del que pide:
+
+- **Creator o superadmin**: ve TODO (líneas completas con amounts de todos los jugadores, todas las vistas)
+- **Jugador regular**: solo ve las líneas que le afectan, con amount filtrado a su propio monto. La lista de `players` (con totales) sí es visible para todos — necesaria para auditar la liquidación grupal.
+
+Response incluye:
+- `viewer_is_creator: boolean`
+- `viewer_is_superadmin: boolean`
+- `viewer_user_id: string`
+
+### Changed — UI condicional por rol (round detail)
+
+- Si soy **creator**: toggle "Por apuesta | Por jugador | Resumen" (3 vistas, sin restricciones)
+- Si soy **jugador regular**: sin toggle. Solo se muestra **mi propio ticket** + **tabla Gran Total** general. Los movimientos detallados de otros (Nassau ganador, etc.) están ocultos.
+- Badge "vista jugador" en el header para que sea claro el contexto
+
+### Added — Menú de impresión modular en round detail
+
+Nueva sección colapsable **"🖨️ Imprimir / PDF para enviar"** con botones agrupados por audiencia:
+
+**Para todos** (público):
+- 🏆 Leaderboard (posiciones)
+- 🏅 Premios especiales
+
+**Personal**:
+- 👤 Mi ticket personal (ganó/pagó/total)
+
+**Liquidación grupal**:
+- 💰 Gran total por jugador
+
+**Solo creator** (auditoría):
+- 🎫 Entry Fee (detalle)
+- 🎯 Nassau (detalle por segmento)
+- ⛳ Por hoyo ganado
+- 🏅 Premios (detalle birdies/eagles/HIO por jugador)
+- ⚠️ Castigos (3 putts)
+- 💎 Skines (hoyo por hoyo con carry-over)
+- 👥 TODOS los tickets (uno por hoja)
+- 👤 Ticket individual (selector dropdown de cualquier jugador)
+- 📦 Paquete completo (master + tickets)
+
+Cada botón abre nueva pestaña con URL como `/results?section=X&autoprint=true` que renderiza solo esa sección y dispara `window.print()` automáticamente al cargar.
+
+### Added — `/results` acepta URL params
+
+- `?section=leaderboard|premios|balances|gran-total|ticket|bet-entry_fee|bet-nassau|bet-per_hole|bet-prize|bet-penalty|bet-skins|all` → renderiza solo esa sección
+- `?player=<user_id>` (para section=ticket) → solo el ticket de ese jugador
+- `?autoprint=true` → dispara diálogo de impresión 600ms después de cargar
+
+Suspense wrapping para que `useSearchParams` funcione correctamente en Next.js 16.
+
+### Notes
+
+- El menú de impresión NO requiere navegar — abre una pestaña independiente que se cierra después de imprimir/guardar
+- Para enviar por WhatsApp: tap botón → Save as PDF → adjuntar el archivo
+- La lógica de filtrado backend protege contra snooping vía DevTools — un jugador regular NO recibe los amounts de otros aunque inspeccione la respuesta del API
+- Las cards `PlayerLedger` siguen mostrando movimientos como "Birdie de Vidal" en el `detail` text (eso es información pública del torneo). Lo privado son los DÓLARES individuales de otros jugadores.
+
+---
+
 ## [1.7.10] - 2026-05-15
 
 ### Changed — Tabla "Gran Total" estilo recibo contable (fondo blanco)

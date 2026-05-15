@@ -995,7 +995,13 @@ async def get_scoreboard(round_id: uuid.UUID, db: DB):
 
 @router.get("/{round_id}/balances")
 async def get_balances(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
-    """Calcula pérdidas y ganancias por jugador según la config de apuestas y los scores capturados.
+    """Calcula pérdidas y ganancias por jugador.
+
+    Privacidad:
+    - Creator/superadmin: ve TODO (líneas completas con amounts de todos los jugadores).
+    - Jugador regular: solo ve las líneas que le afectan, con amount filtrado a su propio
+      monto. La lista `players` siempre se devuelve completa (para que cualquiera audite
+      la tabla de Gran Total y vea cuánto le toca cobrar/pagar a cada uno).
 
     Reglas implementadas:
     - Entry fee 60/30/10 a low net
@@ -1005,8 +1011,34 @@ async def get_balances(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
     - 3-putt: el penalizado paga al resto
     - Skins con carry-over en empate (gross o net según config)
     """
-    _ = current_user  # auth required pero no se filtra por user
     result = await balances_svc.compute_balances(str(round_id), db)
+
+    # Detectar rol del visualizador
+    round_res = await db.execute(select(Round).where(Round.id == round_id))
+    round_ = round_res.scalar_one_or_none()
+    is_creator = bool(round_ and str(round_.created_by) == str(current_user.id))
+    is_superadmin = bool(getattr(current_user, "is_superadmin", False))
+    can_see_all = is_creator or is_superadmin
+
+    # Anotar el role al response
+    result["viewer_is_creator"] = is_creator
+    result["viewer_is_superadmin"] = is_superadmin
+    result["viewer_user_id"] = str(current_user.id)
+
+    # Si NO puede ver todo, filtrar líneas
+    if not can_see_all and result.get("has_bets"):
+        uid = str(current_user.id)
+        filtered: list[dict] = []
+        for line in result.get("lines", []):
+            my_amount = float(line["amounts"].get(uid, 0) or 0)
+            if abs(my_amount) > 0.01:
+                filtered.append({
+                    "kind": line["kind"],
+                    "detail": line["detail"],
+                    "amounts": {uid: my_amount},  # solo mi monto, no expone otros
+                })
+        result["lines"] = filtered
+
     return result
 
 
