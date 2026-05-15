@@ -2026,7 +2026,7 @@ export default function RoundDetailPage() {
     }
     // Cargar balances de apuestas (solo cuando hay scores reales)
     if (roundData.status === 'finished' || roundData.status === 'pending_validation' || roundData.status === 'active') {
-      const balRes = await api.get(`/rounds/${id}/balances`).catch(() => ({ data: null }))
+      const balRes = await api.get(`/rounds/${id}/balances`, { params: { lang: locale } }).catch(() => ({ data: null }))
       if (balRes.data) setBalances(balRes.data)
     }
     // Load teams

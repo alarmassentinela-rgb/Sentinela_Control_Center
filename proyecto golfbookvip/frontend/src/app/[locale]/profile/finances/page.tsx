@@ -338,43 +338,62 @@ function BetTypeStat({ icon, label, value }: { icon: string; label: string; valu
 function MonthlyChart({ data, locale, lbl }: { data: { month: string; total: number }[]; locale: string; lbl: (es: string, en: string) => string }) {
   if (data.length === 0) return null
   const max = Math.max(...data.map(d => Math.abs(d.total)), 1)
-  const width = 100  // svg viewBox
-  const height = 60
-  const padding = 4
-  const barWidth = (width - padding * 2) / data.length * 0.7
   const monthLabel = (key: string) => {
     const [y, m] = key.split('-')
     const d = new Date(parseInt(y), parseInt(m) - 1, 1)
     return d.toLocaleDateString(locale === 'es' ? 'es-MX' : 'en-US', { month: 'short' })
   }
+  const yearLabel = (key: string) => key.slice(2, 4)  // "26" de "2026-05"
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
-      <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+      <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-4">
         {lbl('Balance por mes', 'Balance per month')}
       </h3>
-      <div className="overflow-x-auto">
-        <svg viewBox={`0 0 ${width} ${height + 16}`} preserveAspectRatio="none" className="w-full h-32">
-          {/* línea zero */}
-          <line x1={padding} y1={height / 2} x2={width - padding} y2={height / 2} stroke="#52525b" strokeWidth="0.2" strokeDasharray="1,1" />
-          {data.map((d, i) => {
-            const x = padding + (i + 0.15) * ((width - padding * 2) / data.length)
-            const h = (Math.abs(d.total) / max) * (height / 2 - padding)
-            const y = d.total >= 0 ? height / 2 - h : height / 2
-            const color = d.total > 0 ? '#10b981' : '#ef4444'
+      <div className="overflow-x-auto pb-2">
+        <div className="flex items-stretch gap-3 min-w-fit" style={{ minHeight: '200px' }}>
+          {data.map(d => {
+            const heightPct = (Math.abs(d.total) / max) * 100  // 0-100% del medio container
+            const isPositive = d.total >= 0
             return (
-              <g key={d.month}>
-                <rect x={x} y={y} width={barWidth} height={h} fill={color} rx="0.4" />
-                <text x={x + barWidth / 2} y={height + 5} fontSize="3.5" fill="#a1a1aa" textAnchor="middle">
-                  {monthLabel(d.month)}
-                </text>
-                <text x={x + barWidth / 2} y={d.total >= 0 ? y - 1 : y + h + 3} fontSize="2.8" fill={d.total > 0 ? '#10b981' : '#ef4444'} textAnchor="middle">
-                  {d.total >= 0 ? '+' : '−'}${Math.abs(d.total).toFixed(0)}
-                </text>
-              </g>
+              <div key={d.month} className="flex flex-col items-center w-16 flex-shrink-0">
+                {/* Half top — positivos crecen aquí (hacia arriba) */}
+                <div className="w-full flex flex-col items-center justify-end" style={{ height: '90px' }}>
+                  {isPositive && (
+                    <>
+                      <span className="text-[10px] font-bold text-emerald-400 tabular-nums leading-none mb-1">
+                        +${Math.abs(d.total).toFixed(0)}
+                      </span>
+                      <div className="w-10 bg-gradient-to-t from-emerald-500 to-emerald-400 rounded-t-md transition-all"
+                        style={{ height: `${Math.max(2, heightPct)}%` }} />
+                    </>
+                  )}
+                </div>
+                {/* Línea cero */}
+                <div className="w-full h-px bg-zinc-600" />
+                {/* Half bottom — negativos crecen aquí (hacia abajo) */}
+                <div className="w-full flex flex-col items-center justify-start" style={{ height: '90px' }}>
+                  {!isPositive && Math.abs(d.total) > 0.01 && (
+                    <>
+                      <div className="w-10 bg-gradient-to-b from-red-500 to-red-600 rounded-b-md transition-all"
+                        style={{ height: `${Math.max(2, heightPct)}%` }} />
+                      <span className="text-[10px] font-bold text-red-400 tabular-nums leading-none mt-1">
+                        −${Math.abs(d.total).toFixed(0)}
+                      </span>
+                    </>
+                  )}
+                </div>
+                <span className="text-[11px] text-zinc-400 font-medium mt-1 capitalize">
+                  {monthLabel(d.month)} <span className="text-zinc-600">'{yearLabel(d.month)}</span>
+                </span>
+              </div>
             )
           })}
-        </svg>
+        </div>
+      </div>
+      <div className="flex items-center gap-4 mt-3 text-[10px] text-zinc-500">
+        <span className="flex items-center gap-1"><span className="w-2 h-2 bg-emerald-500 rounded-sm" /> {lbl('Ganaste', 'Won')}</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 bg-red-500 rounded-sm" /> {lbl('Perdiste', 'Lost')}</span>
       </div>
     </div>
   )

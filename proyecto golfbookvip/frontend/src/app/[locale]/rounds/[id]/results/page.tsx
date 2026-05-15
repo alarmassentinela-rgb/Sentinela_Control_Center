@@ -857,7 +857,7 @@ function ResultsContent() {
           api.get(`/courses/${rRes.data.course_id}`),
           api.get(`/rounds/${id}/scoreboard`),
           api.get(`/rounds/${id}/tee-groups`).catch(() => ({ data: { groups: [], ungrouped: [] } })),
-          api.get(`/rounds/${id}/balances`).catch(() => ({ data: null })),
+          api.get(`/rounds/${id}/balances`, { params: { lang: locale } }).catch(() => ({ data: null })),
         ])
         setCourse(cRes.data)
         setBoard(bRes.data)

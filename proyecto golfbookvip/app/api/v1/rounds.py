@@ -1010,7 +1010,7 @@ async def get_scoreboard(round_id: uuid.UUID, db: DB):
 
 
 @router.get("/{round_id}/balances")
-async def get_balances(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
+async def get_balances(round_id: uuid.UUID, current_user: CurrentUser, db: DB, lang: str = "es"):
     """Calcula pérdidas y ganancias por jugador.
 
     Privacidad:
@@ -1027,7 +1027,9 @@ async def get_balances(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
     - 3-putt: el penalizado paga al resto
     - Skins con carry-over en empate (gross o net según config)
     """
-    result = await balances_svc.compute_balances(str(round_id), db)
+    # Validar lang
+    lang = "en" if lang == "en" else "es"
+    result = await balances_svc.compute_balances(str(round_id), db, lang=lang)
 
     # Detectar rol del visualizador
     round_res = await db.execute(select(Round).where(Round.id == round_id))

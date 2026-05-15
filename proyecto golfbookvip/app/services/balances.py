@@ -40,8 +40,19 @@ def _split(amount: float, n: int) -> float:
     return amount / n if n > 0 else 0.0
 
 
-async def compute_balances(round_id: str, db: AsyncSession) -> dict[str, Any]:
-    """Calcula balance final por jugador de una ronda."""
+def _txt(lang: str, es: str, en: str) -> str:
+    """Helper bilingüe — devuelve el string según el idioma."""
+    return en if lang == "en" else es
+
+
+async def compute_balances(round_id: str, db: AsyncSession, lang: str = "es") -> dict[str, Any]:
+    """Calcula balance final por jugador de una ronda.
+
+    Args:
+        round_id: UUID de la ronda
+        db: sesión async
+        lang: 'es' (default) o 'en' — idioma de los strings descriptivos en 'lines[].detail'
+    """
     # 1. Cargar ronda
     r_res = await db.execute(select(Round).where(Round.id == round_id))
     round_ = r_res.scalar_one_or_none()
@@ -70,7 +81,10 @@ async def compute_balances(round_id: str, db: AsyncSession) -> dict[str, Any]:
     players = [{"user_id": str(p.user_id), "rp": p, "name": f"{u.first_name} {u.last_name}"} for p, u in rows]
     n = len(players)
     if n < 2:
-        return {"has_bets": False, "players": [], "lines": [], "note": "Se requieren al menos 2 jugadores para calcular apuestas"}
+        return {"has_bets": False, "players": [], "lines": [],
+                "note": _txt(lang,
+                    "Se requieren al menos 2 jugadores para calcular apuestas",
+                    "At least 2 players are required to calculate bets")}
 
     # 4. Cargar todos los scores
     s_res = await db.execute(
@@ -147,7 +161,11 @@ async def compute_balances(round_id: str, db: AsyncSession) -> dict[str, Any]:
                 prize = pot * share
                 bal[winner_uid]["entry_fee"] += prize
                 amounts_paid[winner_uid] = amounts_paid.get(winner_uid, 0) + prize
-        add_line("entry_fee", f"Entry fee ${fee}: pot ${pot:.2f} dividido 60/30/10 a low net", amounts_paid)
+        add_line("entry_fee",
+            _txt(lang,
+                f"Entry fee ${fee}: pot ${pot:.2f} dividido 60/30/10 a low net",
+                f"Entry fee ${fee}: pot ${pot:.2f} split 60/30/10 to low net"),
+            amounts_paid)
 
     # ─── NASSAU F9 / B9 / Total ───────────────────────────────────────────────
     if bc.nassau_enabled:
@@ -176,14 +194,16 @@ async def compute_balances(round_id: str, db: AsyncSession) -> dict[str, Any]:
             for w in winners:
                 bal[w]["nassau"] += prize_each
                 amounts_paid[w] = amounts_paid.get(w, 0) + prize_each
-            label_full = f"Nassau {label} ${amount}: pot ${pot:.2f} → ganador(es) net {min_net}"
+            label_full = _txt(lang,
+                f"Nassau {label} ${amount}: pot ${pot:.2f} → ganador(es) net {min_net}",
+                f"Nassau {label} ${amount}: pot ${pot:.2f} → winner(s) net {min_net}")
             add_line("nassau", label_full, amounts_paid)
 
         if holes_played >= 9:
-            nassau_segment("Salida (1-9)", range(1, 10), float(bc.nassau_front9))
+            nassau_segment(_txt(lang, "Salida (1-9)", "Front 9 (1-9)"), range(1, 10), float(bc.nassau_front9))
         if holes_played >= 18:
-            nassau_segment("Vuelta (10-18)", range(10, 19), float(bc.nassau_back9))
-            nassau_segment("Total (1-18)", range(1, 19), float(bc.nassau_total))
+            nassau_segment(_txt(lang, "Vuelta (10-18)", "Back 9 (10-18)"), range(10, 19), float(bc.nassau_back9))
+            nassau_segment(_txt(lang, "Total (1-18)", "Total (1-18)"), range(1, 19), float(bc.nassau_total))
 
     # ─── PER HOLE BET — low net por hoyo ──────────────────────────────────────
     if bc.per_hole_bet and float(bc.per_hole_bet) > 0:
@@ -214,7 +234,11 @@ async def compute_balances(round_id: str, db: AsyncSession) -> dict[str, Any]:
         if any(abs(v) > 0.01 for v in total_per_hole.values()):
             for uid, amt in total_per_hole.items():
                 bal[uid]["per_hole"] += amt
-            add_line("per_hole", f"Por hoyo ganado ${per_hole}: low net por hoyo cobra a los que pierden", total_per_hole)
+            add_line("per_hole",
+                _txt(lang,
+                    f"Por hoyo ganado ${per_hole}: low net por hoyo cobra a los que pierden",
+                    f"Per hole won ${per_hole}: low net per hole charges losers"),
+                total_per_hole)
 
     # ─── PRIZES: Birdie / Eagle / Albatross / HIO (pay-each-other) ────────────
     # Genera UNA línea por (jugador, tipo de evento) para que el desglose muestre
@@ -245,8 +269,11 @@ async def compute_balances(round_id: str, db: AsyncSession) -> dict[str, Any]:
             for other in players:
                 if other["user_id"] != uid:
                     bal[other["user_id"]]["prizes"] -= amount * count
-            plural_es = "s" if count > 1 else ""
-            detail = f"{name} hizo {count} {label_es.lower()}{plural_es} (${amount:.0f} c/u) → cobra ${amount:.0f} × {n - 1} otros × {count} = ${gain:.2f}"
+            plural = "s" if count > 1 else ""
+            if lang == "en":
+                detail = f"{name} made {count} {label_en.lower()}{plural} (${amount:.0f} each) → earns ${amount:.0f} × {n - 1} others × {count} = ${gain:.2f}"
+            else:
+                detail = f"{name} hizo {count} {label_es.lower()}{plural} (${amount:.0f} c/u) → cobra ${amount:.0f} × {n - 1} otros × {count} = ${gain:.2f}"
             add_line("prize", detail, line_amounts)
 
     prize_event("Birdie", "Birdies", "is_birdie", float(bc.birdie_prize))
@@ -271,7 +298,11 @@ async def compute_balances(round_id: str, db: AsyncSession) -> dict[str, Any]:
         if any(abs(v) > 0.01 for v in total_pen.values()):
             for uid, amt in total_pen.items():
                 bal[uid]["penalties"] += amt
-            add_line("penalty", f"Penalidad 3 putts ${penalty}: paga al resto cada 3-putt", total_pen)
+            add_line("penalty",
+                _txt(lang,
+                    f"Penalidad 3 putts ${penalty}: paga al resto cada 3-putt",
+                    f"3-putt penalty ${penalty}: pays the rest for each 3-putt"),
+                total_pen)
 
     # ─── SKINS con carry-over (detalle hoyo por hoyo) ─────────────────────────
     if bc.skins_enabled and bc.skins_value and float(bc.skins_value) > 0:
@@ -322,22 +353,32 @@ async def compute_balances(round_id: str, db: AsyncSession) -> dict[str, Any]:
 
             if carry_from:
                 holes_str = ", ".join(f"H{h}" for h in carry_from)
-                detail = (
-                    f"Hoyo {hole}: {winner_name} low {kind_label} outright → "
-                    f"+{skins_won_count} skins acumulados (carry desde {holes_str}) = ${gain:.2f}"
-                )
+                if lang == "en":
+                    detail = (
+                        f"Hole {hole}: {winner_name} outright low {kind_label} → "
+                        f"+{skins_won_count} accumulated skins (carry from {holes_str}) = ${gain:.2f}"
+                    )
+                else:
+                    detail = (
+                        f"Hoyo {hole}: {winner_name} low {kind_label} outright → "
+                        f"+{skins_won_count} skins acumulados (carry desde {holes_str}) = ${gain:.2f}"
+                    )
             else:
-                detail = (
-                    f"Hoyo {hole}: {winner_name} low {kind_label} outright → "
-                    f"+1 skin = ${gain:.2f}"
-                )
+                if lang == "en":
+                    detail = f"Hole {hole}: {winner_name} outright low {kind_label} → +1 skin = ${gain:.2f}"
+                else:
+                    detail = f"Hoyo {hole}: {winner_name} low {kind_label} outright → +1 skin = ${gain:.2f}"
             add_line("skins", detail, line_amounts)
 
         # Resumen de forfeits si los hay (línea informativa, sin movimiento)
         if forfeit_holes:
             holes_str = ", ".join(f"H{h}" for h in forfeit_holes)
             zero_line: dict[str, float] = {p["user_id"]: 0.0 for p in players}
-            add_line("skins", f"📋 {forfeit_skins} skins forfeit (sin ganador al final del 18): empates en {holes_str}", zero_line)
+            add_line("skins",
+                _txt(lang,
+                    f"📋 {forfeit_skins} skins forfeit (sin ganador al final del 18): empates en {holes_str}",
+                    f"📋 {forfeit_skins} skins forfeited (no winner by hole 18): ties at {holes_str}"),
+                zero_line)
 
     # ─── Sumar totales ────────────────────────────────────────────────────────
     for uid in bal:
@@ -380,21 +421,11 @@ async def compute_balances(round_id: str, db: AsyncSession) -> dict[str, Any]:
 async def persist_balances(round_id: str, db: AsyncSession) -> int:
     """Calcula y persiste balances en round_player_balance.
 
-    Usar cuando una ronda llega a 'finished'. Si ya hay balances guardados para
-    esa ronda, los borra y reescribe (idempotente). Devuelve número de jugadores
-    persistidos.
-
-    Mapeo de campos (compute_balances → schema):
-    - entry_fee     → entry_fee
-    - nassau        → nassau_balance
-    - per_hole      → other_balance
-    - prizes        → birds_earned
-    - penalties     → three_putt_loss
-    - skins         → skins_balance
-    - oyes          → oyes_balance
-    - total         → total_balance
+    Usa lang='es' por default — solo persiste los NÚMEROS, no los textos
+    descriptivos (esos se regeneran cuando el cliente consulta /balances con
+    su locale específico).
     """
-    result = await compute_balances(round_id, db)
+    result = await compute_balances(round_id, db, lang="es")
     if not result.get("has_bets"):
         return 0
 

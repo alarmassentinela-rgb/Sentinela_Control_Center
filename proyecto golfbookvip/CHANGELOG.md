@@ -7,6 +7,56 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.9.2] - 2026-05-15
+
+### Fixed — Gráfica "Balance por mes" se veía deformada
+
+El SVG tenía `preserveAspectRatio="none"` que estiraba el viewport y deformaba texto y barras. Reemplazado por **gráfica HTML/CSS** con flexbox:
+
+- Línea cero horizontal al centro
+- Barras positivas crecen hacia arriba con gradiente verde
+- Barras negativas crecen hacia abajo con gradiente rojo
+- Label de mes + año al pie ("May '26")
+- Valor del balance arriba/abajo de cada barra
+- Leyenda al fondo con colores
+- Scroll horizontal si hay muchos meses
+- Altura fija 200px (100px arriba + 100px abajo de la línea cero)
+
+### Added — Backend bilingüe en `compute_balances`
+
+`compute_balances(round_id, db, lang="es")` ahora genera los `detail` strings en el idioma solicitado. Todas las apuestas tienen versiones ES/EN:
+
+```
+ES: "Entry fee $20: pot $440 dividido 60/30/10 a low net"
+EN: "Entry fee $20: pot $440 split 60/30/10 to low net"
+
+ES: "Vidal hizo 4 birdies ($10 c/u) → cobra ..."
+EN: "Vidal made 4 birdies ($10 each) → earns ..."
+
+ES: "Hoyo 5: Vidal low net outright → +3 skins acumulados (carry desde H3, H4)"
+EN: "Hole 5: Vidal outright low net → +3 accumulated skins (carry from H3, H4)"
+
+ES: "Nassau Salida (1-9) $20: pot $440 → ganador(es) net 32"
+EN: "Nassau Front 9 (1-9) $20: pot $440 → winner(s) net 32"
+```
+
+Cubre: entry_fee, nassau, per_hole, prize, penalty, skins (incluyendo línea de forfeit).
+
+### Changed — Endpoint `/rounds/{id}/balances` acepta `?lang`
+
+- Default: `es`
+- Frontend ahora propaga `?lang={locale}` desde round detail y `/results` page
+- Si tu app está en inglés, los detalles ahora vienen en inglés
+- Si está en español, en español
+
+### Notes
+
+- `persist_balances` usa lang='es' por default — solo guarda NÚMEROS, los detalles se regeneran on-demand con el locale del cliente
+- Los textos hardcoded del frontend (titles, labels, headers) ya estaban bilingües desde antes
+- Esto cierra el último gap de bilinguismo en la sección Pérdidas y ganancias
+
+---
+
 ## [1.9.1] - 2026-05-15
 
 ### Fixed — Lazy backfill no detectaba placeholders obsoletos
