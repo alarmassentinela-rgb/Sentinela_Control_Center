@@ -422,8 +422,11 @@ class SentinelaSubscription(models.Model):
         today = fields.Date.today()
         active_subs = self.search([('state', '=', 'active')])
         suspended_count = 0
+        tpl_suspended = self.env.ref(
+            'sentinela_subscriptions.mail_template_subscription_suspended',
+            raise_if_not_found=False,
+        )
         for sub in active_subs:
-            # Si tiene prórroga vigente, no aplica auto-suspensión por mora
             if sub.extension_due_date and sub.extension_due_date >= today:
                 continue
             days_threshold = sub.days_to_suspend or 5
@@ -442,8 +445,70 @@ class SentinelaSubscription(models.Model):
                 )
                 sub.action_suspend()
                 suspended_count += 1
+                if tpl_suspended and sub.partner_id.email:
+                    try:
+                        tpl_suspended.send_mail(sub.id, force_send=True)
+                    except Exception as e:
+                        _logger.error(f"Failed to send suspended mail for sub {sub.name}: {e}")
         _logger.info(f"AUTO-SUSPEND: {suspended_count} suscripciones suspendidas por facturas vencidas.")
         return suspended_count
+
+    def _cron_send_payment_reminders(self):
+        """Recordatorios de cobranza al cliente (siempre se mandan, no respetan auto_send_mail):
+        - Día +1 vencida la factura  → recordatorio SUAVE
+        - Día -1 de auto-suspensión → recordatorio URGENTE
+        El día de suspensión envía el cron _cron_auto_suspend_overdue.
+        """
+        today = fields.Date.today()
+        tpl_soft = self.env.ref(
+            'sentinela_subscriptions.mail_template_subscription_overdue_soft',
+            raise_if_not_found=False,
+        )
+        tpl_urgent = self.env.ref(
+            'sentinela_subscriptions.mail_template_subscription_pre_suspend',
+            raise_if_not_found=False,
+        )
+        active_subs = self.search([('state', '=', 'active')])
+        soft_count = 0
+        urgent_count = 0
+        for sub in active_subs:
+            if sub.extension_due_date and sub.extension_due_date >= today:
+                continue
+            if not sub.partner_id.email:
+                continue
+            days_threshold = sub.days_to_suspend or 5
+            for inv in sub.invoice_ids.filtered(
+                lambda i: i.move_type == 'out_invoice'
+                and i.state == 'posted'
+                and i.payment_state in ('not_paid', 'partial')
+                and i.invoice_date_due
+            ):
+                days_overdue = (today - inv.invoice_date_due).days
+                days_until_suspend = days_threshold - days_overdue
+                ctx = {
+                    'invoice_name': inv.name,
+                    'invoice_amount': inv.amount_total,
+                    'invoice_date_due': inv.invoice_date_due.strftime('%d/%m/%Y'),
+                    'days_until_suspend': days_until_suspend,
+                }
+                # Día +1 vencida — recordatorio SUAVE (1ª vez)
+                if days_overdue == 1 and tpl_soft:
+                    try:
+                        tpl_soft.with_context(**ctx).send_mail(sub.id, force_send=True)
+                        sub.message_post(body=f"📧 Recordatorio SUAVE enviado por factura {inv.name} vencida ayer.")
+                        soft_count += 1
+                    except Exception as e:
+                        _logger.error(f"Failed to send soft reminder sub {sub.name}: {e}")
+                # Día -1 de auto-suspensión — recordatorio URGENTE
+                elif days_until_suspend == 1 and tpl_urgent:
+                    try:
+                        tpl_urgent.with_context(**ctx).send_mail(sub.id, force_send=True)
+                        sub.message_post(body=f"📧 Recordatorio URGENTE enviado — mañana se suspende por factura {inv.name}.")
+                        urgent_count += 1
+                    except Exception as e:
+                        _logger.error(f"Failed to send urgent reminder sub {sub.name}: {e}")
+        _logger.info(f"REMINDERS: soft={soft_count} urgent={urgent_count}")
+        return {'soft': soft_count, 'urgent': urgent_count}
 
     def action_monitor_traffic(self):
         self.ensure_one()

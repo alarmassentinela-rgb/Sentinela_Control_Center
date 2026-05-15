@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+
+    <!-- Recordatorio SUAVE — Día +1 después del vencimiento de factura -->
+    <record id="mail_template_subscription_overdue_soft" model="mail.template">
+        <field name="name">Suscripción: Recordatorio suave de mora</field>
+        <field name="model_id" ref="model_sentinela_subscription"/>
+        <field name="subject">Recordatorio: Tu factura {{ ctx.get('invoice_name') }} venció ayer</field>
+        <field name="email_from">{{ (user.email_formatted or user.company_id.email) }}</field>
+        <field name="partner_to">{{ object.partner_id.id }}</field>
+        <field name="body_html" type="html">
+            <div style="margin: 0px; padding: 0px; font-family: Arial, sans-serif; font-size: 13px; color: #333;">
+                <p>Hola <strong><t t-out="object.partner_id.name or ''"/></strong>,</p>
+                <p>Te recordamos que tu factura <strong><t t-out="ctx.get('invoice_name','')"/></strong> por un monto de
+                <strong>$<t t-out="'{:,.2f}'.format(ctx.get('invoice_amount',0))"/> MXN</strong> venció el
+                <strong><t t-out="ctx.get('invoice_date_due','')"/></strong>.</p>
+                <p>Por favor realiza tu pago a la brevedad. Tu servicio
+                (<t t-out="object.product_id.name or ''"/>) será suspendido automáticamente en
+                <strong><t t-out="ctx.get('days_until_suspend','')"/> días</strong> si no recibimos el pago.</p>
+                <p>Si ya realizaste el pago, ignora este mensaje. Si necesitas apoyo, contáctanos.</p>
+                <p>Atentamente,<br/>El equipo de <strong>Sentinela</strong></p>
+            </div>
+        </field>
+    </record>
+
+    <!-- Recordatorio URGENTE — Día -1 antes de la suspensión automática -->
+    <record id="mail_template_subscription_pre_suspend" model="mail.template">
+        <field name="name">Suscripción: Suspensión mañana (urgente)</field>
+        <field name="model_id" ref="model_sentinela_subscription"/>
+        <field name="subject">URGENTE: Tu servicio se suspende MAÑANA — {{ object.name }}</field>
+        <field name="email_from">{{ (user.email_formatted or user.company_id.email) }}</field>
+        <field name="partner_to">{{ object.partner_id.id }}</field>
+        <field name="body_html" type="html">
+            <div style="margin: 0px; padding: 0px; font-family: Arial, sans-serif; font-size: 13px; color: #333;">
+                <p>Hola <strong><t t-out="object.partner_id.name or ''"/></strong>,</p>
+                <p style="background-color: #fff3cd; padding: 10px; border-left: 4px solid #ff9800;">
+                    <strong>⚠️ AVISO IMPORTANTE:</strong> Tu servicio será <strong>suspendido MAÑANA</strong>
+                    si no recibimos el pago de tu factura
+                    <strong><t t-out="ctx.get('invoice_name','')"/></strong>
+                    por <strong>$<t t-out="'{:,.2f}'.format(ctx.get('invoice_amount',0))"/> MXN</strong>.
+                </p>
+                <p>Para evitar la suspensión, realiza tu pago <strong>hoy mismo</strong>.</p>
+                <p>Servicio: <t t-out="object.product_id.name or ''"/><br/>
+                Contrato: <t t-out="object.name"/></p>
+                <p>Si ya realizaste el pago, contáctanos a la brevedad para evitar el corte automático.</p>
+                <p>Atentamente,<br/>El equipo de <strong>Sentinela</strong></p>
+            </div>
+        </field>
+    </record>
+
+    <!-- Notificación POST-SUSPENSIÓN — el día que el servicio fue cortado -->
+    <record id="mail_template_subscription_suspended" model="mail.template">
+        <field name="name">Suscripción: Servicio suspendido</field>
+        <field name="model_id" ref="model_sentinela_subscription"/>
+        <field name="subject">Servicio Suspendido — {{ object.name }}</field>
+        <field name="email_from">{{ (user.email_formatted or user.company_id.email) }}</field>
+        <field name="partner_to">{{ object.partner_id.id }}</field>
+        <field name="body_html" type="html">
+            <div style="margin: 0px; padding: 0px; font-family: Arial, sans-serif; font-size: 13px; color: #333;">
+                <p>Hola <strong><t t-out="object.partner_id.name or ''"/></strong>,</p>
+                <p style="background-color: #f8d7da; padding: 10px; border-left: 4px solid #dc3545;">
+                    <strong>Tu servicio ha sido SUSPENDIDO</strong> debido a la falta de pago de tu(s) factura(s)
+                    vencida(s).
+                </p>
+                <p>Servicio afectado: <strong><t t-out="object.product_id.name or ''"/></strong><br/>
+                Contrato: <strong><t t-out="object.name"/></strong></p>
+                <p>Para reactivar tu servicio, realiza el pago pendiente y notifícanos. La reactivación es
+                inmediata una vez confirmado el pago.</p>
+                <p>Atentamente,<br/>El equipo de <strong>Sentinela</strong></p>
+            </div>
+        </field>
+    </record>
+
+</odoo>
