@@ -1431,7 +1431,137 @@ function BetLineTable({
   )
 }
 
+// ─── Acortar detalle del backend a perspectiva del jugador ────────────────────
+function shortenForPlayer(detail: string, kind: string, amount: number, locale: string): string {
+  const isEs = locale === 'es'
+  if (kind === 'entry_fee') {
+    return amount > 0
+      ? (isEs ? 'Entry fee — premio' : 'Entry fee — prize')
+      : (isEs ? 'Aportación entry fee' : 'Entry fee contribution')
+  }
+  if (kind === 'nassau') {
+    const segMatch = detail.match(/(Salida|Vuelta|Total|Front|Back)/)
+    const seg = segMatch?.[0] ?? ''
+    return amount > 0
+      ? (isEs ? `Nassau ${seg} — ganaste el pot` : `Nassau ${seg} — won pot`)
+      : (isEs ? `Aportación Nassau ${seg}` : `Nassau ${seg} contribution`)
+  }
+  if (kind === 'per_hole') {
+    return amount > 0
+      ? (isEs ? 'Por hoyo — neto ganado' : 'Per hole — net won')
+      : (isEs ? 'Por hoyo — perdiste' : 'Per hole — lost')
+  }
+  // prize / penalty / skins: usar el detail original recortado al "→"
+  const cut = detail.split('→')[0].trim()
+  return cut || detail
+}
+
+// ─── Tarjeta de ledger personal por jugador ───────────────────────────────────
+function PlayerLedger({ player, lines, locale, lbl }: {
+  player: BalPlayer
+  lines: BalLine[]
+  locale: string
+  lbl: (es: string, en: string) => string
+}) {
+  const rows = lines
+    .map(l => ({ ...l, amount: l.amounts[player.user_id] ?? 0 }))
+    .filter(r => Math.abs(r.amount) > 0.01)
+  const gains = rows.filter(r => r.amount > 0)
+  const losses = rows.filter(r => r.amount < 0)
+  const sumGains = gains.reduce((s, r) => s + r.amount, 0)
+  const sumLosses = losses.reduce((s, r) => s + r.amount, 0)
+  const net = sumGains + sumLosses
+  const netCls = Math.abs(net) < 0.01 ? 'text-zinc-400 bg-zinc-800' : net > 0 ? 'text-emerald-300 bg-emerald-500/15 border-emerald-500/40' : 'text-red-300 bg-red-500/15 border-red-500/40'
+
+  const iconForKind = (kind: string) => {
+    switch (kind) {
+      case 'entry_fee': return '🎫'
+      case 'nassau': return '🎯'
+      case 'per_hole': return '⛳'
+      case 'prize': return '🏅'
+      case 'penalty': return '⚠️'
+      case 'skins': return '💎'
+      default: return '•'
+    }
+  }
+
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 bg-zinc-800/50 border-b border-zinc-800 flex items-center justify-between">
+        <h3 className="font-bold text-white text-sm flex items-center gap-2">
+          <span className="text-lg">👤</span>
+          {player.name}
+        </h3>
+        <span className="text-[10px] text-zinc-500">
+          HCP {player.course_handicap ?? '—'}
+        </span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-zinc-800/60">
+        {/* GANÓ */}
+        <div>
+          <div className="px-3 py-1.5 bg-emerald-500/10 border-b border-emerald-500/20">
+            <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">{lbl('Ganó (+)', 'Won (+)')}</p>
+          </div>
+          <div className="divide-y divide-zinc-800/40">
+            {gains.length === 0 ? (
+              <div className="px-3 py-3 text-xs text-zinc-600 italic">{lbl('Sin ganancias', 'No gains')}</div>
+            ) : (
+              gains.map((r, idx) => (
+                <div key={idx} className="px-3 py-1.5 flex items-start justify-between gap-2">
+                  <span className="text-[11px] text-zinc-300 leading-tight">
+                    <span className="mr-1">{iconForKind(r.kind)}</span>
+                    {shortenForPlayer(r.detail, r.kind, r.amount, locale)}
+                  </span>
+                  <span className="text-xs font-bold text-emerald-400 tabular-nums flex-shrink-0">+${r.amount.toFixed(2)}</span>
+                </div>
+              ))
+            )}
+            <div className="px-3 py-1.5 bg-emerald-500/5 border-t border-emerald-500/20 flex justify-between font-semibold">
+              <span className="text-xs text-emerald-400">{lbl('Subtotal', 'Subtotal')}</span>
+              <span className="text-sm text-emerald-300 tabular-nums">+${sumGains.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* PAGÓ */}
+        <div>
+          <div className="px-3 py-1.5 bg-red-500/10 border-b border-red-500/20">
+            <p className="text-[10px] font-bold text-red-400 uppercase tracking-wider">{lbl('Pagó (−)', 'Paid (−)')}</p>
+          </div>
+          <div className="divide-y divide-zinc-800/40">
+            {losses.length === 0 ? (
+              <div className="px-3 py-3 text-xs text-zinc-600 italic">{lbl('Sin pagos', 'No payments')}</div>
+            ) : (
+              losses.map((r, idx) => (
+                <div key={idx} className="px-3 py-1.5 flex items-start justify-between gap-2">
+                  <span className="text-[11px] text-zinc-300 leading-tight">
+                    <span className="mr-1">{iconForKind(r.kind)}</span>
+                    {shortenForPlayer(r.detail, r.kind, r.amount, locale)}
+                  </span>
+                  <span className="text-xs font-bold text-red-400 tabular-nums flex-shrink-0">−${Math.abs(r.amount).toFixed(2)}</span>
+                </div>
+              ))
+            )}
+            <div className="px-3 py-1.5 bg-red-500/5 border-t border-red-500/20 flex justify-between font-semibold">
+              <span className="text-xs text-red-400">{lbl('Subtotal', 'Subtotal')}</span>
+              <span className="text-sm text-red-300 tabular-nums">−${Math.abs(sumLosses).toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      {/* TOTAL NETO */}
+      <div className={`px-4 py-2 border-t-2 ${netCls} flex justify-between items-center`}>
+        <span className="text-xs font-bold uppercase tracking-wider">{lbl('Total neto', 'Net total')}</span>
+        <span className="text-lg font-black tabular-nums">
+          {net >= 0 ? `+$${net.toFixed(2)}` : `−$${Math.abs(net).toFixed(2)}`}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 function BalancesSection({ balances, lbl, locale }: { balances: BalData; lbl: (es: string, en: string) => string; locale: string }) {
+  const [bView, setBView] = useState<'bet' | 'player' | 'summary'>('bet')
   const allZero = balances.players.every(p => Math.abs(p.breakdown.total) < 0.01)
   if (allZero) {
     return (
@@ -1448,7 +1578,7 @@ function BalancesSection({ balances, lbl, locale }: { balances: BalData; lbl: (e
     )
   }
 
-  // Agrupar líneas por tipo de apuesta
+  // Agrupar líneas por tipo de apuesta (para vista bet)
   const byKind: Record<string, BalLine[]> = {}
   for (const l of balances.lines) {
     byKind[l.kind] = byKind[l.kind] ?? []
@@ -1457,55 +1587,84 @@ function BalancesSection({ balances, lbl, locale }: { balances: BalData; lbl: (e
 
   return (
     <div className="space-y-4">
-      {/* Header */}
+      {/* Header con toggle */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl px-5 py-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <h2 className="font-semibold text-white text-base flex items-center gap-2">
             <span className="text-xl">💰</span>
-            {lbl('Pérdidas y ganancias — desglose detallado', 'Gains & losses — detailed breakdown')}
+            {lbl('Pérdidas y ganancias', 'Gains & losses')}
           </h2>
-          <span className="text-[10px] text-zinc-500">
-            {lbl(`${balances.players.length} jugadores`, `${balances.players.length} players`)}
-          </span>
+          <div className="flex gap-1 bg-zinc-800 border border-zinc-700 rounded-lg p-0.5">
+            <button onClick={() => setBView('bet')}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                bView === 'bet' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-zinc-300'
+              }`}>
+              {lbl('Por apuesta', 'By bet')}
+            </button>
+            <button onClick={() => setBView('player')}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                bView === 'player' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-zinc-300'
+              }`}>
+              {lbl('Por jugador', 'By player')}
+            </button>
+            <button onClick={() => setBView('summary')}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                bView === 'summary' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-zinc-300'
+              }`}>
+              {lbl('Resumen', 'Summary')}
+            </button>
+          </div>
         </div>
         <p className="text-xs text-zinc-500 mt-1">
-          {lbl(
-            'Cada apuesta calculada de forma independiente. Al final, gran total por jugador.',
-            'Each bet calculated independently. Grand total per player at the end.'
-          )}
+          {bView === 'bet' && lbl('Mini-tabla por tipo de apuesta. Auditoría general.', 'Mini-table per bet type. General audit.')}
+          {bView === 'player' && lbl('Una tarjeta por jugador con su ledger personal (ganó vs pagó).', 'One card per player with personal ledger (won vs paid).')}
+          {bView === 'summary' && lbl('Tabla compacta — solo gran total por jugador.', 'Compact table — grand total per player only.')}
         </p>
       </div>
 
-      {/* Tablas por tipo */}
-      {byKind.entry_fee && (
-        <BetLineTable title={lbl('Entrada (Entry Fee)', 'Entry Fee')} icon="🎫"
-          lines={byKind.entry_fee} players={balances.players} locale={locale}
-          color="border-blue-500/30" />
+      {/* VISTA POR JUGADOR */}
+      {bView === 'player' && (
+        <div className="space-y-3 lg:grid lg:grid-cols-2 lg:space-y-0 lg:gap-3">
+          {balances.players.map(p => (
+            <PlayerLedger key={p.user_id} player={p} lines={balances.lines} locale={locale} lbl={lbl} />
+          ))}
+        </div>
       )}
-      {byKind.nassau && (
-        <BetLineTable title="Nassau" icon="🎯"
-          lines={byKind.nassau} players={balances.players} locale={locale}
-          color="border-orange-500/30" />
-      )}
-      {byKind.per_hole && (
-        <BetLineTable title={lbl('Por hoyo ganado', 'Per hole won')} icon="⛳"
-          lines={byKind.per_hole} players={balances.players} locale={locale}
-          color="border-cyan-500/30" />
-      )}
-      {byKind.prize && (
-        <BetLineTable title={lbl('Premios (birdie/eagle/HIO)', 'Prizes (birdie/eagle/HIO)')} icon="🏅"
-          lines={byKind.prize} players={balances.players} locale={locale}
-          color="border-emerald-500/30" />
-      )}
-      {byKind.penalty && (
-        <BetLineTable title={lbl('Castigos (3 putts)', 'Penalties (3-putts)')} icon="⚠️"
-          lines={byKind.penalty} players={balances.players} locale={locale}
-          color="border-red-500/30" />
-      )}
-      {byKind.skins && (
-        <BetLineTable title={lbl('Skines (con carry-over)', 'Skins (with carry-over)')} icon="💎"
-          lines={byKind.skins} players={balances.players} locale={locale}
-          color="border-purple-500/30" />
+
+      {/* VISTA POR APUESTA */}
+      {bView === 'bet' && (
+        <div className="space-y-3">
+          {byKind.entry_fee && (
+            <BetLineTable title={lbl('Entrada (Entry Fee)', 'Entry Fee')} icon="🎫"
+              lines={byKind.entry_fee} players={balances.players} locale={locale}
+              color="border-blue-500/30" />
+          )}
+          {byKind.nassau && (
+            <BetLineTable title="Nassau" icon="🎯"
+              lines={byKind.nassau} players={balances.players} locale={locale}
+              color="border-orange-500/30" />
+          )}
+          {byKind.per_hole && (
+            <BetLineTable title={lbl('Por hoyo ganado', 'Per hole won')} icon="⛳"
+              lines={byKind.per_hole} players={balances.players} locale={locale}
+              color="border-cyan-500/30" />
+          )}
+          {byKind.prize && (
+            <BetLineTable title={lbl('Premios (birdie/eagle/HIO)', 'Prizes (birdie/eagle/HIO)')} icon="🏅"
+              lines={byKind.prize} players={balances.players} locale={locale}
+              color="border-emerald-500/30" />
+          )}
+          {byKind.penalty && (
+            <BetLineTable title={lbl('Castigos (3 putts)', 'Penalties (3-putts)')} icon="⚠️"
+              lines={byKind.penalty} players={balances.players} locale={locale}
+              color="border-red-500/30" />
+          )}
+          {byKind.skins && (
+            <BetLineTable title={lbl('Skines (con carry-over)', 'Skins (with carry-over)')} icon="💎"
+              lines={byKind.skins} players={balances.players} locale={locale}
+              color="border-purple-500/30" />
+          )}
+        </div>
       )}
 
       {/* GRAN TOTAL */}

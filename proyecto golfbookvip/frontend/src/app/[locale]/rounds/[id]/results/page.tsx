@@ -357,6 +357,131 @@ function MasterResults({
   )
 }
 
+// ── Helpers para print balances ──────────────────────────────────────
+
+function shortenForPlayerPrint(detail: string, kind: string, amount: number, locale: string): string {
+  const isEs = locale === 'es'
+  if (kind === 'entry_fee') {
+    return amount > 0 ? (isEs ? 'Entry fee — premio' : 'Entry fee — prize') : (isEs ? 'Aportación entry fee' : 'Entry fee contribution')
+  }
+  if (kind === 'nassau') {
+    const segMatch = detail.match(/(Salida|Vuelta|Total|Front|Back)/)
+    const seg = segMatch?.[0] ?? ''
+    return amount > 0
+      ? (isEs ? `Nassau ${seg} — ganaste el pot` : `Nassau ${seg} — won pot`)
+      : (isEs ? `Aportación Nassau ${seg}` : `Nassau ${seg} contribution`)
+  }
+  if (kind === 'per_hole') {
+    return amount > 0 ? (isEs ? 'Por hoyo — neto ganado' : 'Per hole — net won') : (isEs ? 'Por hoyo — perdiste' : 'Per hole — lost')
+  }
+  const cut = detail.split('→')[0].trim()
+  return cut || detail
+}
+
+const iconForKindPrint = (kind: string): string => {
+  switch (kind) {
+    case 'entry_fee': return '🎫'
+    case 'nassau': return '🎯'
+    case 'per_hole': return '⛳'
+    case 'prize': return '🏅'
+    case 'penalty': return '⚠️'
+    case 'skins': return '💎'
+    default: return '•'
+  }
+}
+
+// ── Ticket personal por jugador (1 por hoja al imprimir) ──────────────
+
+function PlayerLedgerCard({ player, lines, locale, position }: {
+  player: BalPlayer
+  lines: { kind: string; detail: string; amounts: Record<string, number> }[]
+  locale: string
+  position: number
+}) {
+  const lbl = (es: string, en: string) => locale === 'es' ? es : en
+  const rows = lines
+    .map(l => ({ ...l, amount: l.amounts[player.user_id] ?? 0 }))
+    .filter(r => Math.abs(r.amount) > 0.01)
+  const gains = rows.filter(r => r.amount > 0)
+  const losses = rows.filter(r => r.amount < 0)
+  const sumGains = gains.reduce((s, r) => s + r.amount, 0)
+  const sumLosses = losses.reduce((s, r) => s + r.amount, 0)
+  const net = sumGains + sumLosses
+  return (
+    <div className="player-ledger-card">
+      <div className="ledger-header">
+        <div className="ledger-pos">{position === 1 ? '🏆' : position === 2 ? '🥈' : position === 3 ? '🥉' : `#${position}`}</div>
+        <div className="ledger-name">
+          <h2>{player.name}</h2>
+          <p>HCP {player.course_handicap ?? '—'}</p>
+        </div>
+      </div>
+      <table className="ledger-table">
+        <thead>
+          <tr>
+            <th className="gain-col">{lbl('GANÓ (+)', 'WON (+)')}</th>
+            <th className="loss-col">{lbl('PAGÓ (−)', 'PAID (−)')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td className="gain-cell">
+              {gains.length === 0 ? (
+                <p className="ledger-empty">{lbl('Sin ganancias', 'No gains')}</p>
+              ) : (
+                <table className="ledger-mini">
+                  <tbody>
+                    {gains.map((r, i) => (
+                      <tr key={i}>
+                        <td className="mini-detail">{iconForKindPrint(r.kind)} {shortenForPlayerPrint(r.detail, r.kind, r.amount, locale)}</td>
+                        <td className="mini-amount gain">+${r.amount.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </td>
+            <td className="loss-cell">
+              {losses.length === 0 ? (
+                <p className="ledger-empty">{lbl('Sin pagos', 'No payments')}</p>
+              ) : (
+                <table className="ledger-mini">
+                  <tbody>
+                    {losses.map((r, i) => (
+                      <tr key={i}>
+                        <td className="mini-detail">{iconForKindPrint(r.kind)} {shortenForPlayerPrint(r.detail, r.kind, r.amount, locale)}</td>
+                        <td className="mini-amount loss">−${Math.abs(r.amount).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </td>
+          </tr>
+          <tr className="subtotal-row">
+            <td className="gain-cell">
+              <div className="subtotal gain">
+                <span>{lbl('Subtotal', 'Subtotal')}</span>
+                <b>+${sumGains.toFixed(2)}</b>
+              </div>
+            </td>
+            <td className="loss-cell">
+              <div className="subtotal loss">
+                <span>{lbl('Subtotal', 'Subtotal')}</span>
+                <b>−${Math.abs(sumLosses).toFixed(2)}</b>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div className={`ledger-net ${net >= 0 ? 'positive' : 'negative'}`}>
+        <span>{lbl('TOTAL NETO', 'NET TOTAL')}</span>
+        <b>{net >= 0 ? `+$${net.toFixed(2)}` : `−$${Math.abs(net).toFixed(2)}`}</b>
+      </div>
+    </div>
+  )
+}
+
 // ── Printable balances detallados por tipo + gran total ─────────────
 
 function PrintableBalances({ balances, locale }: { balances: BalData; locale: string }) {
@@ -469,6 +594,13 @@ function PrintableBalances({ balances, locale }: { balances: BalData; locale: st
           'Each bet calculated independently and summed. Entry fee 60/30/10 low net · Nassau pot to segment low net · Per hole low net charges others · Prizes/penalties pay-each-other · Skins with carry-over.'
         )}
       </p>
+
+      {/* Tickets personales por jugador — 1 por hoja al imprimir */}
+      <div className="player-ledger-container">
+        {balances.players.map((p, i) => (
+          <PlayerLedgerCard key={p.user_id} player={p} lines={balances.lines} locale={locale} position={i + 1} />
+        ))}
+      </div>
     </>
   )
 }
@@ -884,6 +1016,59 @@ export default function ResultsPage() {
         .bet-line-table td.grouped { color: #666; font-style: italic; }
         .bet-line-table tr.winner td:first-child { color: #047857; }
         .bet-line-table tr.loser td:first-child { color: #999; }
+
+        /* Player Ledger Cards — 1 por hoja al imprimir */
+        .player-ledger-container { margin-top: 1rem; }
+        .player-ledger-card {
+          background: #fff; color: #111;
+          border: 1.5px solid #047857;
+          border-radius: 0.5rem;
+          padding: 0.6rem 0.8rem;
+          margin-bottom: 0.5rem;
+          break-inside: avoid;
+          page-break-before: always;
+          font-size: 9pt;
+        }
+        .player-ledger-card:first-child { page-break-before: avoid; }
+
+        .ledger-header { display: flex; align-items: center; gap: 0.7rem; border-bottom: 2px solid #047857; padding-bottom: 0.4rem; margin-bottom: 0.5rem; }
+        .ledger-pos { font-size: 24pt; font-weight: 900; line-height: 1; color: #047857; min-width: 2.5rem; text-align: center; }
+        .ledger-name h2 { font-size: 16pt; font-weight: 900; margin: 0; color: #111; line-height: 1.1; }
+        .ledger-name p { font-size: 9pt; color: #666; margin: 0; }
+
+        .ledger-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        .ledger-table thead th { padding: 0.25rem 0.5rem; font-size: 8pt; font-weight: 700; text-align: left; text-transform: uppercase; letter-spacing: 0.05em; }
+        .ledger-table .gain-col { background: #dcfce7; color: #047857; border: 1px solid #86efac; }
+        .ledger-table .loss-col { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+        .ledger-table td { padding: 0.2rem; vertical-align: top; border: 1px solid #e5e7eb; }
+        .ledger-table .gain-cell { background: #f0fdf4; }
+        .ledger-table .loss-cell { background: #fef2f2; }
+        .ledger-empty { font-size: 8pt; color: #999; font-style: italic; margin: 0.3rem; }
+
+        .ledger-mini { width: 100%; border-collapse: collapse; font-size: 8pt; }
+        .ledger-mini td { padding: 0.15rem 0.3rem; border: none; border-bottom: 1px dotted #e5e7eb; }
+        .ledger-mini .mini-detail { color: #333; }
+        .ledger-mini .mini-amount { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; width: 1%; }
+        .ledger-mini .mini-amount.gain { color: #047857; }
+        .ledger-mini .mini-amount.loss { color: #b91c1c; }
+
+        .ledger-table .subtotal-row td { padding: 0.25rem; background: #fef3c7; border-top: 2px solid #d97706; }
+        .subtotal { display: flex; justify-content: space-between; font-size: 9pt; font-weight: 700; }
+        .subtotal.gain { color: #047857; }
+        .subtotal.loss { color: #b91c1c; }
+
+        .ledger-net {
+          margin-top: 0.5rem;
+          padding: 0.5rem 0.8rem;
+          border-radius: 0.4rem;
+          display: flex; justify-content: space-between; align-items: center;
+          font-size: 11pt; font-weight: 900;
+          border: 2px solid;
+        }
+        .ledger-net.positive { background: #047857; color: #fff; border-color: #064e3b; }
+        .ledger-net.negative { background: #b91c1c; color: #fff; border-color: #7f1d1d; }
+        .ledger-net span { letter-spacing: 0.05em; }
+        .ledger-net b { font-size: 16pt; }
 
         /* Per-player card */
         .player-header {

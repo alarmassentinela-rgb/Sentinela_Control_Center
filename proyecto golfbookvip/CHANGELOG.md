@@ -7,6 +7,50 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.7.6] - 2026-05-15
+
+Ledger personal por jugador — cada uno ve su propio "estado de cuenta" con ganó/pagó/total.
+
+### Added — Vista "Por jugador" en balances (round detail)
+
+Toggle nuevo en la sección Pérdidas y ganancias con 3 vistas:
+- **Por apuesta** (default actual): mini-tablas por tipo de apuesta
+- **Por jugador** (NUEVO): una tarjeta por jugador con su ledger personal
+- **Resumen**: solo la tabla de gran total (vista compacta)
+
+**Tarjeta de ledger personal:**
+- Header con nombre y HCP del jugador
+- Grid de 2 columnas:
+  - **GANÓ (+)** verde: lista de cada ingreso con descripción contextualizada e icono
+  - **PAGÓ (−)** rojo: lista de cada salida
+- Cada renglón muestra: ícono del tipo (🎫 🎯 ⛳ 🏅 ⚠️ 💎) + descripción adaptada al jugador + monto
+- Subtotales al pie de cada columna
+- **Banner TOTAL NETO** al fondo: verde si positivo (ganó), rojo si negativo (pagó)
+- Mobile: cards apiladas / Desktop: grid 2 columnas
+
+Las descripciones se contextualizan según el jugador. Ejemplos:
+- Backend dice "Entry fee $20: pot $440 dividido 60/30/10" → Vidal ve "Entry fee — premio +$264" / otros ven "Aportación entry fee −$20"
+- Backend dice "Vidal hizo 4 birdies..." → Vidal lo ve completo "Vidal Garza hizo 4 birdies (cobra $840)" / otros ven el mismo texto pero con su pago de −$40
+- Skins: "Hoyo 5: Leo low net outright → +3 skins (carry desde H3, H4)" — todos ven el texto, cada uno con su monto
+
+### Added — Tickets impresos por jugador en `/results`
+
+Después del breakdown por apuesta y la tabla de gran total, ahora se imprime también **una tarjeta personal por cada jugador** con `page-break-before: always`. Resultado:
+- Cada jugador puede recortar SU hoja y guardarla como ticket
+- Header con posición (🏆🥈🥉 top 3) + nombre grande + HCP
+- Grid GANÓ/PAGÓ con monto detallado
+- Subtotales destacados (fondo amarillo)
+- **Banner TOTAL NETO** grande al pie: verde sólido si ganó, rojo sólido si perdió
+
+### Notes
+
+- Vista "Por jugador" es transparencia personal — cada jugador ve exactamente cómo se calculó SU número
+- Vista "Por apuesta" sigue siendo para auditoría general del tesorero
+- Vista "Resumen" para validación rápida sin scroll
+- En impresión, las 3 vistas se imprimen secuencialmente: auditoría general → gran total → tickets personales
+
+---
+
 ## [1.7.5] - 2026-05-15
 
 Más granularidad en el desglose de premios y skines.
