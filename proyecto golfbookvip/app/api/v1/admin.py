@@ -1,6 +1,6 @@
 """Super-admin dashboard API — restricted to users with is_superadmin=True."""
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import select, func, case
+from sqlalchemy import select, func, case, text
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel, Field
 from typing import Optional
@@ -307,3 +307,218 @@ async def generate_reset_link(user_id: str, current_user: CurrentUser, db: DB):
         "token": token,
         "expires_in_hours": 1,
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# GOLFBOOKVIP CLUBS — Super admin manages SaaS golf clubs (tenants)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+import re as _re
+import uuid as _uuid
+from datetime import date as _date
+from app.models.club import Club, ClubStaff, ClubMember
+
+
+class ClubCreatePayload(BaseModel):
+    name: str = Field(..., min_length=2, max_length=200)
+    city: Optional[str] = None
+    state: Optional[str] = None
+    country: str = "MX"
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    currency: str = "MXN"
+    timezone: str = "America/Mexico_City"
+    plan_id: Optional[int] = None
+    admin_user_id: Optional[str] = None  # opcional: auto-asignar un admin del club
+
+
+class ClubPatchPayload(BaseModel):
+    name: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    website: Optional[str] = None
+    currency: Optional[str] = None
+    timezone: Optional[str] = None
+    plan_id: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+def _slugify(name: str) -> str:
+    s = _re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    return s or f"club-{_uuid.uuid4().hex[:8]}"
+
+
+@router.get("/clubs")
+async def list_all_clubs(current_user: CurrentUser, db: DB, q: str = "", include_inactive: bool = False):
+    """Lista todos los clubes con conteos. Super admin only."""
+    _require_admin(current_user)
+    query = select(Club).order_by(Club.created_at.desc())
+    if not include_inactive:
+        query = query.where(Club.is_active == True)
+    if q:
+        like = f"%{q}%"
+        query = query.where(
+            (Club.name.ilike(like)) | (Club.slug.ilike(like)) | (Club.city.ilike(like))
+        )
+    rows = (await db.execute(query)).scalars().all()
+    out = []
+    for c in rows:
+        member_count = (await db.execute(
+            select(func.count()).select_from(ClubMember)
+            .where(ClubMember.club_id == c.id, ClubMember.status == "active")
+        )).scalar() or 0
+        staff_count = (await db.execute(
+            select(func.count()).select_from(ClubStaff)
+            .where(ClubStaff.club_id == c.id, ClubStaff.is_active == True)
+        )).scalar() or 0
+        out.append({
+            "id": str(c.id),
+            "name": c.name,
+            "slug": c.slug,
+            "city": c.city,
+            "state": c.country,  # state field doesn't exist in current schema, reuse country for now
+            "country": c.country,
+            "currency": c.currency,
+            "phone": c.phone,
+            "email": c.email,
+            "plan_id": c.plan_id,
+            "plan_expires_at": c.plan_expires_at.isoformat() if c.plan_expires_at else None,
+            "is_active": c.is_active,
+            "is_verified": c.is_verified,
+            "member_count": member_count,
+            "staff_count": staff_count,
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+        })
+    return out
+
+
+@router.get("/clubs/plans")
+async def list_subscription_plans(current_user: CurrentUser, db: DB):
+    """Lista de planes disponibles para asignar a clubes."""
+    _require_admin(current_user)
+    rows = (await db.execute(
+        text("SELECT id, code, name, plan_type, price_monthly, price_yearly, max_members, features FROM subscription_plans WHERE plan_type='club' AND is_active=true ORDER BY price_monthly ASC")
+    )).all()
+    return [
+        {
+            "id": r[0], "code": r[1], "name": r[2], "plan_type": r[3],
+            "price_monthly": float(r[4]) if r[4] is not None else 0,
+            "price_yearly": float(r[5]) if r[5] is not None else 0,
+            "max_members": r[6], "features": r[7],
+        }
+        for r in rows
+    ]
+
+
+@router.post("/clubs", status_code=201)
+async def create_club_as_admin(data: ClubCreatePayload, current_user: CurrentUser, db: DB):
+    """Crea un club SaaS con plan asignado. Opcionalmente designa al admin del club."""
+    _require_admin(current_user)
+    slug = _slugify(data.name)
+    # Asegurar unicidad
+    existing = (await db.execute(select(Club).where(Club.slug == slug))).scalar_one_or_none()
+    if existing:
+        slug = f"{slug}-{_uuid.uuid4().hex[:6]}"
+
+    club = Club(
+        name=data.name,
+        slug=slug,
+        city=data.city,
+        country=data.country or "MX",
+        phone=data.phone,
+        email=data.email,
+        currency=data.currency or "MXN",
+        timezone=data.timezone or "America/Mexico_City",
+        plan_id=data.plan_id,
+        is_active=True,
+        is_verified=True,  # creado por super admin → verificado
+    )
+    db.add(club)
+    await db.flush()
+
+    # Si se especificó admin_user_id, asignarlo como staff con rol owner
+    if data.admin_user_id:
+        try:
+            admin_uuid = _uuid.UUID(data.admin_user_id)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="admin_user_id inválido")
+        user_check = await db.execute(select(User).where(User.id == admin_uuid))
+        if not user_check.scalar_one_or_none():
+            raise HTTPException(status_code=404, detail="Usuario admin no encontrado")
+        staff = ClubStaff(club_id=club.id, user_id=admin_uuid, role="owner", is_active=True)
+        db.add(staff)
+
+    return {
+        "id": str(club.id),
+        "slug": club.slug,
+        "name": club.name,
+        "plan_id": club.plan_id,
+        "is_active": club.is_active,
+    }
+
+
+@router.patch("/clubs/{club_id}")
+async def update_club(club_id: str, data: ClubPatchPayload, current_user: CurrentUser, db: DB):
+    """Actualiza datos del club: plan, status, info de contacto. Super admin only."""
+    _require_admin(current_user)
+    result = await db.execute(select(Club).where(Club.id == _uuid.UUID(club_id)))
+    club = result.scalar_one_or_none()
+    if not club:
+        raise HTTPException(status_code=404, detail="Club no encontrado")
+    for field, value in data.model_dump(exclude_none=True).items():
+        setattr(club, field, value)
+    await db.flush()
+    return {"id": str(club.id), "slug": club.slug, "is_active": club.is_active, "plan_id": club.plan_id}
+
+
+@router.post("/clubs/{club_id}/staff")
+async def add_club_staff(club_id: str, current_user: CurrentUser, db: DB,
+                          user_id: str, role: str = "admin"):
+    """Asigna un usuario como staff (admin/manager/owner) del club."""
+    _require_admin(current_user)
+    if role not in ("owner", "admin", "manager", "staff"):
+        raise HTTPException(status_code=422, detail="Rol inválido")
+    club_uuid = _uuid.UUID(club_id)
+    user_uuid = _uuid.UUID(user_id)
+    # Verificar que el usuario existe
+    user_res = await db.execute(select(User).where(User.id == user_uuid))
+    if not user_res.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    # Verificar club
+    club_res = await db.execute(select(Club).where(Club.id == club_uuid))
+    if not club_res.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Club no encontrado")
+    # Crear o actualizar staff record
+    existing = await db.execute(
+        select(ClubStaff).where(ClubStaff.club_id == club_uuid, ClubStaff.user_id == user_uuid)
+    )
+    staff = existing.scalar_one_or_none()
+    if staff:
+        staff.role = role
+        staff.is_active = True
+    else:
+        staff = ClubStaff(club_id=club_uuid, user_id=user_uuid, role=role, is_active=True)
+        db.add(staff)
+    await db.flush()
+    return {"club_id": club_id, "user_id": user_id, "role": role}
+
+
+@router.delete("/clubs/{club_id}/staff/{user_id}")
+async def remove_club_staff(club_id: str, user_id: str, current_user: CurrentUser, db: DB):
+    """Quita acceso de staff a un usuario."""
+    _require_admin(current_user)
+    result = await db.execute(
+        select(ClubStaff).where(
+            ClubStaff.club_id == _uuid.UUID(club_id),
+            ClubStaff.user_id == _uuid.UUID(user_id),
+        )
+    )
+    staff = result.scalar_one_or_none()
+    if not staff:
+        raise HTTPException(status_code=404, detail="Staff no encontrado")
+    staff.is_active = False
+    await db.flush()
+    return {"club_id": club_id, "user_id": user_id, "is_active": False}

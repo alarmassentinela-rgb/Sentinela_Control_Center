@@ -1,11 +1,12 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import {
   Users, Flag, CheckCircle2, Clock, Play, BarChart2,
   TrendingUp, Trophy, Search, ChevronLeft, ChevronRight,
   ToggleLeft, ToggleRight, Loader2, RefreshCw, ShieldCheck,
-  Activity, Hash, Pencil, KeyRound, Copy, Check, X,
+  Activity, Hash, Pencil, KeyRound, Copy, Check, X, Building2,
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
@@ -311,6 +312,11 @@ export default function AdminPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Link href={`/${locale}/admin/clubs`}
+              className="flex items-center gap-1.5 text-xs text-emerald-300 hover:text-white bg-emerald-500/15 hover:bg-emerald-500/30 px-3 py-1.5 rounded-lg transition-colors border border-emerald-500/30">
+              <Building2 size={12} />
+              Clubes SaaS
+            </Link>
             <button onClick={handleRefresh} disabled={refreshing}
               className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg transition-colors border border-zinc-700 disabled:opacity-50">
               <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />

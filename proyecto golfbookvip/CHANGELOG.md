@@ -7,6 +7,48 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.10.0] - 2026-05-15
+
+### Added — Clubs SaaS MVP · Fase 0 — Infraestructura
+
+Primer release del producto B2B **GolfBookVIP Clubs** (gestión SaaS para clubes de golf), junto al producto B2C existente para jugadores.
+
+**Backend — endpoints súper admin (`/api/v1/admin/clubs/*`):**
+- `GET /admin/clubs` — listar todos los clubes con búsqueda (`q`) e `include_inactive`. Devuelve `member_count` y `staff_count`.
+- `GET /admin/clubs/plans` — listar `subscription_plans` disponibles (Free / Standard / Premium / Enterprise) para asignar a clubes.
+- `POST /admin/clubs` — crear club con auto-slug desde el nombre (kebab-case + uuid corto si colisión). Acepta plan inicial opcional.
+- `PATCH /admin/clubs/{club_id}` — actualizar metadata, plan, estado activo/inactivo.
+- `POST /admin/clubs/{club_id}/staff` — agregar staff con rol (owner/admin/manager/staff).
+- `DELETE /admin/clubs/{club_id}/staff/{user_id}` — quitar staff (desactivación lógica).
+
+**Frontend — panel súper admin (`/admin/clubs`):**
+- Botón "Clubes SaaS" en header del panel admin principal.
+- Listado de clubes en grid responsivo con: nombre, slug-subdominio, plan actual (Free/Standard/Premium con colores), miembros, staff, estado, ciudad, contacto.
+- Búsqueda por nombre/slug/ciudad + toggle "incluir inactivos".
+- Modal "Nuevo club" con campos: nombre, ciudad, país, teléfono, email, plan inicial.
+- Modal "Cambiar plan" para upgradear/degradear el plan de un club existente.
+- Botón activar/desactivar club.
+- Sección "Planes disponibles" mostrando catálogo con precios mensuales y límite de miembros.
+
+**Bases que aprovecha (modelos pre-existentes en DB):**
+- `clubs`, `club_staff`, `club_members`, `membership_types`, `member_accounts`, `account_transactions`
+- `subscription_plans` con 6 planes pre-sembrados (free_player, player_pro, free_club, club_starter, club_pro, club_enterprise)
+- `tee_time_slots`, `tee_time_bookings` (listos para Fase 2)
+
+**Próximas fases (planeadas, no incluidas en esta release):**
+- Fase 1 (5-7 días): Padrón de miembros (CRUD + import CSV)
+- Fase 2 (7-10 días): Sistema de tee times + calendario admin
+- Fase 3 (5-7 días): Estado de cuenta del miembro + PDF
+- Fase 4 (3-5 días): Onboarding wizard + documentación
+
+### Notes
+
+- Multi-tenancy implementada por `club_id` en cada tabla del dominio club; sin schemas separados.
+- White-label con dominio personalizado (Premium) queda planeado para Fase 4+ vía reverse proxy.
+- Solo el súper admin (`is_superadmin=true`) puede crear/editar clubes desde este panel; el staff del club tendrá su propia UI más adelante.
+
+---
+
 ## [1.9.3] - 2026-05-15
 
 ### Fixed — Estadísticas del perfil mostraban todo en cero
