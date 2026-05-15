@@ -263,8 +263,16 @@ async def get_balance_history(
         )
         bal = bal_res.scalar_one_or_none()
 
-        # Lazy backfill si no existe
-        if bal is None:
+        # Detectar si el balance está obsoleto:
+        # - No existe (legacy)
+        # - El row es un placeholder creado al invitar (updated_at < finished_at)
+        needs_recompute = (
+            bal is None
+            or (round_.finished_at and bal.updated_at and bal.updated_at < round_.finished_at)
+        )
+
+        # Lazy backfill: recalcular y persistir balances finales
+        if needs_recompute:
             try:
                 await balances_svc.persist_balances(str(round_.id), db)
                 bal_res = await db.execute(
@@ -274,15 +282,24 @@ async def get_balance_history(
                     )
                 )
                 bal = bal_res.scalar_one_or_none()
-            except Exception:
-                bal = None
+            except Exception as ex:
+                import logging
+                logging.warning(f"lazy persist_balances failed for round {round_.id}: {ex}")
 
-        if not bal or (
-            float(bal.total_balance or 0) == 0
-            and float(bal.entry_fee or 0) == 0
-            and float(bal.nassau_balance or 0) == 0
-        ):
-            # Sin movimientos para este jugador en esta ronda
+        if not bal:
+            continue
+        # Skip si el jugador no tuvo movimiento (todo $0 en todas las categorías)
+        all_zero = (
+            abs(float(bal.entry_fee or 0)) < 0.01
+            and abs(float(bal.nassau_balance or 0)) < 0.01
+            and abs(float(bal.other_balance or 0)) < 0.01
+            and abs(float(bal.birds_earned or 0)) < 0.01
+            and abs(float(bal.three_putt_loss or 0)) < 0.01
+            and abs(float(bal.skins_balance or 0)) < 0.01
+            and abs(float(bal.oyes_balance or 0)) < 0.01
+            and abs(float(bal.total_balance or 0)) < 0.01
+        )
+        if all_zero:
             continue
 
         items.append({

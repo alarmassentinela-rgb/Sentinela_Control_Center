@@ -7,6 +7,35 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.9.1] - 2026-05-15
+
+### Fixed — Lazy backfill no detectaba placeholders obsoletos
+
+Bug: `/me/balance-history` no mostraba rondas finalizadas ANTES del despliegue de v1.9.0 porque:
+
+1. Cuando se invita un jugador a una ronda, `invite_player` crea un row vacío en `round_player_balance` como placeholder (entry_fee=0, total=0, etc.) — esto es preexistente.
+2. La condición de lazy backfill era `if bal is None: recompute` — pero el placeholder EXISTE con valores en cero, así que la condición fallaba.
+3. Resultado: balances persistidos quedaban en cero forever para rondas finalizadas antes del despliegue.
+
+Fix: la nueva condición detecta también placeholders obsoletos via `bal.updated_at < round.finished_at`:
+
+```python
+needs_recompute = (
+    bal is None
+    or (round_.finished_at and bal.updated_at and bal.updated_at < round_.finished_at)
+)
+```
+
+Como los placeholders se crean en `invite_player` (antes de `finished`), su `updated_at` siempre es anterior a `finished_at` — el lazy backfill ahora los detecta y los recalcula correctamente.
+
+### Impact
+
+- Las rondas finalizadas antiguas ahora aparecen en el historial al primer query
+- Las nuevas rondas finalizadas siguen persistiendo desde `finish_round` (no requieren backfill)
+- Idempotente: recompute solo corre 1 vez (queda persistido con `updated_at >= finished_at`)
+
+---
+
 ## [1.9.0] - 2026-05-15
 
 Historial financiero personal — cada jugador ve su estado de cuenta con gráfica, desglose y PDF profesional.
