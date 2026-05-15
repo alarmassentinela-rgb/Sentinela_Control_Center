@@ -616,6 +616,22 @@ class SentinelaSubscription(models.Model):
             'context': {'default_subscription_id': self.id},
         }
 
+    def action_open_close_wizard(self):
+        """Abre el wizard de Baja Definitiva. Si el contrato está dentro del plazo
+        forzoso, el wizard muestra la opción de facturar penalización."""
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Baja Definitiva',
+            'res_model': 'sentinela.subscription.close.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_subscription_id': self.id,
+                'default_action_type': 'cancel',
+            },
+        }
+
     def action_check_connection(self):
         """Verifica estado PPPoE en MikroTik y actualiza IP."""
         self.ensure_one()

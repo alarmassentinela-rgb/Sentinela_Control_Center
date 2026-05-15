@@ -7,18 +7,36 @@
             <form string="Confirmar Acción de Servicio">
                 <sheet>
                     <div class="alert alert-warning" role="alert">
-                        Está a punto de <strong><field name="action_type" readonly="1" class="oe_inline"/></strong>. 
+                        Está a punto de <strong><field name="action_type" readonly="1" class="oe_inline"/></strong>.
                         Por favor, indique el motivo para fines de auditoría.
                     </div>
                     <group>
                         <field name="subscription_id" invisible="1"/>
+                        <field name="is_within_plazo" invisible="1"/>
+                        <field name="currency_id" invisible="1"/>
                         <field name="reason_type"/>
                         <field name="notes" placeholder="Explique brevemente el motivo..."/>
+                    </group>
+
+                    <!-- Sección Penalización: solo visible al CANCELAR dentro de plazo forzoso -->
+                    <div class="alert alert-danger" role="alert"
+                         invisible="action_type != 'cancel' or not is_within_plazo">
+                        ⚠️ <strong>Atención:</strong> este contrato tiene <strong>plazo forzoso vigente hasta
+                        <field name="commitment_end_date" readonly="1" class="oe_inline"/></strong>.
+                        Se sugiere facturar la penalización configurada antes de cancelar.
+                    </div>
+                    <group string="💰 Penalización por Cancelación Anticipada"
+                           invisible="action_type != 'cancel' or not is_within_plazo">
+                        <field name="penalty_suggested" readonly="1"/>
+                        <field name="apply_penalty" widget="boolean_toggle"/>
+                        <field name="penalty_amount_to_charge"
+                               invisible="not apply_penalty"
+                               required="apply_penalty"/>
                     </group>
                 </sheet>
                 <footer>
                     <button name="action_confirm" string="Confirmar y Aplicar" type="object" class="btn-danger"/>
-                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                    <button string="Cerrar" class="btn-secondary" special="cancel"/>
                 </footer>
             </form>
         </field>

@@ -22,6 +22,8 @@
                         invisible="state != 'suspension'"/>
                     <button name="action_open_extension_wizard" string="Otorgar Prórroga" type="object" class="btn-info"
                         invisible="state != 'suspension' or invoice_count == 0"/>
+                    <button name="action_open_close_wizard" string="Baja Definitiva" type="object" class="btn-danger"
+                        invisible="state in ('draft','cancelled')"/>
                     <button name="action_draft" string="Regresar a Borrador" type="object" class="btn-secondary"
                         invisible="state not in ['pending_signature', 'confirmed']"/>
                     <field name="state" widget="statusbar"
