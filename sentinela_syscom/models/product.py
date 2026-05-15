@@ -27,12 +27,15 @@ class ProductTemplate(models.Model):
         params = self.env['ir.config_parameter'].sudo()
         client_id = params.get_param('sentinela_syscom.client_id')
         client_secret = params.get_param('sentinela_syscom.client_secret')
-        telegram_token = "8373567654:AAGyLpZttCUaHh-LymQwEHRBOqwtVNXYN10" # Nuevo Token del bot Sentinela 2026
-        chat_id = "7965190381"
+        # v18.0.1.2.0: credenciales Telegram leídas desde ir.config_parameter
+        telegram_token = params.get_param('sentinela_syscom.telegram_token')
+        chat_id = params.get_param('sentinela_syscom.telegram_chat_id')
 
         stats = {'total': 0, 'success': 0, 'errors': 0}
-        
+
         def send_telegram(msg):
+            if not telegram_token or not chat_id:
+                return  # Telegram opcional: si no hay config, no envía
             try:
                 url = f"https://api.telegram.org/bot{telegram_token}/sendMessage"
                 requests.post(url, data={'chat_id': chat_id, 'text': msg, 'parse_mode': 'Markdown'}, timeout=10)

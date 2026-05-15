@@ -8,6 +8,17 @@ class ResConfigSettings(models.TransientModel):
     syscom_client_id = fields.Char(string='Client ID', config_parameter='sentinela_syscom.client_id')
     syscom_client_secret = fields.Char(string='Client Secret', config_parameter='sentinela_syscom.client_secret')
     syscom_api_url = fields.Char(string='API URL', default='https://developers.syscom.mx/api/v1', config_parameter='sentinela_syscom.api_url')
+    # v18.0.1.2.0: Telegram para reporte nocturno del cron de sincronización
+    syscom_telegram_token = fields.Char(
+        string='Token Bot Telegram (reporte cron)',
+        config_parameter='sentinela_syscom.telegram_token',
+        help='Token del bot de Telegram que recibe el reporte diario del cron de actualización de precios/stock. Si está vacío, no se envía reporte.',
+    )
+    syscom_telegram_chat_id = fields.Char(
+        string='Chat ID Telegram',
+        config_parameter='sentinela_syscom.telegram_chat_id',
+        help='ID del chat (usuario o grupo) que recibe el reporte diario.',
+    )
 
     def action_test_syscom_connection(self):
         """ Tests the connection to Syscom API using the provided credentials """

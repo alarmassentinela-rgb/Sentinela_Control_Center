@@ -25,6 +25,20 @@
                             </div>
                         </setting>
                     </block>
+                    <block title="Reporte Telegram (Cron Nocturno)" help="Opcional. Si se configura, el cron diario envía un resumen al chat indicado.">
+                        <setting>
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="syscom_telegram_token" class="col-lg-3 o_light_label"/>
+                                    <field name="syscom_telegram_token" password="True"/>
+                                </div>
+                                <div class="row mt16">
+                                    <label for="syscom_telegram_chat_id" class="col-lg-3 o_light_label"/>
+                                    <field name="syscom_telegram_chat_id"/>
+                                </div>
+                            </div>
+                        </setting>
+                    </block>
                 </app_settings>
             </xpath>
         </field>
