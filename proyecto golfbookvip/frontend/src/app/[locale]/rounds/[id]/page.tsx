@@ -1356,8 +1356,10 @@ type BalLine = { kind: string; detail: string; amounts: Record<string, number> }
 type BalData = { has_bets: boolean; players: BalPlayer[]; lines: BalLine[]; note?: string }
 
 function fmtMoney(n: number, locale: string): string {
-  const sign = n >= 0 ? '+' : ''
-  return `${sign}$${n.toFixed(2)}`
+  void locale
+  if (Math.abs(n) < 0.01) return '—'
+  const sign = n >= 0 ? '+' : '−'
+  return `${sign}$${Math.abs(n).toFixed(2)}`
 }
 
 // Mini-tabla por tipo de apuesta — muestra solo jugadores con movimiento ≠ 0
@@ -1697,7 +1699,7 @@ function BalancesSection({ balances, lbl, locale }: { balances: BalData; lbl: (e
               {balances.players.map((p, i) => {
                 const t = p.breakdown.total
                 const tCls = Math.abs(t) < 0.01 ? 'text-zinc-500' : t > 0 ? 'text-emerald-400' : 'text-red-400'
-                const cellCls = (v: number) => Math.abs(v) < 0.01 ? 'text-zinc-700' : v > 0 ? 'text-emerald-400' : 'text-red-400'
+                const cellCls = (v: number) => Math.abs(v) < 0.01 ? 'text-zinc-500' : v > 0 ? 'text-emerald-400' : 'text-red-400'
                 const medalCls = i === 0 ? 'text-yellow-400' : i === 1 ? 'text-zinc-300' : i === 2 ? 'text-amber-700' : 'text-zinc-600'
                 return (
                   <tr key={p.user_id} className={`hover:bg-zinc-800/30 ${i === 0 ? 'bg-yellow-500/5' : ''}`}>

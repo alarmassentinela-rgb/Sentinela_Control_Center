@@ -7,6 +7,17 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.7.7] - 2026-05-15
+
+### Fixed — Ceros invisibles en tabla de balances
+
+- En la tabla "Gran total por jugador" del round detail y en `/results` print, los ceros aparecían como `+$0.00` con color `text-zinc-700` (casi invisible sobre fondo oscuro)
+- `fmtMoney()` ahora devuelve `—` cuando el valor es ~0 (más limpio y legible)
+- `cellCls` para valores cero usa `text-zinc-500` (más contraste) por si acaso
+- Aplicado tanto en pantalla como en versión impresa
+
+---
+
 ## [1.7.6] - 2026-05-15
 
 Ledger personal por jugador — cada uno ve su propio "estado de cuenta" con ganó/pagó/total.
