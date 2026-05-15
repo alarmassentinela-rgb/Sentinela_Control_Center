@@ -15,6 +15,8 @@ class SentinelaSubscription(models.Model):
 
     name = fields.Char(string='Referencia', required=True, copy=False, readonly=True, default='New')
     partner_id = fields.Many2one('res.partner', string='Cliente', required=True, tracking=True)
+    # Nota v18.0.1.3.0: el string label se sobreescribe en la vista PRO para usar
+    # "Fecha de Alta del Servicio" / "Próxima Renovación" / "Días de Crédito" / "Frecuencia de Cobro"
 
     service_address_id = fields.Many2one('res.partner', string='Dirección de Servicio',
         domain="['|', ('id', '=', partner_id), ('parent_id', '=', partner_id)]",
@@ -61,7 +63,8 @@ class SentinelaSubscription(models.Model):
     is_forced_contract = fields.Boolean(string='¿Plazo Forzoso?', default=False)
     commitment_period = fields.Integer(string='Plazo (Meses)', default=12)
     commitment_end_date = fields.Date(string='Fin de Plazo', compute='_compute_commitment_end', store=True)
-    penalty_amount = fields.Float(string='Penalización Anticipada')
+    # DEPRECATED v18.0.1.3.0 — duplicado de early_termination_fee. Quedarse con early_termination_fee.
+    penalty_amount = fields.Float(string='Penalización Anticipada (legacy)')
     
     equipment_ownership = fields.Selection([
         ('company', 'Propiedad de la Empresa (Comodato)'),
@@ -73,17 +76,22 @@ class SentinelaSubscription(models.Model):
         domain="[('is_subscription', '=', True)]")
 
     is_contract_locked = fields.Boolean(string='Contrato Sellado', default=False, tracking=True)
+    # DEPRECATED v18.0.1.3.0 — redundante con recurring_interval. Mantenido para compatibilidad
+    # con plantillas de contrato que lo referencian. NO editar desde UI.
     contract_mode = fields.Selection([
         ('monthly', 'Mensual'),
         ('annual', 'Anual'),
         ('biannual', 'Semestral'),
         ('custom', 'Personalizado'),
-    ], string='Modalidad de Contrato', default='monthly')
-    early_termination_fee = fields.Monetary(string='Penalización por Rescisión', currency_field='currency_id')
+    ], string='Modalidad de Contrato (legacy)', default='monthly')
+    early_termination_fee = fields.Monetary(string='Penalización por Cancelar Antes de Plazo', currency_field='currency_id')
     contract_signed = fields.Boolean(string='Contrato Firmado', default=False, tracking=True)
     contract_body_html = fields.Html(string='Contrato (HTML)', compute='_compute_contract_body_html', store=False)
-    commitment_months = fields.Integer(related='commitment_period', string='Plazo (meses)', readonly=True)
-    payment_day = fields.Integer(string='Día de Pago', default=5)
+    # DEPRECATED v18.0.1.3.0 — duplicado de commitment_period. Eliminado de la vista.
+    # commitment_months = fields.Integer(related='commitment_period', string='Plazo (meses)', readonly=True)
+    # DEPRECATED v18.0.1.3.0 — decorativo, no respetaba lógica. Eliminado de la vista.
+    # Mantenido en modelo para compatibilidad con plantillas (referencia {{ object.payment_day }}).
+    payment_day = fields.Integer(string='Día de Pago (legacy)', default=5)
 
     edit_plan_locked = fields.Boolean(string='Plan Bloqueado', default=True)
     edit_pppoe_locked = fields.Boolean(string='PPPoE Bloqueado', default=True)

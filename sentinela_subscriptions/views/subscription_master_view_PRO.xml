@@ -69,7 +69,7 @@
                                 domain="[('is_subscription', '=', True), ('service_type', '=', service_type)]"
                                 help="Selecciona primero el tipo de servicio arriba para filtrar los planes."/>
                             <field name="price_unit" string="Precio Mensual"/>
-                            <field name="next_billing_date" string="Próximo Cobro"/>
+                            <field name="next_billing_date" string="Próxima Renovación"/>
                         </group>
                     </group>
 
@@ -124,22 +124,19 @@
                         <page string="📅 Facturación" name="billing">
                             <group>
                                 <group string="Ciclo de Cobro">
-                                    <field name="start_date"/>
-                                    <field name="next_billing_date"/>
-                                    <field name="recurring_interval"/>
-                                    <field name="payment_day" string="Día del Mes a Cobrar"/>
-                                    <field name="payment_term_id" options="{'no_create': True}"/>
+                                    <field name="start_date" string="Fecha de Alta del Servicio"/>
+                                    <field name="next_billing_date" string="Próxima Renovación"/>
+                                    <field name="recurring_interval" string="Frecuencia de Cobro"/>
+                                    <field name="payment_term_id" string="Días de Crédito" options="{'no_create': True}"/>
                                     <field name="extension_due_date" invisible="not extension_due_date"/>
                                 </group>
-                                <group string="Preferencias">
+                                <group string="Preferencias de Facturación">
                                     <field name="auto_invoice" widget="boolean_toggle"/>
                                     <field name="auto_send_mail" widget="boolean_toggle"/>
-                                    <field name="contract_mode"/>
                                     <field name="is_forced_contract" widget="boolean_toggle"/>
                                     <field name="commitment_period" invisible="not is_forced_contract"/>
                                     <field name="commitment_end_date" readonly="1" invisible="not is_forced_contract"/>
-                                    <field name="early_termination_fee" invisible="not is_forced_contract"/>
-                                    <field name="penalty_amount" invisible="not is_forced_contract"/>
+                                    <field name="early_termination_fee" string="Penalización por Cancelar Antes de Plazo" invisible="not is_forced_contract"/>
                                 </group>
                                 <group string="Equipo / Propiedad">
                                     <field name="equipment_ownership"/>
