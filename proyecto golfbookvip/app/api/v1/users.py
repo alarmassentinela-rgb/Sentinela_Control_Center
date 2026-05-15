@@ -42,33 +42,147 @@ async def set_initial_handicap(data: HandicapInit, current_user: CurrentUser, db
 
 @router.get("/me/stats")
 async def get_my_stats(current_user: CurrentUser, db: DB):
-    result = await db.execute(
-        select(PlayerStats).where(PlayerStats.user_id == current_user.id)
+    """Estadísticas calculadas on-demand desde los scores capturados.
+
+    Itera rondas finished donde participó el usuario y agrega:
+    - Conteo de rondas / hoyos
+    - Promedio gross y putts
+    - Conteos por categoría (birdies/eagles/pars/bogeys/etc.)
+    - Mejor 18 y mejor 9
+    - Mejor diferencial de hándicap
+    - Total ganado/perdido en apuestas (de balances persistidos)
+    """
+    from app.models.round import Round, RoundPlayer
+    from app.models.score import Score, RoundPlayerBalance
+    from app.models.course import CourseHole
+    from app.models.handicap import ScoreDifferential
+
+    # Rondas finalizadas donde participó como playing
+    rounds_q = await db.execute(
+        select(Round, RoundPlayer)
+        .join(RoundPlayer, RoundPlayer.round_id == Round.id)
+        .where(
+            RoundPlayer.user_id == current_user.id,
+            Round.status == "finished",
+            RoundPlayer.participant_mode == "playing",
+            RoundPlayer.withdrawn_at.is_(None),
+        )
     )
-    stats = result.scalar_one_or_none()
-    if not stats:
-        raise HTTPException(status_code=404, detail="Stats no encontradas")
+    rounds_rows = rounds_q.all()
+    total_rounds = len(rounds_rows)
+
+    total_holes = 0
+    total_gross = 0
+    total_putts = 0
+    holes_with_putts = 0
+    total_eagles = total_birdies = total_pars = total_bogeys = 0
+    total_double_bogeys = total_worse = total_hio = total_three_putts = 0
+    best_score_18: int | None = None
+    best_score_9: int | None = None
+
+    for round_, _rp in rounds_rows:
+        # Scores del usuario en esa ronda
+        scores_q = await db.execute(
+            select(Score).where(
+                Score.round_id == round_.id,
+                Score.user_id == current_user.id,
+            )
+        )
+        scores = scores_q.scalars().all()
+        if not scores:
+            continue
+
+        # Pars del campo (mapa hole_number → par)
+        holes_q = await db.execute(
+            select(CourseHole).where(CourseHole.course_id == round_.course_id)
+        )
+        par_by_hole = {h.hole_number: (h.par or 0) for h in holes_q.scalars().all()}
+
+        round_gross = 0
+        round_holes_with_score = 0
+        for s in scores:
+            if not s.gross_score:
+                continue
+            round_gross += s.gross_score
+            round_holes_with_score += 1
+            par = par_by_hole.get(s.hole_number, 0)
+            if s.putts is not None:
+                total_putts += s.putts
+                holes_with_putts += 1
+            if s.is_hole_in_one:
+                total_hio += 1
+            if s.is_three_putt:
+                total_three_putts += 1
+            # Clasificar score vs par
+            if s.is_albatross or (par and s.gross_score == par - 3):
+                total_eagles += 1  # se agrupa con eagles para el conteo "águilas+"
+            elif s.is_eagle or (par and s.gross_score == par - 2):
+                total_eagles += 1
+            elif s.is_birdie or (par and s.gross_score == par - 1):
+                total_birdies += 1
+            elif par and s.gross_score == par:
+                total_pars += 1
+            elif s.is_bogey or (par and s.gross_score == par + 1):
+                total_bogeys += 1
+            elif s.is_double_bogey or (par and s.gross_score == par + 2):
+                total_double_bogeys += 1
+            else:
+                total_worse += 1
+
+        total_holes += round_holes_with_score
+        total_gross += round_gross
+
+        # Mejor 18 / 9
+        if round_holes_with_score == round_.holes_to_play and round_gross > 0:
+            if round_.holes_to_play == 18:
+                if best_score_18 is None or round_gross < best_score_18:
+                    best_score_18 = round_gross
+            elif round_.holes_to_play == 9:
+                if best_score_9 is None or round_gross < best_score_9:
+                    best_score_9 = round_gross
+
+    avg_score = (total_gross / total_holes) if total_holes > 0 else None
+    avg_putts_per_hole = (total_putts / holes_with_putts) if holes_with_putts > 0 else None
+    avg_putts_per_round = (total_putts / total_rounds) if total_rounds > 0 else None
+
+    # Mejor diferencial de hándicap
+    diff_q = await db.execute(
+        select(ScoreDifferential.differential)
+        .where(ScoreDifferential.user_id == current_user.id)
+        .order_by(ScoreDifferential.differential.asc())
+        .limit(1)
+    )
+    best_diff = diff_q.scalar_one_or_none()
+
+    # Total ganado/perdido en apuestas (desde balances persistidos)
+    bal_q = await db.execute(
+        select(RoundPlayerBalance.total_balance).where(RoundPlayerBalance.user_id == current_user.id)
+    )
+    totals = [float(t) for (t,) in bal_q.all() if t is not None]
+    total_bet_won = sum(t for t in totals if t > 0)
+    total_bet_lost = abs(sum(t for t in totals if t < 0))
+
     return {
-        "total_rounds": stats.total_rounds,
-        "total_holes": stats.total_holes,
-        "avg_score": float(stats.avg_score) if stats.avg_score else None,
-        "avg_putts_per_round": float(stats.avg_putts_per_round) if stats.avg_putts_per_round else None,
-        "avg_putts_per_hole": float(stats.avg_putts_per_hole) if stats.avg_putts_per_hole else None,
-        "fairways_hit_pct": float(stats.fairways_hit_pct) if stats.fairways_hit_pct else None,
-        "gir_pct": float(stats.gir_pct) if stats.gir_pct else None,
-        "total_eagles": stats.total_eagles,
-        "total_birdies": stats.total_birdies,
-        "total_pars": stats.total_pars,
-        "total_bogeys": stats.total_bogeys,
-        "total_double_bogeys": stats.total_double_bogeys,
-        "total_worse": stats.total_worse,
-        "total_hole_in_ones": stats.total_hole_in_ones,
-        "total_three_putts": stats.total_three_putts,
-        "best_score_18": stats.best_score_18,
-        "best_score_9": stats.best_score_9,
-        "best_differential": float(stats.best_differential) if stats.best_differential else None,
-        "total_bet_won": float(stats.total_bet_won),
-        "total_bet_lost": float(stats.total_bet_lost),
+        "total_rounds": total_rounds,
+        "total_holes": total_holes,
+        "avg_score": round(avg_score, 2) if avg_score is not None else None,
+        "avg_putts_per_round": round(avg_putts_per_round, 2) if avg_putts_per_round is not None else None,
+        "avg_putts_per_hole": round(avg_putts_per_hole, 2) if avg_putts_per_hole is not None else None,
+        "fairways_hit_pct": None,  # No se trackea en Score actualmente
+        "gir_pct": None,            # No se trackea en Score actualmente
+        "total_eagles": total_eagles,
+        "total_birdies": total_birdies,
+        "total_pars": total_pars,
+        "total_bogeys": total_bogeys,
+        "total_double_bogeys": total_double_bogeys,
+        "total_worse": total_worse,
+        "total_hole_in_ones": total_hio,
+        "total_three_putts": total_three_putts,
+        "best_score_18": best_score_18,
+        "best_score_9": best_score_9,
+        "best_differential": float(best_diff) if best_diff is not None else None,
+        "total_bet_won": total_bet_won,
+        "total_bet_lost": total_bet_lost,
     }
 
 

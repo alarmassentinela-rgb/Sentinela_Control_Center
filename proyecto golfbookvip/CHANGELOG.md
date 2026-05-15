@@ -7,6 +7,33 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.9.3] - 2026-05-15
+
+### Fixed — Estadísticas del perfil mostraban todo en cero
+
+`GET /users/me/stats` leía de la tabla `PlayerStats` que se crea vacía en el signup pero nunca se actualiza al finalizar rondas. Resultado: rondas=0, birdies=0, mejor score=null, etc. aunque el usuario tuviera jugadas finalizadas.
+
+**Fix:** reescrito el endpoint para **calcular on-demand** desde las tablas Score, RoundPlayer, CourseHole, ScoreDifferential, y RoundPlayerBalance. Ya no depende de PlayerStats persistido.
+
+Stats calculadas:
+- `total_rounds` — rondas finished donde participó como playing (no withdrawn, no observer)
+- `total_holes` — suma de hoyos con score
+- `avg_score` — promedio gross por hoyo
+- `avg_putts_per_hole`, `avg_putts_per_round`
+- `total_eagles` (incluye albatross y HIO en este conteo "águilas+"), `total_birdies`, `total_pars`, `total_bogeys`, `total_double_bogeys`, `total_worse`
+- `total_hole_in_ones`, `total_three_putts`
+- `best_score_18`, `best_score_9` (low score completo)
+- `best_differential` (mínimo de ScoreDifferential)
+- `total_bet_won`, `total_bet_lost` (suma de balances persistidos)
+
+### Notes
+
+- `fairways_hit_pct` y `gir_pct` quedan en `null` porque actualmente el modelo Score no trackea esos campos. Si quieres agregarlos, necesitamos columnas extra y captura en Play page.
+- Cálculo on-demand es rápido para usuarios con <100 rondas. Si crece mucho, optimizamos con persistencia.
+- PlayerStats sigue existiendo en la DB pero ya no se usa para este endpoint — quedará para uso futuro (cache opcional).
+
+---
+
 ## [1.9.2] - 2026-05-15
 
 ### Fixed — Gráfica "Balance por mes" se veía deformada
