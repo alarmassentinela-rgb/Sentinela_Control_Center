@@ -154,8 +154,11 @@
                                 <!-- CONECTIVIDAD INTERNET -->
                                 <group string="Conectividad" invisible="service_type != 'internet'">
                                     <field name="router_id" options="{'no_create': True}" required="service_type == 'internet'"/>
+                                    <field name="product_mikrotik_profile_id" invisible="1"/>
                                     <field name="mikrotik_profile_id" options="{'no_create': True}"
-                                        required="service_type == 'internet' and internet_mgmt_mode == 'pppoe'"/>
+                                        required="service_type == 'internet' and internet_mgmt_mode == 'pppoe'"
+                                        readonly="product_mikrotik_profile_id"
+                                        help="Si el plan contratado tiene perfil MikroTik asignado, se hereda automáticamente y no se puede modificar. Si el plan no tiene perfil, selecciona uno manualmente."/>
                                     <field name="internet_mgmt_mode"/>
                                     <field name="ip_address" string="IP Asignada"/>
                                     <field name="gateway_address" invisible="internet_mgmt_mode != 'static'"/>

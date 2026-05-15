@@ -164,6 +164,12 @@ class SentinelaSubscription(models.Model):
     subnet_mask = fields.Char(string='Máscara de Subred')
     vlan_id = fields.Char(string='VLAN ID')
     mikrotik_profile_id = fields.Many2one('sentinela.mikrotik.profile', string='Perfil MikroTik')
+    product_mikrotik_profile_id = fields.Many2one(
+        'sentinela.mikrotik.profile',
+        related='product_id.mikrotik_profile_id',
+        string='Perfil del Plan',
+        readonly=True,
+    )
     modem_user = fields.Char(string='Usuario Módem')
     modem_password = fields.Char(string='Contraseña Módem')
 
