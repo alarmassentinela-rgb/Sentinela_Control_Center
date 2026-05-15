@@ -1357,7 +1357,6 @@ type BalData = { has_bets: boolean; players: BalPlayer[]; lines: BalLine[]; note
 
 function fmtMoney(n: number, locale: string): string {
   void locale
-  if (Math.abs(n) < 0.01) return '—'
   const sign = n >= 0 ? '+' : '−'
   return `${sign}$${Math.abs(n).toFixed(2)}`
 }
@@ -1683,16 +1682,16 @@ function BalancesSection({ balances, lbl, locale }: { balances: BalData; lbl: (e
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-zinc-800/40 text-[10px] uppercase tracking-wide text-zinc-500">
-                <th className="text-left px-3 py-2 font-semibold">#</th>
-                <th className="text-left px-3 py-2 font-semibold">{lbl('Jugador', 'Player')}</th>
-                <th className="text-right px-2 py-2 font-semibold hidden sm:table-cell">{lbl('Entr.', 'Entry')}</th>
-                <th className="text-right px-2 py-2 font-semibold hidden sm:table-cell">Nassau</th>
-                <th className="text-right px-2 py-2 font-semibold hidden md:table-cell">{lbl('x Hoyo', 'Hole')}</th>
-                <th className="text-right px-2 py-2 font-semibold hidden md:table-cell">{lbl('Prem.', 'Prizes')}</th>
-                <th className="text-right px-2 py-2 font-semibold hidden md:table-cell">{lbl('Cast.', 'Pen.')}</th>
-                <th className="text-right px-2 py-2 font-semibold hidden sm:table-cell">{lbl('Skines', 'Skins')}</th>
-                <th className="text-right px-3 py-2 font-bold text-zinc-200 border-l border-zinc-700">TOTAL</th>
+              <tr className="bg-zinc-800/60 text-[10px] uppercase tracking-wide text-white">
+                <th className="text-left px-3 py-2 font-bold">#</th>
+                <th className="text-left px-3 py-2 font-bold">{lbl('Jugador', 'Player')}</th>
+                <th className="text-right px-2 py-2 font-bold hidden sm:table-cell">{lbl('Entrada', 'Entry')}</th>
+                <th className="text-right px-2 py-2 font-bold hidden sm:table-cell">Nassau</th>
+                <th className="text-right px-2 py-2 font-bold hidden md:table-cell">{lbl('Por hoyo', 'Per hole')}</th>
+                <th className="text-right px-2 py-2 font-bold hidden md:table-cell">{lbl('Premio', 'Prize')}</th>
+                <th className="text-right px-2 py-2 font-bold hidden md:table-cell">{lbl('Castigo', 'Penalty')}</th>
+                <th className="text-right px-2 py-2 font-bold hidden sm:table-cell">{lbl('Skines', 'Skins')}</th>
+                <th className="text-right px-3 py-2 font-bold border-l border-zinc-700">TOTAL</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/40">

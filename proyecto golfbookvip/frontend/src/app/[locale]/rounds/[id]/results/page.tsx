@@ -495,7 +495,7 @@ function PrintableBalances({ balances, locale }: { balances: BalData; locale: st
     byKind[l.kind].push(l)
   }
 
-  const fmt = (v: number) => Math.abs(v) < 0.01 ? '—' : v >= 0 ? `+$${v.toFixed(2)}` : `−$${Math.abs(v).toFixed(2)}`
+  const fmt = (v: number) => v >= 0 ? `+$${v.toFixed(2)}` : `−$${Math.abs(v).toFixed(2)}`
 
   const renderBetSection = (kind: string, titleEs: string, titleEn: string, icon: string) => {
     const lines = byKind[kind]
@@ -561,8 +561,8 @@ function PrintableBalances({ balances, locale }: { balances: BalData; locale: st
             <th>{lbl('Jugador', 'Player')}</th>
             <th>{lbl('Entrada', 'Entry')}</th>
             <th>Nassau</th>
-            <th>{lbl('x Hoyo', 'Per hole')}</th>
-            <th>{lbl('Premios', 'Prizes')}</th>
+            <th>{lbl('Por hoyo', 'Per hole')}</th>
+            <th>{lbl('Premio', 'Prize')}</th>
             <th>{lbl('Castigo', 'Penalty')}</th>
             <th>{lbl('Skines', 'Skins')}</th>
             <th>TOTAL</th>

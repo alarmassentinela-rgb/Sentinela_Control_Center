@@ -7,6 +7,28 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.7.8] - 2026-05-15
+
+### Fixed — Header de tabla Gran Total ilegible
+
+Feedback de v1.7.7: el cambio anterior reemplazó los valores 0 por "—" pero el usuario prefería ver los $0.00. El problema real era el **color del header**, no los valores.
+
+Correcciones:
+- **`fmtMoney()` revertido** — vuelve a mostrar `$0.00` (no `—`)
+- **Header row** `text-zinc-500` → `text-white` (mismo contraste que la columna TOTAL)
+- Header row `bg-zinc-800/40` → `bg-zinc-800/60` para más contraste
+- Font weight `font-semibold` → `font-bold` en todos los headers
+- Abreviaciones expandidas a palabras completas:
+  - `Entr.` → `Entrada`
+  - `x Hoyo` → `Por hoyo`
+  - `Prem.` → `Premio`
+  - `Cast.` → `Castigo`
+  - `Skines` se mantiene (ya completo)
+
+Aplicado en round detail y en `/results` impreso.
+
+---
+
 ## [1.7.7] - 2026-05-15
 
 ### Fixed — Ceros invisibles en tabla de balances
