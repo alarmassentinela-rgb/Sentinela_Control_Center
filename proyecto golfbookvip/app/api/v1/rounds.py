@@ -14,6 +14,7 @@ from app.schemas.round import RoundCreate, RoundOut, BetConfigCreate, RoundUpdat
 from app.schemas.score import ScoreSubmit, ScoreOut
 from app.services import scoring as scoring_svc
 from app.services import handicap as hcp_svc
+from app.services import balances as balances_svc
 from app.services.ws_manager import manager
 from app.services.notifications import push as notify
 
@@ -990,6 +991,23 @@ async def get_scoreboard(round_id: uuid.UUID, db: DB):
         })
 
     return sorted(board, key=lambda x: x["total_gross"] if x["total_gross"] else 999)
+
+
+@router.get("/{round_id}/balances")
+async def get_balances(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
+    """Calcula pérdidas y ganancias por jugador según la config de apuestas y los scores capturados.
+
+    Reglas implementadas:
+    - Entry fee 60/30/10 a low net
+    - Nassau F9/B9/Total: pot por segmento, ganador low net toma todo
+    - Por hoyo ganado: low net del hoyo cobra a los que pierden
+    - Birdie/Eagle/HIO: cada uno paga al que lo hizo
+    - 3-putt: el penalizado paga al resto
+    - Skins con carry-over en empate (gross o net según config)
+    """
+    _ = current_user  # auth required pero no se filtra por user
+    result = await balances_svc.compute_balances(str(round_id), db)
+    return result
 
 
 @router.get("/join/{invite_code}")

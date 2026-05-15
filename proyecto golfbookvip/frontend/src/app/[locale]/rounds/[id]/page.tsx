@@ -1239,6 +1239,96 @@ function FormatInfoModal({ format, locale, onClose }: { format: string; locale: 
   )
 }
 
+// ─── Balances (pérdidas y ganancias) ──────────────────────────────────────────
+
+type BalBreak = { entry_fee: number; nassau: number; per_hole: number; prizes: number; penalties: number; skins: number; oyes: number; total: number }
+type BalPlayer = { user_id: string; name: string; course_handicap: number | null; breakdown: BalBreak }
+type BalLine = { kind: string; detail: string; amounts: Record<string, number> }
+type BalData = { has_bets: boolean; players: BalPlayer[]; lines: BalLine[]; note?: string }
+
+function fmtMoney(n: number, locale: string): string {
+  const sign = n >= 0 ? '+' : ''
+  return `${sign}$${n.toFixed(2)}`
+}
+
+function BalancesSection({ balances, lbl, locale }: { balances: BalData; lbl: (es: string, en: string) => string; locale: string }) {
+  const allZero = balances.players.every(p => Math.abs(p.breakdown.total) < 0.01)
+  if (allZero) {
+    return (
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+        <h2 className="font-semibold text-white text-sm flex items-center gap-2 mb-2">
+          <span>💰</span>
+          {lbl('Pérdidas y ganancias', 'Gains & losses')}
+        </h2>
+        <p className="text-xs text-zinc-500">{lbl(
+          'Sin movimientos de apuestas aún (revisa configuración de apuestas y que haya scores capturados).',
+          'No bet movements yet (check bet config and that scores are captured).'
+        )}</p>
+      </div>
+    )
+  }
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+      <div className="px-5 pt-5 pb-3 border-b border-zinc-800 flex items-center justify-between">
+        <h2 className="font-semibold text-white text-sm flex items-center gap-2">
+          <span>💰</span>
+          {lbl('Pérdidas y ganancias', 'Gains & losses')}
+        </h2>
+        <span className="text-[10px] text-zinc-500">
+          {lbl(`${balances.players.length} jugadores`, `${balances.players.length} players`)}
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-zinc-800/40 text-[10px] uppercase tracking-wide text-zinc-500">
+              <th className="text-left px-3 py-2 font-semibold sticky left-0 bg-zinc-800/40">{lbl('Jugador', 'Player')}</th>
+              <th className="text-right px-2 py-2 font-semibold">{lbl('Entrada', 'Entry')}</th>
+              <th className="text-right px-2 py-2 font-semibold">Nassau</th>
+              <th className="text-right px-2 py-2 font-semibold">{lbl('Por hoyo', 'Per hole')}</th>
+              <th className="text-right px-2 py-2 font-semibold">{lbl('Premios', 'Prizes')}</th>
+              <th className="text-right px-2 py-2 font-semibold">{lbl('Castigos', 'Penalties')}</th>
+              <th className="text-right px-2 py-2 font-semibold">{lbl('Skines', 'Skins')}</th>
+              <th className="text-right px-3 py-2 font-bold text-zinc-300 border-l border-zinc-700">TOTAL</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-800/40">
+            {balances.players.map((p, i) => {
+              const t = p.breakdown.total
+              const tCls = Math.abs(t) < 0.01 ? 'text-zinc-500' : t > 0 ? 'text-emerald-400' : 'text-red-400'
+              const cellCls = (v: number) => Math.abs(v) < 0.01 ? 'text-zinc-700' : v > 0 ? 'text-emerald-400' : 'text-red-400'
+              const medalCls = i === 0 ? 'text-yellow-400' : i === 1 ? 'text-zinc-300' : i === 2 ? 'text-amber-700' : 'text-zinc-600'
+              return (
+                <tr key={p.user_id} className="hover:bg-zinc-800/30">
+                  <td className="px-3 py-2 sticky left-0 bg-zinc-900">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`text-[10px] font-mono font-bold ${medalCls}`}>#{i+1}</span>
+                      <span className="text-xs text-zinc-200 font-medium truncate">{p.name}</span>
+                    </div>
+                  </td>
+                  <td className={`text-right px-2 py-2 text-xs tabular-nums ${cellCls(p.breakdown.entry_fee)}`}>{fmtMoney(p.breakdown.entry_fee, locale)}</td>
+                  <td className={`text-right px-2 py-2 text-xs tabular-nums ${cellCls(p.breakdown.nassau)}`}>{fmtMoney(p.breakdown.nassau, locale)}</td>
+                  <td className={`text-right px-2 py-2 text-xs tabular-nums ${cellCls(p.breakdown.per_hole)}`}>{fmtMoney(p.breakdown.per_hole, locale)}</td>
+                  <td className={`text-right px-2 py-2 text-xs tabular-nums ${cellCls(p.breakdown.prizes)}`}>{fmtMoney(p.breakdown.prizes, locale)}</td>
+                  <td className={`text-right px-2 py-2 text-xs tabular-nums ${cellCls(p.breakdown.penalties)}`}>{fmtMoney(p.breakdown.penalties, locale)}</td>
+                  <td className={`text-right px-2 py-2 text-xs tabular-nums ${cellCls(p.breakdown.skins)}`}>{fmtMoney(p.breakdown.skins, locale)}</td>
+                  <td className={`text-right px-3 py-2 text-sm font-bold tabular-nums ${tCls} border-l border-zinc-700 bg-zinc-800/30`}>{fmtMoney(t, locale)}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="px-5 py-3 border-t border-zinc-800 text-[10px] text-zinc-500">
+        {lbl(
+          'Cálculo según reglas estándar: entry fee 60/30/10 a low net · Nassau pot al low net del segmento · Por hoyo low net cobra a los demás · Premios y castigos pay-each-other · Skines con carry-over.',
+          'Standard rules: entry fee 60/30/10 low net · Nassau pot to segment low net · Per hole low net charges others · Prizes/penalties pay-each-other · Skins with carry-over.'
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function RoundDetailPage() {
   const locale = useLocale()
   const router = useRouter()
@@ -1248,6 +1338,14 @@ export default function RoundDetailPage() {
   const [round, setRound] = useState<Round | null>(null)
   const [players, setPlayers] = useState<Player[]>([])
   const [board, setBoard] = useState<BoardEntry[]>([])
+  type BalanceBreakdown = {
+    entry_fee: number; nassau: number; per_hole: number;
+    prizes: number; penalties: number; skins: number; oyes: number; total: number
+  }
+  type BalancePlayer = { user_id: string; name: string; course_handicap: number | null; breakdown: BalanceBreakdown }
+  type BalanceLine = { kind: string; detail: string; amounts: Record<string, number> }
+  type BalancesData = { has_bets: boolean; players: BalancePlayer[]; lines: BalanceLine[]; note?: string }
+  const [balances, setBalances] = useState<BalancesData | null>(null)
   const [holes, setHoles] = useState<Hole[]>([])
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
@@ -1321,6 +1419,11 @@ export default function RoundDetailPage() {
       ])
       setBoard(boardRes.data)
       if (courseRes) setHoles(courseRes.data.holes ?? [])
+    }
+    // Cargar balances de apuestas (solo cuando hay scores reales)
+    if (roundData.status === 'finished' || roundData.status === 'pending_validation' || roundData.status === 'active') {
+      const balRes = await api.get(`/rounds/${id}/balances`).catch(() => ({ data: null }))
+      if (balRes.data) setBalances(balRes.data)
     }
     // Load teams
     const teamsRes = await api.get(`/rounds/${id}/teams`).catch(() => ({ data: null }))
@@ -1581,6 +1684,10 @@ export default function RoundDetailPage() {
           )
         )
         if (ok) { setFinishing(false); return handleFinishRound(true) }
+      } else if (status === 400 && typeof detail === 'string' && /no se puede finalizar|cannot/i.test(detail)) {
+        // La ronda ya cambió de estado en el servidor (probable doble-click o WS perdido).
+        // En lugar de mostrar error, sincronizar UI con el estado real.
+        await load().catch(() => { /* ignored */ })
       } else if (typeof detail === 'string') {
         alert(detail)
       } else if (detail) {
@@ -3419,6 +3526,11 @@ export default function RoundDetailPage() {
             matchups={matchupsData}
             teamsData={teamsData}
           />
+        )}
+
+        {/* Balance de apuestas (pérdidas y ganancias) */}
+        {balances && balances.has_bets && balances.players.length > 0 && (
+          <BalancesSection balances={balances} lbl={lbl} locale={locale} />
         )}
       </main>
     </div>

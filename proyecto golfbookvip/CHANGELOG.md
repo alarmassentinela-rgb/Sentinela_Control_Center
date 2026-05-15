@@ -7,6 +7,47 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.7.3] - 2026-05-15
+
+Motor de pérdidas y ganancias + fix de spinner stale al finalizar.
+
+### Added — Motor de balances de apuestas
+
+Nuevo servicio `app/services/balances.py` calcula pérdidas y ganancias por jugador al cierre de la ronda según la configuración de apuestas. Reglas implementadas (estándares de la mayoría de ligas):
+
+- **Entry fee**: pot total dividido 60/30/10 a los 3 mejores NET
+- **Nassau F9 / B9 / Total**: cada segmento es un pot independiente, ganador low NET toma todo, empate split
+- **Por hoyo ganado**: cada hoyo low NET cobra `per_hole_bet` de cada jugador que perdió; empate split entre ganadores
+- **Birdie / Eagle / Albatross / HIO**: cada uno cobra del resto al jugador que lo hizo (pay-each-other), multiplicado por cantidad de eventos
+- **3-putt penalty**: cada 3-putt el penalizado paga al resto
+- **Skins** (con carry-over en empate): cada skin paga `skins_value × (N-1)` al ganador. Gross o net según `skins_use_net`. Sin ganar al final del 18 = forfeit
+- **Oyes**: pendiente (necesito que me confirmes regla regional)
+
+Excluye automáticamente jugadores withdrawn y observers.
+
+### Added — Endpoint `GET /rounds/{id}/balances`
+
+Devuelve por jugador el desglose: `entry_fee`, `nassau`, `per_hole`, `prizes`, `penalties`, `skins`, `oyes`, `total`. Más una lista de `lines` con explicación textual de cada movimiento.
+
+### Added — Sección "Pérdidas y ganancias" en round detail
+
+Tabla compacta con jugadores ordenados por total desc (ganadores arriba). Color verde para ganancias, rojo para pérdidas, neutro para zero. Columna TOTAL resaltada amarillo. Cita de reglas al pie.
+
+### Added — Balances impresos en `/results`
+
+Vista maestra ahora incluye sección "Pérdidas y ganancias" con la misma tabla optimizada para impresión (filas top con fondo amarillo, regla al pie). Imprimible junto con leaderboard y premios especiales.
+
+### Fixed — Spinner stale en "Terminar ronda"
+
+Si el servidor regresa 400 con detalle "No se puede finalizar" (porque la ronda ya cambió de estado por otra vía o doble-click), el frontend ahora hace auto-refresh en lugar de mostrar error. Sincroniza UI con estado real del servidor.
+
+### Notes
+
+- **Reglas son configurables a nivel de futuro**: cualquier liga puede tener variantes. Si tu liga difiere (ej. otros porcentajes del entry fee, Nassau con presses, oyes con reglas específicas), las parametrizamos
+- Necesito que confirmes la regla de **Oyes** (regional mexicano) para implementarla en v1.7.4
+
+---
+
 ## [1.7.2] - 2026-05-14
 
 ### Added — Reset con limpiezas opcionales

@@ -195,10 +195,14 @@ function computeStats(board: BoardEntry[], course: Course, holesTotal: number, p
 
 // ── Master sheet ────────────────────────────────────────────────────
 
+type BalBreak = { entry_fee: number; nassau: number; per_hole: number; prizes: number; penalties: number; skins: number; oyes: number; total: number }
+type BalPlayer = { user_id: string; name: string; course_handicap: number | null; breakdown: BalBreak }
+type BalData = { has_bets: boolean; players: BalPlayer[]; lines: { kind: string; detail: string; amounts: Record<string, number> }[] }
+
 function MasterResults({
-  round, course, board, players, gameFormat, locale,
+  round, course, board, players, gameFormat, locale, balances,
 }: {
-  round: Round; course: Course; board: BoardEntry[]; players: TeeGroupPlayer[]; gameFormat: string; locale: string
+  round: Round; course: Course; board: BoardEntry[]; players: TeeGroupPlayer[]; gameFormat: string; locale: string; balances: BalData | null
 }) {
   const lbl = (es: string, en: string) => locale === 'es' ? es : en
 
@@ -339,6 +343,53 @@ function MasterResults({
           <div className="award award-hio"><span className="lbl">⛳ {lbl('¡HOYO EN UNO!', 'HOLE IN ONE!')}</span><span className="val">{stats.holes_in_one.map(h => `${h.user} (H${h.hole})`).join(' · ')}</span></div>
         )}
       </div>
+
+      {/* Balance de apuestas — solo se imprime si hay bets */}
+      {balances && balances.has_bets && balances.players.length > 0 && balances.players.some(p => Math.abs(p.breakdown.total) > 0.01) && (
+        <>
+          <h2 className="section-title">{lbl('Pérdidas y ganancias', 'Gains & losses')}</h2>
+          <table className="balances-table">
+            <thead>
+              <tr>
+                <th className="pos">{lbl('Pos', 'Pos')}</th>
+                <th>{lbl('Jugador', 'Player')}</th>
+                <th>{lbl('Entrada', 'Entry')}</th>
+                <th>Nassau</th>
+                <th>{lbl('x Hoyo', 'Per hole')}</th>
+                <th>{lbl('Premios', 'Prizes')}</th>
+                <th>{lbl('Castigo', 'Penalty')}</th>
+                <th>{lbl('Skines', 'Skins')}</th>
+                <th>TOTAL</th>
+              </tr>
+            </thead>
+            <tbody>
+              {balances.players.map((p, i) => {
+                const t = p.breakdown.total
+                const cellClass = (v: number) => Math.abs(v) < 0.01 ? '' : v > 0 ? 'plus' : 'minus'
+                return (
+                  <tr key={p.user_id} className={i === 0 ? 'top' : ''}>
+                    <td className="pos">{posOrdinal(i + 1, locale)}</td>
+                    <td className="player-name">{p.name}</td>
+                    <td className={`num ${cellClass(p.breakdown.entry_fee)}`}>{p.breakdown.entry_fee >= 0 ? `+$${p.breakdown.entry_fee.toFixed(2)}` : `-$${Math.abs(p.breakdown.entry_fee).toFixed(2)}`}</td>
+                    <td className={`num ${cellClass(p.breakdown.nassau)}`}>{p.breakdown.nassau >= 0 ? `+$${p.breakdown.nassau.toFixed(2)}` : `-$${Math.abs(p.breakdown.nassau).toFixed(2)}`}</td>
+                    <td className={`num ${cellClass(p.breakdown.per_hole)}`}>{p.breakdown.per_hole >= 0 ? `+$${p.breakdown.per_hole.toFixed(2)}` : `-$${Math.abs(p.breakdown.per_hole).toFixed(2)}`}</td>
+                    <td className={`num ${cellClass(p.breakdown.prizes)}`}>{p.breakdown.prizes >= 0 ? `+$${p.breakdown.prizes.toFixed(2)}` : `-$${Math.abs(p.breakdown.prizes).toFixed(2)}`}</td>
+                    <td className={`num ${cellClass(p.breakdown.penalties)}`}>{p.breakdown.penalties >= 0 ? `+$${p.breakdown.penalties.toFixed(2)}` : `-$${Math.abs(p.breakdown.penalties).toFixed(2)}`}</td>
+                    <td className={`num ${cellClass(p.breakdown.skins)}`}>{p.breakdown.skins >= 0 ? `+$${p.breakdown.skins.toFixed(2)}` : `-$${Math.abs(p.breakdown.skins).toFixed(2)}`}</td>
+                    <td className={`num total ${cellClass(t)}`}><b>{t >= 0 ? `+$${t.toFixed(2)}` : `-$${Math.abs(t).toFixed(2)}`}</b></td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+          <p className="balances-note">
+            {lbl(
+              'Reglas: entry fee 60/30/10 a low net · Nassau pot al low net del segmento · Por hoyo low net cobra a los demás · Premios y castigos pay-each-other · Skines con carry-over.',
+              'Rules: entry fee 60/30/10 low net · Nassau pot to segment low net · Per hole low net charges others · Prizes/penalties pay-each-other · Skins with carry-over.'
+            )}
+          </p>
+        </>
+      )}
 
       <p className="footer-note">
         {lbl(`${sortedBoard.length} jugadores · `, `${sortedBoard.length} players · `)}
@@ -528,6 +579,10 @@ export default function ResultsPage() {
   const [course, setCourse] = useState<Course | null>(null)
   const [board, setBoard] = useState<BoardEntry[]>([])
   const [players, setPlayers] = useState<TeeGroupPlayer[]>([])
+  type BBreak = { entry_fee: number; nassau: number; per_hole: number; prizes: number; penalties: number; skins: number; oyes: number; total: number }
+  type BPlayer = { user_id: string; name: string; course_handicap: number | null; breakdown: BBreak }
+  type BData = { has_bets: boolean; players: BPlayer[]; lines: { kind: string; detail: string; amounts: Record<string, number> }[] }
+  const [balances, setBalances] = useState<BData | null>(null)
   const [view, setView] = useState<'master' | 'cards'>('master')
 
   useEffect(() => {
@@ -536,13 +591,15 @@ export default function ResultsPage() {
       try {
         const rRes = await api.get(`/rounds/${id}`)
         setRound(rRes.data)
-        const [cRes, bRes, tgRes] = await Promise.all([
+        const [cRes, bRes, tgRes, balRes] = await Promise.all([
           api.get(`/courses/${rRes.data.course_id}`),
           api.get(`/rounds/${id}/scoreboard`),
           api.get(`/rounds/${id}/tee-groups`).catch(() => ({ data: { groups: [], ungrouped: [] } })),
+          api.get(`/rounds/${id}/balances`).catch(() => ({ data: null })),
         ])
         setCourse(cRes.data)
         setBoard(bRes.data)
+        if (balRes.data) setBalances(balRes.data)
         // Flatten players from tee-groups for name lookup
         const all: TeeGroupPlayer[] = []
         const tg = tgRes.data
@@ -631,7 +688,7 @@ export default function ResultsPage() {
 
       <main className="print-area bg-zinc-950 text-zinc-100">
         {view === 'master' ? (
-          <MasterResults round={round} course={course} board={board} players={players} gameFormat={round.game_format} locale={locale} />
+          <MasterResults round={round} course={course} board={board} players={players} gameFormat={round.game_format} locale={locale} balances={balances} />
         ) : (
           sortedBoard.map((b, i) => {
             const player = players.find(p => p.user_id === b.user_id) ?? {
@@ -719,6 +776,21 @@ export default function ResultsPage() {
         .award .val { color: #111; text-align: right; }
         .award-special { background: #f3e8ff; border-left-color: #7c3aed; grid-column: 1 / -1; }
         .award-hio { background: #fef2f2; border-left-color: #dc2626; grid-column: 1 / -1; }
+
+        /* Balances table */
+        .balances-table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 0.4rem; }
+        .balances-table th { background: #b45309; color: #fff; padding: 0.35rem 0.4rem; text-align: center; font-weight: 700; }
+        .balances-table th:nth-child(2) { text-align: left; }
+        .balances-table td { padding: 0.25rem 0.4rem; border-bottom: 1px solid #e5e7eb; text-align: center; font-variant-numeric: tabular-nums; }
+        .balances-table td.pos { font-weight: 700; }
+        .balances-table td.player-name { text-align: left; font-weight: 600; color: #111; }
+        .balances-table td.num { font-size: 8pt; }
+        .balances-table td.num.plus { color: #047857; }
+        .balances-table td.num.minus { color: #b91c1c; }
+        .balances-table td.total { font-size: 9pt; border-left: 1px solid #ccc; background: #fef3c7; }
+        .balances-table tr.top td { background: #fef3c7; font-weight: 700; }
+        .balances-table tr.top td.total { background: #fde68a; }
+        .balances-note { font-size: 7.5pt; color: #666; font-style: italic; margin: 0 0 0.5rem 0; }
 
         /* Per-player card */
         .player-header {
