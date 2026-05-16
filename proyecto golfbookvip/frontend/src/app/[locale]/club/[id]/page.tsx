@@ -272,6 +272,42 @@ export default function ClubPanelPage() {
           )}
         </div>
 
+        {/* Gestión del club — features activas */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Link href={`/${locale}/club/${club.id}/members`}
+            className="bg-zinc-900 border border-blue-500/30 hover:border-blue-500/60 hover:bg-blue-500/5 rounded-2xl p-4 transition-all group">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center">
+                <Users size={18} className="text-blue-400" />
+              </div>
+              <div className="flex-1">
+                <p className="font-semibold text-white text-sm">{lbl('Padrón de miembros', 'Member roster')}</p>
+                <p className="text-xs text-zinc-500">{lbl('Alta, baja y administración de socios', 'Add, remove and manage members')}</p>
+              </div>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-3xl font-black text-blue-400">{club.member_count}</span>
+              <span className="text-xs text-blue-400/70 group-hover:text-blue-300">{lbl('Ver padrón →', 'View roster →')}</span>
+            </div>
+          </Link>
+
+          <Link href={`/${locale}/club/${club.id}/membership-types`}
+            className="bg-zinc-900 border border-purple-500/30 hover:border-purple-500/60 hover:bg-purple-500/5 rounded-2xl p-4 transition-all group">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center">
+                <Crown size={18} className="text-purple-400" />
+              </div>
+              <div className="flex-1">
+                <p className="font-semibold text-white text-sm">{lbl('Tipos de membresía', 'Membership types')}</p>
+                <p className="text-xs text-zinc-500">{lbl('Configurar planes y cuotas del club', 'Configure plans and fees')}</p>
+              </div>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-xs text-purple-400/70 group-hover:text-purple-300 ml-auto">{lbl('Configurar →', 'Configure →')}</span>
+            </div>
+          </Link>
+        </div>
+
         {/* Próximas features */}
         <div className="bg-zinc-900 border border-zinc-800 border-dashed rounded-2xl p-5">
           <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
@@ -280,10 +316,10 @@ export default function ClubPanelPage() {
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {[
-              { es: 'Padrón de miembros', en: 'Member roster', sub: { es: 'CRUD + import CSV', en: 'CRUD + CSV import' } },
               { es: 'Reservas de tee times', en: 'Tee time bookings', sub: { es: 'Calendario + horarios', en: 'Calendar + schedule' } },
               { es: 'Estado de cuenta de socios', en: 'Member account statements', sub: { es: 'Cargos, pagos, PDF', en: 'Charges, payments, PDF' } },
               { es: 'Empleados y asistencia', en: 'Employees and attendance', sub: { es: 'Check-in, nómina', en: 'Check-in, payroll' } },
+              { es: 'Import CSV del padrón', en: 'CSV roster import', sub: { es: 'Carga masiva de miembros', en: 'Bulk member upload' } },
             ].map((f, i) => (
               <div key={i} className="bg-zinc-800/40 rounded-lg p-3 opacity-70">
                 <p className="text-sm font-semibold text-zinc-300">{lbl(f.es, f.en)}</p>
@@ -291,12 +327,6 @@ export default function ClubPanelPage() {
               </div>
             ))}
           </div>
-          <p className="text-xs text-zinc-500 mt-4 leading-relaxed">
-            {lbl(
-              'Estamos construyendo estas funciones para tu club. Te avisaremos cuando estén listas.',
-              'We are building these features for your club. We will notify you when they are ready.'
-            )}
-          </p>
         </div>
       </main>
     </div>

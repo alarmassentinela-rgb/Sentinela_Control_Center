@@ -7,6 +7,53 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.11.0] - 2026-05-15
+
+### Added — Clubs SaaS Fase 1 · Padrón de miembros + Tipos de membresía
+
+Primera versión funcional para que el cliente-admin del club gestione su operación. Cierra el ciclo: del setup (v1.10) al **uso diario** (v1.11).
+
+**Backend — matriz de permisos por rol (`/api/v1/clubs/*`):**
+- Helper `_require_club_role(club_id, user, min_role)` con jerarquía owner > admin > manager > staff. Súper-admin bypass automático.
+- `GET /clubs/{id}/my-role` — devuelve `role`, `is_superadmin`, `can_manage_members`, `can_manage_membership_types`, `can_manage_staff`.
+
+**Backend — CRUD de tipos de membresía (Owner/Admin):**
+- `GET /clubs/{id}/membership-types` — listar (con filtro `include_inactive`) y `member_count` por tipo
+- `POST /clubs/{id}/membership-types` — crear
+- `PATCH /clubs/{id}/membership-types/{mt_id}` — editar (incl. activar/desactivar)
+- `DELETE /clubs/{id}/membership-types/{mt_id}` — soft-delete (rechaza si hay miembros activos asignados, código 409)
+
+**Backend — CRUD del padrón (Owner/Admin/Manager):**
+- `GET /clubs/{id}/padron` — listar con filtros (`q`, `status_filter`, `membership_type_id`)
+- `POST /clubs/{id}/padron` — agregar miembro por `email`/`username`/`user_id`. Si ya existe inactivo, reactiva.
+- `PATCH /clubs/{id}/padron/{user_id}` — editar tipo, status (active/inactive/suspended), expiración, notas, # de socio
+- `DELETE /clubs/{id}/padron/{user_id}` — soft-delete (status=inactive)
+
+**Frontend — páginas nuevas:**
+- `/[locale]/club/{id}/members` — padrón con tabla responsive, filtros (status, tipo, búsqueda), modal "Agregar" con formulario completo (email, # de socio, tipo, fechas ingresó/vence, notas), modal "Editar" para cambiar estado/tipo, botón "Dar de baja". Lectura disponible para Staff; CRUD para Manager+.
+- `/[locale]/club/{id}/membership-types` — grid de tipos con cuota mensual/anual, member_count, badges activo/inactivo, modal crear/editar, toggle activar/desactivar, eliminar (con guard de miembros activos). Solo Owner/Admin.
+
+**Frontend — panel del cliente (`/club/{id}`):**
+- Reemplaza la sección "Próximamente" del padrón con **dos tarjetas activas**: "Padrón de miembros" (link a /members con contador) y "Tipos de membresía" (link a configuración).
+- "Próximamente" queda solo con Tee times, Estados de cuenta, Empleados, Import CSV.
+
+**Matriz de permisos implementada (primera vez):**
+
+| Acción | Owner | Admin | Manager | Staff | Súper-admin |
+|---|---|---|---|---|---|
+| Ver padrón | ✓ | ✓ | ✓ | ✓ | ✓ |
+| CRUD miembros | ✓ | ✓ | ✓ | — | ✓ |
+| CRUD tipos de membresía | ✓ | ✓ | — | — | ✓ |
+| Gestionar staff del club | ✓ | — | — | — | ✓ (vía /admin/clubs) |
+
+### Notes
+
+- Endpoint del padrón se llama `/padron` (no `/members`) para no chocar con el endpoint legacy B2C `/clubs/{id}/members` del jugador.
+- Import CSV (masivo) queda para v1.11.x. Hoy se agregan miembros uno a uno por email/username.
+- `member_count` en tipos se calcula on-demand; sin caché. Aceptable hasta cientos de miembros por club.
+
+---
+
 ## [1.10.1] - 2026-05-15
 
 ### Added — Clubs SaaS Fase 0.5 — Panel del cliente y gestión de staff
