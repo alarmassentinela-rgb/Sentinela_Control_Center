@@ -7,6 +7,62 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.13.0] - 2026-05-15
+
+### Added — Clubs SaaS Fase 3 · Estado de cuenta de socios
+
+Sistema de cuentas del miembro con cargos, pagos, ajustes y balance en tiempo real. Permite al club facturar consumos y rastrear deuda/crédito.
+
+**Backend (`/api/v1/clubs/{id}/accounts/*`):**
+- `GET /accounts` — lista resumen de cuentas del club con totales (filtros `only_debtors`, `q`). Requiere staff.
+- `GET /accounts/{user_id}` — detalle de cuenta (balance, límite, info del miembro). Accesible por el propio user, staff o súper-admin.
+- `GET /accounts/{user_id}/transactions` — historial con filtros `date_from`, `date_to`, `type_filter`, `limit`. Mismo scoping.
+- `POST /accounts/{user_id}/charge` — registrar cargo (manager+). Tipos: `charge`, `membership_fee`, `green_fee`, `bet_loss`.
+- `POST /accounts/{user_id}/payment` — registrar pago (manager+). Método: `cash`, `card`, `transfer`, `other`.
+- `POST /accounts/{user_id}/adjust` — ajuste manual con monto firmado y motivo (admin+).
+- `PATCH /accounts/{user_id}/credit-limit` — cambiar límite de crédito (admin+).
+- `GET /my-account` — atajo del socio para ver su balance.
+
+**Convención del balance:**
+- `balance > 0` → saldo a favor del socio (crédito)
+- `balance < 0` → deuda del socio con el club
+- Cargos restan, pagos suman. Ajustes manuales usan signo explícito.
+- `credit_limit` define el saldo negativo máximo permitido (default 0 = sin deuda).
+
+**Auditoría:** cada transacción guarda `balance_after` (snapshot del saldo) + `created_by` (qué staff la registró). Las transacciones nunca se eliminan — solo se crean ajustes inversos.
+
+**Frontend — páginas nuevas:**
+- `/[locale]/club/{id}/accounts` — lista de cuentas con 3 tarjetas resumen (deuda total / crédito total / # de cuentas), filtro "solo deudores", búsqueda, tabla clicable.
+- `/[locale]/club/{id}/accounts/{user_id}` — detalle:
+  - Hero con avatar, balance grande coloreado (rojo deuda, verde crédito), límite editable
+  - 3 botones de acción: **Pago** (verde), **Cargo** (rojo), **Ajuste** (azul, solo admin+)
+  - Tabla cronológica de movimientos con tipo coloreado, concepto, monto firmado y saldo después
+  - Botón "Imprimir" con CSS print-friendly (header oculto, fondos blancos, texto oscuro)
+
+**Frontend — integración:**
+- Panel del cliente (`/club/{id}`): nueva tarjeta verde "Estado de cuenta" + grid reorganizado (4 tarjetas activas: Padrón / Tipos / Tee times / Cuenta)
+- Padrón (`/members`): nuevo icono `$` por miembro → atajo directo a su estado de cuenta
+
+**Matriz de permisos:**
+
+| Acción | Owner | Admin | Manager | Staff | Miembro (propio) |
+|---|---|---|---|---|---|
+| Ver lista cuentas | ✓ | ✓ | ✓ | ✓ | — |
+| Ver cuenta de un socio | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Registrar cargos | ✓ | ✓ | ✓ | — | — |
+| Registrar pagos | ✓ | ✓ | ✓ | — | — |
+| Ajuste manual | ✓ | ✓ | — | — | — |
+| Cambiar límite crédito | ✓ | ✓ | — | — | — |
+
+### Notes
+
+- PDF exportable: usa el navegador (Ctrl+P) → save as PDF. Mejor render con generación server-side queda para v1.13.x.
+- Generación masiva de cuotas mensuales (ej. cobrar 100 cuotas el día 1 del mes) pendiente.
+- Recibos por email/WhatsApp al registrar pago pendientes.
+- Integración con el sistema de tee times (cobrar green fee automático al jugar) pendiente.
+
+---
+
 ## [1.12.0] - 2026-05-15
 
 ### Added — Clubs SaaS Fase 2 · Tee times (reservas de salidas)

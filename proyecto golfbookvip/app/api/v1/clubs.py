@@ -7,7 +7,7 @@ import re
 from datetime import date, datetime, time as time_cls, timedelta, timezone
 
 from app.core.deps import CurrentUser, DB
-from app.models.club import Club, ClubStaff, ClubMember, MembershipType
+from app.models.club import Club, ClubStaff, ClubMember, MembershipType, MemberAccount, AccountTransaction
 from app.models.tee_time import TeeTimeSlot, TeeTimeBooking
 from app.models.user import User
 
@@ -954,3 +954,293 @@ async def my_bookings(club_id: uuid.UUID, current_user: CurrentUser, db: DB,
         }
         for b, s in rows
     ]
+
+
+# ─── Estado de cuenta (Clubs SaaS Fase 3) ─────────────────────────────────
+
+# Convención del balance:
+#   balance > 0 => saldo a favor del socio (crédito)
+#   balance < 0 => deuda del socio con el club
+# Tipos que SUMAN al balance (saldo a favor): payment, credit, refund
+# Tipos que RESTAN del balance (deuda):       charge, membership_fee, green_fee, bet_loss
+# Tipo "other" usa el signo del amount tal cual
+
+CHARGE_TYPES = {"charge", "membership_fee", "green_fee", "bet_loss"}
+CREDIT_TYPES = {"payment", "credit", "refund", "bet_win"}
+
+
+class ChargePayload(BaseModel):
+    amount: float = Field(..., gt=0)
+    type: str = "charge"
+    description: Optional[str] = None
+    reference_type: Optional[str] = None
+    reference_id: Optional[str] = None
+
+
+class PaymentPayload(BaseModel):
+    amount: float = Field(..., gt=0)
+    method: Optional[str] = None  # cash / card / transfer / etc.
+    description: Optional[str] = None
+
+
+class AdjustmentPayload(BaseModel):
+    amount: float  # con signo
+    description: str = Field(..., min_length=1)
+
+
+async def _get_or_create_account(db, club_id: uuid.UUID, user_id: uuid.UUID) -> MemberAccount:
+    res = await db.execute(select(MemberAccount).where(
+        MemberAccount.club_id == club_id, MemberAccount.user_id == user_id
+    ))
+    acc = res.scalar_one_or_none()
+    if acc:
+        return acc
+    acc = MemberAccount(club_id=club_id, user_id=user_id, balance=0, credit_limit=0, is_active=True)
+    db.add(acc)
+    await db.flush()
+    return acc
+
+
+@router.get("/{club_id}/accounts")
+async def list_member_accounts(club_id: uuid.UUID, current_user: CurrentUser, db: DB,
+                                only_debtors: bool = False, q: str = ""):
+    """Lista resumen de cuentas del club. Requiere staff (cualquier rol)."""
+    await _require_club_role(db, club_id, current_user, "staff")
+    query = (
+        select(MemberAccount, User)
+        .join(User, User.id == MemberAccount.user_id)
+        .where(MemberAccount.club_id == club_id, MemberAccount.is_active == True)
+    )
+    if only_debtors:
+        query = query.where(MemberAccount.balance < 0)
+    if q:
+        like = f"%{q}%"
+        query = query.where(or_(
+            User.first_name.ilike(like),
+            User.last_name.ilike(like),
+            User.email.ilike(like),
+        ))
+    query = query.order_by(MemberAccount.balance, User.first_name)
+    rows = (await db.execute(query)).all()
+    return [
+        {
+            "account_id": str(a.id),
+            "user_id": str(a.user_id),
+            "first_name": u.first_name,
+            "last_name": u.last_name,
+            "email": u.email,
+            "balance": float(a.balance) if a.balance is not None else 0,
+            "credit_limit": float(a.credit_limit) if a.credit_limit is not None else 0,
+        }
+        for a, u in rows
+    ]
+
+
+@router.get("/{club_id}/accounts/{user_id}")
+async def get_member_account(club_id: uuid.UUID, user_id: uuid.UUID,
+                              current_user: CurrentUser, db: DB):
+    """Detalle de cuenta. El propio user, staff del club o súper-admin."""
+    if current_user.id != user_id and not current_user.is_superadmin:
+        await _require_club_role(db, club_id, current_user, "staff")
+
+    acc = await _get_or_create_account(db, club_id, user_id)
+    # info del user
+    u_res = await db.execute(select(User).where(User.id == user_id))
+    u = u_res.scalar_one_or_none()
+    if not u:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    # info del miembro (status, member_number)
+    m_res = await db.execute(select(ClubMember).where(
+        ClubMember.club_id == club_id, ClubMember.user_id == user_id
+    ))
+    m = m_res.scalar_one_or_none()
+
+    return {
+        "account_id": str(acc.id),
+        "user_id": str(u.id),
+        "first_name": u.first_name,
+        "last_name": u.last_name,
+        "email": u.email,
+        "username": u.username,
+        "balance": float(acc.balance) if acc.balance is not None else 0,
+        "credit_limit": float(acc.credit_limit) if acc.credit_limit is not None else 0,
+        "is_active": acc.is_active,
+        "member_number": m.member_number if m else None,
+        "member_status": m.status if m else None,
+        "created_at": acc.created_at.isoformat() if acc.created_at else None,
+    }
+
+
+@router.get("/{club_id}/accounts/{user_id}/transactions")
+async def list_transactions(club_id: uuid.UUID, user_id: uuid.UUID,
+                             current_user: CurrentUser, db: DB,
+                             date_from: Optional[date] = None, date_to: Optional[date] = None,
+                             type_filter: Optional[str] = None,
+                             limit: int = 100):
+    """Historial de transacciones. El propio user, staff o súper-admin."""
+    if current_user.id != user_id and not current_user.is_superadmin:
+        await _require_club_role(db, club_id, current_user, "staff")
+    acc = await _get_or_create_account(db, club_id, user_id)
+
+    q = select(AccountTransaction).where(AccountTransaction.account_id == acc.id)
+    if date_from:
+        q = q.where(AccountTransaction.created_at >= datetime.combine(date_from, time_cls.min, tzinfo=timezone.utc))
+    if date_to:
+        q = q.where(AccountTransaction.created_at <= datetime.combine(date_to, time_cls.max, tzinfo=timezone.utc))
+    if type_filter:
+        q = q.where(AccountTransaction.type == type_filter)
+    q = q.order_by(AccountTransaction.created_at.desc()).limit(limit)
+    rows = (await db.execute(q)).scalars().all()
+
+    # also fetch user names for created_by
+    creator_ids = {r.created_by for r in rows if r.created_by}
+    creator_names: dict[uuid.UUID, str] = {}
+    if creator_ids:
+        c_res = await db.execute(select(User).where(User.id.in_(creator_ids)))
+        for c in c_res.scalars().all():
+            creator_names[c.id] = f"{c.first_name} {c.last_name}"
+
+    return [
+        {
+            "id": str(t.id),
+            "type": t.type,
+            "amount": float(t.amount),
+            "balance_after": float(t.balance_after),
+            "description": t.description,
+            "reference_type": t.reference_type,
+            "reference_id": str(t.reference_id) if t.reference_id else None,
+            "created_by_name": creator_names.get(t.created_by) if t.created_by else None,
+            "created_at": t.created_at.isoformat() if t.created_at else None,
+        }
+        for t in rows
+    ]
+
+
+async def _apply_transaction(db, acc: MemberAccount, type_: str, amount: float,
+                              description: str, current_user: User,
+                              reference_id: Optional[str] = None,
+                              reference_type: Optional[str] = None) -> AccountTransaction:
+    """Aplica transacción y actualiza balance atomically. amount siempre positivo excepto 'other'."""
+    # decidir signo aplicado al balance
+    if type_ in CREDIT_TYPES:
+        delta = abs(amount)
+    elif type_ in CHARGE_TYPES:
+        delta = -abs(amount)
+    elif type_ == "other":
+        delta = amount  # con signo
+    else:
+        raise HTTPException(status_code=422, detail=f"Tipo desconocido: {type_}")
+
+    new_balance = float(acc.balance or 0) + delta
+
+    # validar credit_limit si el balance va a quedar negativo
+    if new_balance < 0:
+        max_debt = -float(acc.credit_limit or 0)
+        if new_balance < max_debt:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Excede el límite de crédito permitido. Balance quedaría en {new_balance:.2f}, límite: {max_debt:.2f}"
+            )
+
+    acc.balance = new_balance
+    tx = AccountTransaction(
+        account_id=acc.id,
+        type=type_,
+        amount=abs(amount) if type_ != "other" else amount,
+        balance_after=new_balance,
+        description=description,
+        reference_id=uuid.UUID(reference_id) if reference_id else None,
+        reference_type=reference_type,
+        created_by=current_user.id,
+    )
+    db.add(tx)
+    await db.flush()
+    return tx
+
+
+@router.post("/{club_id}/accounts/{user_id}/charge", status_code=201)
+async def register_charge(club_id: uuid.UUID, user_id: uuid.UUID, payload: ChargePayload,
+                           current_user: CurrentUser, db: DB):
+    """Registrar cargo a la cuenta. Requiere manager+ del club."""
+    await _require_club_role(db, club_id, current_user, "manager")
+    if payload.type not in CHARGE_TYPES:
+        raise HTTPException(status_code=422, detail=f"Tipo debe ser uno de: {', '.join(CHARGE_TYPES)}")
+    acc = await _get_or_create_account(db, club_id, user_id)
+    tx = await _apply_transaction(
+        db, acc, payload.type, payload.amount,
+        payload.description or payload.type,
+        current_user, payload.reference_id, payload.reference_type,
+    )
+    return {
+        "id": str(tx.id),
+        "type": tx.type,
+        "amount": float(tx.amount),
+        "balance_after": float(tx.balance_after),
+    }
+
+
+@router.post("/{club_id}/accounts/{user_id}/payment", status_code=201)
+async def register_payment(club_id: uuid.UUID, user_id: uuid.UUID, payload: PaymentPayload,
+                            current_user: CurrentUser, db: DB):
+    """Registrar pago del socio. Requiere manager+ del club."""
+    await _require_club_role(db, club_id, current_user, "manager")
+    acc = await _get_or_create_account(db, club_id, user_id)
+    desc = payload.description or (f"Pago en {payload.method}" if payload.method else "Pago")
+    tx = await _apply_transaction(db, acc, "payment", payload.amount, desc, current_user)
+    return {
+        "id": str(tx.id),
+        "type": tx.type,
+        "amount": float(tx.amount),
+        "balance_after": float(tx.balance_after),
+    }
+
+
+@router.post("/{club_id}/accounts/{user_id}/adjust", status_code=201)
+async def register_adjustment(club_id: uuid.UUID, user_id: uuid.UUID, payload: AdjustmentPayload,
+                               current_user: CurrentUser, db: DB):
+    """Ajuste manual con signo. Requiere admin+ del club (más sensible)."""
+    await _require_club_role(db, club_id, current_user, "admin")
+    if payload.amount == 0:
+        raise HTTPException(status_code=422, detail="El monto del ajuste debe ser distinto de cero")
+    acc = await _get_or_create_account(db, club_id, user_id)
+    tx = await _apply_transaction(db, acc, "other", payload.amount, payload.description, current_user)
+    return {
+        "id": str(tx.id),
+        "type": tx.type,
+        "amount": float(tx.amount),
+        "balance_after": float(tx.balance_after),
+    }
+
+
+@router.patch("/{club_id}/accounts/{user_id}/credit-limit")
+async def set_credit_limit(club_id: uuid.UUID, user_id: uuid.UUID,
+                            credit_limit: float, current_user: CurrentUser, db: DB):
+    """Cambiar límite de crédito. Requiere admin+ del club."""
+    await _require_club_role(db, club_id, current_user, "admin")
+    if credit_limit < 0:
+        raise HTTPException(status_code=422, detail="credit_limit debe ser >= 0")
+    acc = await _get_or_create_account(db, club_id, user_id)
+    acc.credit_limit = credit_limit
+    await db.flush()
+    return {"account_id": str(acc.id), "credit_limit": float(acc.credit_limit)}
+
+
+@router.get("/{club_id}/my-account")
+async def get_my_account(club_id: uuid.UUID, current_user: CurrentUser, db: DB):
+    """Mi cuenta en este club (atajo para el socio)."""
+    # verificar que sea miembro o staff
+    role = await _get_club_role(db, club_id, current_user)
+    if not role:
+        m_res = await db.execute(select(ClubMember).where(
+            ClubMember.club_id == club_id,
+            ClubMember.user_id == current_user.id,
+            ClubMember.status == "active",
+        ))
+        if not m_res.scalar_one_or_none():
+            raise HTTPException(status_code=403, detail="No eres miembro de este club")
+    acc = await _get_or_create_account(db, club_id, current_user.id)
+    return {
+        "account_id": str(acc.id),
+        "balance": float(acc.balance) if acc.balance is not None else 0,
+        "credit_limit": float(acc.credit_limit) if acc.credit_limit is not None else 0,
+    }

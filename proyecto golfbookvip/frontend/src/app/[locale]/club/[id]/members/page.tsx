@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Plus, Users, Loader2, Search, X, Edit2, UserMinus, Mail, Hash, Calendar, CreditCard, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Plus, Users, Loader2, Search, X, Edit2, UserMinus, Mail, Hash, Calendar, CreditCard, AlertCircle, DollarSign } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
@@ -288,6 +288,10 @@ export default function ClubMembersPage() {
                       {canEdit && (
                         <td className="px-3 py-3">
                           <div className="flex items-center gap-2 justify-end">
+                            <Link href={`/${locale}/club/${params.id}/accounts/${m.user_id}`} title={lbl('Cuenta', 'Account')}
+                              className="text-zinc-500 hover:text-emerald-400">
+                              <DollarSign size={14} />
+                            </Link>
                             <button onClick={() => openEdit(m)} title={lbl('Editar', 'Edit')}
                               className="text-zinc-500 hover:text-blue-400">
                               <Edit2 size={14} />
