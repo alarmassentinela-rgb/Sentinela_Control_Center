@@ -11,10 +11,11 @@ from app.models.base import Base
 
 class TeeTimeSlot(Base):
     __tablename__ = "tee_time_slots"
-    __table_args__ = (UniqueConstraint("course_id", "date", "time"),)
+    __table_args__ = (UniqueConstraint("club_id", "date", "time", name="tee_time_slots_club_date_time_key"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    course_id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"))
+    club_id: Mapped[Optional[uuid.UUID]] = mapped_column(pgUUID(as_uuid=True), ForeignKey("clubs.id", ondelete="CASCADE"))
+    course_id: Mapped[Optional[uuid.UUID]] = mapped_column(pgUUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"))
     date: Mapped[date] = mapped_column(Date, nullable=False)
     time: Mapped[time] = mapped_column(Time, nullable=False)
     max_players: Mapped[int] = mapped_column(Integer, default=4)

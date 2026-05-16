@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Building2, Users, Shield, Crown, Mail, Phone, MapPin, Globe, Loader2, X, Calendar, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Building2, Users, Shield, Crown, Mail, Phone, MapPin, Globe, Loader2, X, Calendar, AlertCircle, Clock } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
@@ -306,6 +306,20 @@ export default function ClubPanelPage() {
               <span className="text-xs text-purple-400/70 group-hover:text-purple-300 ml-auto">{lbl('Configurar →', 'Configure →')}</span>
             </div>
           </Link>
+
+          <Link href={`/${locale}/club/${club.id}/tee-times`}
+            className="bg-zinc-900 border border-amber-500/30 hover:border-amber-500/60 hover:bg-amber-500/5 rounded-2xl p-4 transition-all group sm:col-span-2">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center">
+                <Clock size={18} className="text-amber-400" />
+              </div>
+              <div className="flex-1">
+                <p className="font-semibold text-white text-sm">{lbl('Tee times', 'Tee times')}</p>
+                <p className="text-xs text-zinc-500">{lbl('Calendario de salidas, reservas de socios, generación masiva de horarios', 'Tee time calendar, member bookings, bulk schedule generation')}</p>
+              </div>
+              <span className="text-xs text-amber-400/70 group-hover:text-amber-300">→</span>
+            </div>
+          </Link>
         </div>
 
         {/* Próximas features */}
@@ -316,10 +330,10 @@ export default function ClubPanelPage() {
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {[
-              { es: 'Reservas de tee times', en: 'Tee time bookings', sub: { es: 'Calendario + horarios', en: 'Calendar + schedule' } },
               { es: 'Estado de cuenta de socios', en: 'Member account statements', sub: { es: 'Cargos, pagos, PDF', en: 'Charges, payments, PDF' } },
               { es: 'Empleados y asistencia', en: 'Employees and attendance', sub: { es: 'Check-in, nómina', en: 'Check-in, payroll' } },
               { es: 'Import CSV del padrón', en: 'CSV roster import', sub: { es: 'Carga masiva de miembros', en: 'Bulk member upload' } },
+              { es: 'Notificaciones de reserva', en: 'Booking notifications', sub: { es: 'Email + WhatsApp', en: 'Email + WhatsApp' } },
             ].map((f, i) => (
               <div key={i} className="bg-zinc-800/40 rounded-lg p-3 opacity-70">
                 <p className="text-sm font-semibold text-zinc-300">{lbl(f.es, f.en)}</p>

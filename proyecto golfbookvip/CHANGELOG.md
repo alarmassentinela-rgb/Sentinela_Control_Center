@@ -7,6 +7,60 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.12.0] - 2026-05-15
+
+### Added — Clubs SaaS Fase 2 · Tee times (reservas de salidas)
+
+Sistema básico de reservas de tee times integrado con el panel del cliente. Los socios reservan, el admin gestiona el calendario.
+
+**Schema migration aplicada en producción:**
+- `tee_time_slots`: agregada columna `club_id UUID REFERENCES clubs(id) ON DELETE CASCADE` + índice `(club_id, date)` + unique key reemplazada por `(club_id, date, time)`.
+- `tee_time_slots.course_id` ahora nullable (era required) para hacer el slot pertenezca al club, no al course físico.
+
+**Backend (`/api/v1/clubs/{id}/tee-times/*`):**
+- `GET /tee-times?date_from&date_to` — lista slots del rango (default: hoy + 14 días) con sus bookings. Accesible por staff o miembros activos.
+- `POST /tee-times/generate` — generación masiva (admin+): rango de fechas, hora inicio/fin, intervalo en minutos (2-60), max_players (1-8), opcionalmente filtro por días de la semana. Máximo 90 días por llamada. Duplicados se omiten silenciosamente.
+- `POST /tee-times` — crear slot individual (admin+).
+- `PATCH /tee-times/{slot_id}` — editar max_players o bloquear/desbloquear con razón (admin+).
+- `DELETE /tee-times/{slot_id}` — eliminar slot (admin+, rechaza si hay reservas activas, 409).
+- `POST /tee-times/{slot_id}/book` — reservar. Miembros activos del padrón o staff pueden reservar. Staff puede reservar a nombre de otro user. Confirmación inmediata (sin workflow de aprobación en MVP). Valida disponibilidad atomically.
+- `DELETE /tee-times/bookings/{booking_id}` — cancelar reserva. Dueño de la reserva o manager+.
+- `GET /tee-times/my-bookings` — mis reservas (próximas por default).
+
+**Frontend — página `/[locale]/club/{id}/tee-times`:**
+- Navegación por día con botones ←/→ y selector de fecha + botón "Hoy"
+- Grid de slots con barra de ocupación (verde<50%, ámbar<100%, naranja=lleno), estado visible (bloqueado/lleno/disponible)
+- Lista de socios reservados por slot con nombre y # de jugadores
+- Acciones admin: bloquear/desbloquear (con razón opcional), eliminar slot, generar slots en bulk
+- Modal "Generar slots" con preview de qué se va a crear (rango de fechas, hora, intervalo, cupo)
+- Modal "Reservar" para socios: # de jugadores, notas, confirma con animación
+- Cancelación de reserva con confirm dialog
+
+**Panel del cliente (`/[locale]/club/{id}`):**
+- Nueva tarjeta ámbar "Tee times" full-width abajo de Padrón/Tipos
+- "Próximamente" actualizado: queda Estado de cuenta, Empleados, Import CSV, Notificaciones de reserva
+
+**Matriz de permisos (extendida con tee times):**
+
+| Acción | Owner | Admin | Manager | Staff | Miembro | Súper-admin |
+|---|---|---|---|---|---|---|
+| Ver calendario | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Generar/crear slots | ✓ | ✓ | — | — | — | ✓ |
+| Bloquear/eliminar slot | ✓ | ✓ | — | — | — | ✓ |
+| Reservar para sí | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Reservar para otro | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+| Cancelar reserva propia | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Cancelar reserva ajena | ✓ | ✓ | ✓ | — | — | ✓ |
+
+### Notes
+
+- Confirmación de reservas es inmediata (status `confirmed`) en MVP. Workflow de aprobación pendiente para Fase 2.1.
+- Límites por miembro (ej. máx 1 reserva por día) no implementados todavía. Pendiente Fase 2.1.
+- Notificaciones por email/WhatsApp al reservar/cancelar pendientes.
+- Import CSV de padrón sigue pendiente para Fase 1.5.
+
+---
+
 ## [1.11.0] - 2026-05-15
 
 ### Added — Clubs SaaS Fase 1 · Padrón de miembros + Tipos de membresía

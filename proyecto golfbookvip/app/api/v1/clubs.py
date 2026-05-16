@@ -4,10 +4,11 @@ from pydantic import BaseModel, Field
 from typing import Optional
 import uuid
 import re
-from datetime import date
+from datetime import date, datetime, time as time_cls, timedelta, timezone
 
 from app.core.deps import CurrentUser, DB
 from app.models.club import Club, ClubStaff, ClubMember, MembershipType
+from app.models.tee_time import TeeTimeSlot, TeeTimeBooking
 from app.models.user import User
 
 
@@ -624,3 +625,332 @@ async def remove_from_padron(club_id: uuid.UUID, user_id: uuid.UUID,
     member.status = "inactive"
     await db.flush()
     return {"id": str(member.id), "status": "inactive"}
+
+
+# ─── Tee times (Clubs SaaS Fase 2) ─────────────────────────────────────────
+
+
+class TeeTimeSlotIn(BaseModel):
+    date: date
+    time: str  # HH:MM
+    max_players: int = 4
+
+
+class TeeTimeSlotPatch(BaseModel):
+    max_players: Optional[int] = None
+    is_blocked: Optional[bool] = None
+    block_reason: Optional[str] = None
+
+
+class TeeTimeGenerate(BaseModel):
+    date_from: date
+    date_to: date
+    time_start: str = "06:00"
+    time_end: str = "18:00"
+    interval_minutes: int = Field(8, ge=2, le=60)
+    max_players: int = Field(4, ge=1, le=8)
+    weekdays: Optional[list[int]] = None  # 0=Mon, 6=Sun; None = todos
+
+
+class BookingCreate(BaseModel):
+    players_count: int = Field(1, ge=1, le=8)
+    notes: Optional[str] = None
+    user_id: Optional[str] = None  # admin reserva por otro usuario
+
+
+def _parse_hhmm(s: str) -> time_cls:
+    h, m = s.split(":")
+    return time_cls(int(h), int(m))
+
+
+@router.get("/{club_id}/tee-times")
+async def list_tee_times(club_id: uuid.UUID, current_user: CurrentUser, db: DB,
+                          date_from: Optional[date] = None, date_to: Optional[date] = None):
+    """Lista slots del club con bookings. Requiere ser staff (cualquier rol) o miembro del club."""
+    role = await _get_club_role(db, club_id, current_user)
+    is_member = False
+    if not role:
+        # quizás es solo miembro del padrón (no staff), también puede ver el calendario
+        m_res = await db.execute(select(ClubMember).where(
+            ClubMember.club_id == club_id,
+            ClubMember.user_id == current_user.id,
+            ClubMember.status == "active",
+        ))
+        is_member = m_res.scalar_one_or_none() is not None
+        if not (is_member or current_user.is_superadmin):
+            raise HTTPException(status_code=403, detail="No tienes acceso a este club")
+
+    if not date_from:
+        date_from = date.today()
+    if not date_to:
+        date_to = date_from + timedelta(days=14)
+
+    q = select(TeeTimeSlot).where(
+        TeeTimeSlot.club_id == club_id,
+        TeeTimeSlot.date >= date_from,
+        TeeTimeSlot.date <= date_to,
+    ).order_by(TeeTimeSlot.date, TeeTimeSlot.time)
+    slots = (await db.execute(q)).scalars().all()
+
+    out = []
+    for s in slots:
+        bookings_res = await db.execute(
+            select(TeeTimeBooking, User)
+            .join(User, User.id == TeeTimeBooking.user_id)
+            .where(TeeTimeBooking.slot_id == s.id, TeeTimeBooking.status != "cancelled")
+            .order_by(TeeTimeBooking.booked_at)
+        )
+        bookings = [
+            {
+                "id": str(b.id),
+                "user_id": str(b.user_id),
+                "user_name": f"{u.first_name} {u.last_name}",
+                "user_email": u.email,
+                "players_count": b.players_count,
+                "status": b.status,
+                "notes": b.notes,
+                "booked_at": b.booked_at.isoformat() if b.booked_at else None,
+            }
+            for b, u in bookings_res.all()
+        ]
+        booked_total = sum(bk["players_count"] for bk in bookings if bk["status"] in ("pending", "confirmed"))
+        out.append({
+            "id": s.id,
+            "date": s.date.isoformat(),
+            "time": s.time.strftime("%H:%M"),
+            "max_players": s.max_players,
+            "available_spots": s.max_players - booked_total,
+            "booked_count": booked_total,
+            "is_blocked": s.is_blocked,
+            "block_reason": s.block_reason,
+            "bookings": bookings,
+        })
+    return out
+
+
+@router.post("/{club_id}/tee-times/generate", status_code=201)
+async def generate_tee_times(club_id: uuid.UUID, data: TeeTimeGenerate,
+                              current_user: CurrentUser, db: DB):
+    """Genera slots en bulk. Requiere admin+ del club."""
+    await _require_club_role(db, club_id, current_user, "admin")
+    if data.date_to < data.date_from:
+        raise HTTPException(status_code=422, detail="date_to debe ser >= date_from")
+    if (data.date_to - data.date_from).days > 90:
+        raise HTTPException(status_code=422, detail="Rango máximo 90 días por generación")
+
+    t_start = _parse_hhmm(data.time_start)
+    t_end = _parse_hhmm(data.time_end)
+    if t_end <= t_start:
+        raise HTTPException(status_code=422, detail="time_end debe ser > time_start")
+
+    created = 0
+    skipped = 0
+    cur = data.date_from
+    while cur <= data.date_to:
+        if data.weekdays is not None and cur.weekday() not in data.weekdays:
+            cur += timedelta(days=1)
+            continue
+        # generar slots del día
+        cur_dt = datetime.combine(cur, t_start)
+        end_dt = datetime.combine(cur, t_end)
+        while cur_dt < end_dt:
+            cur_time = cur_dt.time()
+            # verificar duplicado
+            exists_res = await db.execute(select(TeeTimeSlot).where(
+                TeeTimeSlot.club_id == club_id,
+                TeeTimeSlot.date == cur,
+                TeeTimeSlot.time == cur_time,
+            ))
+            if not exists_res.scalar_one_or_none():
+                db.add(TeeTimeSlot(
+                    club_id=club_id,
+                    date=cur,
+                    time=cur_time,
+                    max_players=data.max_players,
+                    available_spots=data.max_players,
+                ))
+                created += 1
+            else:
+                skipped += 1
+            cur_dt += timedelta(minutes=data.interval_minutes)
+        cur += timedelta(days=1)
+    await db.flush()
+    return {"created": created, "skipped": skipped}
+
+
+@router.post("/{club_id}/tee-times", status_code=201)
+async def create_tee_time_slot(club_id: uuid.UUID, data: TeeTimeSlotIn,
+                                current_user: CurrentUser, db: DB):
+    """Crear un slot individual. Requiere admin+ del club."""
+    await _require_club_role(db, club_id, current_user, "admin")
+    t = _parse_hhmm(data.time)
+    exists = await db.execute(select(TeeTimeSlot).where(
+        TeeTimeSlot.club_id == club_id, TeeTimeSlot.date == data.date, TeeTimeSlot.time == t
+    ))
+    if exists.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="Ya existe un slot en esa fecha y hora")
+    slot = TeeTimeSlot(
+        club_id=club_id, date=data.date, time=t,
+        max_players=data.max_players, available_spots=data.max_players,
+    )
+    db.add(slot)
+    await db.flush()
+    return {"id": slot.id, "date": slot.date.isoformat(), "time": slot.time.strftime("%H:%M")}
+
+
+@router.patch("/{club_id}/tee-times/{slot_id}")
+async def update_tee_time_slot(club_id: uuid.UUID, slot_id: int, data: TeeTimeSlotPatch,
+                                current_user: CurrentUser, db: DB):
+    """Editar/bloquear slot. Requiere admin+ del club."""
+    await _require_club_role(db, club_id, current_user, "admin")
+    res = await db.execute(select(TeeTimeSlot).where(
+        TeeTimeSlot.id == slot_id, TeeTimeSlot.club_id == club_id
+    ))
+    slot = res.scalar_one_or_none()
+    if not slot:
+        raise HTTPException(status_code=404, detail="Slot no encontrado")
+    for k, v in data.model_dump(exclude_unset=True).items():
+        setattr(slot, k, v)
+    await db.flush()
+    return {"id": slot.id, "is_blocked": slot.is_blocked}
+
+
+@router.delete("/{club_id}/tee-times/{slot_id}")
+async def delete_tee_time_slot(club_id: uuid.UUID, slot_id: int,
+                                current_user: CurrentUser, db: DB):
+    """Eliminar slot. Requiere admin+ del club. Solo si no tiene bookings activas."""
+    await _require_club_role(db, club_id, current_user, "admin")
+    res = await db.execute(select(TeeTimeSlot).where(
+        TeeTimeSlot.id == slot_id, TeeTimeSlot.club_id == club_id
+    ))
+    slot = res.scalar_one_or_none()
+    if not slot:
+        raise HTTPException(status_code=404, detail="Slot no encontrado")
+    # verificar bookings activas
+    bk_res = await db.execute(select(func.count()).where(
+        TeeTimeBooking.slot_id == slot_id,
+        TeeTimeBooking.status.in_(["pending", "confirmed"]),
+    ))
+    if (bk_res.scalar() or 0) > 0:
+        raise HTTPException(status_code=409, detail="No se puede eliminar: el slot tiene reservas activas")
+    await db.delete(slot)
+    await db.flush()
+    return {"id": slot_id, "deleted": True}
+
+
+@router.post("/{club_id}/tee-times/{slot_id}/book", status_code=201)
+async def book_tee_time(club_id: uuid.UUID, slot_id: int, data: BookingCreate,
+                         current_user: CurrentUser, db: DB):
+    """Reservar un slot. Cualquier miembro del padrón puede reservar para sí; staff puede reservar para otros."""
+    # buscar slot
+    s_res = await db.execute(select(TeeTimeSlot).where(
+        TeeTimeSlot.id == slot_id, TeeTimeSlot.club_id == club_id
+    ))
+    slot = s_res.scalar_one_or_none()
+    if not slot:
+        raise HTTPException(status_code=404, detail="Slot no encontrado")
+    if slot.is_blocked:
+        raise HTTPException(status_code=409, detail=f"Slot bloqueado: {slot.block_reason or 'sin razón'}")
+    if slot.date < date.today():
+        raise HTTPException(status_code=409, detail="No puedes reservar slots pasados")
+
+    # determinar a quién se reserva
+    target_user_id = current_user.id
+    if data.user_id:
+        # solo staff puede reservar por otros
+        role = await _get_club_role(db, club_id, current_user)
+        if not role:
+            raise HTTPException(status_code=403, detail="No tienes permisos para reservar a nombre de otro")
+        target_user_id = uuid.UUID(data.user_id)
+
+    # verificar que el target_user sea miembro activo del padrón (o staff)
+    member_res = await db.execute(select(ClubMember).where(
+        ClubMember.club_id == club_id,
+        ClubMember.user_id == target_user_id,
+        ClubMember.status == "active",
+    ))
+    staff_res = await db.execute(select(ClubStaff).where(
+        ClubStaff.club_id == club_id,
+        ClubStaff.user_id == target_user_id,
+        ClubStaff.is_active == True,
+    ))
+    if not member_res.scalar_one_or_none() and not staff_res.scalar_one_or_none() and not current_user.is_superadmin:
+        raise HTTPException(status_code=403, detail="Solo miembros del padrón o staff pueden reservar")
+
+    # verificar disponibilidad
+    bk_res = await db.execute(select(func.coalesce(func.sum(TeeTimeBooking.players_count), 0)).where(
+        TeeTimeBooking.slot_id == slot_id,
+        TeeTimeBooking.status.in_(["pending", "confirmed"]),
+    ))
+    booked = bk_res.scalar() or 0
+    if booked + data.players_count > slot.max_players:
+        raise HTTPException(status_code=409, detail=f"No hay cupo. Disponibles: {slot.max_players - booked}")
+
+    booking = TeeTimeBooking(
+        slot_id=slot_id,
+        user_id=target_user_id,
+        players_count=data.players_count,
+        status="confirmed",  # confirmación inmediata en MVP
+        notes=data.notes,
+        confirmed_at=datetime.now(timezone.utc),
+    )
+    db.add(booking)
+    await db.flush()
+    return {"id": str(booking.id), "status": "confirmed", "slot_id": slot_id}
+
+
+@router.delete("/{club_id}/tee-times/bookings/{booking_id}")
+async def cancel_booking(club_id: uuid.UUID, booking_id: uuid.UUID,
+                          current_user: CurrentUser, db: DB):
+    """Cancelar reserva. El dueño de la reserva o staff (manager+) pueden cancelar."""
+    b_res = await db.execute(
+        select(TeeTimeBooking, TeeTimeSlot)
+        .join(TeeTimeSlot, TeeTimeSlot.id == TeeTimeBooking.slot_id)
+        .where(TeeTimeBooking.id == booking_id, TeeTimeSlot.club_id == club_id)
+    )
+    row = b_res.first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Reserva no encontrada")
+    booking, slot = row
+
+    # permisos: el dueño puede cancelar siempre; staff manager+ del club también; superadmin también
+    if booking.user_id != current_user.id and not current_user.is_superadmin:
+        role = await _get_club_role(db, club_id, current_user)
+        if not role or ROLE_HIERARCHY.get(role, 0) < ROLE_HIERARCHY["manager"]:
+            raise HTTPException(status_code=403, detail="No tienes permisos para cancelar esta reserva")
+
+    booking.status = "cancelled"
+    booking.cancelled_at = datetime.now(timezone.utc)
+    await db.flush()
+    return {"id": str(booking.id), "status": "cancelled"}
+
+
+@router.get("/{club_id}/tee-times/my-bookings")
+async def my_bookings(club_id: uuid.UUID, current_user: CurrentUser, db: DB,
+                       upcoming_only: bool = True):
+    """Mis reservas en este club."""
+    q = (
+        select(TeeTimeBooking, TeeTimeSlot)
+        .join(TeeTimeSlot, TeeTimeSlot.id == TeeTimeBooking.slot_id)
+        .where(
+            TeeTimeBooking.user_id == current_user.id,
+            TeeTimeSlot.club_id == club_id,
+            TeeTimeBooking.status != "cancelled",
+        )
+    )
+    if upcoming_only:
+        q = q.where(TeeTimeSlot.date >= date.today())
+    q = q.order_by(TeeTimeSlot.date, TeeTimeSlot.time)
+    rows = (await db.execute(q)).all()
+    return [
+        {
+            "id": str(b.id),
+            "slot_id": s.id,
+            "date": s.date.isoformat(),
+            "time": s.time.strftime("%H:%M"),
+            "players_count": b.players_count,
+            "status": b.status,
+            "notes": b.notes,
+        }
+        for b, s in rows
+    ]
