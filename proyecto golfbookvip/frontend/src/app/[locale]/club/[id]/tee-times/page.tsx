@@ -25,6 +25,10 @@ interface Slot {
   booked_count: number
   is_blocked: boolean
   block_reason: string | null
+  tier: 'members_only' | 'members_priority' | 'public'
+  green_fee_member: number
+  green_fee_guest: number
+  green_fee_public: number
   bookings: Booking[]
 }
 interface MyRole {
@@ -61,11 +65,17 @@ export default function TeeTimesPage() {
     date_to: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
     time_start: '07:00', time_end: '14:00',
     interval_minutes: 10, max_players: 4,
+    tier: 'members_only' as 'members_only' | 'members_priority' | 'public',
+    green_fee_member: 0, green_fee_guest: 0, green_fee_public: 0,
   })
   const [generating, setGenerating] = useState(false)
 
   const [showCreate, setShowCreate] = useState(false)
-  const [createForm, setCreateForm] = useState({ date: todayIso, time: '07:00', max_players: 4 })
+  const [createForm, setCreateForm] = useState({
+    date: todayIso, time: '07:00', max_players: 4,
+    tier: 'members_only' as 'members_only' | 'members_priority' | 'public',
+    green_fee_member: 0, green_fee_guest: 0, green_fee_public: 0,
+  })
   const [creating, setCreating] = useState(false)
 
   const [blockingSlot, setBlockingSlot] = useState<Slot | null>(null)
@@ -269,7 +279,7 @@ export default function TeeTimesPage() {
                     full ? 'border-orange-500/30' :
                     'border-zinc-800'
                   }`}>
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between mb-2">
                     <div>
                       <p className="text-2xl font-black text-white flex items-center gap-2">
                         <Clock size={16} className="text-amber-400" />
@@ -287,6 +297,25 @@ export default function TeeTimesPage() {
                         {s.booked_count}/{s.max_players}
                       </p>
                     </div>
+                  </div>
+                  {/* Tier + pricing */}
+                  <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
+                      s.tier === 'members_only' ? 'bg-red-500/15 text-red-300 border-red-500/40' :
+                      s.tier === 'members_priority' ? 'bg-amber-500/15 text-amber-300 border-amber-500/40' :
+                      'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                    }`}>
+                      {s.tier === 'members_only' ? lbl('Solo socios', 'Members only') :
+                       s.tier === 'members_priority' ? lbl('Prioridad socios', 'Member priority') :
+                       lbl('Público', 'Public')}
+                    </span>
+                    {(s.green_fee_member > 0 || s.green_fee_guest > 0 || s.green_fee_public > 0) && (
+                      <div className="flex gap-1.5 text-[10px] font-mono">
+                        {s.green_fee_member > 0 && <span className="text-emerald-400" title={lbl('Socio', 'Member')}>S ${s.green_fee_member.toFixed(0)}</span>}
+                        {s.green_fee_guest > 0 && <span className="text-purple-400" title={lbl('Invitado', 'Guest')}>I ${s.green_fee_guest.toFixed(0)}</span>}
+                        {s.green_fee_public > 0 && <span className="text-amber-400" title={lbl('Público', 'Public')}>P ${s.green_fee_public.toFixed(0)}</span>}
+                      </div>
+                    )}
                   </div>
 
                   {!s.is_blocked && (
@@ -408,6 +437,35 @@ export default function TeeTimesPage() {
                     className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
                 </div>
               </div>
+              {/* Tier + pricing */}
+              <div className="border-t border-zinc-800 pt-3 space-y-2">
+                <div>
+                  <label className="text-[10px] text-zinc-400 uppercase tracking-wider font-semibold block mb-1">{lbl('Acceso (tier)', 'Access tier')}</label>
+                  <select value={genForm.tier} onChange={e => setGenForm({ ...genForm, tier: e.target.value as 'members_only' | 'members_priority' | 'public' })}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm">
+                    <option value="members_only">{lbl('Solo socios', 'Members only')}</option>
+                    <option value="members_priority">{lbl('Prioridad socios', 'Member priority')}</option>
+                    <option value="public">{lbl('Público', 'Public')}</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-[9px] text-emerald-400 uppercase tracking-wider font-semibold block mb-1">{lbl('Socio $', 'Member $')}</label>
+                    <input type="number" min="0" step="0.01" value={genForm.green_fee_member} onChange={e => setGenForm({ ...genForm, green_fee_member: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-white text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-[9px] text-purple-400 uppercase tracking-wider font-semibold block mb-1">{lbl('Invitado $', 'Guest $')}</label>
+                    <input type="number" min="0" step="0.01" value={genForm.green_fee_guest} onChange={e => setGenForm({ ...genForm, green_fee_guest: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-white text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-[9px] text-amber-400 uppercase tracking-wider font-semibold block mb-1">{lbl('Público $', 'Public $')}</label>
+                    <input type="number" min="0" step="0.01" value={genForm.green_fee_public} onChange={e => setGenForm({ ...genForm, green_fee_public: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-white text-sm" />
+                  </div>
+                </div>
+              </div>
               <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3 text-xs text-purple-200">
                 {lbl(
                   'Se generarán slots cada N minutos entre las horas especificadas, para cada día del rango. Duplicados se omiten.',
@@ -457,6 +515,32 @@ export default function TeeTimesPage() {
                   <label className="text-[10px] text-zinc-400 uppercase tracking-wider font-semibold block mb-1">{lbl('Cupo', 'Max')}</label>
                   <input type="number" min="1" max="8" value={createForm.max_players} onChange={e => setCreateForm({ ...createForm, max_players: parseInt(e.target.value) || 4 })}
                     className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] text-zinc-400 uppercase tracking-wider font-semibold block mb-1">{lbl('Tier', 'Tier')}</label>
+                <select value={createForm.tier} onChange={e => setCreateForm({ ...createForm, tier: e.target.value as 'members_only' | 'members_priority' | 'public' })}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm">
+                  <option value="members_only">{lbl('Solo socios', 'Members only')}</option>
+                  <option value="members_priority">{lbl('Prioridad socios', 'Member priority')}</option>
+                  <option value="public">{lbl('Público', 'Public')}</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-[9px] text-emerald-400 uppercase tracking-wider font-semibold block mb-1">{lbl('Socio $', 'Member $')}</label>
+                  <input type="number" min="0" step="0.01" value={createForm.green_fee_member} onChange={e => setCreateForm({ ...createForm, green_fee_member: parseFloat(e.target.value) || 0 })}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-white text-sm" />
+                </div>
+                <div>
+                  <label className="text-[9px] text-purple-400 uppercase tracking-wider font-semibold block mb-1">{lbl('Invitado $', 'Guest $')}</label>
+                  <input type="number" min="0" step="0.01" value={createForm.green_fee_guest} onChange={e => setCreateForm({ ...createForm, green_fee_guest: parseFloat(e.target.value) || 0 })}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-white text-sm" />
+                </div>
+                <div>
+                  <label className="text-[9px] text-amber-400 uppercase tracking-wider font-semibold block mb-1">{lbl('Público $', 'Public $')}</label>
+                  <input type="number" min="0" step="0.01" value={createForm.green_fee_public} onChange={e => setCreateForm({ ...createForm, green_fee_public: parseFloat(e.target.value) || 0 })}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-white text-sm" />
                 </div>
               </div>
             </div>

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, date, time
 from typing import Optional
-from sqlalchemy import String, Boolean, Integer, Text, ForeignKey, UniqueConstraint, Date, Time
+from sqlalchemy import String, Boolean, Integer, Numeric, Text, ForeignKey, UniqueConstraint, Date, Time
 from sqlalchemy.dialects.postgresql import UUID as pgUUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -22,6 +22,11 @@ class TeeTimeSlot(Base):
     available_spots: Mapped[int] = mapped_column(Integer, default=4)
     is_blocked: Mapped[bool] = mapped_column(Boolean, default=False)
     block_reason: Mapped[Optional[str]] = mapped_column(String(200))
+    # ─── Tier + pricing (Fase 4.2 — Híbrido) ───────────────────────────────
+    tier: Mapped[str] = mapped_column(String(20), default="members_only")  # members_only | members_priority | public
+    green_fee_member: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
+    green_fee_guest: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
+    green_fee_public: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
     created_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now())
 
 

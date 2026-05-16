@@ -7,6 +7,40 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.15.0] - 2026-05-15
+
+### Added — Clubs SaaS Fase 4.2 · Tiers y pricing en tee_time_slots
+
+Segunda de 4 sub-releases del híbrido. Cada slot ahora tiene tier de acceso y 3 tarifas (socio/invitado/público).
+
+**Schema migration (`tee_time_slots`):**
+- `tier VARCHAR(20) NOT NULL DEFAULT 'members_only'` con CHECK `IN ('members_only','members_priority','public')`
+- `green_fee_member NUMERIC(10,2) NOT NULL DEFAULT 0`
+- `green_fee_guest NUMERIC(10,2) NOT NULL DEFAULT 0`
+- `green_fee_public NUMERIC(10,2) NOT NULL DEFAULT 0`
+
+Slots existentes quedan en `members_only` con tarifas 0 (retrocompatible).
+
+**Backend:**
+- `GET /clubs/{id}/tee-times` ahora devuelve `tier`, `green_fee_member`, `green_fee_guest`, `green_fee_public` por slot.
+- `POST /clubs/{id}/tee-times` y `POST /tee-times/generate` aceptan los 4 campos nuevos. Validan `tier in VALID_TIERS`.
+- `PATCH /clubs/{id}/tee-times/{slot_id}` extendido para editar tier/precios.
+- `PATCH /clubs/{id}/tee-times/bulk` — **endpoint nuevo** para aplicar cambios masivos a un rango (fechas + opcionalmente horas/weekdays): permite "ponle precio member=500/public=1500 a todos los slots de viernes-domingo de junio".
+
+**Frontend (`/club/{id}/tee-times`):**
+- Cada slot muestra **badge de tier** (rojo "Solo socios" / ámbar "Prioridad socios" / verde "Público") + **mini-pricing inline** ("S $500  I $1000  P $1500" con colores).
+- Modal **"Generar slots"** extendido con sección Tier + 3 inputs de precio.
+- Modal **"Crear slot individual"** extendido idem.
+- Los precios solo aparecen en la tarjeta si alguno > 0 (clubes privados puros pueden no usar precios).
+
+### Notes
+
+- Los precios todavía no se cobran automáticamente en booking. Eso llega en v1.17.0.
+- v1.16.0 agrega booking multi-jugador con guests nombrados y reglas de sponsor.
+- Endpoint bulk usa parámetros granulares: `time_start`/`time_end` (rango horario), `weekdays` (array 0-6) para reglas tipo "fin de semana antes de 10am es members_only".
+
+---
+
 ## [1.14.0] - 2026-05-15
 
 ### Added — Clubs SaaS Fase 4.1 · Configuración del club (acceso híbrido)

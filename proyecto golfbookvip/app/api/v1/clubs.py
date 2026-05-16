@@ -635,12 +635,20 @@ class TeeTimeSlotIn(BaseModel):
     date: date
     time: str  # HH:MM
     max_players: int = 4
+    tier: str = "members_only"
+    green_fee_member: float = 0
+    green_fee_guest: float = 0
+    green_fee_public: float = 0
 
 
 class TeeTimeSlotPatch(BaseModel):
     max_players: Optional[int] = None
     is_blocked: Optional[bool] = None
     block_reason: Optional[str] = None
+    tier: Optional[str] = None
+    green_fee_member: Optional[float] = None
+    green_fee_guest: Optional[float] = None
+    green_fee_public: Optional[float] = None
 
 
 class TeeTimeGenerate(BaseModel):
@@ -651,6 +659,13 @@ class TeeTimeGenerate(BaseModel):
     interval_minutes: int = Field(8, ge=2, le=60)
     max_players: int = Field(4, ge=1, le=8)
     weekdays: Optional[list[int]] = None  # 0=Mon, 6=Sun; None = todos
+    tier: str = "members_only"
+    green_fee_member: float = 0
+    green_fee_guest: float = 0
+    green_fee_public: float = 0
+
+
+VALID_TIERS = {"members_only", "members_priority", "public"}
 
 
 class BookingCreate(BaseModel):
@@ -724,6 +739,10 @@ async def list_tee_times(club_id: uuid.UUID, current_user: CurrentUser, db: DB,
             "booked_count": booked_total,
             "is_blocked": s.is_blocked,
             "block_reason": s.block_reason,
+            "tier": s.tier or "members_only",
+            "green_fee_member": float(s.green_fee_member or 0),
+            "green_fee_guest": float(s.green_fee_guest or 0),
+            "green_fee_public": float(s.green_fee_public or 0),
             "bookings": bookings,
         })
     return out
@@ -738,6 +757,8 @@ async def generate_tee_times(club_id: uuid.UUID, data: TeeTimeGenerate,
         raise HTTPException(status_code=422, detail="date_to debe ser >= date_from")
     if (data.date_to - data.date_from).days > 90:
         raise HTTPException(status_code=422, detail="Rango máximo 90 días por generación")
+    if data.tier not in VALID_TIERS:
+        raise HTTPException(status_code=422, detail=f"tier inválido (válidos: {', '.join(VALID_TIERS)})")
 
     t_start = _parse_hhmm(data.time_start)
     t_end = _parse_hhmm(data.time_end)
@@ -769,6 +790,10 @@ async def generate_tee_times(club_id: uuid.UUID, data: TeeTimeGenerate,
                     time=cur_time,
                     max_players=data.max_players,
                     available_spots=data.max_players,
+                    tier=data.tier,
+                    green_fee_member=data.green_fee_member,
+                    green_fee_guest=data.green_fee_guest,
+                    green_fee_public=data.green_fee_public,
                 ))
                 created += 1
             else:
@@ -784,6 +809,8 @@ async def create_tee_time_slot(club_id: uuid.UUID, data: TeeTimeSlotIn,
                                 current_user: CurrentUser, db: DB):
     """Crear un slot individual. Requiere admin+ del club."""
     await _require_club_role(db, club_id, current_user, "admin")
+    if data.tier not in VALID_TIERS:
+        raise HTTPException(status_code=422, detail=f"tier inválido (válidos: {', '.join(VALID_TIERS)})")
     t = _parse_hhmm(data.time)
     exists = await db.execute(select(TeeTimeSlot).where(
         TeeTimeSlot.club_id == club_id, TeeTimeSlot.date == data.date, TeeTimeSlot.time == t
@@ -793,6 +820,10 @@ async def create_tee_time_slot(club_id: uuid.UUID, data: TeeTimeSlotIn,
     slot = TeeTimeSlot(
         club_id=club_id, date=data.date, time=t,
         max_players=data.max_players, available_spots=data.max_players,
+        tier=data.tier,
+        green_fee_member=data.green_fee_member,
+        green_fee_guest=data.green_fee_guest,
+        green_fee_public=data.green_fee_public,
     )
     db.add(slot)
     await db.flush()
@@ -810,10 +841,55 @@ async def update_tee_time_slot(club_id: uuid.UUID, slot_id: int, data: TeeTimeSl
     slot = res.scalar_one_or_none()
     if not slot:
         raise HTTPException(status_code=404, detail="Slot no encontrado")
-    for k, v in data.model_dump(exclude_unset=True).items():
+    payload = data.model_dump(exclude_unset=True)
+    if "tier" in payload and payload["tier"] not in VALID_TIERS:
+        raise HTTPException(status_code=422, detail=f"tier inválido (válidos: {', '.join(VALID_TIERS)})")
+    for k, v in payload.items():
         setattr(slot, k, v)
     await db.flush()
-    return {"id": slot.id, "is_blocked": slot.is_blocked}
+    return {"id": slot.id, "is_blocked": slot.is_blocked, "tier": slot.tier}
+
+
+class TeeTimeSlotBulkPatch(BaseModel):
+    date_from: date
+    date_to: date
+    time_start: Optional[str] = None  # HH:MM
+    time_end: Optional[str] = None
+    weekdays: Optional[list[int]] = None
+    tier: Optional[str] = None
+    green_fee_member: Optional[float] = None
+    green_fee_guest: Optional[float] = None
+    green_fee_public: Optional[float] = None
+
+
+@router.patch("/{club_id}/tee-times/bulk")
+async def bulk_update_tee_times(club_id: uuid.UUID, data: TeeTimeSlotBulkPatch,
+                                  current_user: CurrentUser, db: DB):
+    """Aplicar cambios a múltiples slots existentes (rango fechas/horas). Requiere admin+."""
+    await _require_club_role(db, club_id, current_user, "admin")
+    if data.tier and data.tier not in VALID_TIERS:
+        raise HTTPException(status_code=422, detail=f"tier inválido (válidos: {', '.join(VALID_TIERS)})")
+    q = select(TeeTimeSlot).where(
+        TeeTimeSlot.club_id == club_id,
+        TeeTimeSlot.date >= data.date_from,
+        TeeTimeSlot.date <= data.date_to,
+    )
+    if data.time_start:
+        q = q.where(TeeTimeSlot.time >= _parse_hhmm(data.time_start))
+    if data.time_end:
+        q = q.where(TeeTimeSlot.time < _parse_hhmm(data.time_end))
+    slots = (await db.execute(q)).scalars().all()
+    updated = 0
+    for s in slots:
+        if data.weekdays is not None and s.date.weekday() not in data.weekdays:
+            continue
+        if data.tier is not None: s.tier = data.tier
+        if data.green_fee_member is not None: s.green_fee_member = data.green_fee_member
+        if data.green_fee_guest is not None: s.green_fee_guest = data.green_fee_guest
+        if data.green_fee_public is not None: s.green_fee_public = data.green_fee_public
+        updated += 1
+    await db.flush()
+    return {"updated": updated}
 
 
 @router.delete("/{club_id}/tee-times/{slot_id}")
