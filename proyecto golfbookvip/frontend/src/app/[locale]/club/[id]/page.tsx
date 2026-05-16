@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Building2, Users, Shield, Crown, Mail, Phone, MapPin, Globe, Loader2, X, Calendar, AlertCircle, Clock, DollarSign } from 'lucide-react'
+import { ArrowLeft, Building2, Users, Shield, Crown, Mail, Phone, MapPin, Globe, Loader2, X, Calendar, AlertCircle, Clock, DollarSign, Settings, Lock } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
@@ -20,6 +20,7 @@ interface ClubDashboard {
   timezone: string
   is_active: boolean
   is_verified: boolean
+  access_type?: 'private' | 'semi_private' | 'public'
   plan: { id: number; code: string; name: string; plan_type: string; price_monthly: number; max_members: number | null } | null
   plan_expires_at: string | null
   member_count: number
@@ -332,6 +333,31 @@ export default function ClubPanelPage() {
                 <p className="text-xs text-zinc-500">{lbl('Cargos, pagos y saldos de socios', 'Charges, payments and balances')}</p>
               </div>
               <span className="text-xs text-emerald-400/70 group-hover:text-emerald-300">→</span>
+            </div>
+          </Link>
+
+          <Link href={`/${locale}/club/${club.id}/settings`}
+            className="bg-zinc-900 border border-zinc-700 hover:border-zinc-500 hover:bg-zinc-800/40 rounded-2xl p-4 transition-all group sm:col-span-2">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-zinc-700/40 border border-zinc-600 flex items-center justify-center">
+                <Settings size={18} className="text-zinc-300" />
+              </div>
+              <div className="flex-1">
+                <p className="font-semibold text-white text-sm">{lbl('Configuración del club', 'Club settings')}</p>
+                <p className="text-xs text-zinc-500">{lbl('Tipo de acceso, política de invitados, ventanas de reserva', 'Access type, guest policy, booking windows')}</p>
+              </div>
+              {club.access_type && (
+                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
+                  club.access_type === 'private' ? 'bg-red-500/15 text-red-300 border-red-500/40' :
+                  club.access_type === 'semi_private' ? 'bg-amber-500/15 text-amber-300 border-amber-500/40' :
+                  'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                }`}>
+                  {club.access_type === 'private' ? lbl('Privado', 'Private') :
+                   club.access_type === 'semi_private' ? lbl('Híbrido', 'Hybrid') :
+                   lbl('Público', 'Public')}
+                </span>
+              )}
+              <span className="text-xs text-zinc-500 group-hover:text-zinc-300">→</span>
             </div>
           </Link>
         </div>

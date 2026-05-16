@@ -288,6 +288,7 @@ async def club_dashboard(club_id: uuid.UUID, current_user: CurrentUser, db: DB):
         "cover_url": club.cover_url,
         "is_active": club.is_active,
         "is_verified": club.is_verified,
+        "access_type": club.access_type,
         "plan": plan_info,
         "plan_expires_at": club.plan_expires_at.isoformat() if club.plan_expires_at else None,
         "member_count": member_count_res.scalar() or 0,
@@ -1244,3 +1245,54 @@ async def get_my_account(club_id: uuid.UUID, current_user: CurrentUser, db: DB):
         "balance": float(acc.balance) if acc.balance is not None else 0,
         "credit_limit": float(acc.credit_limit) if acc.credit_limit is not None else 0,
     }
+
+
+# ─── Configuración del club / Política de acceso (Fase 4) ──────────────────
+
+
+class ClubSettingsPatch(BaseModel):
+    access_type: Optional[str] = None  # private|semi_private|public
+    allow_guests: Optional[bool] = None
+    guest_requires_sponsor: Optional[bool] = None
+    max_guests_per_booking: Optional[int] = Field(None, ge=0, le=10)
+    max_guest_visits_per_year: Optional[int] = Field(None, ge=0, le=365)
+    guest_fee_to_sponsor: Optional[bool] = None
+    members_advance_days: Optional[int] = Field(None, ge=0, le=365)
+    public_advance_days: Optional[int] = Field(None, ge=0, le=365)
+
+
+@router.get("/{club_id}/settings")
+async def get_club_settings(club_id: uuid.UUID, current_user: CurrentUser, db: DB):
+    """Lee la configuración de acceso del club. Requiere ser staff."""
+    await _require_club_role(db, club_id, current_user, "staff")
+    res = await db.execute(select(Club).where(Club.id == club_id))
+    club = res.scalar_one_or_none()
+    if not club:
+        raise HTTPException(status_code=404, detail="Club no encontrado")
+    return {
+        "access_type": club.access_type,
+        "allow_guests": club.allow_guests,
+        "guest_requires_sponsor": club.guest_requires_sponsor,
+        "max_guests_per_booking": club.max_guests_per_booking,
+        "max_guest_visits_per_year": club.max_guest_visits_per_year,
+        "guest_fee_to_sponsor": club.guest_fee_to_sponsor,
+        "members_advance_days": club.members_advance_days,
+        "public_advance_days": club.public_advance_days,
+    }
+
+
+@router.patch("/{club_id}/settings")
+async def update_club_settings(club_id: uuid.UUID, payload: ClubSettingsPatch,
+                                current_user: CurrentUser, db: DB):
+    """Actualizar política de acceso del club. Requiere admin+."""
+    await _require_club_role(db, club_id, current_user, "admin")
+    if payload.access_type and payload.access_type not in ("private", "semi_private", "public"):
+        raise HTTPException(status_code=422, detail="access_type inválido")
+    res = await db.execute(select(Club).where(Club.id == club_id))
+    club = res.scalar_one_or_none()
+    if not club:
+        raise HTTPException(status_code=404, detail="Club no encontrado")
+    for k, v in payload.model_dump(exclude_unset=True).items():
+        setattr(club, k, v)
+    await db.flush()
+    return {"ok": True, "access_type": club.access_type}

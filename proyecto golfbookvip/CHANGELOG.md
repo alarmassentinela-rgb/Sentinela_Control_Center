@@ -7,6 +7,59 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.14.0] - 2026-05-15
+
+### Added — Clubs SaaS Fase 4.1 · Configuración del club (acceso híbrido)
+
+Primera de 4 sub-releases para soportar clubes híbridos (socios + público). Esta versión agrega la **configuración**; las siguientes integran las reglas en bookings/pricing/cobro.
+
+**Schema migration aplicada en producción (`clubs`):**
+- `access_type VARCHAR(20) NOT NULL DEFAULT 'private'` con CHECK `IN ('private','semi_private','public')`
+- `allow_guests BOOLEAN NOT NULL DEFAULT TRUE`
+- `guest_requires_sponsor BOOLEAN NOT NULL DEFAULT TRUE`
+- `max_guests_per_booking INT NOT NULL DEFAULT 3`
+- `max_guest_visits_per_year INT NOT NULL DEFAULT 6`
+- `guest_fee_to_sponsor BOOLEAN NOT NULL DEFAULT TRUE`
+- `members_advance_days INT NOT NULL DEFAULT 30`
+- `public_advance_days INT NOT NULL DEFAULT 7`
+
+Todos los clubes existentes quedan con defaults sensatos (privado puro), retrocompatible.
+
+**Backend:**
+- `GET /clubs/{id}/settings` — config completa (requiere staff)
+- `PATCH /clubs/{id}/settings` — actualizar parámetros uno o varios (requiere admin+)
+- `GET /clubs/{id}/dashboard` ahora incluye `access_type` para que el panel muestre el badge.
+
+**Frontend — `/[locale]/club/{id}/settings`:**
+- Sección 1 **Tipo de acceso**: 3 tarjetas grandes (Privado / Híbrido / Público) con icono, color y descripción. Click para cambiar (solo Owner/Admin).
+- Sección 2 **Política de invitados**: 3 toggles (allow_guests, guest_requires_sponsor, guest_fee_to_sponsor) + 2 campos numéricos (max_guests_per_booking, max_guest_visits_per_year). Auto-disable de campos dependientes cuando se desactiva el padre.
+- Sección 3 **Ventanas de reserva**: 2 campos numéricos (members_advance_days, public_advance_days). public_advance_days se deshabilita si access_type=private.
+- Auto-save al cambiar cualquier campo + flash "✓ Guardado" en header.
+- Vista de solo-lectura para Manager/Staff (warning visible).
+
+**Frontend — panel `/club/{id}`:**
+- Nueva tarjeta gris "Configuración del club" (full-width abajo) con badge del tipo de acceso (rojo Privado / ámbar Híbrido / verde Público).
+
+### Notes
+
+- Esta versión **NO impone las reglas en los endpoints de booking todavía**. Lo hará v1.15.0+ cuando integremos tiers en slots.
+- Roadmap restante para híbrido completo:
+  - v1.15.0 — Tiers y pricing en tee_time_slots (members_only/members_priority/public + green_fee_member/guest/public)
+  - v1.16.0 — Booking multi-jugador con guests nombrados + validación de sponsor + limit checks
+  - v1.17.0 — Cobro automático: al confirmar booking, generar transacciones charge en cuentas correctas
+
+### Roadmap pendiente Clubs SaaS
+
+| Versión | Tema |
+|---|---|
+| v1.15.0 | Tiers y pricing en slots |
+| v1.16.0 | Booking con guests nombrados |
+| v1.17.0 | Cobro automático de green fees |
+| v1.18.0 | Onboarding wizard nuevo club |
+| Backlog | Import CSV padrón, notificaciones, dominio personalizado, fix BuildKit |
+
+---
+
 ## [1.13.0] - 2026-05-15
 
 ### Added — Clubs SaaS Fase 3 · Estado de cuenta de socios

@@ -33,6 +33,15 @@ class Club(Base):
     stripe_customer_id: Mapped[Optional[str]] = mapped_column(String(200))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    # ─── Política de acceso (Clubs SaaS Fase 4 — Híbrido) ──────────────────
+    access_type: Mapped[str] = mapped_column(String(20), default="private")  # private|semi_private|public
+    allow_guests: Mapped[bool] = mapped_column(Boolean, default=True)
+    guest_requires_sponsor: Mapped[bool] = mapped_column(Boolean, default=True)
+    max_guests_per_booking: Mapped[int] = mapped_column(Integer, default=3)
+    max_guest_visits_per_year: Mapped[int] = mapped_column(Integer, default=6)
+    guest_fee_to_sponsor: Mapped[bool] = mapped_column(Boolean, default=True)
+    members_advance_days: Mapped[int] = mapped_column(Integer, default=30)
+    public_advance_days: Mapped[int] = mapped_column(Integer, default=7)
     created_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now())
     updated_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
 
