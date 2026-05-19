@@ -53,8 +53,17 @@
                                         <field name="event_type"/>
                                         <field name="priority_id" widget="badge"/>
                                         <field name="start_date"/>
+                                        <field name="acknowledged_at"/>
                                         <field name="end_date"/>
                                         <field name="duration"/>
+                                        <field name="sla_deadline"
+                                               invisible="not sla_deadline"/>
+                                        <field name="sla_status"
+                                               widget="badge"
+                                               decoration-success="sla_status in ('ok','met')"
+                                               decoration-warning="sla_status == 'warning'"
+                                               decoration-danger="sla_status in ('overdue','breached')"
+                                               decoration-muted="sla_status == 'no_sla'"/>
                                     </group>                        <group string="Dispositivo y Cliente">
                             <field name="device_id"/>
                             <field name="partner_id"/>
@@ -110,7 +119,9 @@
         <field name="name">sentinela.alarm.event.list</field>
         <field name="model">sentinela.alarm.event</field>
         <field name="arch" type="xml">
-            <list string="Eventos de Alarma" decoration-danger="subscription_state == 'suspended'">
+            <list string="Eventos de Alarma"
+                  decoration-danger="sla_status in ('overdue','breached') or subscription_state == 'suspended'"
+                  decoration-warning="sla_status == 'warning'">
                 <field name="name"/>
                 <field name="event_type"/>
                 <field name="priority_id" widget="badge"/>
@@ -122,6 +133,12 @@
                     decoration-muted="subscription_state in ('none','cut')"
                     string="Cliente"/>
                 <field name="start_date"/>
+                <field name="sla_deadline" optional="show"/>
+                <field name="sla_status" widget="badge"
+                    decoration-success="sla_status in ('ok','met')"
+                    decoration-warning="sla_status == 'warning'"
+                    decoration-danger="sla_status in ('overdue','breached')"
+                    decoration-muted="sla_status == 'no_sla'"/>
                 <field name="status"/>
                 <field name="duration"/>
             </list>
@@ -190,6 +207,8 @@
                 <filter name="priority_high" string="Prioridad Alta" domain="[('priority_id.level', '&gt;=', 8)]"/>
                 <filter name="active" string="Activos" domain="[('status', '=', 'active')]"/>
                 <filter name="in_progress" string="En Progreso" domain="[('status', '=', 'in_progress')]"/>
+                <filter name="sla_overdue" string="SLA Vencido"
+                        domain="[('sla_deadline','!=',False),('sla_deadline','&lt;',context_today().strftime('%Y-%m-%d %H:%M:%S')),('acknowledged_at','=',False)]"/>
                 <filter name="client_suspended" string="⚠️ Cliente Suspendido" domain="[('subscription_id.technical_state', '=', 'suspended')]"/>
                 <filter name="today" string="Hoy" domain="[('start_date', '&gt;=', time.strftime('%%Y-%%m-%%d 00:00:00')), ('start_date', '&lt;=', time.strftime('%%Y-%%m-%%d 23:59:59'))]"/>
                 <group expand="0" string="Agrupar por">

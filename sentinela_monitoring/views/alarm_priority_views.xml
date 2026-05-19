@@ -9,6 +9,7 @@
                 <field name="name"/>
                 <field name="code"/>
                 <field name="color_hex" widget="color"/>
+                <field name="sla_response_minutes" string="SLA (min)"/>
                 <field name="priority_sound_filename" column_invisible="1"/>
                 <field name="priority_sound" widget="binary" filename="priority_sound_filename"/>
                 <field name="blink"/>
@@ -31,6 +32,7 @@
                             <field name="name"/>
                             <field name="code"/>
                             <field name="level"/>
+                            <field name="sla_response_minutes"/>
                         </group>
                         <group>
                             <field name="color_hex" widget="color"/>

@@ -42,6 +42,50 @@ class AlarmEvent(models.Model):
     start_date = fields.Datetime(string='Fecha de Inicio', default=fields.Datetime.now)
     end_date = fields.Datetime(string='Fecha de Finalización')
     duration = fields.Float(string='Duración (horas)', compute='_compute_duration', store=True)
+
+    # F2.3 — SLA Timer
+    acknowledged_at = fields.Datetime(string='Reconocido el', tracking=True,
+        help='Cuándo un operador reconoció el evento por primera vez.')
+    sla_deadline = fields.Datetime(string='Deadline SLA', compute='_compute_sla_deadline', store=True,
+        help='start_date + priority.sla_response_minutes. Vacío si la prioridad no tiene SLA.')
+    sla_status = fields.Selection([
+        ('no_sla', 'Sin SLA'),
+        ('ok', 'OK'),
+        ('warning', 'Próximo a vencer'),
+        ('overdue', 'Vencido'),
+        ('met', 'Cumplido'),
+        ('breached', 'Incumplido'),
+    ], string='Estado SLA', compute='_compute_sla_status',
+       help='Estado dinámico calculado al leer. Para filtros eficientes usar sla_deadline.')
+
+    @api.depends('start_date', 'priority_id.sla_response_minutes')
+    def _compute_sla_deadline(self):
+        for rec in self:
+            if rec.start_date and rec.priority_id and rec.priority_id.sla_response_minutes > 0:
+                rec.sla_deadline = rec.start_date + timedelta(minutes=rec.priority_id.sla_response_minutes)
+            else:
+                rec.sla_deadline = False
+
+    @api.depends('sla_deadline', 'acknowledged_at')
+    def _compute_sla_status(self):
+        now = fields.Datetime.now()
+        for rec in self:
+            if not rec.sla_deadline:
+                rec.sla_status = 'no_sla'
+                continue
+            if rec.acknowledged_at:
+                rec.sla_status = 'met' if rec.acknowledged_at <= rec.sla_deadline else 'breached'
+                continue
+            if now > rec.sla_deadline:
+                rec.sla_status = 'overdue'
+                continue
+            # warning si pasó >= 50% del tiempo
+            window = rec.sla_deadline - rec.start_date
+            elapsed = now - rec.start_date
+            if window.total_seconds() > 0 and elapsed.total_seconds() / window.total_seconds() >= 0.5:
+                rec.sla_status = 'warning'
+            else:
+                rec.sla_status = 'ok'
     
     description = fields.Text(string='Descripción del Evento')
     operator_final_remarks = fields.Text(string='Conclusión del Operador', help="Notas finales que aparecerán en el reporte para el cliente.")
@@ -412,7 +456,12 @@ class AlarmEvent(models.Model):
             if not rec.current_operator_id:
                 rec._try_claim()  # auto-claim al reconocer
             rec._ensure_claim_held()
-        self.write({'status': 'acknowledged', 'assigned_operator_id': self.env.uid})
+        # acknowledged_at solo se setea la PRIMERA vez (re-ack no resetea timer SLA)
+        for rec in self:
+            vals = {'status': 'acknowledged', 'assigned_operator_id': self.env.uid}
+            if not rec.acknowledged_at:
+                vals['acknowledged_at'] = fields.Datetime.now()
+            rec.write(vals)
         return True
 
     def action_escalate(self):

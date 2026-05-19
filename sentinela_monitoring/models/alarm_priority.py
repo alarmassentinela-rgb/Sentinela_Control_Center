@@ -18,6 +18,14 @@ class AlarmPriority(models.Model):
     
     is_reminder = fields.Boolean(string='Es Sonido de Recordatorio', default=False, help="Marque esto para usar este sonido como recordatorio suave cada 30 segundos.")
     blink = fields.Boolean(string='Parpadear en Dashboard', default=False)
+
+    # F2.3 — SLA por prioridad (minutos hasta que operador debe reconocer)
+    sla_response_minutes = fields.Integer(
+        string='SLA Reconocimiento (min)',
+        default=0,
+        help='Minutos máximos para que un operador reconozca un evento de esta '
+             'prioridad. 0 = sin SLA. Los eventos sin reconocer pasan a estado '
+             "'overdue' al cumplirse el plazo.")
     
     _sql_constraints = [
         ('level_uniq', 'unique(level)', 'Ya existe una prioridad con este nivel.'),
