@@ -74,7 +74,9 @@
                         <field name="description" nolabel="1"/>
                     </group>
                     <group string="Resolución">
-                        <field name="resolution_notes" nolabel="1"/>
+                        <field name="close_reason" required="status in ('resolved', 'closed')"/>
+                        <field name="resolution_notes" nolabel="1"
+                               placeholder="Notas libres complementarias. Obligatorio si close_reason = 'Otro'."/>
                     </group>
                     <notebook>
                         <page string="Señales Relacionadas">
@@ -196,6 +198,7 @@
                     <filter name="group_by_priority" string="Prioridad" context="{'group_by': 'priority_id'}"/>
                     <filter name="group_by_device" string="Panel" context="{'group_by': 'device_id'}"/>
                     <filter name="group_by_status" string="Estado" context="{'group_by': 'status'}"/>
+                    <filter name="group_by_close_reason" string="Motivo de Cierre" context="{'group_by': 'close_reason'}"/>
                 </group>
             </search>
         </field>
@@ -241,7 +244,8 @@
                 <field name="device_id" string="Panel"/>
                 <field name="alarm_code_id" string="Código"/>
                 <field name="description" string="Evento"/>
-                <field name="resolution_notes" string="Comentarios del Operador"/>
+                <field name="close_reason" string="Motivo"/>
+                <field name="resolution_notes" string="Comentarios" optional="hide"/>
                 <field name="assigned_operator_id" widget="many2one_avatar_user" string="Atendió"/>
             </list>
         </field>

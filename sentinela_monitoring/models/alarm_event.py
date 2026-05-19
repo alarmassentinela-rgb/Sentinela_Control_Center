@@ -46,6 +46,22 @@ class AlarmEvent(models.Model):
     description = fields.Text(string='Descripción del Evento')
     operator_final_remarks = fields.Text(string='Conclusión del Operador', help="Notas finales que aparecerán en el reporte para el cliente.")
     resolution_notes = fields.Text(string='Notas de Resolución')
+
+    # F2.2 — Motivo de cierre estructurado (obligatorio al resolver)
+    close_reason = fields.Selection([
+        ('false_alarm', 'Falsa alarma'),
+        ('user_error', 'Error de usuario'),
+        ('customer_confirmed_ok', 'Cliente confirma OK'),
+        ('verified_real', 'Evento real verificado'),
+        ('patrol_no_event', 'Patrulla acudió, sin evento'),
+        ('patrol_event', 'Patrulla acudió, evento confirmado'),
+        ('no_contact', 'Sin contacto con cliente'),
+        ('technical_fault', 'Falla técnica del equipo'),
+        ('test_signal', 'Señal de prueba'),
+        ('auto_offline_recovered', 'Panel offline recuperado (auto)'),
+        ('other', 'Otro (especificar en notas)'),
+    ], string='Motivo de Cierre', tracking=True,
+       help="Tipificación del cierre del evento. Obligatorio al resolver/cerrar.")
     call_ids = fields.Char(string='IDs de Llamadas', help="IDs de Asterisk para recuperar grabaciones.")
     recording_count = fields.Integer(string='Grabaciones', compute='_compute_recording_count')
 
@@ -197,6 +213,7 @@ class AlarmEvent(models.Model):
             open_offline.write({
                 'status': 'resolved',
                 'end_date': now,
+                'close_reason': 'auto_offline_recovered',
                 'resolution_notes': (open_offline[0].resolution_notes or '') + f"\nPanel reportó nuevamente el {now}.",
             })
 
@@ -411,6 +428,11 @@ class AlarmEvent(models.Model):
 
     def action_resolve(self):
         self._ensure_claim_held()
+        for rec in self:
+            if not rec.close_reason:
+                raise UserError(_("Selecciona el motivo de cierre antes de resolver el evento '%s'.") % rec.name)
+            if rec.close_reason == 'other' and not (rec.resolution_notes or '').strip():
+                raise UserError(_("El motivo 'Otro' requiere especificar notas de resolución."))
         # resolver suelta el lock
         self.write({'status': 'resolved', 'end_date': datetime.now(),
                     'current_operator_id': False, 'claimed_at': False})
@@ -507,7 +529,11 @@ class AlarmEvent(models.Model):
 
     def action_close(self):
         # Al cerrar ya no bajamos manual, el cron lo hará solo.
+        for rec in self:
+            if not rec.close_reason:
+                raise UserError(_("Selecciona el motivo de cierre antes de cerrar el evento '%s'.") % rec.name)
         self.write({'status': 'closed', 'end_date': datetime.now()})
+        return True
     
     def action_click_to_call(self, phone_number):
         """
