@@ -43,6 +43,7 @@
                     </group>
                     <group string="Estado del Dispositivo">
                         <field name="last_communication"/>
+                        <field name="expected_heartbeat_hours"/>
                         <field name="battery_level"/>
                         <field name="signal_strength"/>
                     </group>

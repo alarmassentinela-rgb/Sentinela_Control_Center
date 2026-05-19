@@ -73,6 +73,10 @@ class MonitoringDevice(models.Model):
     ], string='Estado', default='active', required=True)
     
     last_communication = fields.Datetime(string='Última Comunicación')
+    expected_heartbeat_hours = fields.Float(string='Heartbeat Esperado (horas)', default=0.0,
+        help="Cada cuántas horas debe reportar el panel. 0 = no monitorear offline. "
+             "Si last_communication queda atrasada más de este intervalo, el cron horario "
+             "genera un evento trouble 'Panel sin reportar'.")
     battery_level = fields.Float(string='Nivel de Batería (%)')
     signal_strength = fields.Integer(string='Potencia de Señal (dBm)')
     

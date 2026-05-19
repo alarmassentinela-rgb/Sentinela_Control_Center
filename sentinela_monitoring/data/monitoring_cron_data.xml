@@ -16,5 +16,21 @@
             <field name="interval_type">minutes</field>
             <field name="active" eval="True"/>
         </record>
+
+        <record id="action_detect_offline_panels" model="ir.actions.server">
+            <field name="name">Detect Offline Panels</field>
+            <field name="model_id" ref="model_sentinela_alarm_event"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_detect_offline_panels()</field>
+        </record>
+
+        <record id="ir_cron_detect_offline_panels" model="ir.cron">
+            <field name="name">Sentinela: Detección de Paneles Offline</field>
+            <field name="ir_actions_server_id" ref="action_detect_offline_panels"/>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">1</field>
+            <field name="interval_type">hours</field>
+            <field name="active" eval="True"/>
+        </record>
     </data>
 </odoo>

@@ -92,6 +92,50 @@ class AlarmEvent(models.Model):
         return val
 
     @api.model
+    def _cron_detect_offline_panels(self):
+        """Genera evento trouble para paneles cuya last_communication superó
+        expected_heartbeat_hours. Idempotente: marca el evento con [AUTO_OFFLINE]
+        y no crea duplicados. Cuando el panel vuelva a reportar, el flujo de
+        process_signal_from_receptor cierra el evento automáticamente."""
+        now = fields.Datetime.now()
+        Device = self.env['sentinela.monitoring.device'].sudo()
+        devices = Device.search([
+            ('expected_heartbeat_hours', '>', 0),
+            ('status', '=', 'active'),
+        ])
+        priority = self.env['sentinela.alarm.priority'].sudo().search(
+            [], order='level asc', limit=1)
+        priority_id = priority.id if priority else False
+        created = 0
+        for dev in devices:
+            threshold = now - timedelta(hours=dev.expected_heartbeat_hours)
+            if dev.last_communication and dev.last_communication >= threshold:
+                continue
+            exists = self.sudo().search_count([
+                ('device_id', '=', dev.id),
+                ('status', 'in', ('active', 'acknowledged', 'in_progress')),
+                ('description', 'like', '[AUTO_OFFLINE]%'),
+            ])
+            if exists:
+                continue
+            last_str = str(dev.last_communication)[:19] if dev.last_communication else 'nunca'
+            self.sudo().create({
+                'name': f"Panel sin reportar {dev.account_number}",
+                'event_type': 'trouble',
+                'device_id': dev.id,
+                'priority_id': priority_id,
+                'description': f"[AUTO_OFFLINE] Panel {dev.account_number} sin comunicación "
+                               f"desde {last_str}. Umbral: {dev.expected_heartbeat_hours}h.",
+                'status': 'active',
+                'start_date': now,
+            })
+            created += 1
+        if created:
+            self.env['bus.bus']._sendone('sentinela_monitoring', 'sentinela_monitoring', {'refresh': True})
+            _logger.info("AUTO_OFFLINE: %s evento(s) trouble creado(s)", created)
+        return created
+
+    @api.model
     def process_signal_from_receptor(self, vals):
         """METODO FORMULA 1: Procesa todo en UNA sola llamada"""
         account = vals.get('account')
@@ -119,6 +163,21 @@ class AlarmEvent(models.Model):
             if status_rec:
                 status_rec.write({'last_heartbeat': fields.Datetime.now()})
             return True
+
+        # 1b. Heartbeat del panel: actualizar last_communication y cerrar trouble OFFLINE_AUTO si existe
+        now = fields.Datetime.now()
+        device.sudo().write({'last_communication': now})
+        open_offline = self.sudo().search([
+            ('device_id', '=', device.id),
+            ('status', 'in', ('active', 'acknowledged', 'in_progress')),
+            ('description', 'like', '[AUTO_OFFLINE]%'),
+        ])
+        if open_offline:
+            open_offline.write({
+                'status': 'resolved',
+                'end_date': now,
+                'resolution_notes': (open_offline[0].resolution_notes or '') + f"\nPanel reportó nuevamente el {now}.",
+            })
 
         # 2. Inteligencia de Codigo y Prioridad
         alarm_code = self.env['sentinela.alarm.code'].sudo().search([('code', '=', code)], limit=1)
