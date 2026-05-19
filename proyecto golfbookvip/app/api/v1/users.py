@@ -2,6 +2,7 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import select, or_
 
 from app.core.deps import CurrentUser, DB
@@ -11,6 +12,44 @@ from app.models.group import UserFollow
 from app.schemas.user import UserOut, UserUpdate, HandicapInit
 
 router = APIRouter()
+
+
+class LookupBatchPayload(BaseModel):
+    emails: list[str] = Field(..., min_length=1, max_length=500)
+
+
+@router.post("/lookup-batch")
+async def lookup_users_batch(payload: LookupBatchPayload, current_user: CurrentUser, db: DB):
+    """Resuelve una lista de emails contra users. Auth required. Útil para preview
+    de import CSV antes de crear el club (no necesita club_id). v1.19.0."""
+    # Normalizar emails
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for e in payload.emails:
+        e_norm = (e or "").strip().lower()
+        if not e_norm or "@" not in e_norm or e_norm in seen:
+            continue
+        seen.add(e_norm)
+        normalized.append(e_norm)
+    if not normalized:
+        return {"matches": [], "not_found": []}
+    res = await db.execute(select(User).where(User.email.in_(normalized)))
+    found_by_email: dict[str, User] = {u.email.lower(): u for u in res.scalars().all()}
+    matches = []
+    not_found = []
+    for e in normalized:
+        u = found_by_email.get(e)
+        if u:
+            matches.append({
+                "email": e,
+                "user_id": str(u.id),
+                "first_name": u.first_name,
+                "last_name": u.last_name,
+                "username": u.username,
+            })
+        else:
+            not_found.append(e)
+    return {"matches": matches, "not_found": not_found}
 
 
 @router.get("/me", response_model=UserOut)

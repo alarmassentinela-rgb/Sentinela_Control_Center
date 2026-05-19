@@ -7,6 +7,57 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.19.0] - 2026-05-19
+
+### Added — Wizard de creación de club + Import CSV de padrón
+
+Crear un club en producción dejaba al admin con un esqueleto vacío y 4 pantallas distintas por recorrer (tipos, settings, padrón uno por uno). Esta release entrega un club operativo en un solo flujo, y resuelve el TODO de "Import CSV del padrón" que llevaba 7 releases como placeholder.
+
+**Backend (`app/api/v1/`):**
+- `POST /clubs/{club_id}/padron/import` (NUEVO en `clubs.py`):
+  - Acepta hasta 500 rows con `email` (requerido), `member_number`, `membership_type_id` o `membership_type_name` (lookup case-insensitive), `joined_at`, `expires_at`, `notes`
+  - Vincula a `users` existentes por email; los no encontrados se reportan en `not_found` con `row_index`
+  - Reactiva ClubMembers inactivos en lugar de duplicar
+  - Detecta duplicados dentro del mismo CSV (mismo email en 2 filas → la 2ª en `errors`)
+  - Marca cada fila con `onboarding_source='manual_import'`
+  - Response incluye contadores + listas detalladas + `invite_link` del club para compartir con los pendientes
+- `POST /users/lookup-batch` (NUEVO en `users.py`):
+  - Recibe `{emails: [str]}` máx 500, retorna `{matches: [...], not_found: [...]}`
+  - Sin club_id en la ruta — usado por el wizard para validar antes de crear el club
+
+**Frontend:**
+- `/admin/clubs/new` (NUEVO) — wizard de 4 pasos con stepper visual:
+  1. **Datos básicos** del club + selector de plan
+  2. **Tipos de membresía** (lista dinámica; opcional)
+  3. **Padrón** (componente `CsvPadronImport`; opcional, saltable)
+  4. **Review + Crear** con log de operaciones en vivo
+  - Submit ejecuta secuencialmente: POST club → POST tipos → POST padron/import. Si un paso intermedio falla, continúa con los demás y reporta al final.
+- `components/clubs/CsvPadronImport.tsx` (NUEVO) — componente reutilizable:
+  - Drag & drop / file input para CSV
+  - Plantilla descargable con headers ES (`email,member_number,membership_type,joined_at,expires_at,notes`)
+  - Aliasing de headers en español + inglés (`correo`/`email`, `tipo`/`membership_type`, etc.)
+  - Preview con ✓/⚠️ por fila tras validate (max 200 visibles, scroll)
+  - Dos modos: standalone (importa directo con `clubId`) y wizard (expone rows validadas via `onRowsReady`)
+  - Tras import: banner con resumen + link copiable para los emails pendientes
+- `/admin/clubs/page.tsx` — botón "Nuevo" ahora redirige al wizard; modal inline eliminado (~85 líneas menos)
+- `/club/{id}/members/page.tsx` — tab nueva "Importar CSV" en el modal de Agregar socio (3 tabs total: Invitar / Buscar / CSV)
+- `/club/{id}/page.tsx` — eliminada la entrada "Import CSV del padrón — Coming soon" del placeholder de próximas features
+
+**Dependencia nueva:** `papaparse` ^5.5.3 + `@types/papaparse` (parsing robusto de CSV con quoted fields, BOM, multi-line escapes).
+
+### Changed
+
+- `ClubMember.onboarding_source` ahora acepta el valor `'manual_import'` (sin cambio de schema; la columna es VARCHAR(20) sin CHECK constraint)
+- El modal inline de "Nuevo club" en `/admin/clubs` se eliminó; el botón redirige al wizard
+
+### Notes
+
+- **CSV solo vincula `users` existentes.** No se crea cuenta automática (sin SMTP; pendiente desde v1.0). Los emails sin cuenta se devuelven con el link de invitación a compartir.
+- `max_length=500` por import para evitar timeouts en clubes grandes. Si tienes más de 500 socios, divide el CSV en lotes.
+- Los tipos de membresía del CSV se matchean por nombre case-insensitive contra los tipos activos del club; sin match → queda NULL (admin asigna después).
+
+---
+
 ## [1.18.0] - 2026-05-19
 
 ### Added — Auto-cobro de green fees con refund automático al cancelar

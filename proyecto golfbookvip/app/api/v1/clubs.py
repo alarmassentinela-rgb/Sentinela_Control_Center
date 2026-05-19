@@ -688,6 +688,172 @@ async def add_member_to_padron(club_id: uuid.UUID, payload: MemberAddPayload,
     }
 
 
+# ─── Import masivo del padrón (v1.19.0) ────────────────────────────────────
+
+
+class PadronImportRow(BaseModel):
+    email: str
+    member_number: Optional[str] = None
+    membership_type_id: Optional[int] = None
+    membership_type_name: Optional[str] = None
+    joined_at: Optional[date] = None
+    expires_at: Optional[date] = None
+    notes: Optional[str] = None
+
+
+class PadronImportPayload(BaseModel):
+    rows: list[PadronImportRow] = Field(..., min_length=1, max_length=500)
+    skip_existing: bool = True
+
+
+@router.post("/{club_id}/padron/import", status_code=200)
+async def import_padron(club_id: uuid.UUID, payload: PadronImportPayload,
+                          current_user: CurrentUser, db: DB):
+    """Importa filas del padrón en batch. Vincula a `users` existentes por email.
+    Los emails no encontrados se reportan; no se crea cuenta automática (sin SMTP).
+    Requiere manager+."""
+    await _require_club_role(db, club_id, current_user, "manager")
+
+    # Cargar club para obtener invite_code
+    c_res = await db.execute(select(Club).where(Club.id == club_id))
+    club = c_res.scalar_one_or_none()
+    if not club:
+        raise HTTPException(status_code=404, detail="Club no encontrado")
+
+    # Cargar tipos de membresía del club (para resolver por nombre)
+    types_res = await db.execute(select(MembershipType).where(
+        MembershipType.club_id == club_id, MembershipType.is_active == True,
+    ))
+    types_by_id: dict[int, MembershipType] = {}
+    types_by_name: dict[str, MembershipType] = {}
+    for mt in types_res.scalars().all():
+        types_by_id[mt.id] = mt
+        types_by_name[mt.name.strip().lower()] = mt
+
+    # Recolectar emails normalizados con sus índices originales
+    emails_seen: set[str] = set()
+    emails_to_lookup: list[str] = []
+    rows_indexed: list[tuple[int, PadronImportRow, str]] = []  # (idx, row, normalized_email)
+    duplicate_in_batch: list[dict] = []
+    for i, row in enumerate(payload.rows):
+        email_norm = (row.email or "").strip().lower()
+        if not email_norm or "@" not in email_norm:
+            duplicate_in_batch.append({"row_index": i, "email": row.email, "error": "email inválido"})
+            continue
+        if email_norm in emails_seen:
+            duplicate_in_batch.append({"row_index": i, "email": email_norm, "error": "email duplicado en esta carga"})
+            continue
+        emails_seen.add(email_norm)
+        emails_to_lookup.append(email_norm)
+        rows_indexed.append((i, row, email_norm))
+
+    # Buscar todos los users en un solo query
+    users_by_email: dict[str, User] = {}
+    if emails_to_lookup:
+        u_res = await db.execute(select(User).where(User.email.in_(emails_to_lookup)))
+        for u in u_res.scalars().all():
+            users_by_email[u.email.lower()] = u
+
+    # Buscar ClubMembers existentes para esos users
+    existing_members: dict[uuid.UUID, ClubMember] = {}
+    user_ids = [u.id for u in users_by_email.values()]
+    if user_ids:
+        em_res = await db.execute(select(ClubMember).where(
+            ClubMember.club_id == club_id,
+            ClubMember.user_id.in_(user_ids),
+        ))
+        for cm in em_res.scalars().all():
+            existing_members[cm.user_id] = cm
+
+    created: list[dict] = []
+    reactivated: list[dict] = []
+    skipped: list[dict] = []
+    not_found: list[dict] = []
+    errors: list[dict] = list(duplicate_in_batch)
+
+    for idx, row, email_norm in rows_indexed:
+        user = users_by_email.get(email_norm)
+        if not user:
+            not_found.append({"row_index": idx, "email": email_norm})
+            continue
+
+        # Resolver membership_type
+        mt_id: Optional[int] = None
+        if row.membership_type_id:
+            if row.membership_type_id in types_by_id:
+                mt_id = row.membership_type_id
+            else:
+                errors.append({"row_index": idx, "email": email_norm, "error": f"membership_type_id {row.membership_type_id} no pertenece al club"})
+                continue
+        elif row.membership_type_name:
+            mt = types_by_name.get(row.membership_type_name.strip().lower())
+            if mt:
+                mt_id = mt.id
+            # si no se encuentra, queda NULL silenciosamente — no es error fatal
+
+        existing = existing_members.get(user.id)
+        if existing:
+            if existing.status == "active":
+                if payload.skip_existing:
+                    skipped.append({"row_index": idx, "email": email_norm, "user_id": str(user.id)})
+                    continue
+                else:
+                    errors.append({"row_index": idx, "email": email_norm, "error": "ya es socio activo"})
+                    continue
+            # reactivar inactivo/suspendido
+            existing.status = "active"
+            if mt_id is not None:
+                existing.membership_type_id = mt_id
+            if row.member_number:
+                existing.member_number = row.member_number
+            if row.joined_at:
+                existing.joined_at = row.joined_at
+            if row.expires_at:
+                existing.expires_at = row.expires_at
+            if row.notes is not None:
+                existing.notes = row.notes
+            existing.onboarding_source = "manual_import"
+            reactivated.append({"row_index": idx, "email": email_norm, "user_id": str(user.id)})
+        else:
+            new_member = ClubMember(
+                club_id=club_id,
+                user_id=user.id,
+                membership_type_id=mt_id,
+                member_number=row.member_number,
+                joined_at=row.joined_at or date.today(),
+                expires_at=row.expires_at,
+                notes=row.notes,
+                status="active",
+                onboarding_source="manual_import",
+            )
+            db.add(new_member)
+            created.append({"row_index": idx, "email": email_norm, "user_id": str(user.id)})
+
+    await db.flush()
+
+    # Construir link de invitación para compartir con los not_found
+    invite_link = None
+    if club.invite_code:
+        invite_link = f"https://golfbookvip.com/es/join-club/{club.invite_code}"
+
+    return {
+        "total_rows": len(payload.rows),
+        "created": len(created),
+        "reactivated": len(reactivated),
+        "skipped": len(skipped),
+        "not_found_count": len(not_found),
+        "error_count": len(errors),
+        "details": {
+            "created": created,
+            "reactivated": reactivated,
+            "skipped": skipped,
+            "not_found": not_found,
+            "errors": errors,
+        },
+        "invite_link": invite_link,
+    }
+
+
 @router.patch("/{club_id}/padron/{user_id}")
 async def update_padron_member(club_id: uuid.UUID, user_id: uuid.UUID, payload: MemberPatchPayload,
                                 current_user: CurrentUser, db: DB):

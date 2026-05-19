@@ -2,10 +2,11 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Plus, Users, Loader2, Search, X, Edit2, UserMinus, Mail, Hash, Calendar, CreditCard, AlertCircle, DollarSign, Link2, QrCode, Copy, Check } from 'lucide-react'
+import { ArrowLeft, Plus, Users, Loader2, Search, X, Edit2, UserMinus, Mail, Hash, Calendar, CreditCard, AlertCircle, DollarSign, Link2, QrCode, Copy, Check, Upload } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
+import CsvPadronImport from '@/components/clubs/CsvPadronImport'
 
 interface Member {
   id: string
@@ -56,7 +57,7 @@ export default function ClubMembersPage() {
   const [typeFilter, setTypeFilter] = useState<number | ''>('')
 
   const [showAdd, setShowAdd] = useState(false)
-  const [addTab, setAddTab] = useState<'invite' | 'search'>('invite')
+  const [addTab, setAddTab] = useState<'invite' | 'search' | 'csv'>('invite')
   const [inviteCode, setInviteCode] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [addForm, setAddForm] = useState({ email: '', member_number: '', membership_type_id: '', joined_at: new Date().toISOString().slice(0, 10), expires_at: '', notes: '' })
@@ -373,15 +374,21 @@ export default function ClubMembersPage() {
             <div className="flex gap-1 mb-4 bg-zinc-800/60 p-1 rounded-xl">
               <button onClick={() => setAddTab('invite')}
                 className={`flex-1 text-xs font-semibold py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors ${addTab === 'invite' ? 'bg-emerald-500 text-white' : 'text-zinc-400 hover:text-white'}`}>
-                <Link2 size={12} /> {lbl('Compartir invitación', 'Share invitation')}
+                <Link2 size={12} /> {lbl('Invitar', 'Invite')}
               </button>
               <button onClick={() => setAddTab('search')}
                 className={`flex-1 text-xs font-semibold py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors ${addTab === 'search' ? 'bg-emerald-500 text-white' : 'text-zinc-400 hover:text-white'}`}>
-                <Search size={12} /> {lbl('Buscar usuario', 'Search user')}
+                <Search size={12} /> {lbl('Buscar', 'Search')}
+              </button>
+              <button onClick={() => setAddTab('csv')}
+                className={`flex-1 text-xs font-semibold py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors ${addTab === 'csv' ? 'bg-emerald-500 text-white' : 'text-zinc-400 hover:text-white'}`}>
+                <Upload size={12} /> {lbl('Importar CSV', 'Import CSV')}
               </button>
             </div>
 
-            {addTab === 'invite' ? (
+            {addTab === 'csv' ? (
+              <CsvPadronImport locale={locale as 'es' | 'en'} clubId={params.id} onImported={() => load()} />
+            ) : addTab === 'invite' ? (
               <div className="space-y-4">
                 {inviteCode ? (
                   <>

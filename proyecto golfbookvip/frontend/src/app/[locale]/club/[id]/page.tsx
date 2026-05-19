@@ -371,9 +371,9 @@ export default function ClubPanelPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {[
               { es: 'Empleados y asistencia', en: 'Employees and attendance', sub: { es: 'Check-in, nómina', en: 'Check-in, payroll' } },
-              { es: 'Import CSV del padrón', en: 'CSV roster import', sub: { es: 'Carga masiva de miembros', en: 'Bulk member upload' } },
               { es: 'Notificaciones de reserva', en: 'Booking notifications', sub: { es: 'Email + WhatsApp', en: 'Email + WhatsApp' } },
               { es: 'Reportes financieros', en: 'Financial reports', sub: { es: 'Cobranza, antigüedad, exportar', en: 'Collections, aging, export' } },
+              { es: 'Dominio personalizado', en: 'Custom domain', sub: { es: 'mi-club.app (tier Premium)', en: 'my-club.app (Premium tier)' } },
             ].map((f, i) => (
               <div key={i} className="bg-zinc-800/40 rounded-lg p-3 opacity-70">
                 <p className="text-sm font-semibold text-zinc-300">{lbl(f.es, f.en)}</p>

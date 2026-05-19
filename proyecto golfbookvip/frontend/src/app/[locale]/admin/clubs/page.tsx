@@ -45,9 +45,6 @@ export default function AdminClubsPage() {
   const [plans, setPlans] = useState<Plan[]>([])
   const [search, setSearch] = useState('')
   const [includeInactive, setIncludeInactive] = useState(false)
-  const [showCreate, setShowCreate] = useState(false)
-  const [createForm, setCreateForm] = useState({ name: '', city: '', country: 'MX', phone: '', email: '', plan_id: '' })
-  const [creating, setCreating] = useState(false)
   const [editingClub, setEditingClub] = useState<Club | null>(null)
   const [staffClub, setStaffClub] = useState<Club | null>(null)
   const [staffList, setStaffList] = useState<{ user_id: string; first_name: string; last_name: string; email: string; username: string; role: string }[]>([])
@@ -75,28 +72,6 @@ export default function AdminClubsPage() {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [includeInactive])
-
-  const handleCreate = async () => {
-    if (!createForm.name.trim()) { alert(lbl('Nombre requerido', 'Name required')); return }
-    setCreating(true)
-    try {
-      const payload: Record<string, unknown> = {
-        name: createForm.name.trim(),
-        city: createForm.city || null,
-        country: createForm.country || 'MX',
-        phone: createForm.phone || null,
-        email: createForm.email || null,
-      }
-      if (createForm.plan_id) payload.plan_id = parseInt(createForm.plan_id)
-      await api.post('/admin/clubs', payload)
-      setShowCreate(false)
-      setCreateForm({ name: '', city: '', country: 'MX', phone: '', email: '', plan_id: '' })
-      load()
-    } catch (e: unknown) {
-      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      alert(detail ? (typeof detail === 'string' ? detail : JSON.stringify(detail)) : lbl('Error al crear', 'Error creating'))
-    } finally { setCreating(false) }
-  }
 
   const handleToggleActive = async (club: Club) => {
     if (!confirm(lbl(
@@ -208,7 +183,7 @@ export default function AdminClubsPage() {
             <Building2 size={14} className="text-emerald-400" />
             {lbl('Clubes (SaaS)', 'Clubs (SaaS)')}
           </h1>
-          <button onClick={() => setShowCreate(true)}
+          <button onClick={() => router.push(`/${locale}/admin/clubs/new`)}
             className="flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold px-3 py-1.5 rounded-lg text-xs">
             <Plus size={12} />
             {lbl('Nuevo', 'New')}
@@ -249,7 +224,7 @@ export default function AdminClubsPage() {
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-12 text-center">
             <Building2 size={42} className="text-zinc-700 mx-auto mb-3" />
             <p className="text-zinc-400 text-sm">{lbl('No hay clubes registrados', 'No clubs registered')}</p>
-            <button onClick={() => setShowCreate(true)}
+            <button onClick={() => router.push(`/${locale}/admin/clubs/new`)}
               className="mt-3 bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-semibold px-4 py-2 rounded-lg">
               {lbl('Crear el primero', 'Create the first one')}
             </button>
@@ -331,86 +306,6 @@ export default function AdminClubsPage() {
           </div>
         </div>
       </main>
-
-      {/* Create modal */}
-      {showCreate && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center px-4"
-          onClick={() => !creating && setShowCreate(false)}>
-          <div onClick={e => e.stopPropagation()}
-            className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-md p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-white flex items-center gap-2">
-                <Building2 size={16} className="text-emerald-400" />
-                {lbl('Nuevo club', 'New club')}
-              </h3>
-              <button onClick={() => !creating && setShowCreate(false)} className="text-zinc-500 hover:text-white">
-                <X size={18} />
-              </button>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <label className="text-[10px] text-zinc-400 block mb-1 uppercase tracking-wider font-semibold">{lbl('Nombre del club', 'Club name')} *</label>
-                <input type="text" value={createForm.name}
-                  onChange={e => setCreateForm({ ...createForm, name: e.target.value })}
-                  placeholder="Club de Golf Saucito"
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-emerald-500" />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] text-zinc-400 block mb-1 uppercase tracking-wider font-semibold">{lbl('Ciudad', 'City')}</label>
-                  <input type="text" value={createForm.city}
-                    onChange={e => setCreateForm({ ...createForm, city: e.target.value })}
-                    placeholder="Matamoros"
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
-                </div>
-                <div>
-                  <label className="text-[10px] text-zinc-400 block mb-1 uppercase tracking-wider font-semibold">{lbl('País', 'Country')}</label>
-                  <input type="text" value={createForm.country}
-                    onChange={e => setCreateForm({ ...createForm, country: e.target.value })}
-                    placeholder="MX"
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] text-zinc-400 block mb-1 uppercase tracking-wider font-semibold">{lbl('Teléfono', 'Phone')}</label>
-                  <input type="text" value={createForm.phone}
-                    onChange={e => setCreateForm({ ...createForm, phone: e.target.value })}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
-                </div>
-                <div>
-                  <label className="text-[10px] text-zinc-400 block mb-1 uppercase tracking-wider font-semibold">{lbl('Email', 'Email')}</label>
-                  <input type="email" value={createForm.email}
-                    onChange={e => setCreateForm({ ...createForm, email: e.target.value })}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
-                </div>
-              </div>
-              <div>
-                <label className="text-[10px] text-zinc-400 block mb-1 uppercase tracking-wider font-semibold">{lbl('Plan inicial', 'Initial plan')}</label>
-                <select value={createForm.plan_id}
-                  onChange={e => setCreateForm({ ...createForm, plan_id: e.target.value })}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm">
-                  <option value="">{lbl('-- Sin plan --', '-- No plan --')}</option>
-                  {plans.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} (${p.price_monthly.toFixed(0)}/mes)</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="flex gap-2 mt-5">
-              <button onClick={() => setShowCreate(false)} disabled={creating}
-                className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 py-2.5 rounded-xl text-sm">
-                {lbl('Cancelar', 'Cancel')}
-              </button>
-              <button onClick={handleCreate} disabled={creating || !createForm.name.trim()}
-                className="flex-1 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2">
-                {creating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                {lbl('Crear club', 'Create club')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Change plan modal */}
       {editingClub && (
