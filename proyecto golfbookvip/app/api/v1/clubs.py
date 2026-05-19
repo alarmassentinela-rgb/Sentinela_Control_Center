@@ -9,7 +9,7 @@ from datetime import date, datetime, time as time_cls, timedelta, timezone
 
 from app.core.deps import CurrentUser, DB
 from app.models.club import Club, ClubStaff, ClubMember, MembershipType, MemberAccount, AccountTransaction
-from app.models.tee_time import TeeTimeSlot, TeeTimeBooking
+from app.models.tee_time import TeeTimeSlot, TeeTimeBooking, TeeTimeBookingPlayer
 from app.models.user import User
 
 
@@ -763,10 +763,105 @@ class TeeTimeGenerate(BaseModel):
 VALID_TIERS = {"members_only", "members_priority", "public"}
 
 
+VALID_PLAYER_TYPES = {"member", "guest", "public"}
+
+
+class BookingPlayerIn(BaseModel):
+    player_type: str = Field(..., pattern="^(member|guest|public)$")
+    user_id: Optional[uuid.UUID] = None      # member: requerido; guest/public: opcional si tiene cuenta
+    guest_name: Optional[str] = None         # guest/public sin cuenta: requerido
+    guest_email: Optional[str] = None
+    sponsor_id: Optional[uuid.UUID] = None   # guest: requerido si club.guest_requires_sponsor
+
+
 class BookingCreate(BaseModel):
-    players_count: int = Field(1, ge=1, le=8)
     notes: Optional[str] = None
-    user_id: Optional[str] = None  # admin reserva por otro usuario
+    user_id: Optional[uuid.UUID] = None      # admin: reservar por otro socio (= booker del booking)
+    players: list[BookingPlayerIn] = Field(..., min_length=1, max_length=8)
+
+
+def _calculate_fee(slot: TeeTimeSlot, player_type: str) -> float:
+    if player_type == "member":
+        return float(slot.green_fee_member or 0)
+    if player_type == "guest":
+        return float(slot.green_fee_guest or 0)
+    if player_type == "public":
+        return float(slot.green_fee_public or 0)
+    return 0.0
+
+
+async def _validate_booking(club: Club, slot: TeeTimeSlot, players: list[BookingPlayerIn],
+                              booker_id: uuid.UUID, db) -> None:
+    """Valida reglas duras del booking. Levanta HTTPException 422 con lista de errores. v1.17.0."""
+    errors: list[str] = []
+    today = date.today()
+
+    # 1. max_players
+    if len(players) > slot.max_players:
+        errors.append(f"El slot permite máximo {slot.max_players} jugadores, recibidos {len(players)}")
+
+    # 2. allow_guests
+    has_guests_or_public = any(p.player_type in ("guest", "public") for p in players)
+    if not club.allow_guests and has_guests_or_public:
+        errors.append("Este club no permite invitados ni público; solo socios pueden reservar")
+
+    # 3. guest_requires_sponsor
+    guests = [p for p in players if p.player_type == "guest"]
+    if club.guest_requires_sponsor and guests:
+        for i, g in enumerate(guests):
+            if not g.sponsor_id:
+                errors.append(f"Invitado #{i+1} requiere sponsor (socio que lo invita)")
+
+    # 4. max_guests_per_booking
+    if len(guests) > club.max_guests_per_booking:
+        errors.append(f"Máximo {club.max_guests_per_booking} invitados por reserva (recibidos {len(guests)})")
+
+    # 5. Tier enforcement
+    tier = slot.tier or "members_only"
+    has_public = any(p.player_type == "public" for p in players)
+    if tier == "members_only" and has_public:
+        errors.append("Este slot es 'solo socios' — no admite jugadores públicos")
+    if club.access_type == "private" and has_public:
+        errors.append("Este club es privado — no admite jugadores públicos")
+
+    # 6. Ventana de reserva para socios
+    days_ahead = (slot.date - today).days
+    if days_ahead > club.members_advance_days:
+        errors.append(f"Los socios pueden reservar hasta {club.members_advance_days} días de anticipación (este slot está a {days_ahead} días)")
+    # 6b. Ventana pública en members_priority
+    if tier == "members_priority" and has_public and days_ahead > club.public_advance_days:
+        errors.append(f"El público puede reservar a este slot prioritario solo dentro de {club.public_advance_days} días (faltan {days_ahead})")
+
+    # 7. Validar members realmente sean socios activos del club
+    for i, p in enumerate(players):
+        if p.player_type == "member":
+            if not p.user_id:
+                errors.append(f"Jugador #{i+1} de tipo socio requiere user_id")
+                continue
+            m_res = await db.execute(select(ClubMember).where(
+                ClubMember.club_id == club.id,
+                ClubMember.user_id == p.user_id,
+                ClubMember.status == "active",
+            ))
+            if not m_res.scalar_one_or_none():
+                errors.append(f"Jugador #{i+1}: el usuario no es socio activo del club")
+        elif p.player_type in ("guest", "public"):
+            if not p.user_id and not (p.guest_name and p.guest_name.strip()):
+                errors.append(f"Jugador #{i+1} de tipo {p.player_type} requiere user_id o nombre")
+
+    # 8. Validar sponsors sean socios activos del club
+    for i, g in enumerate(guests):
+        if g.sponsor_id:
+            s_res = await db.execute(select(ClubMember).where(
+                ClubMember.club_id == club.id,
+                ClubMember.user_id == g.sponsor_id,
+                ClubMember.status == "active",
+            ))
+            if not s_res.scalar_one_or_none():
+                errors.append(f"Invitado #{i+1}: el sponsor seleccionado no es socio activo del club")
+
+    if errors:
+        raise HTTPException(status_code=422, detail=errors)
 
 
 def _parse_hhmm(s: str) -> time_cls:
@@ -811,8 +906,10 @@ async def list_tee_times(club_id: uuid.UUID, current_user: CurrentUser, db: DB,
             .where(TeeTimeBooking.slot_id == s.id, TeeTimeBooking.status != "cancelled")
             .order_by(TeeTimeBooking.booked_at)
         )
-        bookings = [
-            {
+        bookings = []
+        for b, u in bookings_res.all():
+            players_resolved = await _resolve_players_for_booking(db, b.id)
+            bookings.append({
                 "id": str(b.id),
                 "user_id": str(b.user_id),
                 "user_name": f"{u.first_name} {u.last_name}",
@@ -821,9 +918,9 @@ async def list_tee_times(club_id: uuid.UUID, current_user: CurrentUser, db: DB,
                 "status": b.status,
                 "notes": b.notes,
                 "booked_at": b.booked_at.isoformat() if b.booked_at else None,
-            }
-            for b, u in bookings_res.all()
-        ]
+                "players": players_resolved,
+                "total_fees": sum(p["fee_amount"] for p in players_resolved),
+            })
         booked_total = sum(bk["players_count"] for bk in bookings if bk["status"] in ("pending", "confirmed"))
         out.append({
             "id": s.id,
@@ -1013,8 +1110,15 @@ async def delete_tee_time_slot(club_id: uuid.UUID, slot_id: int,
 @router.post("/{club_id}/tee-times/{slot_id}/book", status_code=201)
 async def book_tee_time(club_id: uuid.UUID, slot_id: int, data: BookingCreate,
                          current_user: CurrentUser, db: DB):
-    """Reservar un slot. Cualquier miembro del padrón puede reservar para sí; staff puede reservar para otros."""
-    # buscar slot
+    """Reservar un slot con lista detallada de jugadores. v1.17.0.
+
+    Cualquier socio del padrón puede reservar para sí. Staff puede reservar a nombre de otro (campo user_id).
+    `players[]` lista todos los jugadores (incluido el booker). Tipos: member | guest | public.
+    Valida: max_players, allow_guests, guest_requires_sponsor, max_guests_per_booking, tier (members_only / members_priority),
+    members_advance_days, public_advance_days, access_type=private.
+    Fees por jugador se calculan según tier del slot y se persisten (cobro real llega en v1.18).
+    """
+    # 1. Cargar slot
     s_res = await db.execute(select(TeeTimeSlot).where(
         TeeTimeSlot.id == slot_id, TeeTimeSlot.club_id == club_id
     ))
@@ -1026,49 +1130,125 @@ async def book_tee_time(club_id: uuid.UUID, slot_id: int, data: BookingCreate,
     if slot.date < date.today():
         raise HTTPException(status_code=409, detail="No puedes reservar slots pasados")
 
-    # determinar a quién se reserva
-    target_user_id = current_user.id
-    if data.user_id:
-        # solo staff puede reservar por otros
+    # 2. Cargar club (para reglas de acceso)
+    c_res = await db.execute(select(Club).where(Club.id == club_id))
+    club = c_res.scalar_one_or_none()
+    if not club:
+        raise HTTPException(status_code=404, detail="Club no encontrado")
+
+    # 3. Determinar booker (quién es responsable de la reserva)
+    booker_id = current_user.id
+    if data.user_id and data.user_id != current_user.id:
         role = await _get_club_role(db, club_id, current_user)
         if not role:
             raise HTTPException(status_code=403, detail="No tienes permisos para reservar a nombre de otro")
-        target_user_id = uuid.UUID(data.user_id)
+        booker_id = data.user_id
 
-    # verificar que el target_user sea miembro activo del padrón (o staff)
+    # 4. Booker debe ser socio activo o staff (o superadmin)
     member_res = await db.execute(select(ClubMember).where(
-        ClubMember.club_id == club_id,
-        ClubMember.user_id == target_user_id,
-        ClubMember.status == "active",
+        ClubMember.club_id == club_id, ClubMember.user_id == booker_id, ClubMember.status == "active",
     ))
     staff_res = await db.execute(select(ClubStaff).where(
-        ClubStaff.club_id == club_id,
-        ClubStaff.user_id == target_user_id,
-        ClubStaff.is_active == True,
+        ClubStaff.club_id == club_id, ClubStaff.user_id == booker_id, ClubStaff.is_active == True,
     ))
     if not member_res.scalar_one_or_none() and not staff_res.scalar_one_or_none() and not current_user.is_superadmin:
-        raise HTTPException(status_code=403, detail="Solo miembros del padrón o staff pueden reservar")
+        raise HTTPException(status_code=403, detail="Solo socios del padrón o staff pueden reservar")
 
-    # verificar disponibilidad
+    # 5. Disponibilidad del slot
     bk_res = await db.execute(select(func.coalesce(func.sum(TeeTimeBooking.players_count), 0)).where(
         TeeTimeBooking.slot_id == slot_id,
         TeeTimeBooking.status.in_(["pending", "confirmed"]),
     ))
     booked = bk_res.scalar() or 0
-    if booked + data.players_count > slot.max_players:
+    if booked + len(data.players) > slot.max_players:
         raise HTTPException(status_code=409, detail=f"No hay cupo. Disponibles: {slot.max_players - booked}")
 
+    # 6. Validación de reglas duras del booking
+    await _validate_booking(club, slot, data.players, booker_id, db)
+
+    # 7. Crear booking
     booking = TeeTimeBooking(
         slot_id=slot_id,
-        user_id=target_user_id,
-        players_count=data.players_count,
-        status="confirmed",  # confirmación inmediata en MVP
+        user_id=booker_id,
+        players_count=len(data.players),
+        status="confirmed",
         notes=data.notes,
         confirmed_at=datetime.now(timezone.utc),
     )
     db.add(booking)
     await db.flush()
-    return {"id": str(booking.id), "status": "confirmed", "slot_id": slot_id}
+
+    # 8. Crear filas de players con fee calculado
+    players_out = []
+    for p in data.players:
+        fee = _calculate_fee(slot, p.player_type)
+        player_row = TeeTimeBookingPlayer(
+            booking_id=booking.id,
+            player_type=p.player_type,
+            user_id=p.user_id,
+            guest_name=(p.guest_name.strip() if p.guest_name else None),
+            guest_email=(p.guest_email.strip().lower() if p.guest_email else None),
+            sponsor_id=p.sponsor_id,
+            fee_amount=fee,
+            added_by=current_user.id,
+        )
+        db.add(player_row)
+        players_out.append(player_row)
+    await db.flush()
+
+    # 9. Response (resolved con nombres)
+    resolved = await _resolve_players_for_booking(db, booking.id)
+    total_fees = sum(r["fee_amount"] for r in resolved)
+    return {
+        "id": str(booking.id),
+        "status": "confirmed",
+        "slot_id": slot_id,
+        "players_count": len(data.players),
+        "total_fees": total_fees,
+        "players": resolved,
+    }
+
+
+async def _resolve_players_for_booking(db, booking_id: uuid.UUID) -> list[dict]:
+    """Lista jugadores de un booking con nombres resueltos (join users) y nombre del sponsor."""
+    rows_res = await db.execute(
+        select(TeeTimeBookingPlayer).where(TeeTimeBookingPlayer.booking_id == booking_id)
+        .order_by(TeeTimeBookingPlayer.created_at)
+    )
+    players = rows_res.scalars().all()
+    if not players:
+        return []
+    # Cargar users de player.user_id y de sponsor_id (en un solo query)
+    user_ids = {p.user_id for p in players if p.user_id} | {p.sponsor_id for p in players if p.sponsor_id}
+    users_map: dict[uuid.UUID, User] = {}
+    if user_ids:
+        users_res = await db.execute(select(User).where(User.id.in_(user_ids)))
+        for u in users_res.scalars().all():
+            users_map[u.id] = u
+    out = []
+    for p in players:
+        if p.user_id and p.user_id in users_map:
+            u = users_map[p.user_id]
+            name = f"{u.first_name or ''} {u.last_name or ''}".strip() or u.email
+            email = u.email
+        else:
+            name = p.guest_name or "(sin nombre)"
+            email = p.guest_email
+        sponsor_name = None
+        if p.sponsor_id and p.sponsor_id in users_map:
+            su = users_map[p.sponsor_id]
+            sponsor_name = f"{su.first_name or ''} {su.last_name or ''}".strip() or su.email
+        out.append({
+            "id": str(p.id),
+            "player_type": p.player_type,
+            "user_id": str(p.user_id) if p.user_id else None,
+            "name": name,
+            "email": email,
+            "sponsor_id": str(p.sponsor_id) if p.sponsor_id else None,
+            "sponsor_name": sponsor_name,
+            "fee_amount": float(p.fee_amount or 0),
+        })
+    return out
 
 
 @router.delete("/{club_id}/tee-times/bookings/{booking_id}")
@@ -1095,6 +1275,42 @@ async def cancel_booking(club_id: uuid.UUID, booking_id: uuid.UUID,
     booking.cancelled_at = datetime.now(timezone.utc)
     await db.flush()
     return {"id": str(booking.id), "status": "cancelled"}
+
+
+@router.get("/{club_id}/tee-times/bookings/{booking_id}")
+async def get_booking_detail(club_id: uuid.UUID, booking_id: uuid.UUID,
+                              current_user: CurrentUser, db: DB):
+    """Detalle de un booking con la lista resuelta de jugadores. v1.17.0.
+    Permisos: el booker, sus sponsors, staff del club o superadmin."""
+    res = await db.execute(
+        select(TeeTimeBooking, TeeTimeSlot)
+        .join(TeeTimeSlot, TeeTimeSlot.id == TeeTimeBooking.slot_id)
+        .where(TeeTimeBooking.id == booking_id, TeeTimeSlot.club_id == club_id)
+    )
+    row = res.first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Reserva no encontrada")
+    booking, slot = row
+    # permisos: booker o staff del club o superadmin
+    if booking.user_id != current_user.id and not current_user.is_superadmin:
+        role = await _get_club_role(db, club_id, current_user)
+        if not role:
+            raise HTTPException(status_code=403, detail="No tienes permisos para ver esta reserva")
+    players = await _resolve_players_for_booking(db, booking.id)
+    return {
+        "id": str(booking.id),
+        "slot_id": booking.slot_id,
+        "date": slot.date.isoformat(),
+        "time": slot.time.strftime("%H:%M"),
+        "user_id": str(booking.user_id),
+        "players_count": booking.players_count,
+        "status": booking.status,
+        "notes": booking.notes,
+        "booked_at": booking.booked_at.isoformat() if booking.booked_at else None,
+        "tier": slot.tier or "members_only",
+        "players": players,
+        "total_fees": sum(p["fee_amount"] for p in players),
+    }
 
 
 @router.get("/{club_id}/tee-times/my-bookings")

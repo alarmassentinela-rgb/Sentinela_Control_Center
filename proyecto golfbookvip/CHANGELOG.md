@@ -7,6 +7,84 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.17.0] - 2026-05-19
+
+### Added — Booking multi-jugador con guests nombrados + enforcement del híbrido
+
+Hoy el booking solo guardaba un contador (`players_count`); v1.17 introduce un detalle por jugador con tipo (member / guest / public), sponsor nombrado, fee calculado por tier, y enciende todas las reglas duras del híbrido que llevaban un mes en producción como cosméticas.
+
+**Schema nuevo (`tee_time_booking_players`):**
+- `id` UUID PK, `booking_id` UUID FK CASCADE
+- `player_type` VARCHAR(20) CHECK (member | guest | public)
+- `user_id` UUID FK users (nullable — guests/public sin cuenta usan guest_name)
+- `guest_name` VARCHAR(200), `guest_email` VARCHAR(255)
+- `sponsor_id` UUID FK users (guest con sponsor)
+- `fee_amount` NUMERIC(10,2) — calculado al reservar según slot.tier + player_type (cobro real llega en v1.18)
+- `added_by` UUID FK users, `created_at` TIMESTAMPTZ
+- Índices en booking_id, user_id (partial), sponsor_id (partial)
+- Backfill: 1 fila placeholder `member` por booking existente
+
+**Backend (`app/api/v1/clubs.py`):**
+- `POST /clubs/{id}/tee-times/{slot_id}/book` REFACTOR — acepta `players[]` con detalle. Schemas nuevos: `BookingPlayerIn`, `BookingCreate` ahora con `players: list[BookingPlayerIn]`.
+- `GET /clubs/{id}/tee-times/bookings/{booking_id}` (NUEVO) — detalle de booking con players resueltos (booker o staff).
+- `GET /clubs/{id}/tee-times` AMPLIADO — cada booking incluye `players[]` con nombres resueltos y `total_fees`. Retrocompat: mantiene `user_name`, `players_count`.
+- Helpers nuevos: `_calculate_fee(slot, player_type)`, `_validate_booking(club, slot, players, booker_id, db)` (raises 422 con lista de errores), `_resolve_players_for_booking(db, booking_id)`.
+
+**Enforcement encendido (eran "dead config" desde v1.14/v1.15):**
+- `Club.allow_guests=false` → rechaza guest/public
+- `Club.guest_requires_sponsor=true` + guests → cada guest requiere `sponsor_id` válido (socio activo del club)
+- `Club.max_guests_per_booking` → límite duro al conteo de guests
+- `Slot.tier='members_only'` → rechaza `player_type='public'`
+- `Slot.tier='members_priority'` + public → solo dentro de `Club.public_advance_days`
+- `Club.access_type='private'` → rechaza public en cualquier slot
+- `Club.members_advance_days` → ventana máxima para socios
+- Member validation: si `player_type='member'`, el user_id debe ser ClubMember activo
+- Errores se acumulan y retornan en `detail: list[str]` con HTTP 422
+
+**Frontend (`/club/[id]/tee-times`):**
+- Modal de Reserva rediseñado, max-w-2xl con lista vertical de jugadores
+- Cada fila: dropdown tipo (Socio / Invitado / Público), inputs dinámicos según tipo
+  - Socio → dropdown del padrón completo, excluye los ya tomados en otras filas, muestra HCP y member_number
+  - Invitado → nombre + email (opcional) + dropdown sponsor (requerido si `guest_requires_sponsor`)
+  - Público → nombre + email (deshabilitado si tier='members_only' o allow_guests=false)
+- Botón "+ Agregar jugador" hasta `slot.max_players`
+- Fee inline por fila + sidebar de total (calc cliente, recalc backend)
+- Banner rojo con bullets cuando backend retorna 422 con lista de errores
+- Slot card ahora muestra jugadores nombrados de cada booking con tipo y sponsor
+- Lazy load del padrón + settings del club al abrir el modal
+- Lee `currentUserId` desde `/users/me` para preseleccionarse como primera fila
+
+### Schema migration
+
+```sql
+CREATE TABLE tee_time_booking_players (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  booking_id UUID NOT NULL REFERENCES tee_time_bookings(id) ON DELETE CASCADE,
+  player_type VARCHAR(20) NOT NULL CHECK (player_type IN ('member','guest','public')),
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  guest_name VARCHAR(200), guest_email VARCHAR(255),
+  sponsor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  fee_amount NUMERIC(10,2) NOT NULL DEFAULT 0,
+  added_by UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX idx_booking_players_booking ON tee_time_booking_players(booking_id);
+CREATE INDEX idx_booking_players_user ON tee_time_booking_players(user_id) WHERE user_id IS NOT NULL;
+CREATE INDEX idx_booking_players_sponsor ON tee_time_booking_players(sponsor_id) WHERE sponsor_id IS NOT NULL;
+-- Backfill placeholder member para bookings existentes
+INSERT INTO tee_time_booking_players (booking_id, player_type, user_id, fee_amount, added_by)
+SELECT b.id, 'member', b.user_id, 0, b.user_id FROM tee_time_bookings b
+WHERE NOT EXISTS (SELECT 1 FROM tee_time_booking_players p WHERE p.booking_id = b.id);
+```
+
+### Notes
+
+- **v1.18 pendiente:** cobro real con `_apply_transaction` usando `fee_amount` ya persistido. Member → cargo a cuenta propia. Guest → cargo al sponsor si `guest_fee_to_sponsor=true`, else a cuenta del guest si tiene una.
+- `max_guest_visits_per_year` sigue siendo informativo (requiere tracking por email; queda para v1.18+).
+- Notificaciones email/WA al confirmar booking — pendiente para v1.20.
+
+---
+
 ## [1.16.0] - 2026-05-19
 
 ### Added — Auto-onboarding de socios al club + búsqueda manual

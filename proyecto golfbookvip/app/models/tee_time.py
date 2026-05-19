@@ -42,3 +42,19 @@ class TeeTimeBooking(Base):
     booked_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now())
     confirmed_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
     cancelled_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+
+
+class TeeTimeBookingPlayer(Base):
+    """Jugadores individuales por booking. v1.17.0 reemplaza el contador players_count con detalle por jugador."""
+    __tablename__ = "tee_time_booking_players"
+
+    id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    booking_id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), ForeignKey("tee_time_bookings.id", ondelete="CASCADE"))
+    player_type: Mapped[str] = mapped_column(String(20))  # member | guest | public
+    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(pgUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    guest_name: Mapped[Optional[str]] = mapped_column(String(200))
+    guest_email: Mapped[Optional[str]] = mapped_column(String(255))
+    sponsor_id: Mapped[Optional[uuid.UUID]] = mapped_column(pgUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    fee_amount: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
+    added_by: Mapped[Optional[uuid.UUID]] = mapped_column(pgUUID(as_uuid=True), ForeignKey("users.id"))
+    created_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now())
