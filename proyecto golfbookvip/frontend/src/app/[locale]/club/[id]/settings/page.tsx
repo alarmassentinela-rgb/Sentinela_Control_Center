@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Settings, Loader2, AlertCircle, Lock, Unlock, Globe, Users, Calendar, CreditCard, CheckCircle2, Info } from 'lucide-react'
+import { ArrowLeft, Settings, Loader2, AlertCircle, Lock, Unlock, Globe, Users, Calendar, CreditCard, CheckCircle2, Info, Link2, QrCode, Copy, Check, RotateCw, Mail } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
@@ -15,6 +16,15 @@ interface ClubSettings {
   guest_fee_to_sponsor: boolean
   members_advance_days: number
   public_advance_days: number
+  invite_code: string | null
+  default_membership_type_id: number | null
+}
+
+interface MembershipType {
+  id: number
+  name: string
+  monthly_fee: number
+  is_active: boolean
 }
 
 interface MyRole {
@@ -52,27 +62,79 @@ export default function ClubSettingsPage() {
   const [forbidden, setForbidden] = useState(false)
   const [readOnly, setReadOnly] = useState(false)
   const [settings, setSettings] = useState<ClubSettings | null>(null)
+  const [types, setTypes] = useState<MembershipType[]>([])
   const [saving, setSaving] = useState(false)
   const [savedFlash, setSavedFlash] = useState(false)
   const [clubName, setClubName] = useState('')
+  const [copied, setCopied] = useState(false)
+  const [rotating, setRotating] = useState(false)
 
   const load = async () => {
     setLoading(true)
     try {
-      const [roleRes, clubRes, settingsRes] = await Promise.all([
+      const [roleRes, clubRes, settingsRes, typesRes] = await Promise.all([
         api.get(`/clubs/${params.id}/my-role`),
         api.get(`/clubs/${params.id}/dashboard`),
         api.get(`/clubs/${params.id}/settings`),
+        api.get(`/clubs/${params.id}/membership-types`),
       ])
       const role: MyRole = roleRes.data
       const canEdit = role.is_superadmin || role.role === 'owner' || role.role === 'admin'
       setReadOnly(!canEdit)
       setClubName(clubRes.data.name)
       setSettings(settingsRes.data)
+      setTypes(typesRes.data || [])
     } catch (e: unknown) {
       const status = (e as { response?: { status?: number } })?.response?.status
       if (status === 403) setForbidden(true)
     } finally { setLoading(false) }
+  }
+
+  const inviteUrl = (() => {
+    if (!settings?.invite_code) return ''
+    if (typeof window === 'undefined') return ''
+    return `${window.location.origin}/${locale}/join-club/${settings.invite_code}`
+  })()
+
+  const copyInvite = async () => {
+    if (!inviteUrl) return
+    try {
+      await navigator.clipboard.writeText(inviteUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    } catch { /* ignore */ }
+  }
+
+  const downloadQr = () => {
+    if (!inviteUrl || !settings?.invite_code) return
+    const svg = document.getElementById('settings-invite-qr')
+    if (!svg) return
+    const serializer = new XMLSerializer()
+    const svgStr = serializer.serializeToString(svg)
+    const blob = new Blob([svgStr], { type: 'image/svg+xml' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `invitacion-${settings.invite_code}.svg`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const rotateCode = async () => {
+    if (!confirm(lbl(
+      '¿Rotar el código? El código actual dejará de funcionar de inmediato y los socios deberán usar el nuevo.',
+      'Rotate the code? The current code will stop working immediately and members must use the new one.'
+    ))) return
+    setRotating(true)
+    try {
+      const res = await api.post(`/clubs/${params.id}/invite-code/rotate`)
+      if (settings) setSettings({ ...settings, invite_code: res.data.invite_code })
+      setSavedFlash(true)
+      setTimeout(() => setSavedFlash(false), 1500)
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      alert(detail || lbl('Error al rotar', 'Error rotating'))
+    } finally { setRotating(false) }
   }
 
   useEffect(() => {
@@ -133,6 +195,87 @@ export default function ClubSettingsPage() {
             <p className="text-xs text-amber-200">{lbl('Vista de solo lectura. Solo Owner y Admin pueden modificar la configuración.', 'Read-only view. Only Owner and Admin can change settings.')}</p>
           </div>
         )}
+
+        {/* Invitación de socios (v1.16.0) */}
+        <section className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+          <h2 className="text-sm font-bold text-white mb-1 flex items-center gap-2">
+            <Mail size={14} className="text-emerald-400" />
+            {lbl('Invitación de socios', 'Member invitation')}
+          </h2>
+          <p className="text-xs text-zinc-500 mb-4">
+            {lbl(
+              'Comparte un link o código QR único. Cuando un socio se registra desde ahí, queda vinculado automáticamente al padrón del club.',
+              'Share a unique link or QR code. When members register through it, they are automatically linked to the club roster.'
+            )}
+          </p>
+
+          {settings.invite_code ? (
+            <div className="space-y-4">
+              <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4 text-center">
+                <p className="text-[10px] text-emerald-400/80 uppercase tracking-widest font-semibold mb-2">{lbl('Código de tu club', 'Your club code')}</p>
+                <p className="text-2xl font-bold text-emerald-300 font-mono tracking-wider">{settings.invite_code}</p>
+              </div>
+
+              <div>
+                <label className="text-[10px] text-zinc-400 uppercase tracking-wider font-semibold block mb-1">{lbl('Liga de invitación', 'Invitation link')}</label>
+                <div className="flex gap-1">
+                  <input readOnly value={inviteUrl}
+                    onFocus={(e) => e.target.select()}
+                    className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-xs font-mono" />
+                  <button onClick={copyInvite}
+                    className="bg-emerald-500 hover:bg-emerald-400 text-white px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5">
+                    {copied ? <Check size={14} /> : <Copy size={14} />}
+                    {copied ? lbl('Copiado', 'Copied') : lbl('Copiar', 'Copy')}
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                <div className="bg-white p-3 rounded-xl flex items-center justify-center">
+                  <QRCodeSVG id="settings-invite-qr" value={inviteUrl || ' '} size={160} />
+                </div>
+                <div className="space-y-2">
+                  <button onClick={downloadQr}
+                    className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 py-2.5 rounded-xl text-sm flex items-center justify-center gap-2">
+                    <QrCode size={14} /> {lbl('Descargar QR', 'Download QR')}
+                  </button>
+                  {!readOnly && (
+                    <button onClick={rotateCode} disabled={rotating}
+                      className="w-full bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-300 py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 disabled:opacity-50">
+                      {rotating ? <Loader2 size={14} className="animate-spin" /> : <RotateCw size={14} />}
+                      {lbl('Rotar código', 'Rotate code')}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] text-zinc-400 uppercase tracking-wider font-semibold block mb-1">
+                  {lbl('Tipo de membresía por defecto', 'Default membership type')}
+                </label>
+                <select value={settings.default_membership_type_id ?? ''}
+                  disabled={readOnly || saving}
+                  onChange={e => update({ default_membership_type_id: e.target.value ? parseInt(e.target.value) : null })}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm disabled:opacity-60">
+                  <option value="">{lbl('— Sin tipo (el admin asigna después) —', '— None (admin assigns later) —')}</option>
+                  {types.filter(t => t.is_active).map(t => (
+                    <option key={t.id} value={t.id}>{t.name} (${t.monthly_fee.toFixed(0)}/mes)</option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-zinc-500 mt-1 leading-relaxed">
+                  {lbl(
+                    'Es el tipo que se asigna automáticamente a quien se registra usando este link/QR. Puedes ajustarlo por socio luego desde el padrón.',
+                    'This type is automatically assigned to anyone registering via this link/QR. You can adjust it per member from the roster.'
+                  )}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center text-sm text-zinc-500 py-6">
+              {lbl('Este club todavía no tiene código de invitación.', 'This club has no invitation code yet.')}
+            </div>
+          )}
+        </section>
 
         {/* Tipo de acceso */}
         <section className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">

@@ -42,6 +42,8 @@ class Club(Base):
     guest_fee_to_sponsor: Mapped[bool] = mapped_column(Boolean, default=True)
     members_advance_days: Mapped[int] = mapped_column(Integer, default=30)
     public_advance_days: Mapped[int] = mapped_column(Integer, default=7)
+    invite_code: Mapped[Optional[str]] = mapped_column(String(32), unique=True)
+    default_membership_type_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("membership_types.id", ondelete="SET NULL"))
     created_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now())
     updated_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -85,6 +87,7 @@ class ClubMember(Base):
     joined_at: Mapped[date] = mapped_column(Date, nullable=False)
     expires_at: Mapped[Optional[date]] = mapped_column(Date)
     notes: Mapped[Optional[str]] = mapped_column(Text)
+    onboarding_source: Mapped[Optional[str]] = mapped_column(String(20), default="manual")
     created_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now())
 
 

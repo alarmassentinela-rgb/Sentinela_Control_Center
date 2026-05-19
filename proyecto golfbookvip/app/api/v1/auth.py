@@ -7,8 +7,10 @@ from app.core.deps import DB
 from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token, decode_token, create_reset_token, verify_reset_token
 from app.models.user import User
 from app.models.handicap import PlayerStats
+from app.models.club import Club, ClubMember
 from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest, ForgotPasswordRequest, ResetPasswordRequest
 import base64
+from datetime import date
 
 router = APIRouter()
 
@@ -39,9 +41,33 @@ async def register(data: RegisterRequest, db: DB):
     stats = PlayerStats(user_id=user.id)
     db.add(stats)
 
+    # Si el registro viene con club_code, vincular como ClubMember (escenario A — v1.16.0)
+    joined_club_id: str | None = None
+    joined_club_name: str | None = None
+    if data.club_code:
+        code = data.club_code.strip().upper()
+        club_res = await db.execute(select(Club).where(Club.invite_code == code, Club.is_active == True))
+        club = club_res.scalar_one_or_none()
+        if club:
+            member = ClubMember(
+                club_id=club.id,
+                user_id=user.id,
+                membership_type_id=club.default_membership_type_id,
+                joined_at=date.today(),
+                status="active",
+                onboarding_source="invite_link",
+            )
+            db.add(member)
+            joined_club_id = str(club.id)
+            joined_club_name = club.name
+        # Si el código es inválido, registramos al usuario sin fallar; el frontend muestra warning
+
     access = create_access_token(str(user.id))
     refresh = create_refresh_token(str(user.id))
-    return TokenResponse(access_token=access, refresh_token=refresh)
+    return TokenResponse(
+        access_token=access, refresh_token=refresh,
+        joined_club_id=joined_club_id, joined_club_name=joined_club_name,
+    )
 
 
 @router.post("/login", response_model=TokenResponse)

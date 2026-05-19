@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from typing import Optional
 import uuid
 import re
+import secrets
 from datetime import date, datetime, time as time_cls, timedelta, timezone
 
 from app.core.deps import CurrentUser, DB
@@ -42,6 +43,89 @@ async def _require_club_role(db, club_id: uuid.UUID, user: User, min_role: str) 
     return role
 
 router = APIRouter()
+
+
+def _generate_invite_code(club_name: str) -> str:
+    """Genera código de invitación del estilo SLUG-XXXX. SLUG son los primeros 8 chars alfanum del nombre."""
+    slug = re.sub(r"[^A-Z0-9]", "", (club_name or "").upper())[:8] or "CLUB"
+    suffix = secrets.token_hex(2).upper()
+    return f"{slug}-{suffix}"
+
+
+# ─── Auto-onboarding por código de invitación (v1.16.0) ────────────────────
+
+
+class JoinByCodePayload(BaseModel):
+    invite_code: str
+
+
+@router.get("/by-code/{invite_code}")
+async def get_club_by_invite_code(invite_code: str, db: DB):
+    """PÚBLICO: resuelve invite_code → info del club para la landing /join/{code}."""
+    code = (invite_code or "").strip().upper()
+    if not code:
+        raise HTTPException(status_code=404, detail="Código no encontrado")
+    res = await db.execute(select(Club).where(Club.invite_code == code, Club.is_active == True))
+    club = res.scalar_one_or_none()
+    if not club:
+        raise HTTPException(status_code=404, detail="Código no encontrado")
+    count_res = await db.execute(
+        select(func.count()).select_from(ClubMember).where(
+            ClubMember.club_id == club.id, ClubMember.status == "active"
+        )
+    )
+    members_count = count_res.scalar_one() or 0
+    return {
+        "club_id": str(club.id),
+        "name": club.name,
+        "logo_url": club.logo_url,
+        "city": club.city,
+        "country": club.country,
+        "members_count": members_count,
+    }
+
+
+@router.post("/by-code/join")
+async def join_club_by_invite_code(payload: JoinByCodePayload, current_user: CurrentUser, db: DB):
+    """AUTH: vincula al usuario actual como miembro del club asociado al invite_code.
+    Idempotente: si ya es miembro retorna already_member=true sin error."""
+    code = (payload.invite_code or "").strip().upper()
+    if not code:
+        raise HTTPException(status_code=404, detail="Código inválido")
+    res = await db.execute(select(Club).where(Club.invite_code == code, Club.is_active == True))
+    club = res.scalar_one_or_none()
+    if not club:
+        raise HTTPException(status_code=404, detail="Código no encontrado")
+    existing = await db.execute(
+        select(ClubMember).where(ClubMember.club_id == club.id, ClubMember.user_id == current_user.id)
+    )
+    member = existing.scalar_one_or_none()
+    if member:
+        if member.status != "active":
+            member.status = "active"
+            await db.flush()
+        return {
+            "club_id": str(club.id),
+            "club_name": club.name,
+            "member_id": str(member.id),
+            "already_member": True,
+        }
+    member = ClubMember(
+        club_id=club.id,
+        user_id=current_user.id,
+        membership_type_id=club.default_membership_type_id,
+        joined_at=date.today(),
+        status="active",
+        onboarding_source="self_join",
+    )
+    db.add(member)
+    await db.flush()
+    return {
+        "club_id": str(club.id),
+        "club_name": club.name,
+        "member_id": str(member.id),
+        "already_member": False,
+    }
 
 
 class ClubCreate(BaseModel):
@@ -120,17 +204,28 @@ async def create_club(data: ClubCreate, current_user: CurrentUser, db: DB):
     if existing.scalar_one_or_none():
         slug = f"{slug}-{str(uuid.uuid4())[:8]}"
 
-    club = Club(slug=slug, **data.model_dump())
+    # Generar invite_code único (con reintento en caso de colisión)
+    invite_code = _generate_invite_code(data.name)
+    for _ in range(5):
+        check = await db.execute(select(Club).where(Club.invite_code == invite_code))
+        if not check.scalar_one_or_none():
+            break
+        invite_code = _generate_invite_code(data.name)
+
+    club = Club(slug=slug, invite_code=invite_code, **data.model_dump())
     db.add(club)
     await db.flush()
 
     staff = ClubStaff(club_id=club.id, user_id=current_user.id, role="owner")
     db.add(staff)
 
-    member = ClubMember(club_id=club.id, user_id=current_user.id, status="active", joined_at=date.today())
+    member = ClubMember(
+        club_id=club.id, user_id=current_user.id, status="active",
+        joined_at=date.today(), onboarding_source="manual",
+    )
     db.add(member)
 
-    return {"id": str(club.id), "slug": club.slug, "name": club.name}
+    return {"id": str(club.id), "slug": club.slug, "name": club.name, "invite_code": club.invite_code}
 
 
 @router.get("/{club_id}")
@@ -1335,11 +1430,12 @@ class ClubSettingsPatch(BaseModel):
     guest_fee_to_sponsor: Optional[bool] = None
     members_advance_days: Optional[int] = Field(None, ge=0, le=365)
     public_advance_days: Optional[int] = Field(None, ge=0, le=365)
+    default_membership_type_id: Optional[int] = None
 
 
 @router.get("/{club_id}/settings")
 async def get_club_settings(club_id: uuid.UUID, current_user: CurrentUser, db: DB):
-    """Lee la configuración de acceso del club. Requiere ser staff."""
+    """Lee la configuración del club (acceso + invitación). Requiere ser staff."""
     await _require_club_role(db, club_id, current_user, "staff")
     res = await db.execute(select(Club).where(Club.id == club_id))
     club = res.scalar_one_or_none()
@@ -1354,6 +1450,8 @@ async def get_club_settings(club_id: uuid.UUID, current_user: CurrentUser, db: D
         "guest_fee_to_sponsor": club.guest_fee_to_sponsor,
         "members_advance_days": club.members_advance_days,
         "public_advance_days": club.public_advance_days,
+        "invite_code": club.invite_code,
+        "default_membership_type_id": club.default_membership_type_id,
     }
 
 
@@ -1368,7 +1466,80 @@ async def update_club_settings(club_id: uuid.UUID, payload: ClubSettingsPatch,
     club = res.scalar_one_or_none()
     if not club:
         raise HTTPException(status_code=404, detail="Club no encontrado")
-    for k, v in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    # Validar que el default_membership_type_id pertenezca al club
+    if "default_membership_type_id" in data and data["default_membership_type_id"] is not None:
+        mt_check = await db.execute(select(MembershipType).where(
+            MembershipType.id == data["default_membership_type_id"],
+            MembershipType.club_id == club_id,
+        ))
+        if not mt_check.scalar_one_or_none():
+            raise HTTPException(status_code=422, detail="default_membership_type_id no pertenece al club")
+    for k, v in data.items():
         setattr(club, k, v)
     await db.flush()
-    return {"ok": True, "access_type": club.access_type}
+    return {"ok": True, "access_type": club.access_type, "default_membership_type_id": club.default_membership_type_id}
+
+
+# ─── Rotación de invite_code + búsqueda de usuarios (v1.16.0) ──────────────
+
+
+@router.post("/{club_id}/invite-code/rotate")
+async def rotate_invite_code(club_id: uuid.UUID, current_user: CurrentUser, db: DB):
+    """Genera un nuevo invite_code para el club. Requiere admin+. El código viejo deja de funcionar."""
+    await _require_club_role(db, club_id, current_user, "admin")
+    res = await db.execute(select(Club).where(Club.id == club_id))
+    club = res.scalar_one_or_none()
+    if not club:
+        raise HTTPException(status_code=404, detail="Club no encontrado")
+    new_code = _generate_invite_code(club.name)
+    for _ in range(5):
+        check = await db.execute(select(Club).where(Club.invite_code == new_code, Club.id != club.id))
+        if not check.scalar_one_or_none():
+            break
+        new_code = _generate_invite_code(club.name)
+    club.invite_code = new_code
+    await db.flush()
+    return {"invite_code": club.invite_code}
+
+
+@router.get("/{club_id}/users/search")
+async def search_users_for_club(club_id: uuid.UUID, current_user: CurrentUser, db: DB,
+                                  q: str = "", limit: int = 20):
+    """Autocomplete sobre `users` para agregar al padrón. Excluye los que ya son miembros activos. Requiere manager+."""
+    await _require_club_role(db, club_id, current_user, "manager")
+    q = (q or "").strip()
+    if len(q) < 3:
+        return []
+    like = f"%{q}%"
+    # Subquery: user_ids que ya son miembros activos
+    members_subq = select(ClubMember.user_id).where(
+        ClubMember.club_id == club_id, ClubMember.status == "active"
+    ).scalar_subquery()
+    query = (
+        select(User)
+        .where(
+            User.is_active == True,
+            User.id.notin_(members_subq),
+            or_(
+                User.email.ilike(like),
+                User.first_name.ilike(like),
+                User.last_name.ilike(like),
+                User.username.ilike(like),
+            ),
+        )
+        .order_by(User.first_name, User.last_name)
+        .limit(min(max(limit, 1), 50))
+    )
+    rows = (await db.execute(query)).scalars().all()
+    return [
+        {
+            "user_id": str(u.id),
+            "email": u.email,
+            "first_name": u.first_name,
+            "last_name": u.last_name,
+            "username": u.username,
+            "handicap_index": float(u.handicap_index) if u.handicap_index is not None else None,
+        }
+        for u in rows
+    ]

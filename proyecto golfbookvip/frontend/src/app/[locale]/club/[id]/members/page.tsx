@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Plus, Users, Loader2, Search, X, Edit2, UserMinus, Mail, Hash, Calendar, CreditCard, AlertCircle, DollarSign } from 'lucide-react'
+import { ArrowLeft, Plus, Users, Loader2, Search, X, Edit2, UserMinus, Mail, Hash, Calendar, CreditCard, AlertCircle, DollarSign, Link2, QrCode, Copy, Check } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
@@ -55,6 +56,9 @@ export default function ClubMembersPage() {
   const [typeFilter, setTypeFilter] = useState<number | ''>('')
 
   const [showAdd, setShowAdd] = useState(false)
+  const [addTab, setAddTab] = useState<'invite' | 'search'>('invite')
+  const [inviteCode, setInviteCode] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
   const [addForm, setAddForm] = useState({ email: '', member_number: '', membership_type_id: '', joined_at: new Date().toISOString().slice(0, 10), expires_at: '', notes: '' })
   const [adding, setAdding] = useState(false)
 
@@ -73,6 +77,13 @@ export default function ClubMembersPage() {
       setMyRole(meRoleRes.data)
       setClubName(clubRes.data.name)
       setTypes(typesRes.data || [])
+      // Si el rol permite gestionar, obtener invite_code para la tab "Compartir invitación"
+      if (meRoleRes.data?.can_manage_members) {
+        try {
+          const settingsRes = await api.get(`/clubs/${params.id}/settings`)
+          setInviteCode(settingsRes.data?.invite_code || null)
+        } catch { /* sin permiso o sin código todavía */ }
+      }
       const membersRes = await api.get(`/clubs/${params.id}/padron`, {
         params: {
           q: search,
@@ -85,6 +96,36 @@ export default function ClubMembersPage() {
       const status = (e as { response?: { status?: number } })?.response?.status
       if (status === 403) setForbidden(true)
     } finally { setLoading(false) }
+  }
+
+  const inviteUrl = (() => {
+    if (!inviteCode) return ''
+    if (typeof window === 'undefined') return ''
+    return `${window.location.origin}/${locale}/join-club/${inviteCode}`
+  })()
+
+  const copyInvite = async () => {
+    if (!inviteUrl) return
+    try {
+      await navigator.clipboard.writeText(inviteUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    } catch { /* ignore */ }
+  }
+
+  const downloadQr = () => {
+    if (!inviteUrl) return
+    const svg = document.getElementById('club-invite-qr')
+    if (!svg) return
+    const serializer = new XMLSerializer()
+    const svgStr = serializer.serializeToString(svg)
+    const blob = new Blob([svgStr], { type: 'image/svg+xml' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `invitacion-${inviteCode}.svg`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   useEffect(() => {
@@ -327,6 +368,70 @@ export default function ClubMembersPage() {
               </h3>
               <button onClick={() => !adding && setShowAdd(false)} className="text-zinc-500 hover:text-white"><X size={18} /></button>
             </div>
+
+            {/* Tabs */}
+            <div className="flex gap-1 mb-4 bg-zinc-800/60 p-1 rounded-xl">
+              <button onClick={() => setAddTab('invite')}
+                className={`flex-1 text-xs font-semibold py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors ${addTab === 'invite' ? 'bg-emerald-500 text-white' : 'text-zinc-400 hover:text-white'}`}>
+                <Link2 size={12} /> {lbl('Compartir invitación', 'Share invitation')}
+              </button>
+              <button onClick={() => setAddTab('search')}
+                className={`flex-1 text-xs font-semibold py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors ${addTab === 'search' ? 'bg-emerald-500 text-white' : 'text-zinc-400 hover:text-white'}`}>
+                <Search size={12} /> {lbl('Buscar usuario', 'Search user')}
+              </button>
+            </div>
+
+            {addTab === 'invite' ? (
+              <div className="space-y-4">
+                {inviteCode ? (
+                  <>
+                    <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4 text-center">
+                      <p className="text-[10px] text-emerald-400/80 uppercase tracking-widest font-semibold mb-2">{lbl('Código de tu club', 'Your club code')}</p>
+                      <p className="text-2xl font-bold text-emerald-300 font-mono tracking-wider">{inviteCode}</p>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-400 uppercase tracking-wider font-semibold block mb-1">{lbl('Liga de invitación', 'Invitation link')}</label>
+                      <div className="flex gap-1">
+                        <input readOnly value={inviteUrl}
+                          onFocus={(e) => e.target.select()}
+                          className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-xs font-mono" />
+                        <button onClick={copyInvite}
+                          className="bg-emerald-500 hover:bg-emerald-400 text-white px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5">
+                          {copied ? <Check size={14} /> : <Copy size={14} />}
+                          {copied ? lbl('Copiado', 'Copied') : lbl('Copiar', 'Copy')}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="bg-white p-4 rounded-xl flex items-center justify-center">
+                      <QRCodeSVG id="club-invite-qr" value={inviteUrl || ' '} size={180} />
+                    </div>
+                    <button onClick={downloadQr}
+                      className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 py-2.5 rounded-xl text-sm flex items-center justify-center gap-2">
+                      <QrCode size={14} /> {lbl('Descargar QR', 'Download QR')}
+                    </button>
+                    <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                      <p className="text-xs text-blue-200 leading-relaxed">
+                        {lbl(
+                          'Comparte este link o QR con tus socios. Al registrarse desde aquí, quedarán automáticamente vinculados al padrón. Tú solo ajustas su tipo de membresía y número de socio.',
+                          'Share this link or QR with your members. When they register through it, they will be automatically linked to the roster. You only adjust their membership type and member number.'
+                        )}
+                      </p>
+                    </div>
+                    <div className="text-center pt-2">
+                      <Link href={`/${locale}/club/${params.id}/settings`}
+                        className="text-xs text-zinc-500 hover:text-emerald-400 transition-colors">
+                        {lbl('Rotar código en Configuración →', 'Rotate code in Settings →')}
+                      </Link>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center py-8 text-zinc-500 text-sm">
+                    {lbl('No hay código de invitación disponible.', 'No invitation code available.')}
+                  </div>
+                )}
+              </div>
+            ) : (
+            <>
             <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-3">
               <p className="text-xs text-blue-200 leading-relaxed">
                 {lbl(
@@ -388,6 +493,8 @@ export default function ClubMembersPage() {
                 {lbl('Agregar', 'Add')}
               </button>
             </div>
+            </>
+            )}
           </div>
         </div>
       )}

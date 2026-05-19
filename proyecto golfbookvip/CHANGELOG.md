@@ -7,6 +7,58 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.16.0] - 2026-05-19
+
+### Added — Auto-onboarding de socios al club + búsqueda manual
+
+El club deja de capturar el padrón a mano. Ahora comparte un link/QR único y los socios se auto-registran y quedan vinculados al instante. El admin solo ajusta excepciones (tipo de membresía, número de socio, vencimiento). Cobertura completa de 5 escenarios: usuario nuevo, usuario existente sin sesión, con sesión, ya socio (idempotente) y búsqueda manual del admin.
+
+**Schema migration:**
+- `clubs`: + `invite_code VARCHAR(32) UNIQUE`, + `default_membership_type_id INTEGER REFERENCES membership_types(id) ON DELETE SET NULL`
+- `club_members`: + `onboarding_source VARCHAR(20) DEFAULT 'manual'` (valores: `manual` | `invite_link` | `self_join`)
+- Clubes existentes recibieron código auto-generado tipo `SAUCITO-12A5`.
+
+**Backend nuevos:**
+- `GET /clubs/by-code/{invite_code}` (PÚBLICO, sin auth) → resuelve el código a info del club (id, nombre, logo, ciudad, conteo de socios). Sirve a la landing `/join-club/{code}`.
+- `POST /clubs/by-code/join` (auth) → vincula al usuario actual al club. **Idempotente:** si ya es socio retorna `already_member: true`. Usa `default_membership_type_id` del club si está configurado. `onboarding_source='self_join'`.
+- `POST /clubs/{id}/invite-code/rotate` (admin) → genera nuevo código; el viejo deja de funcionar inmediatamente.
+- `GET /clubs/{id}/users/search?q=...` (manager) → autocomplete sobre `users` excluyendo los que ya son socios activos. Mínimo 3 chars; máx 50 resultados.
+
+**Backend modificados:**
+- `POST /auth/register` ahora acepta `club_code` opcional. Si presente y válido, crea `ClubMember` en la misma transacción con `onboarding_source='invite_link'`. Si inválido, registra al usuario normalmente sin fallar. Response añade `joined_club_id` y `joined_club_name`.
+- `POST /clubs` (create_club) genera un `invite_code` único al crear el club; añade `onboarding_source='manual'` al socio fundador.
+- `GET/PATCH /clubs/{id}/settings` extendido con `invite_code` (read-only) y `default_membership_type_id` (read+write, valida que el tipo pertenezca al club).
+
+**Frontend nuevo:**
+- `/join-club/{code}` — landing pública con info del club, 3 estados de CTA:
+  - Sin sesión: "Registrarme y unirme" / "Ya tengo cuenta — Entrar"
+  - Con sesión, no socio: botón "Unirme al club"
+  - Ya socio: mensaje + redirect al panel
+- Convive con el `/join/{code}` existente (invitaciones a rondas) sin colisión de rutas.
+
+**Frontend modificado:**
+- `/auth/register` lee `?club_code=` del query, lo envía al backend, y si el response trae `joined_club_id` redirige a `/club/{id}`.
+- `/auth/login` lee `?club_code=`, después de login hace `POST /clubs/by-code/join` y redirige al panel del club. Banner contextual visible.
+- `/club/[id]/members` — botón "Agregar" abre modal con 2 tabs:
+  - **Compartir invitación** (default): código grande, link copiable, QR descargable (SVG), nota explicativa para el admin
+  - **Buscar usuario**: form existente por email/username sobre `/padron`
+- `/club/[id]/settings` — nueva sección "Invitación de socios" arriba con código, link, QR, botón "Rotar código" (rojo + confirm), y selector "Tipo de membresía por defecto".
+
+### Reglas de producto
+
+- `ClubMember.user_id` se mantiene NOT NULL. Sólo registra socios con cuenta de app. (Captura de personas sin cuenta queda fuera de scope — futuro: invitaciones por email.)
+- Un usuario puede ser socio de varios clubes simultáneamente.
+- Al auto-unirse: `status='active'` (sin aprobación manual del admin), `joined_at=hoy`, `membership_type_id=club.default_membership_type_id` (puede ser NULL).
+- Idempotencia garantizada por `UniqueConstraint(club_id, user_id)` + chequeo en endpoint.
+- Rotación del código es destructiva sólo para el código (no afecta socios ya registrados).
+
+### Notes
+
+- v1.17.0 retoma el booking multi-jugador con guests nombrados (pospuesto desde v1.16.0 para priorizar el onboarding).
+- El QR se exporta como SVG. Conversión a PNG queda al cliente (open en navegador → screenshot, o usar herramienta externa).
+
+---
+
 ## [1.15.0] - 2026-05-15
 
 ### Added — Clubs SaaS Fase 4.2 · Tiers y pricing en tee_time_slots

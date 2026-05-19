@@ -20,6 +20,7 @@ function RegisterForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const inviteCode = searchParams.get('invite')
+  const clubCode = searchParams.get('club_code')
   const lbl = (es: string, en: string) => locale === 'es' ? es : en
 
   const [form, setForm] = useState({
@@ -61,13 +62,14 @@ function RegisterForm() {
     setLoading(true)
     setError('')
     try {
-      await api.post('/auth/register', {
+      const regRes = await api.post('/auth/register', {
         first_name: form.first_name,
         last_name: form.last_name,
         username: form.username,
         email: form.email,
         password: form.password,
         initial_handicap: hcpNum,
+        club_code: clubCode || undefined,
       })
 
       // Auto-login
@@ -77,7 +79,11 @@ function RegisterForm() {
       })
       localStorage.setItem('access_token', loginRes.data.access_token)
 
-      if (inviteCode) {
+      // Si el registro vinculó automáticamente a un club (vía club_code), priorizar esa redirección
+      const joinedClubId = regRes.data?.joined_club_id as string | undefined
+      if (joinedClubId) {
+        router.push(`/${locale}/club/${joinedClubId}`)
+      } else if (inviteCode) {
         try {
           const joinRes = await api.post(`/rounds/join/${inviteCode}`)
           const roundId = joinRes.data.round_id
@@ -118,9 +124,11 @@ function RegisterForm() {
           </Link>
           <h1 className="text-2xl font-bold text-white">{t('register_title')}</h1>
           <p className="text-zinc-400 text-sm mt-1">
-            {inviteCode
-              ? lbl('Regístrate para unirte a la ronda', 'Register to join the round')
-              : t('register_subtitle')}
+            {clubCode
+              ? lbl('Regístrate para unirte a tu club', 'Register to join your club')
+              : inviteCode
+                ? lbl('Regístrate para unirte a la ronda', 'Register to join the round')
+                : t('register_subtitle')}
           </p>
         </div>
 
@@ -144,7 +152,14 @@ function RegisterForm() {
           </div>
         )}
 
-        {inviteCode && (
+        {clubCode && (
+          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3 mb-4 text-center">
+            <p className="text-sm text-emerald-400">
+              {lbl(`Te unirás al club al registrarte · ${clubCode}`, `You'll join the club on registration · ${clubCode}`)}
+            </p>
+          </div>
+        )}
+        {!clubCode && inviteCode && (
           <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3 mb-4 text-center">
             <p className="text-sm text-emerald-400">
               {lbl(`Invitado con código: ${inviteCode}`, `Invited with code: ${inviteCode}`)}
@@ -258,7 +273,7 @@ function RegisterForm() {
             <button type="submit" disabled={loading}
               className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2 mt-2">
               {loading && <Loader2 size={18} className="animate-spin" />}
-              {inviteCode
+              {(clubCode || inviteCode)
                 ? lbl('Registrarme y unirme', 'Register and join')
                 : t('btn_register')}
             </button>
@@ -268,7 +283,7 @@ function RegisterForm() {
           <div className="mt-5 text-center text-sm text-zinc-500">
             {t('have_account')}{' '}
             <Link
-              href={`/${locale}/auth/login${inviteCode ? `?invite=${inviteCode}` : ''}`}
+              href={`/${locale}/auth/login${clubCode ? `?club_code=${clubCode}` : inviteCode ? `?invite=${inviteCode}` : ''}`}
               className="text-emerald-400 hover:text-emerald-300 font-medium">
               {t('login')}
             </Link>

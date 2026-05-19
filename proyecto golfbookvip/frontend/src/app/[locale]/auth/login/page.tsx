@@ -13,6 +13,7 @@ function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const inviteCode = searchParams.get('invite')
+  const clubCode = searchParams.get('club_code')
   const redirectTo = searchParams.get('redirect')
 
   const [form, setForm] = useState({ email: '', password: '' })
@@ -28,7 +29,14 @@ function LoginForm() {
       const res = await api.post('/auth/login', { email: form.email, password: form.password })
       localStorage.setItem('access_token', res.data.access_token)
 
-      if (inviteCode) {
+      if (clubCode) {
+        try {
+          const joinRes = await api.post('/clubs/by-code/join', { invite_code: clubCode })
+          router.push(`/${locale}/club/${joinRes.data.club_id}`)
+        } catch {
+          router.push(`/${locale}/dashboard`)
+        }
+      } else if (inviteCode) {
         try {
           const joinRes = await api.post(`/rounds/join/${inviteCode}`)
           router.push(`/${locale}/rounds/${joinRes.data.round_id}`)
@@ -58,13 +66,24 @@ function LoginForm() {
           </Link>
           <h1 className="text-2xl font-bold text-white">{t('login_title')}</h1>
           <p className="text-zinc-400 text-sm mt-1">
-            {inviteCode
-              ? (locale === 'es' ? 'Inicia sesión para unirte a la ronda' : 'Log in to join the round')
-              : t('login_subtitle')}
+            {clubCode
+              ? (locale === 'es' ? 'Inicia sesión para unirte a tu club' : 'Log in to join your club')
+              : inviteCode
+                ? (locale === 'es' ? 'Inicia sesión para unirte a la ronda' : 'Log in to join the round')
+                : t('login_subtitle')}
           </p>
         </div>
 
-        {inviteCode && (
+        {clubCode && (
+          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3 mb-4 text-center">
+            <p className="text-sm text-emerald-400">
+              {locale === 'es'
+                ? `Te unirás al club al entrar · ${clubCode}`
+                : `You'll join the club on login · ${clubCode}`}
+            </p>
+          </div>
+        )}
+        {!clubCode && inviteCode && (
           <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3 mb-4 text-center">
             <p className="text-sm text-emerald-400">
               {locale === 'es'
@@ -106,12 +125,12 @@ function LoginForm() {
             <button type="submit" disabled={loading}
               className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
               {loading && <Loader2 size={18} className="animate-spin" />}
-              {inviteCode ? (locale === 'es' ? 'Entrar y unirme' : 'Login and join') : t('btn_login')}
+              {(clubCode || inviteCode) ? (locale === 'es' ? 'Entrar y unirme' : 'Login and join') : t('btn_login')}
             </button>
           </form>
           <div className="mt-6 text-center text-sm text-zinc-500">
             {t('no_account')}{' '}
-            <Link href={`/${locale}/auth/register${inviteCode ? `?invite=${inviteCode}` : ''}`}
+            <Link href={`/${locale}/auth/register${clubCode ? `?club_code=${clubCode}` : inviteCode ? `?invite=${inviteCode}` : ''}`}
               className="text-emerald-400 hover:text-emerald-300 font-medium">
               {t('register')}
             </Link>

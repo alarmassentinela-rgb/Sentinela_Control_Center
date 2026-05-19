@@ -10,6 +10,7 @@ class RegisterRequest(BaseModel):
     username: str
     phone: str | None = None
     initial_handicap: float | None = None
+    club_code: str | None = None  # Si presente y válido, vincula al club como ClubMember
 
     @field_validator("password")
     @classmethod
@@ -35,6 +36,8 @@ class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+    joined_club_id: str | None = None
+    joined_club_name: str | None = None
 
 
 class RefreshRequest(BaseModel):
