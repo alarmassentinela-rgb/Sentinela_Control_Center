@@ -7,6 +7,60 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.22.0] - 2026-05-19
+
+### Added — Bot conversacional Telegram (6 comandos de lectura)
+
+v1.21 dejó el bot vinculable pero pasivo: solo recibía notificaciones del backend. v1.22 lo convierte en **conversacional**: el socio pregunta y el bot responde con datos reales desde la DB. Sin migración, sin frontend — toda la conversación es entre el socio y `@GolfBookVip_bot`.
+
+**Comandos disponibles:**
+
+| Comando | Qué hace |
+|---|---|
+| `/help` | Listado de comandos |
+| `/saldo` | Balance en MemberAccount de cada club del socio |
+| `/proxima` | Próxima reserva confirmada (cualquier club) |
+| `/reservas` | Próximas 5 reservas confirmadas |
+| `/handicap` | Hcp index actual + tendencia (último cambio) |
+| `/cuenta` | Resumen: nombre, email, clubes activos |
+
+Comandos no reconocidos → sugerencia de `/help`. Cuenta no vinculada (escribe al bot sin haber pasado por `/profile`) → mensaje guiando a vincular.
+
+**Backend:**
+
+- `app/services/telegram_handlers.py` (NUEVO) — 6 funciones `cmd_*` que reciben `(db, user)` ya autenticado y devuelven HTML compacto. Cada comando hace 1-2 queries sobre modelos existentes (`MemberAccount`, `Club`, `TeeTimeBooking`, `TeeTimeSlot`, `ClubMember`, `HandicapHistory`). Lectura solamente.
+- `app/services/telegram.py` extendido con `set_my_commands()` helper y constante `BOT_COMMANDS`.
+- `app/api/v1/telegram.py` webhook dispatcher refactorizado:
+  - `/start` con token → flujo de vinculación (sin cambio)
+  - `/start` sin token → equivalente a `/help` (si está vinculado) o invitación a vincular
+  - Cualquier otro `/comando` → busca user por `chat_id`, dispatcher al handler
+  - Comando inválido → `cmd_unknown` con sugerencia
+  - Mensajes no-comando → ignorados silenciosamente
+
+**Soporte de comandos con sufijo bot**: `/saldo@GolfBookVip_bot` se normaliza a `/saldo` (útil en grupos donde Telegram añade el sufijo).
+
+### Setup post-deploy (Claude lo hizo)
+
+Registrar los 6 comandos en BotFather (para autocompletado en clientes):
+
+```bash
+curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setMyCommands" \
+  -H "Content-Type: application/json" \
+  -d '{"commands":[...]}'
+```
+
+Verificable con `getMyCommands`.
+
+### Notes
+
+- **Solo lectura.** Crear/cancelar reservas desde el bot llega en v1.23 con inline keyboards.
+- **Sin estados conversacionales**: cada comando es stateless, no hay flujos multi-step.
+- **Multi-club**: `/saldo` y `/reservas` listan todos los clubes del socio; `/proxima` toma la más temprana de cualquier club.
+- **Performance**: cada comando hace 1-3 queries pequeños; respuesta <500ms típicamente.
+- **Sin nuevas dependencias**: reusa `httpx` (ya en deps) y los modelos existentes.
+
+---
+
 ## [1.21.0] - 2026-05-19
 
 ### Added — Notificaciones por Telegram + UI de preferencias

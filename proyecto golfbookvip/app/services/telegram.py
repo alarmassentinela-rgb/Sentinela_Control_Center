@@ -75,3 +75,34 @@ async def set_webhook(webhook_url: str) -> bool:
         return r.is_success
     except Exception:
         return False
+
+
+# Lista de comandos del bot (v1.22). El autocompletado en los clientes Telegram
+# se actualiza llamando set_my_commands() al deploy.
+BOT_COMMANDS = [
+    {"command": "saldo",     "description": "Tu balance en cada club"},
+    {"command": "proxima",   "description": "Tu próxima reserva"},
+    {"command": "reservas",  "description": "Tus próximas reservas"},
+    {"command": "handicap",  "description": "Tu hándicap actual"},
+    {"command": "cuenta",    "description": "Resumen de tu cuenta"},
+    {"command": "help",      "description": "Ayuda"},
+]
+
+
+async def set_my_commands(commands: Optional[list[dict]] = None) -> bool:
+    """Registra los comandos disponibles en BotFather (autocomplete en clients)."""
+    if not is_configured():
+        return False
+    cmds = commands if commands is not None else BOT_COMMANDS
+    url = f"{_API_BASE}/bot{settings.TELEGRAM_BOT_TOKEN}/setMyCommands"
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            r = await client.post(url, json={"commands": cmds})
+        if r.is_success:
+            logger.info(f"setMyCommands OK ({len(cmds)} comandos)")
+            return True
+        logger.error(f"setMyCommands error {r.status_code}: {r.text}")
+        return False
+    except Exception as e:
+        logger.error(f"setMyCommands excepción: {e}")
+        return False

@@ -21,6 +21,7 @@ from app.models.telegram import TelegramLinkToken
 from app.models.user import User
 from app.services.telegram import send_telegram
 from app.services.telegram_templates import tg_account_linked, tg_link_invalid
+from app.services.telegram_handlers import get_command_handler, cmd_unknown, cmd_help
 
 logger = logging.getLogger("golfbookvip.telegram.webhook")
 router = APIRouter()
@@ -81,8 +82,48 @@ async def telegram_webhook(secret: str, update: dict, db: DB):
         parts = text.split(maxsplit=1)
         token_arg = parts[1].strip() if len(parts) > 1 else ""
 
-        if not token_arg:
-            # Sin token — solo saludo
+        if token_arg:
+            # Flujo de vinculación con token
+            tk_res = await db.execute(
+                select(TelegramLinkToken).where(TelegramLinkToken.token == token_arg)
+            )
+            link_tk = tk_res.scalar_one_or_none()
+
+            if not link_tk:
+                await send_telegram(chat_id, tg_link_invalid())
+                return {"ok": True}
+
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+            if link_tk.used_at is not None:
+                await send_telegram(chat_id, tg_link_invalid())
+                return {"ok": True}
+            created_at = link_tk.created_at
+            if created_at and created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=timezone.utc)
+            if created_at and created_at < cutoff:
+                await send_telegram(chat_id, tg_link_invalid())
+                return {"ok": True}
+
+            u_res = await db.execute(select(User).where(User.id == link_tk.user_id))
+            user = u_res.scalar_one_or_none()
+            if not user:
+                await send_telegram(chat_id, tg_link_invalid())
+                return {"ok": True}
+
+            user.telegram_chat_id = chat_id
+            user.telegram_username = tg_username
+            link_tk.used_at = datetime.now(timezone.utc)
+            await db.flush()
+
+            await send_telegram(chat_id, tg_account_linked())
+            logger.info(f"Telegram vinculado: user_id={user.id} chat_id={chat_id} username=@{tg_username}")
+            return {"ok": True}
+
+        # /start sin token — equivalente a /help, requiere que la cuenta esté vinculada
+        # Si no está vinculada, mensaje de invitación a vincular
+        u_res = await db.execute(select(User).where(User.telegram_chat_id == chat_id))
+        user = u_res.scalar_one_or_none()
+        if not user:
             await send_telegram(chat_id, (
                 "👋 Hola, soy <b>GolfBookVIP Bot</b>.\n\n"
                 "Para vincular tu cuenta y recibir notificaciones, ve a tu perfil "
@@ -90,45 +131,32 @@ async def telegram_webhook(secret: str, update: dict, db: DB):
                 "y haz clic en \"Conectar mi Telegram\"."
             ))
             return {"ok": True}
-
-        # Validar token
-        tk_res = await db.execute(
-            select(TelegramLinkToken).where(TelegramLinkToken.token == token_arg)
-        )
-        link_tk = tk_res.scalar_one_or_none()
-
-        if not link_tk:
-            await send_telegram(chat_id, tg_link_invalid())
-            return {"ok": True}
-
-        # Expirado (>1h) o ya usado
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
-        if link_tk.used_at is not None:
-            await send_telegram(chat_id, tg_link_invalid())
-            return {"ok": True}
-        # comparación robusta cuando created_at puede ser naive (depende del driver)
-        created_at = link_tk.created_at
-        if created_at and created_at.tzinfo is None:
-            created_at = created_at.replace(tzinfo=timezone.utc)
-        if created_at and created_at < cutoff:
-            await send_telegram(chat_id, tg_link_invalid())
-            return {"ok": True}
-
-        # Vincular
-        u_res = await db.execute(select(User).where(User.id == link_tk.user_id))
-        user = u_res.scalar_one_or_none()
-        if not user:
-            await send_telegram(chat_id, tg_link_invalid())
-            return {"ok": True}
-
-        user.telegram_chat_id = chat_id
-        user.telegram_username = tg_username
-        link_tk.used_at = datetime.now(timezone.utc)
-        await db.flush()
-
-        await send_telegram(chat_id, tg_account_linked())
-        logger.info(f"Telegram vinculado: user_id={user.id} chat_id={chat_id} username=@{tg_username}")
+        await send_telegram(chat_id, await cmd_help(db, user))
         return {"ok": True}
 
-    # Otros mensajes — ignorar por ahora (bot conversacional en v1.22+)
+    # Cualquier otro comando: identificar al usuario por chat_id
+    if text.startswith("/"):
+        u_res = await db.execute(select(User).where(User.telegram_chat_id == chat_id))
+        user = u_res.scalar_one_or_none()
+        if not user:
+            await send_telegram(chat_id, (
+                "🔒 Esta cuenta de Telegram no está vinculada a ningún usuario de GolfBookVIP.\n\n"
+                "Ve a tu perfil en <a href=\"https://golfbookvip.com/es/profile\">golfbookvip.com</a> "
+                "y haz clic en \"Conectar mi Telegram\"."
+            ))
+            return {"ok": True}
+
+        handler = get_command_handler(text)
+        if handler is None:
+            response = await cmd_unknown(db, user)
+        else:
+            try:
+                response = await handler(db, user)
+            except Exception as e:
+                logger.exception(f"Error en comando {text}: {e}")
+                response = "⚠️ Ocurrió un error procesando tu solicitud. Inténtalo de nuevo en un momento."
+        await send_telegram(chat_id, response)
+        return {"ok": True}
+
+    # Mensajes que no son comandos — ignorar silenciosamente (v1.22 es solo comandos)
     return {"ok": True}
