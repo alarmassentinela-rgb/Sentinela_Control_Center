@@ -433,6 +433,46 @@ class AlarmEvent(models.Model):
         return True
 
     @api.model
+    def get_audio_state(self):
+        """F2.5 — Estado de audio para el dashboard.
+        Devuelve alarmas activas (active/acknowledged/in_progress) con info de
+        su prioridad y URL del sonido. is_claimed_by_me=True si el operador
+        actual ya tiene el evento — para que el frontend NO toque audio por
+        eventos que él mismo está atendiendo.
+
+        Returns:
+            {'active_alarms': [{event_id, priority_id, priority_level,
+                                priority_name, has_sound, sound_url,
+                                is_reminder, is_claimed_by_me}, ...]}
+        """
+        events = self.sudo().search([
+            ('status', 'in', ('active', 'acknowledged', 'in_progress')),
+            ('priority_id', '!=', False),
+        ])
+        result = []
+        uid = self.env.uid
+        for ev in events:
+            pri = ev.priority_id
+            has_sound = bool(pri.priority_sound)
+            sound_url = False
+            if has_sound:
+                fn = pri.priority_sound_filename or 'sound.mp3'
+                sound_url = (f"/web/content/sentinela.alarm.priority/{pri.id}"
+                             f"/priority_sound/{fn}")
+            result.append({
+                'event_id': ev.id,
+                'priority_id': pri.id,
+                'priority_level': pri.level,
+                'priority_name': self._clean_translated_name(pri.name),
+                'has_sound': has_sound,
+                'sound_url': sound_url,
+                'is_reminder': bool(pri.is_reminder),
+                'is_claimed_by_me': bool(ev.current_operator_id and
+                                          ev.current_operator_id.id == uid),
+            })
+        return {'active_alarms': result}
+
+    @api.model
     def _cron_release_stale_locks(self):
         """Libera locks con claimed_at más antiguo que LOCK_TIMEOUT_MINUTES."""
         cutoff = fields.Datetime.now() - timedelta(minutes=LOCK_TIMEOUT_MINUTES)

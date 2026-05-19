@@ -11,6 +11,12 @@
                         <small class="text-muted">Operación en Tiempo Real</small>
                     </div>
                     <button class="btn btn-sm btn-light border ms-3" t-on-click="loadData"><i class="fa fa-refresh"></i> RECARGAR</button>
+                    <button t-att-class="'btn btn-sm border ms-2 ' + (state.audioMuted ? 'btn-warning' : 'btn-light')"
+                            t-on-click="toggleAudioMute"
+                            t-att-title="state.audioMuted ? 'Audio silenciado 5min — click para reactivar' : 'Click para silenciar audio 5min'">
+                        <i t-att-class="'fa ' + (state.audioMuted ? 'fa-volume-off' : 'fa-volume-up')"></i>
+                        <t t-esc="state.audioMuted ? ' SILENCIADO' : ' AUDIO'"/>
+                    </button>
                 </div>
                 <div class="text-end">
                     <div t-if="state.receiverStatus === 'online'" class="text-success fw-bold"><i class="fa fa-circle me-1 fa-beat"></i>RECEPTOR ONLINE</div>

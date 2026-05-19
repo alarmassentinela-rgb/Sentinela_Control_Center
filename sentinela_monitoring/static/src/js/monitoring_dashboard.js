@@ -18,11 +18,13 @@ export class MonitoringDashboard extends Component {
             pendingCount: 0,
             loading: false,
             lastUpdate: new Date().toLocaleTimeString(),
+            audioMuted: false,
         });
         
         this.orm = useService("orm");
         this.action = useService("action");
         this.busService = useService("bus_service");
+        this.alarmSound = useService("sentinela_alarm_sound");
         
         onWillStart(async () => { 
             await this.loadData(); 
@@ -92,11 +94,20 @@ export class MonitoringDashboard extends Component {
                 lastUpdate: new Date().toLocaleTimeString()
             });
 
-        } catch (e) { 
-            console.error("Dashboard Load Error:", e); 
-        } finally { 
-            this.state.loading = false; 
+            // F2.5 — re-evaluar audio con el estado fresco
+            if (this.alarmSound) this.alarmSound.evaluate();
+
+        } catch (e) {
+            console.error("Dashboard Load Error:", e);
+        } finally {
+            this.state.loading = false;
         }
+    }
+
+    toggleAudioMute() {
+        if (!this.alarmSound) return;
+        this.alarmSound.toggleMute();
+        this.state.audioMuted = this.alarmSound.isMuted();
     }
 
     _safeMap(e) {
