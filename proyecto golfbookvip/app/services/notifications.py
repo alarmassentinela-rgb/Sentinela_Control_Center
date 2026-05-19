@@ -16,6 +16,7 @@ from sqlalchemy import select
 from app.models.notification import Notification
 from app.models.user import User
 from app.services.mailer import send_email
+from app.services.telegram import send_telegram
 
 if TYPE_CHECKING:
     from fastapi import BackgroundTasks
@@ -51,18 +52,19 @@ async def notify_user(
     data: Optional[dict] = None,
     email_subject: Optional[str] = None,
     email_html: Optional[str] = None,
+    telegram_text: Optional[str] = None,
     background_tasks: Optional["BackgroundTasks"] = None,
 ) -> None:
-    """Notificación unificada in-app + email. Lee preferencias del user.
+    """Notificación unificada in-app + email + Telegram. Lee preferencias del user.
 
     - Si user.notify_inapp → crea Notification row (in-app, bell counter).
-    - Si user.notify_email + email_subject + email_html → agenda envío via
-      BackgroundTasks (no bloquea la respuesta del endpoint).
+    - Si user.notify_email + email_subject + email_html → agenda envío email.
+    - Si user.notify_telegram + user.telegram_chat_id + telegram_text → agenda envío Telegram.
 
-    Si background_tasks no se pasa, el email se envía sincrónicamente al final
-    de la corutina (útil para cron jobs / scripts donde no hay request).
+    Si background_tasks no se pasa, los envíos externos van sincrónicos (útil para
+    cron jobs / scripts donde no hay request).
     """
-    # Cargar user para preferencias y email
+    # Cargar user para preferencias y contactos
     u_res = await db.execute(select(User).where(User.id == user_id))
     user = u_res.scalar_one_or_none()
     if not user:
@@ -85,3 +87,10 @@ async def notify_user(
             background_tasks.add_task(send_email, user.email, email_subject, email_html)
         else:
             await send_email(user.email, email_subject, email_html)
+
+    # 3) Telegram (v1.21)
+    if telegram_text and user.notify_telegram and user.telegram_chat_id:
+        if background_tasks is not None:
+            background_tasks.add_task(send_telegram, user.telegram_chat_id, telegram_text)
+        else:
+            await send_telegram(user.telegram_chat_id, telegram_text)

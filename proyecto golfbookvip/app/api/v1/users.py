@@ -702,6 +702,52 @@ async def unfollow_user(user_id: uuid.UUID, current_user: CurrentUser, db: DB):
     db.add(existing)
 
 
+# ─── Vinculación de Telegram (v1.21) ───────────────────────────────────────
+
+
+import secrets as _secrets
+from datetime import datetime, timezone, timedelta
+from app.models.telegram import TelegramLinkToken
+from app.core.config import settings as _settings
+
+
+@router.post("/me/telegram/link-token")
+async def create_telegram_link_token(current_user: CurrentUser, db: DB):
+    """Genera token efímero para vincular cuenta a Telegram. Devuelve link directo al bot."""
+    # Limpiar tokens viejos del mismo user (>1h)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+    await db.execute(
+        select(TelegramLinkToken).where(
+            TelegramLinkToken.user_id == current_user.id,
+            TelegramLinkToken.created_at < cutoff,
+        )
+    )
+    # No es estrictamente necesario eliminar; el webhook valida la edad.
+    # Generar nuevo token (URL-safe, 32 chars hex = 16 bytes random)
+    token = _secrets.token_hex(16)
+    db.add(TelegramLinkToken(token=token, user_id=current_user.id))
+    await db.flush()
+    bot_username = _settings.TELEGRAM_BOT_USERNAME or "GolfBookVip_bot"
+    link = f"https://t.me/{bot_username}?start={token}"
+    return {"token": token, "link": link, "bot_username": bot_username}
+
+
+@router.delete("/me/telegram")
+async def unlink_telegram(current_user: CurrentUser, db: DB):
+    """Desvincular Telegram del usuario actual."""
+    from app.services.telegram import send_telegram
+    from app.services.telegram_templates import tg_account_unlinked
+
+    old_chat_id = current_user.telegram_chat_id
+    current_user.telegram_chat_id = None
+    current_user.telegram_username = None
+    await db.flush()
+    # Enviar último mensaje al chat antes de olvidar (no bloqueante por timeout)
+    if old_chat_id:
+        await send_telegram(old_chat_id, tg_account_unlinked())
+    return {"unlinked": True}
+
+
 @router.get("/{username}", response_model=UserOut)
 async def get_user_profile(username: str, db: DB):
     result = await db.execute(

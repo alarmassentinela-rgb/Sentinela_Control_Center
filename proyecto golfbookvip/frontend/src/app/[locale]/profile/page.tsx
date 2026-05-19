@@ -5,7 +5,8 @@ import Link from 'next/link'
 import {
   Flag, ArrowLeft, TrendingUp, Edit2, Save, X, Loader2,
   Award, Target, BarChart2, Star, AlertCircle, CheckCircle2,
-  Crown, ChevronDown, ChevronUp, Crosshair, Circle
+  Crown, ChevronDown, ChevronUp, Crosshair, Circle,
+  Bell, Mail, Send, Check, Copy
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
@@ -21,6 +22,11 @@ interface UserProfile {
   handicap_index: number | null; initial_handicap: number | null
   created_at: string | null
   is_lifetime_member: boolean
+  notify_email?: boolean
+  notify_inapp?: boolean
+  notify_telegram?: boolean
+  telegram_chat_id?: string | null
+  telegram_username?: string | null
 }
 
 interface Stats {
@@ -180,6 +186,10 @@ export default function ProfilePage() {
   const [hcpSaving, setHcpSaving]       = useState(false)
   const [error, setError]       = useState('')
   const [form, setForm] = useState({ first_name: '', last_name: '', phone: '', city: '', country: '' })
+  // v1.21 — Telegram linking modal
+  const [tgLink, setTgLink] = useState<{ token: string; link: string; bot_username: string } | null>(null)
+  const [tgPolling, setTgPolling] = useState(false)
+  const [tgCopied, setTgCopied] = useState(false)
 
   useEffect(() => {
     if (!localStorage.getItem('access_token')) { router.push(`/${locale}/auth/login`); return }
@@ -209,6 +219,65 @@ export default function ProfilePage() {
     } catch { setError(lbl('Error al guardar', 'Save error')) }
     finally { setSaving(false) }
   }
+
+  // ─── v1.21 — Notificaciones ──────────────────────────────────────────────
+  const toggleNotifPref = async (field: 'notify_email' | 'notify_inapp' | 'notify_telegram', value: boolean) => {
+    if (!user) return
+    setUser({ ...user, [field]: value })
+    try {
+      await api.patch('/users/me', { [field]: value })
+    } catch {
+      setUser({ ...user, [field]: !value })
+      setError(lbl('Error al guardar preferencia', 'Error saving preference'))
+    }
+  }
+
+  const startTelegramLink = async () => {
+    setError('')
+    try {
+      const res = await api.post('/users/me/telegram/link-token')
+      setTgLink(res.data)
+      setTgPolling(true)
+    } catch {
+      setError(lbl('Error al generar link de Telegram', 'Error generating Telegram link'))
+    }
+  }
+
+  const unlinkTelegram = async () => {
+    if (!confirm(lbl('¿Desvincular tu cuenta de Telegram?', 'Unlink your Telegram account?'))) return
+    try {
+      await api.delete('/users/me/telegram')
+      if (user) setUser({ ...user, telegram_chat_id: null, telegram_username: null })
+    } catch {
+      setError(lbl('Error al desvincular', 'Error unlinking'))
+    }
+  }
+
+  const copyTgLink = async () => {
+    if (!tgLink?.link) return
+    try {
+      await navigator.clipboard.writeText(tgLink.link)
+      setTgCopied(true)
+      setTimeout(() => setTgCopied(false), 1500)
+    } catch { /* ignore */ }
+  }
+
+  // Polling cada 3s mientras el modal de Telegram está abierto
+  useEffect(() => {
+    if (!tgPolling || !tgLink) return
+    const interval = setInterval(async () => {
+      try {
+        const res = await api.get('/users/me')
+        const updated = res.data as UserProfile
+        if (updated.telegram_chat_id) {
+          setUser(updated)
+          setTgPolling(false)
+          setTgLink(null)
+        }
+      } catch { /* sigue intentando */ }
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [tgPolling, tgLink])
 
   const handleHcpInit = async () => {
     const val = parseFloat(hcpInitVal)
@@ -330,6 +399,131 @@ export default function ProfilePage() {
             </div>
           )}
         </div>
+
+        {/* ── Notificaciones (v1.21) ── */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+          <h2 className="font-semibold text-white flex items-center gap-2 mb-4">
+            <Bell size={16} className="text-emerald-400" />
+            {lbl('Notificaciones', 'Notifications')}
+          </h2>
+          <p className="text-xs text-zinc-500 mb-4 leading-relaxed">
+            {lbl(
+              'Elige cómo quieres recibir avisos de tus reservas, cuenta y cambios del club.',
+              'Choose how you want to receive bookings, account and club updates.'
+            )}
+          </p>
+          <div className="space-y-3">
+            {/* In-app */}
+            <label className="flex items-center justify-between gap-3 py-2 cursor-pointer">
+              <div className="flex items-center gap-3 min-w-0">
+                <Bell size={14} className="text-zinc-400 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm text-zinc-200">{lbl('Notificaciones en la app', 'In-app notifications')}</p>
+                  <p className="text-[11px] text-zinc-500">{lbl('Aparecen en la campana del dashboard.', 'Show up in the dashboard bell.')}</p>
+                </div>
+              </div>
+              <input type="checkbox" checked={user.notify_inapp ?? true}
+                onChange={e => toggleNotifPref('notify_inapp', e.target.checked)}
+                className="w-9 h-5 rounded-full appearance-none bg-zinc-700 checked:bg-emerald-500 relative cursor-pointer transition-colors
+                  before:content-[''] before:absolute before:top-0.5 before:w-4 before:h-4 before:rounded-full before:bg-white before:transition-transform
+                  before:left-0.5 checked:before:translate-x-4" />
+            </label>
+
+            {/* Email */}
+            <label className="flex items-center justify-between gap-3 py-2 cursor-pointer">
+              <div className="flex items-center gap-3 min-w-0">
+                <Mail size={14} className="text-zinc-400 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm text-zinc-200">{lbl('Por email', 'By email')}</p>
+                  <p className="text-[11px] text-zinc-500 truncate">{user.email}</p>
+                </div>
+              </div>
+              <input type="checkbox" checked={user.notify_email ?? true}
+                onChange={e => toggleNotifPref('notify_email', e.target.checked)}
+                className="w-9 h-5 rounded-full appearance-none bg-zinc-700 checked:bg-emerald-500 relative cursor-pointer transition-colors
+                  before:content-[''] before:absolute before:top-0.5 before:w-4 before:h-4 before:rounded-full before:bg-white before:transition-transform
+                  before:left-0.5 checked:before:translate-x-4" />
+            </label>
+
+            {/* Telegram */}
+            <div className="flex items-center justify-between gap-3 py-2">
+              <div className="flex items-center gap-3 min-w-0">
+                <Send size={14} className="text-zinc-400 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm text-zinc-200">{lbl('Por Telegram', 'By Telegram')}</p>
+                  <p className="text-[11px] text-zinc-500">
+                    {user.telegram_chat_id
+                      ? <>✅ {lbl('Vinculado', 'Linked')}{user.telegram_username && <> como <span className="text-emerald-400">@{user.telegram_username}</span></>}</>
+                      : lbl('No vinculado. Vincula tu cuenta para recibir avisos en Telegram.', 'Not linked. Connect your account to receive Telegram notifications.')
+                    }
+                  </p>
+                </div>
+              </div>
+              <input type="checkbox" checked={user.notify_telegram ?? true}
+                disabled={!user.telegram_chat_id}
+                onChange={e => toggleNotifPref('notify_telegram', e.target.checked)}
+                className="w-9 h-5 rounded-full appearance-none bg-zinc-700 checked:bg-emerald-500 relative cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed
+                  before:content-[''] before:absolute before:top-0.5 before:w-4 before:h-4 before:rounded-full before:bg-white before:transition-transform
+                  before:left-0.5 checked:before:translate-x-4" />
+            </div>
+
+            {/* Botón vincular/desvincular Telegram */}
+            <div className="pl-7">
+              {user.telegram_chat_id ? (
+                <button onClick={unlinkTelegram}
+                  className="text-xs text-red-400 hover:text-red-300 transition-colors">
+                  {lbl('Desvincular Telegram', 'Unlink Telegram')}
+                </button>
+              ) : (
+                <button onClick={startTelegramLink}
+                  className="flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
+                  <Send size={11} /> {lbl('Conectar mi Telegram', 'Connect my Telegram')}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Modal de vinculación Telegram */}
+        {tgLink && (
+          <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center px-4"
+            onClick={() => { setTgLink(null); setTgPolling(false) }}>
+            <div onClick={e => e.stopPropagation()}
+              className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-md p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-white text-sm flex items-center gap-2">
+                  <Send size={14} className="text-emerald-400" />
+                  {lbl('Conecta tu Telegram', 'Connect your Telegram')}
+                </h3>
+                <button onClick={() => { setTgLink(null); setTgPolling(false) }} className="text-zinc-500 hover:text-white"><X size={18} /></button>
+              </div>
+              <ol className="text-xs text-zinc-300 space-y-2 mb-4 list-decimal list-inside">
+                <li>{lbl('Haz clic en el botón de abajo (abrirá Telegram)', 'Click the button below (opens Telegram)')}</li>
+                <li>{lbl('Cuando se abra el chat con @' + tgLink.bot_username + ', toca "Iniciar" o envía /start', 'When the chat with @' + tgLink.bot_username + ' opens, tap "Start" or send /start')}</li>
+                <li>{lbl('Espera el mensaje de confirmación del bot', 'Wait for the bot confirmation message')}</li>
+              </ol>
+              <a href={tgLink.link} target="_blank" rel="noopener"
+                className="w-full block text-center bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-3 rounded-xl text-sm mb-3">
+                {lbl('Abrir Telegram', 'Open Telegram')} →
+              </a>
+              <div className="bg-zinc-800 rounded-lg p-2 flex items-center gap-2 mb-3">
+                <input readOnly value={tgLink.link}
+                  onFocus={(e) => e.target.select()}
+                  className="flex-1 bg-transparent text-[10px] text-zinc-400 font-mono outline-none" />
+                <button onClick={copyTgLink} className="text-zinc-400 hover:text-emerald-400">
+                  {tgCopied ? <Check size={12} /> : <Copy size={12} />}
+                </button>
+              </div>
+              <div className="text-center text-xs text-zinc-500 flex items-center justify-center gap-2">
+                <Loader2 size={12} className="animate-spin" />
+                {lbl('Esperando confirmación de Telegram...', 'Waiting for Telegram confirmation...')}
+              </div>
+              <p className="text-[10px] text-zinc-600 text-center mt-3">
+                {lbl('Este link expira en 1 hora.', 'This link expires in 1 hour.')}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* ── Hándicap + Trend Chart ── */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">

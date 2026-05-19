@@ -16,6 +16,9 @@ from app.services.notifications import notify_user
 from app.services.email_templates import (
     tpl_booking_confirmed, tpl_booking_cancelled, tpl_welcome_to_club, tpl_tee_time_reminder,
 )
+from app.services.telegram_templates import (
+    tg_booking_confirmed, tg_booking_cancelled, tg_welcome_to_club, tg_tee_time_reminder,
+)
 
 
 # ─── Helpers de permisos por rol (Clubs SaaS Fase 1) ───────────────────────
@@ -127,17 +130,19 @@ async def join_club_by_invite_code(payload: JoinByCodePayload, background_tasks:
     db.add(member)
     await db.flush()
 
-    # Notificación de bienvenida (v1.20.0)
+    # Notificación de bienvenida (v1.20.0 + v1.21.0)
     panel_url = f"https://golfbookvip.com/es/club/{club.id}"
     invite_link = f"https://golfbookvip.com/es/join-club/{club.invite_code}" if club.invite_code else None
     user_name = f"{current_user.first_name or ''} {current_user.last_name or ''}".strip() or current_user.email
     subject, html = tpl_welcome_to_club(user_name, club.name, panel_url, invite_link)
+    tg_text = tg_welcome_to_club(user_name, club.name, panel_url, invite_link)
     await notify_user(
         db, current_user.id, "welcome_club",
         f"Bienvenido a {club.name}",
         f"Eres socio activo del club. Visita tu panel para ver tee times y estado de cuenta.",
         data={"club_id": str(club.id)},
         email_subject=subject, email_html=html,
+        telegram_text=tg_text,
         background_tasks=background_tasks,
     )
 
@@ -701,7 +706,7 @@ async def add_member_to_padron(club_id: uuid.UUID, payload: MemberAddPayload,
         db.add(member)
     await db.flush()
 
-    # Notificación de bienvenida (v1.20.0). Solo si es nuevo socio activo (no reactivación silenciosa).
+    # Notificación de bienvenida (v1.20.0 + v1.21.0)
     club_res = await db.execute(select(Club).where(Club.id == club_id))
     club_obj = club_res.scalar_one_or_none()
     if club_obj:
@@ -709,12 +714,14 @@ async def add_member_to_padron(club_id: uuid.UUID, payload: MemberAddPayload,
         invite_link = f"https://golfbookvip.com/es/join-club/{club_obj.invite_code}" if club_obj.invite_code else None
         user_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email
         subject, html = tpl_welcome_to_club(user_name, club_obj.name, panel_url, invite_link)
+        tg_text = tg_welcome_to_club(user_name, club_obj.name, panel_url, invite_link)
         await notify_user(
             db, user.id, "welcome_club",
             f"Bienvenido a {club_obj.name}",
             "Fuiste agregado al padrón del club. Visita tu panel.",
             data={"club_id": str(club_obj.id)},
             email_subject=subject, email_html=html,
+            telegram_text=tg_text,
             background_tasks=background_tasks,
         )
 
@@ -877,9 +884,8 @@ async def import_padron(club_id: uuid.UUID, payload: PadronImportPayload,
     if club.invite_code:
         invite_link = f"https://golfbookvip.com/es/join-club/{club.invite_code}"
 
-    # Notificación de bienvenida a cada socio recién creado/reactivado (v1.20.0)
+    # Notificación de bienvenida a cada socio recién creado/reactivado (v1.20.0 + v1.21.0)
     panel_url = f"https://golfbookvip.com/es/club/{club.id}"
-    welcomed_emails = {c["email"] for c in created} | {r["email"] for r in reactivated}
     for entry in [*created, *reactivated]:
         email_norm = entry["email"]
         user = users_by_email.get(email_norm)
@@ -887,12 +893,14 @@ async def import_padron(club_id: uuid.UUID, payload: PadronImportPayload,
             continue
         user_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email
         subject, html = tpl_welcome_to_club(user_name, club.name, panel_url, invite_link)
+        tg_text = tg_welcome_to_club(user_name, club.name, panel_url, invite_link)
         await notify_user(
             db, user.id, "welcome_club",
             f"Bienvenido a {club.name}",
             "Fuiste agregado al padrón del club. Visita tu panel.",
             data={"club_id": str(club.id)},
             email_subject=subject, email_html=html,
+            telegram_text=tg_text,
             background_tasks=background_tasks,
         )
 
@@ -1445,11 +1453,18 @@ async def book_tee_time(club_id: uuid.UUID, slot_id: int, data: BookingCreate,
         players_list=resolved, total_charged=fees_result["total_charged"],
         panel_url=panel_url,
     )
+    tg_text = tg_booking_confirmed(
+        user_name="", club_name=club.name,
+        slot_date=slot_date_str, slot_time=slot_time_str,
+        players=resolved, total_charged=fees_result["total_charged"],
+        panel_url=panel_url,
+    )
     for uid in notify_user_ids:
         await notify_user(
             db, uid, "booking_confirmed", title, body,
             data={"booking_id": str(booking.id), "club_id": str(club.id), "slot_id": slot_id},
             email_subject=subject, email_html=html,
+            telegram_text=tg_text,
             background_tasks=background_tasks,
         )
 
@@ -1695,6 +1710,11 @@ async def cancel_booking(club_id: uuid.UUID, booking_id: uuid.UUID,
             slot_date=slot_date_str, slot_time=slot_time_str,
             refunded_total=refund_result["refunded_total"], panel_url=panel_url,
         )
+        tg_text = tg_booking_cancelled(
+            user_name="", club_name=club.name,
+            slot_date=slot_date_str, slot_time=slot_time_str,
+            refunded_total=refund_result["refunded_total"], panel_url=panel_url,
+        )
         title = f"Reserva cancelada · {club.name}"
         body = f"Tee time {slot_date_str} {slot_time_str}"
         for uid in notify_ids:
@@ -1702,6 +1722,7 @@ async def cancel_booking(club_id: uuid.UUID, booking_id: uuid.UUID,
                 db, uid, "booking_cancelled", title, body,
                 data={"booking_id": str(booking.id), "club_id": str(club.id)},
                 email_subject=subject, email_html=html,
+                telegram_text=tg_text,
                 background_tasks=background_tasks,
             )
 

@@ -7,6 +7,63 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.21.0] - 2026-05-19
+
+### Added — Notificaciones por Telegram + UI de preferencias
+
+v1.20 entregó email + in-app pero el canal "móvil instantáneo" estaba pendiente. Inicialmente se consideró WhatsApp via bot OpenClaw, pero **Telegram es técnicamente superior** (API oficial gratuita, sin dependencias intermediarias, sin costo por mensaje, bots no se bloquean). El bot `@GolfBookVip_bot` ya fue creado por el usuario en BotFather.
+
+**Schema migration:**
+```sql
+ALTER TABLE users ADD COLUMN telegram_chat_id VARCHAR(50);
+ALTER TABLE users ADD COLUMN telegram_username VARCHAR(100);
+ALTER TABLE users ADD COLUMN notify_telegram BOOLEAN NOT NULL DEFAULT TRUE;
+CREATE INDEX idx_users_telegram_chat ON users(telegram_chat_id) WHERE telegram_chat_id IS NOT NULL;
+CREATE TABLE telegram_link_tokens (
+  token VARCHAR(40) PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT now(), used_at TIMESTAMPTZ
+);
+CREATE INDEX idx_telegram_tokens_user ON telegram_link_tokens(user_id);
+```
+
+**Backend:**
+- `app/core/config.py` — agregado `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME` (default `GolfBookVip_bot`), `TELEGRAM_WEBHOOK_SECRET`. Token vive solo en `.env` del servidor — nunca en repo.
+- `app/models/telegram.py` (NUEVO) — `TelegramLinkToken` con token (PK), user_id (FK), created_at, used_at.
+- `app/models/user.py` extendido — `telegram_chat_id`, `telegram_username`, `notify_telegram` (default True).
+- `app/services/telegram.py` (NUEVO) — `send_telegram(chat_id, text)` async via `httpx` a `api.telegram.org/bot<TOKEN>/sendMessage` con parse_mode=HTML. Si token no configurado → warning + False (mismo patrón que mailer). También `get_me()` y `set_webhook()` helpers.
+- `app/services/telegram_templates.py` (NUEVO) — 4 templates HTML compactos (3-8 líneas con emojis y formato Telegram): `tg_booking_confirmed`, `tg_booking_cancelled`, `tg_welcome_to_club`, `tg_tee_time_reminder`, más `tg_account_linked`, `tg_account_unlinked`, `tg_link_invalid` para el flujo de vinculación.
+- `app/services/notifications.py` — `notify_user()` extendido con parámetro opcional `telegram_text`. Si `user.notify_telegram` + `user.telegram_chat_id` + `telegram_text` → agenda `send_telegram` via BackgroundTasks.
+- `app/api/v1/users.py` — endpoints `POST /me/telegram/link-token` (genera token efímero 1h) y `DELETE /me/telegram` (desvincular). `UserOut` y `UserUpdate` extendidos con flags y campos de Telegram.
+- `app/api/v1/telegram.py` (NUEVO) — `POST /telegram/webhook/{secret}` que recibe updates del bot, detecta `/start <token>`, valida el token, vincula `telegram_chat_id` con el user, responde con mensaje de confirmación.
+- Triggers Telegram integrados en los **6 puntos** que ya tenían email/in-app: `book_tee_time`, `cancel_booking`, `join_club_by_invite_code`, `add_member_to_padron`, `import_padron`, `register` con club_code, y el cron de recordatorios.
+
+**Frontend:**
+- `/profile` — sección nueva "Notificaciones" con:
+  - 3 toggles (in-app, email, Telegram)
+  - Estado de vinculación de Telegram (badge "✅ Vinculado como @user" o "No vinculado")
+  - Botón "Conectar mi Telegram" abre modal con instrucciones + deep link `https://t.me/GolfBookVip_bot?start=<token>`
+  - Modal hace polling cada 3s a `/users/me` para detectar `telegram_chat_id` poblado y cerrarse automáticamente
+  - Botón "Copiar link" como fallback
+  - Botón "Desvincular Telegram" cuando está vinculado
+- PATCH `/users/me` ahora acepta `notify_email`, `notify_inapp`, `notify_telegram` — se aplican on-change del toggle.
+
+### Setup post-deploy (Claude lo hizo)
+
+1. Token + secret agregados a `/opt/golfbookvip/.env` vía SSH (nunca commiteados)
+2. Migración SQL aplicada en producción
+3. Webhook registrado vía `setWebhook` → `https://api.golfbookvip.com/api/v1/telegram/webhook/<secret>`
+
+### Notes
+
+- **Telegram es opt-in**: por defecto `notify_telegram=True` pero sin `telegram_chat_id` no se envía nada. El socio debe vincular activamente.
+- **El bot solo procesa `/start <token>` por ahora.** Bot conversacional (`/saldo`, `/proxima_reserva`, etc.) queda para v1.22+.
+- **Tokens de vinculación expiran a 1h** y son single-use (se marcan `used_at` cuando se consumen).
+- **WhatsApp queda definitivamente postergado.** Si en el futuro hay demanda específica, OpenClaw u otro proveedor se integra con el mismo patrón (helper + template + flag de user + parámetro opcional en notify_user).
+- **El push notifications via Firebase** sigue pendiente (config existe desde v1.0, falta SW activo).
+
+---
+
 ## [1.20.0] - 2026-05-19
 
 ### Added — Email sender real + notificaciones de Clubs SaaS

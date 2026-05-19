@@ -15,6 +15,7 @@ from app.models.course import Course
 from app.models.handicap import ScoreDifferential
 from app.services.notifications import notify_user
 from app.services.email_templates import tpl_tee_time_reminder
+from app.services.telegram_templates import tg_tee_time_reminder
 
 router = APIRouter()
 
@@ -627,12 +628,16 @@ async def process_tee_time_reminders(
                 subject, html = tpl_tee_time_reminder(
                     user_name, club.name, slot_date_str, slot_time_str, hours, panel_url,
                 )
+                tg_text = tg_tee_time_reminder(
+                    user_name, club.name, slot_date_str, slot_time_str, hours, panel_url,
+                )
                 title = f"Recordatorio · Tee time en {hours}h" if hours >= 12 else f"Recordatorio · Tee time en 1h"
                 body = f"{club.name} · {slot_date_str} {slot_time_str}"
                 await notify_user(
                     db, uid, "tee_time_reminder", title, body,
                     data={"booking_id": str(booking.id), "club_id": str(club.id), "hours_until": hours},
                     email_subject=subject, email_html=html,
+                    telegram_text=tg_text,
                     background_tasks=None,  # sync send dentro del cron
                 )
             # Marcar flag

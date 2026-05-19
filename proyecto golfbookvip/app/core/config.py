@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     # Token para que el cron externo dispare el endpoint de recordatorios
     REMINDER_CRON_TOKEN: str = ""
 
+    # Telegram (v1.21)
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_BOT_USERNAME: str = "GolfBookVip_bot"
+    TELEGRAM_WEBHOOK_SECRET: str = ""
+
     # Storage
     STORAGE_TYPE: str = "local"
     MEDIA_ROOT: str = "/app/media"

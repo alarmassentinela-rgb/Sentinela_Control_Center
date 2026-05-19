@@ -19,6 +19,11 @@ class UserOut(BaseModel):
     is_verified: bool
     email_verified: bool
     is_superadmin: bool = False
+    notify_email: bool = True
+    notify_inapp: bool = True
+    notify_telegram: bool = True
+    telegram_chat_id: Optional[str] = None
+    telegram_username: Optional[str] = None
     created_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
@@ -33,6 +38,9 @@ class UserUpdate(BaseModel):
     city: Optional[str] = None
     gender: Optional[str] = None
     birthdate: Optional[date] = None
+    notify_email: Optional[bool] = None
+    notify_inapp: Optional[bool] = None
+    notify_telegram: Optional[bool] = None
 
 
 class HandicapInit(BaseModel):

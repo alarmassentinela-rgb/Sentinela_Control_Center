@@ -11,6 +11,7 @@ from app.models.club import Club, ClubMember
 from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest, ForgotPasswordRequest, ResetPasswordRequest
 from app.services.notifications import notify_user
 from app.services.email_templates import tpl_welcome_to_club
+from app.services.telegram_templates import tg_welcome_to_club
 import base64
 from datetime import date
 
@@ -62,17 +63,21 @@ async def register(data: RegisterRequest, background_tasks: BackgroundTasks, db:
             db.add(member)
             joined_club_id = str(club.id)
             joined_club_name = club.name
-            # Notificación bienvenida (v1.20.0)
+            # Notificación bienvenida (v1.20.0 + v1.21.0). Nota: Telegram aún no está
+            # vinculado en este momento (el usuario acaba de registrarse), pero el
+            # template se pasa por si en el futuro lo vincula y aún tiene la notification.
             panel_url = f"https://golfbookvip.com/es/club/{club.id}"
             invite_link = f"https://golfbookvip.com/es/join-club/{club.invite_code}" if club.invite_code else None
             user_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email
             subject, html = tpl_welcome_to_club(user_name, club.name, panel_url, invite_link)
+            tg_text = tg_welcome_to_club(user_name, club.name, panel_url, invite_link)
             await notify_user(
                 db, user.id, "welcome_club",
                 f"Bienvenido a {club.name}",
                 "Te registraste a través del link de invitación. Visita tu panel del club.",
                 data={"club_id": str(club.id)},
                 email_subject=subject, email_html=html,
+                telegram_text=tg_text,
                 background_tasks=background_tasks,
             )
         # Si el código es inválido, registramos al usuario sin fallar; el frontend muestra warning
