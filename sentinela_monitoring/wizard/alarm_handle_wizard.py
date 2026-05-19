@@ -145,16 +145,23 @@ class AlarmHandleWizard(models.TransientModel):
     # ---------- Acciones de despacho (compatibilidad con existentes) ----------
 
     def action_request_patrol_from_wizard(self):
+        """Solicita autorización al cliente. NO crea venta todavía."""
         self.ensure_one()
-        # Marca tracking + delega al método del evento si existe
-        self.patrol_dispatched = True
-        if hasattr(self.alarm_event_id, 'action_request_service_authorization'):
-            return self.alarm_event_id.action_request_service_authorization('patrol')
+        self.alarm_event_id.action_request_service_authorization('patrol')
+        return True
+
+    def action_authorize_patrol_from_wizard(self):
+        """Marca autorizado + crea sale.order si el producto está configurado."""
+        self.ensure_one()
+        self.alarm_event_id.action_authorize_service()
         return True
 
     def action_dispatch_patrol(self):
+        """Despacha la patrulla. Si autorizada y aún sin venta, la crea."""
         self.ensure_one()
         self.patrol_dispatched = True
+        if self.alarm_event_id.extra_service_authorized and not self.alarm_event_id.sale_order_id:
+            self.alarm_event_id._create_service_sale_order()
         return True
 
     def action_create_technical_ticket(self):

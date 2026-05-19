@@ -82,6 +82,8 @@
                         <group string="Botones rápidos">
                             <button name="action_request_patrol_from_wizard" string="Solicitar autorización patrulla"
                                     type="object" class="btn-warning" invisible="extra_service_authorized"/>
+                            <button name="action_authorize_patrol_from_wizard" string="Autorizar y generar venta"
+                                    type="object" class="btn-info" invisible="extra_service_authorized"/>
                             <button name="action_dispatch_patrol" string="Despachar patrulla"
                                     type="object" class="btn-danger"
                                     invisible="not extra_service_authorized and not patrol_included"/>

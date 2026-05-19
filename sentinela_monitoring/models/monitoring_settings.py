@@ -16,6 +16,15 @@ class MonitoringSettings(models.TransientModel):
         help="La URL que se incrustará en el Radar del Dashboard."
     )
 
+    # F2.6 — Cobranza al atender
+    patrol_service_product_id = fields.Many2one(
+        'product.product',
+        string='Producto Servicio de Patrulla',
+        config_parameter='sentinela_monitoring.patrol_service_product_id',
+        help='Producto / servicio que se factura cuando el operador despacha '
+             'una patrulla autorizada. Se usa para crear la sale.order automática.',
+    )
+
     @api.model
     def get_values(self):
         res = super(MonitoringSettings, self).get_values()

@@ -526,6 +526,108 @@ class AlarmEvent(models.Model):
         self.write({'status': 'resolved', 'end_date': datetime.now(),
                     'current_operator_id': False, 'claimed_at': False})
         return True
+
+    # ---------- F2.6 Cobranza al atender ----------
+
+    def action_request_service_authorization(self, service_type='patrol', method=None):
+        """Marca que se solicitó autorización al cliente para un servicio
+        extra (patrulla por default). NO crea sale.order todavía — eso pasa
+        en action_authorize_service una vez el cliente confirma.
+
+        El parámetro service_type queda como reservado para futuras variantes
+        (técnico extra, etc.). Hoy solo 'patrol'."""
+        self.ensure_one()
+        vals = {'patrol_strategy': 'request_auth'}
+        if method in ('telegram', 'phone'):
+            vals['authorization_method'] = method
+        self.write(vals)
+        self.message_post(body=_(
+            "Solicitada autorización de %s al cliente (vía %s)."
+        ) % (service_type, method or 'no especificado'))
+        return True
+
+    def action_authorize_service(self):
+        """Marca el servicio como autorizado y crea la sale.order si está
+        configurado el producto patrol_service_product_id."""
+        self.ensure_one()
+        self.write({'extra_service_authorized': True})
+        if not self.sale_order_id:
+            self._create_service_sale_order()
+        return True
+
+    def _create_service_sale_order(self):
+        """Crea sale.order con una línea del patrol_service_product_id
+        configurado en monitoring.settings. No-op si el producto no está
+        configurado o si ya existe sale_order_id."""
+        self.ensure_one()
+        if self.sale_order_id:
+            return self.sale_order_id
+        product_id_str = self.env['ir.config_parameter'].sudo().get_param(
+            'sentinela_monitoring.patrol_service_product_id')
+        if not product_id_str:
+            _logger.warning("F2.6: patrol_service_product_id no configurado, "
+                            "no se crea sale.order para evento %s", self.name)
+            return False
+        try:
+            product_id = int(product_id_str)
+        except (TypeError, ValueError):
+            _logger.warning("F2.6: patrol_service_product_id inválido (%s)", product_id_str)
+            return False
+        product = self.env['product.product'].sudo().browse(product_id).exists()
+        if not product:
+            _logger.warning("F2.6: producto %s no existe", product_id)
+            return False
+        if not self.partner_id:
+            raise UserError(_("El evento no tiene cliente — no se puede crear venta."))
+        so = self.env['sale.order'].sudo().create({
+            'partner_id': self.partner_id.id,
+            'origin': f"Evento alarma {self.name}",
+            'order_line': [(0, 0, {
+                'product_id': product.id,
+                'name': f"{product.name} — Evento {self.name}",
+                'product_uom_qty': 1.0,
+            })],
+        })
+        self.write({'sale_order_id': so.id})
+        self.message_post(body=_(
+            "Venta automática creada: %s — por servicio de patrulla."
+        ) % so.name)
+        return so
+
+    def action_open_sale_order(self):
+        """Botón en form para abrir la sale.order asociada."""
+        self.ensure_one()
+        if not self.sale_order_id:
+            raise UserError(_("Este evento no tiene venta asociada."))
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'sale.order',
+            'res_id': self.sale_order_id.id,
+            'view_mode': 'form',
+            'target': 'current',
+        }
+
+    def get_sale_order_info(self):
+        """Devuelve resumen sudo de la sale.order para clientes que no tienen
+        permiso directo (e.g., api_user usado por receiver/tests)."""
+        self.ensure_one()
+        if not self.sale_order_id:
+            return {}
+        so = self.sale_order_id.sudo()
+        lines = [{
+            'product_id': l.product_id.id,
+            'product_name': l.product_id.display_name,
+            'qty': l.product_uom_qty,
+            'price_unit': l.price_unit,
+        } for l in so.order_line]
+        return {
+            'id': so.id,
+            'name': so.name,
+            'partner_id': so.partner_id.id,
+            'origin': so.origin,
+            'amount_total': so.amount_total,
+            'lines': lines,
+        }
     def _cron_fetch_ucm_recordings(self):
         """
         Robot que sincroniza grabaciones de forma transparente.

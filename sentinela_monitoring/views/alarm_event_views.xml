@@ -79,6 +79,14 @@
                         <field name="assigned_operator_id"/>
                         <field name="assigned_technician_id"/>
                     </group>
+                    <group string="Servicio extra (cobranza)" invisible="not extra_service_authorized and not sale_order_id">
+                        <field name="extra_service_authorized"/>
+                        <field name="authorization_method"/>
+                        <field name="patrol_strategy"/>
+                        <field name="sale_order_id" readonly="1"/>
+                        <button name="action_open_sale_order" type="object" string="Abrir venta"
+                                class="btn-link" invisible="not sale_order_id"/>
+                    </group>
                     <group string="Descripción">
                         <field name="description" nolabel="1"/>
                     </group>

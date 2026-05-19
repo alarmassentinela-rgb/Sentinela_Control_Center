@@ -17,6 +17,9 @@
                                 </div>
                             </div>
                         </setting>
+                        <setting string="Servicio de Patrulla" help="Producto que se factura al despachar una patrulla autorizada (F2.6).">
+                            <field name="patrol_service_product_id"/>
+                        </setting>
                     </block>
                 </app>
             </xpath>
