@@ -1,0 +1,14 @@
+[Unit]
+Description=Sentinela Alarm Receiver — LAB (Sentinela_STAGING, port 10002)
+After=network.target
+
+[Service]
+Type=simple
+User=egarza
+WorkingDirectory=/home/egarza/sentinela_receiver
+ExecStart=/usr/bin/python3 /home/egarza/sentinela_receiver/receiver.py /home/egarza/sentinela_receiver/config_lab.yaml
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

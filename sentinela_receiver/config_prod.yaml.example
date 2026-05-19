@@ -1,0 +1,12 @@
+instance_name: prod
+odoo_url: http://192.168.3.2:8070
+odoo_db: Sentinela_V18
+odoo_user: api_user
+odoo_password: __SET_ME__
+listen_port: 10001
+bind_ip: 0.0.0.0
+parser: contact_id
+heartbeat_interval_seconds: 10
+socket_timeout_seconds: 10
+log_level: INFO
+log_file: /home/egarza/sentinela_receiver/logs/receiver_prod.log

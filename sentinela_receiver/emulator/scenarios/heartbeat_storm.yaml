@@ -1,0 +1,29 @@
+name: Heartbeat storm
+description: |
+  20 señales rápidas (200ms entre cada una) desde la cuenta de prueba.
+  Sirve para verificar que el receiver no pierde señales bajo ráfaga y que
+  cada una crea su signal/event correspondiente.
+target:
+  host: 192.168.3.2
+  port: 10002
+steps:
+  - {account: "1025", code: "602", zone: "001", delay_after: 0.2, note: "storm 1/20"}
+  - {account: "1025", code: "602", zone: "002", delay_after: 0.2, note: "storm 2/20"}
+  - {account: "1025", code: "602", zone: "003", delay_after: 0.2, note: "storm 3/20"}
+  - {account: "1025", code: "602", zone: "004", delay_after: 0.2, note: "storm 4/20"}
+  - {account: "1025", code: "602", zone: "005", delay_after: 0.2, note: "storm 5/20"}
+  - {account: "1025", code: "602", zone: "006", delay_after: 0.2, note: "storm 6/20"}
+  - {account: "1025", code: "602", zone: "007", delay_after: 0.2, note: "storm 7/20"}
+  - {account: "1025", code: "602", zone: "008", delay_after: 0.2, note: "storm 8/20"}
+  - {account: "1025", code: "602", zone: "009", delay_after: 0.2, note: "storm 9/20"}
+  - {account: "1025", code: "602", zone: "010", delay_after: 0.2, note: "storm 10/20"}
+  - {account: "1025", code: "602", zone: "011", delay_after: 0.2, note: "storm 11/20"}
+  - {account: "1025", code: "602", zone: "012", delay_after: 0.2, note: "storm 12/20"}
+  - {account: "1025", code: "602", zone: "013", delay_after: 0.2, note: "storm 13/20"}
+  - {account: "1025", code: "602", zone: "014", delay_after: 0.2, note: "storm 14/20"}
+  - {account: "1025", code: "602", zone: "015", delay_after: 0.2, note: "storm 15/20"}
+  - {account: "1025", code: "602", zone: "016", delay_after: 0.2, note: "storm 16/20"}
+  - {account: "1025", code: "602", zone: "017", delay_after: 0.2, note: "storm 17/20"}
+  - {account: "1025", code: "602", zone: "018", delay_after: 0.2, note: "storm 18/20"}
+  - {account: "1025", code: "602", zone: "019", delay_after: 0.2, note: "storm 19/20"}
+  - {account: "1025", code: "602", zone: "020", delay_after: 0, note: "storm 20/20"}

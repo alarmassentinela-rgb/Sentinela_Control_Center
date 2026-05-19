@@ -1,0 +1,33 @@
+name: Panel offline + recuperación
+description: |
+  Valida el flujo de detección y auto-cierre de paneles offline (F1 #2).
+
+  Setup manual previo (en STAGING):
+    1. Picar un device de prueba, ej. id 4 / account 1025.
+    2. En el form: poner expected_heartbeat_hours = 0.01 (36 segundos).
+    3. Backdatear last_communication para que ya esté en mora:
+       UPDATE sentinela_monitoring_device
+       SET last_communication = NOW() - INTERVAL '1 hour'
+       WHERE id = 4;
+    4. Disparar el cron manualmente (ir.cron "Sentinela: Detección de Paneles
+       Offline" → Run Manually) o esperar la hora.
+    5. Verificar que se creó un sentinela.alarm.event con marker [AUTO_OFFLINE]
+       en la descripción y status=active.
+
+  Recuperación (este escenario):
+    Manda una señal de la cuenta 1025. process_signal_from_receptor escribe
+    device.last_communication = now() y cierra el evento [AUTO_OFFLINE] del
+    mismo device a status=resolved con nota.
+
+  Limpieza:
+    UPDATE sentinela_monitoring_device SET expected_heartbeat_hours = 0
+    WHERE id = 4;
+target:
+  host: 192.168.3.2
+  port: 10002
+steps:
+  - account: "1025"
+    code: "602"
+    zone: "000"
+    delay_after: 0
+    note: Periodic test — debería disparar auto-cierre del trouble [AUTO_OFFLINE]

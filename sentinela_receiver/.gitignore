@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+logs/
+*.log
+
+# Configs con credenciales — solo se commitea el .example
+config_lab.yaml
+config_prod.yaml

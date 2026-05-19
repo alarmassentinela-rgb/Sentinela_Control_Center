@@ -1,0 +1,12 @@
+instance_name: lab
+odoo_url: http://192.168.3.2:8070
+odoo_db: Sentinela_STAGING
+odoo_user: api_user
+odoo_password: __SET_ME__
+listen_port: 10002
+bind_ip: 0.0.0.0
+parser: contact_id
+heartbeat_interval_seconds: 10
+socket_timeout_seconds: 10
+log_level: DEBUG
+log_file: /home/egarza/sentinela_receiver/logs/receiver_lab.log

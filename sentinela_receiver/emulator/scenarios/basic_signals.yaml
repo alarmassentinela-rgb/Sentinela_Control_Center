@@ -1,0 +1,53 @@
+name: Basic signals
+description: |
+  Una de cada señal Contact ID común desde la cuenta de prueba 1025.
+  Cubre robo, fuego, pánico, médica, apertura/cierre, test, AC, batería.
+target:
+  host: 192.168.3.2
+  port: 10002
+steps:
+  - account: "1025"
+    code: "130"
+    zone: "003"
+    delay_after: 2
+    note: Burglary alarm (E130)
+  - account: "1025"
+    code: "110"
+    zone: "002"
+    delay_after: 2
+    note: Fire alarm (E110)
+  - account: "1025"
+    code: "120"
+    zone: "001"
+    delay_after: 2
+    note: Panic (E120)
+  - account: "1025"
+    code: "100"
+    zone: "001"
+    delay_after: 2
+    note: Medical (E100)
+  - account: "1025"
+    code: "401"
+    zone: "005"
+    delay_after: 2
+    note: Open / Disarm (E401)
+  - account: "1025"
+    code: "402"
+    zone: "005"
+    delay_after: 2
+    note: Close / Arm (E402)
+  - account: "1025"
+    code: "602"
+    zone: "000"
+    delay_after: 2
+    note: Periodic test (E602)
+  - account: "1025"
+    code: "301"
+    zone: "000"
+    delay_after: 2
+    note: AC loss (E301)
+  - account: "1025"
+    code: "302"
+    zone: "000"
+    delay_after: 0
+    note: Low battery (E302)
