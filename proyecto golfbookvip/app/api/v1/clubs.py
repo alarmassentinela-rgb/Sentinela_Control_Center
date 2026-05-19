@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, BackgroundTasks
 from sqlalchemy import select, func, text, or_
 from pydantic import BaseModel, Field
 from typing import Optional
@@ -8,9 +8,14 @@ import secrets
 from datetime import date, datetime, time as time_cls, timedelta, timezone
 
 from app.core.deps import CurrentUser, DB
+from app.core.config import settings
 from app.models.club import Club, ClubStaff, ClubMember, MembershipType, MemberAccount, AccountTransaction
 from app.models.tee_time import TeeTimeSlot, TeeTimeBooking, TeeTimeBookingPlayer
 from app.models.user import User
+from app.services.notifications import notify_user
+from app.services.email_templates import (
+    tpl_booking_confirmed, tpl_booking_cancelled, tpl_welcome_to_club, tpl_tee_time_reminder,
+)
 
 
 # ─── Helpers de permisos por rol (Clubs SaaS Fase 1) ───────────────────────
@@ -86,7 +91,8 @@ async def get_club_by_invite_code(invite_code: str, db: DB):
 
 
 @router.post("/by-code/join")
-async def join_club_by_invite_code(payload: JoinByCodePayload, current_user: CurrentUser, db: DB):
+async def join_club_by_invite_code(payload: JoinByCodePayload, background_tasks: BackgroundTasks,
+                                     current_user: CurrentUser, db: DB):
     """AUTH: vincula al usuario actual como miembro del club asociado al invite_code.
     Idempotente: si ya es miembro retorna already_member=true sin error."""
     code = (payload.invite_code or "").strip().upper()
@@ -120,6 +126,21 @@ async def join_club_by_invite_code(payload: JoinByCodePayload, current_user: Cur
     )
     db.add(member)
     await db.flush()
+
+    # Notificación de bienvenida (v1.20.0)
+    panel_url = f"https://golfbookvip.com/es/club/{club.id}"
+    invite_link = f"https://golfbookvip.com/es/join-club/{club.invite_code}" if club.invite_code else None
+    user_name = f"{current_user.first_name or ''} {current_user.last_name or ''}".strip() or current_user.email
+    subject, html = tpl_welcome_to_club(user_name, club.name, panel_url, invite_link)
+    await notify_user(
+        db, current_user.id, "welcome_club",
+        f"Bienvenido a {club.name}",
+        f"Eres socio activo del club. Visita tu panel para ver tee times y estado de cuenta.",
+        data={"club_id": str(club.id)},
+        email_subject=subject, email_html=html,
+        background_tasks=background_tasks,
+    )
+
     return {
         "club_id": str(club.id),
         "club_name": club.name,
@@ -629,6 +650,7 @@ async def list_padron(club_id: uuid.UUID, current_user: CurrentUser, db: DB,
 
 @router.post("/{club_id}/padron", status_code=201)
 async def add_member_to_padron(club_id: uuid.UUID, payload: MemberAddPayload,
+                                background_tasks: BackgroundTasks,
                                 current_user: CurrentUser, db: DB):
     """Agrega un usuario al padrón. Requiere manager+ del club."""
     await _require_club_role(db, club_id, current_user, "manager")
@@ -678,6 +700,24 @@ async def add_member_to_padron(club_id: uuid.UUID, payload: MemberAddPayload,
         )
         db.add(member)
     await db.flush()
+
+    # Notificación de bienvenida (v1.20.0). Solo si es nuevo socio activo (no reactivación silenciosa).
+    club_res = await db.execute(select(Club).where(Club.id == club_id))
+    club_obj = club_res.scalar_one_or_none()
+    if club_obj:
+        panel_url = f"https://golfbookvip.com/es/club/{club_obj.id}"
+        invite_link = f"https://golfbookvip.com/es/join-club/{club_obj.invite_code}" if club_obj.invite_code else None
+        user_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email
+        subject, html = tpl_welcome_to_club(user_name, club_obj.name, panel_url, invite_link)
+        await notify_user(
+            db, user.id, "welcome_club",
+            f"Bienvenido a {club_obj.name}",
+            "Fuiste agregado al padrón del club. Visita tu panel.",
+            data={"club_id": str(club_obj.id)},
+            email_subject=subject, email_html=html,
+            background_tasks=background_tasks,
+        )
+
     return {
         "id": str(member.id),
         "user_id": str(user.id),
@@ -708,6 +748,7 @@ class PadronImportPayload(BaseModel):
 
 @router.post("/{club_id}/padron/import", status_code=200)
 async def import_padron(club_id: uuid.UUID, payload: PadronImportPayload,
+                          background_tasks: BackgroundTasks,
                           current_user: CurrentUser, db: DB):
     """Importa filas del padrón en batch. Vincula a `users` existentes por email.
     Los emails no encontrados se reportan; no se crea cuenta automática (sin SMTP).
@@ -835,6 +876,25 @@ async def import_padron(club_id: uuid.UUID, payload: PadronImportPayload,
     invite_link = None
     if club.invite_code:
         invite_link = f"https://golfbookvip.com/es/join-club/{club.invite_code}"
+
+    # Notificación de bienvenida a cada socio recién creado/reactivado (v1.20.0)
+    panel_url = f"https://golfbookvip.com/es/club/{club.id}"
+    welcomed_emails = {c["email"] for c in created} | {r["email"] for r in reactivated}
+    for entry in [*created, *reactivated]:
+        email_norm = entry["email"]
+        user = users_by_email.get(email_norm)
+        if not user:
+            continue
+        user_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email
+        subject, html = tpl_welcome_to_club(user_name, club.name, panel_url, invite_link)
+        await notify_user(
+            db, user.id, "welcome_club",
+            f"Bienvenido a {club.name}",
+            "Fuiste agregado al padrón del club. Visita tu panel.",
+            data={"club_id": str(club.id)},
+            email_subject=subject, email_html=html,
+            background_tasks=background_tasks,
+        )
 
     return {
         "total_rows": len(payload.rows),
@@ -1275,6 +1335,7 @@ async def delete_tee_time_slot(club_id: uuid.UUID, slot_id: int,
 
 @router.post("/{club_id}/tee-times/{slot_id}/book", status_code=201)
 async def book_tee_time(club_id: uuid.UUID, slot_id: int, data: BookingCreate,
+                         background_tasks: BackgroundTasks,
                          current_user: CurrentUser, db: DB):
     """Reservar un slot con lista detallada de jugadores. v1.17.0.
 
@@ -1365,8 +1426,33 @@ async def book_tee_time(club_id: uuid.UUID, slot_id: int, data: BookingCreate,
     # 9. Auto-cobro de green fees (v1.18.0): postea AccountTransaction por cada player payable
     fees_result = await _post_booking_fees(db, booking, slot, club, current_user)
 
-    # 10. Response (resolved con nombres + info de cobro)
+    # 10. Notificaciones (v1.20.0): in-app + email al booker y a cada player con cuenta
     resolved = await _resolve_players_for_booking(db, booking.id)
+    panel_url = f"https://golfbookvip.com/es/club/{club.id}"
+    slot_date_str = slot.date.isoformat()
+    slot_time_str = slot.time.strftime("%H:%M")
+    notify_user_ids: set[uuid.UUID] = {booker_id}
+    for r in resolved:
+        if r.get("user_id"):
+            notify_user_ids.add(uuid.UUID(r["user_id"]))
+        if r.get("sponsor_id"):
+            notify_user_ids.add(uuid.UUID(r["sponsor_id"]))
+    title = f"Reserva confirmada · {club.name}"
+    body = f"Tee time {slot_date_str} {slot_time_str}"
+    subject, html = tpl_booking_confirmed(
+        user_name="", club_name=club.name,
+        slot_date=slot_date_str, slot_time=slot_time_str,
+        players_list=resolved, total_charged=fees_result["total_charged"],
+        panel_url=panel_url,
+    )
+    for uid in notify_user_ids:
+        await notify_user(
+            db, uid, "booking_confirmed", title, body,
+            data={"booking_id": str(booking.id), "club_id": str(club.id), "slot_id": slot_id},
+            email_subject=subject, email_html=html,
+            background_tasks=background_tasks,
+        )
+
     total_fees = sum(r["fee_amount"] for r in resolved)
     return {
         "id": str(booking.id),
@@ -1561,6 +1647,7 @@ async def _refund_booking_fees(db, booking: TeeTimeBooking, current_user: User) 
 
 @router.delete("/{club_id}/tee-times/bookings/{booking_id}")
 async def cancel_booking(club_id: uuid.UUID, booking_id: uuid.UUID,
+                          background_tasks: BackgroundTasks,
                           current_user: CurrentUser, db: DB):
     """Cancelar reserva. El dueño de la reserva o staff (manager+) pueden cancelar."""
     b_res = await db.execute(
@@ -1585,6 +1672,39 @@ async def cancel_booking(club_id: uuid.UUID, booking_id: uuid.UUID,
     booking.status = "cancelled"
     booking.cancelled_at = datetime.now(timezone.utc)
     await db.flush()
+
+    # Notificaciones de cancelación (v1.20.0)
+    c_res = await db.execute(select(Club).where(Club.id == club_id))
+    club = c_res.scalar_one_or_none()
+    if club:
+        panel_url = f"https://golfbookvip.com/es/club/{club.id}/tee-times"
+        slot_date_str = slot.date.isoformat()
+        slot_time_str = slot.time.strftime("%H:%M")
+        # Notificar al booker + sponsors + cualquier player con cuenta
+        players_res = await db.execute(
+            select(TeeTimeBookingPlayer).where(TeeTimeBookingPlayer.booking_id == booking_id)
+        )
+        notify_ids: set[uuid.UUID] = {booking.user_id}
+        for p in players_res.scalars().all():
+            if p.user_id:
+                notify_ids.add(p.user_id)
+            if p.sponsor_id:
+                notify_ids.add(p.sponsor_id)
+        subject, html = tpl_booking_cancelled(
+            user_name="", club_name=club.name,
+            slot_date=slot_date_str, slot_time=slot_time_str,
+            refunded_total=refund_result["refunded_total"], panel_url=panel_url,
+        )
+        title = f"Reserva cancelada · {club.name}"
+        body = f"Tee time {slot_date_str} {slot_time_str}"
+        for uid in notify_ids:
+            await notify_user(
+                db, uid, "booking_cancelled", title, body,
+                data={"booking_id": str(booking.id), "club_id": str(club.id)},
+                email_subject=subject, email_html=html,
+                background_tasks=background_tasks,
+            )
+
     return {
         "id": str(booking.id),
         "status": "cancelled",

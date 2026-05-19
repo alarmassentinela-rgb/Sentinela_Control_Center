@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, BackgroundTasks
 from sqlalchemy import select
 from jose import JWTError
 from datetime import datetime, timezone
@@ -9,6 +9,8 @@ from app.models.user import User
 from app.models.handicap import PlayerStats
 from app.models.club import Club, ClubMember
 from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest, ForgotPasswordRequest, ResetPasswordRequest
+from app.services.notifications import notify_user
+from app.services.email_templates import tpl_welcome_to_club
 import base64
 from datetime import date
 
@@ -16,7 +18,7 @@ router = APIRouter()
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-async def register(data: RegisterRequest, db: DB):
+async def register(data: RegisterRequest, background_tasks: BackgroundTasks, db: DB):
     # Verificar duplicados
     existing = await db.execute(
         select(User).where((User.email == data.email) | (User.username == data.username))
@@ -60,6 +62,19 @@ async def register(data: RegisterRequest, db: DB):
             db.add(member)
             joined_club_id = str(club.id)
             joined_club_name = club.name
+            # Notificación bienvenida (v1.20.0)
+            panel_url = f"https://golfbookvip.com/es/club/{club.id}"
+            invite_link = f"https://golfbookvip.com/es/join-club/{club.invite_code}" if club.invite_code else None
+            user_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email
+            subject, html = tpl_welcome_to_club(user_name, club.name, panel_url, invite_link)
+            await notify_user(
+                db, user.id, "welcome_club",
+                f"Bienvenido a {club.name}",
+                "Te registraste a través del link de invitación. Visita tu panel del club.",
+                data={"club_id": str(club.id)},
+                email_subject=subject, email_html=html,
+                background_tasks=background_tasks,
+            )
         # Si el código es inválido, registramos al usuario sin fallar; el frontend muestra warning
 
     access = create_access_token(str(user.id))

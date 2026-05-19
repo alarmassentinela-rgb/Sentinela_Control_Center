@@ -42,6 +42,8 @@ class TeeTimeBooking(Base):
     booked_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now())
     confirmed_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
     cancelled_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    reminder_24h_sent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    reminder_1h_sent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
 class TeeTimeBookingPlayer(Base):

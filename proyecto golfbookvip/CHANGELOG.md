@@ -7,6 +7,57 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.20.0] - 2026-05-19
+
+### Added — Email sender real + notificaciones de Clubs SaaS
+
+El módulo Clubs SaaS llevaba 10 releases sin emitir una sola notificación. Un socio podía ser agregado al padrón, recibir un cargo de $1500, ser cancelado de una reserva, y nunca enterarse. v1.20 cierra ese hueco: notificaciones in-app + email para los 4 eventos clave del módulo, y enciende el SMTP real (stub desde v1.0).
+
+**Schema migration:**
+```sql
+ALTER TABLE users ADD COLUMN notify_email BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE users ADD COLUMN notify_inapp BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE tee_time_bookings ADD COLUMN reminder_24h_sent BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE tee_time_bookings ADD COLUMN reminder_1h_sent BOOLEAN NOT NULL DEFAULT FALSE;
+```
+
+**Backend:**
+- `app/services/mailer.py` (NUEVO) — `send_email(to, subject, html)` async usando `fastapi-mail` (ya en deps). Si MAIL_USERNAME/PASSWORD vacíos, log warning y retorna False sin romper. NUNCA lanza.
+- `app/services/email_templates.py` (NUEVO) — 4 templates HTML inline ES:
+  - `tpl_booking_confirmed` con desglose de jugadores y total cobrado
+  - `tpl_booking_cancelled` con monto reembolsado
+  - `tpl_welcome_to_club` con link al panel + invite_link copiable
+  - `tpl_tee_time_reminder` para recordatorios 24h y 1h
+- `app/services/notifications.py` extendido con `notify_user(db, user_id, type, title, body, data, email_subject, email_html, background_tasks)` — lee preferencias del user, crea in-app si `notify_inapp`, agenda email task si `notify_email`. Helper legacy `push()` se mantiene para compatibilidad.
+- `app/core/config.py` — `MAIL_FROM` cambió default a `contacto@golfbookvip.com`. Agregado `MAIL_STARTTLS`, `MAIL_TIMEOUT`, `REMINDER_CRON_TOKEN`.
+- Triggers integrados en `app/api/v1/clubs.py`:
+  - `book_tee_time` → notifica `booking_confirmed` al booker + players con cuenta + sponsors
+  - `cancel_booking` → notifica `booking_cancelled` al booker + payers
+  - `join_club_by_invite_code` → `welcome_club`
+  - `add_member_to_padron` → `welcome_club`
+  - `import_padron` → `welcome_club` por cada socio creado/reactivado
+- `app/api/v1/auth.py` — `register` con `club_code` también dispara `welcome_club`.
+- `app/api/v1/admin.py` — endpoint `POST /admin/notifications/process-reminders` (auth via header `X-Reminder-Token` contra `settings.REMINDER_CRON_TOKEN`). Procesa ventanas 22-26h y 30min-1h30min, marca flags `reminder_*_sent`. Idempotente.
+
+**Frontend:**
+- `/notifications/page.tsx` — iconos + colores para los 4 tipos nuevos: `booking_confirmed` (Calendar emerald), `booking_cancelled` (CalendarX orange), `welcome_club` (Building2 emerald), `tee_time_reminder` (Bell amber).
+- Bell counter sigue contando todos los unread (sin cambios).
+
+### Changed
+
+- `User.notify_email` y `User.notify_inapp` default `True` — sin UI todavía; opt-out manual via SQL o futura página `/profile`.
+- `MAIL_FROM` ahora apunta a `contacto@golfbookvip.com` (cuenta del dominio que el usuario configurará).
+
+### Notes
+
+- **SMTP no se rompe sin configurar.** Si `MAIL_USERNAME` o `MAIL_PASSWORD` están vacíos en `.env`, los envíos hacen log de warning y siguen — los bookings y otros endpoints funcionan normal con solo in-app.
+- **Recordatorios** requieren un cron externo que llame al endpoint cada N minutos con el header de token. Ejemplo: `*/15 * * * * curl -X POST -H "X-Reminder-Token: $TOKEN" https://api.golfbookvip.com/api/v1/admin/notifications/process-reminders`. Si `REMINDER_CRON_TOKEN` está vacío en `.env`, el endpoint queda inaccesible (safe-by-default).
+- **WhatsApp via OpenClaw** queda para v1.21 — necesita definir el contrato del bot.
+- **UI de preferencias** en `/profile` queda para v1.21+.
+- **Templates externos / locale-aware** (Jinja2 + `User.preferred_locale`) para v1.21+.
+
+---
+
 ## [1.19.0] - 2026-05-19
 
 ### Added — Wizard de creación de club + Import CSV de padrón

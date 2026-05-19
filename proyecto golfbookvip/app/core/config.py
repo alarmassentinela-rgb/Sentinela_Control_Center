@@ -37,10 +37,14 @@ class Settings(BaseSettings):
     # Email
     MAIL_USERNAME: str = ""
     MAIL_PASSWORD: str = ""
-    MAIL_FROM: str = "noreply@golfbookvip.com"
+    MAIL_FROM: str = "contacto@golfbookvip.com"
     MAIL_PORT: int = 587
     MAIL_SERVER: str = "smtp.gmail.com"
     MAIL_FROM_NAME: str = "GolfBookVIP"
+    MAIL_STARTTLS: bool = True
+    MAIL_TIMEOUT: int = 15
+    # Token para que el cron externo dispare el endpoint de recordatorios
+    REMINDER_CRON_TOKEN: str = ""
 
     # Storage
     STORAGE_TYPE: str = "local"

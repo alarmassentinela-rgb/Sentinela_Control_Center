@@ -1,17 +1,20 @@
 """Super-admin dashboard API — restricted to users with is_superadmin=True."""
-from fastapi import APIRouter, HTTPException
-from sqlalchemy import select, func, case, text
+from fastapi import APIRouter, HTTPException, Header
+from sqlalchemy import select, func, case, text, and_
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel, Field
 from typing import Optional
 
 from app.core.deps import CurrentUser, DB
+from app.core.config import settings
 from app.core.security import create_reset_token
 from app.models.user import User
 from app.models.round import Round, RoundPlayer
 from app.models.score import Score
 from app.models.course import Course
 from app.models.handicap import ScoreDifferential
+from app.services.notifications import notify_user
+from app.services.email_templates import tpl_tee_time_reminder
 
 router = APIRouter()
 
@@ -544,3 +547,103 @@ async def remove_club_staff(club_id: str, user_id: str, current_user: CurrentUse
     staff.is_active = False
     await db.flush()
     return {"club_id": club_id, "user_id": user_id, "is_active": False}
+
+
+# ─── Recordatorios de tee time (cron) — v1.20.0 ────────────────────────────
+
+
+@router.post("/notifications/process-reminders")
+async def process_tee_time_reminders(
+    db: DB,
+    x_reminder_token: Optional[str] = Header(default=None),
+):
+    """Endpoint cron-friendly: envía recordatorios 24h y 1h antes del tee time.
+
+    Auth via header `X-Reminder-Token` con valor igual a `settings.REMINDER_CRON_TOKEN`.
+    Si el token no está configurado en .env, el endpoint queda inaccesible (safe-by-default).
+
+    Idempotente: solo envía si el flag correspondiente está en False; luego
+    lo marca True. Se puede ejecutar cada N minutos sin duplicar mensajes.
+    """
+    if not settings.REMINDER_CRON_TOKEN or x_reminder_token != settings.REMINDER_CRON_TOKEN:
+        raise HTTPException(status_code=403, detail="Token de cron inválido o no configurado")
+
+    from app.models.tee_time import TeeTimeBooking, TeeTimeSlot, TeeTimeBookingPlayer
+    from app.models.club import Club
+
+    now = datetime.now(timezone.utc)
+    sent_24h = 0
+    sent_1h = 0
+
+    # Funcion auxiliar para combinar slot.date + slot.time → datetime UTC aproximado
+    # (asumimos timezone del club; aquí simplificamos y comparamos en UTC naive)
+    async def _process_window(hours: int, lower: timedelta, upper: timedelta, flag_attr: str) -> int:
+        """Busca bookings cuyo slot esté entre now+lower y now+upper, flag en False, y envía."""
+        target_lower = (now + lower).replace(tzinfo=None)
+        target_upper = (now + upper).replace(tzinfo=None)
+        # Query: bookings confirmed con slot dentro de la ventana
+        flag_col = getattr(TeeTimeBooking, flag_attr)
+        q = (
+            select(TeeTimeBooking, TeeTimeSlot, Club)
+            .join(TeeTimeSlot, TeeTimeSlot.id == TeeTimeBooking.slot_id)
+            .join(Club, Club.id == TeeTimeSlot.club_id)
+            .where(
+                TeeTimeBooking.status == "confirmed",
+                flag_col == False,  # noqa: E712
+                # Filtro grueso por date primero (rápido por índice)
+                TeeTimeSlot.date >= target_lower.date(),
+                TeeTimeSlot.date <= target_upper.date(),
+            )
+        )
+        rows = (await db.execute(q)).all()
+        count_sent = 0
+        for booking, slot, club in rows:
+            # Verificación fina del datetime combinado
+            slot_dt = datetime.combine(slot.date, slot.time)
+            if not (target_lower <= slot_dt <= target_upper):
+                continue
+
+            # Iterar players con user_id
+            p_res = await db.execute(
+                select(TeeTimeBookingPlayer).where(TeeTimeBookingPlayer.booking_id == booking.id)
+            )
+            user_ids = set()
+            for p in p_res.scalars().all():
+                if p.user_id:
+                    user_ids.add(p.user_id)
+            # Incluir al booker por si no está en los players
+            user_ids.add(booking.user_id)
+
+            panel_url = f"https://golfbookvip.com/es/club/{club.id}/tee-times"
+            slot_date_str = slot.date.isoformat()
+            slot_time_str = slot.time.strftime("%H:%M")
+            for uid in user_ids:
+                # Cargar user para nombre
+                u_res = await db.execute(select(User).where(User.id == uid))
+                u = u_res.scalar_one_or_none()
+                if not u:
+                    continue
+                user_name = f"{u.first_name or ''} {u.last_name or ''}".strip() or u.email
+                subject, html = tpl_tee_time_reminder(
+                    user_name, club.name, slot_date_str, slot_time_str, hours, panel_url,
+                )
+                title = f"Recordatorio · Tee time en {hours}h" if hours >= 12 else f"Recordatorio · Tee time en 1h"
+                body = f"{club.name} · {slot_date_str} {slot_time_str}"
+                await notify_user(
+                    db, uid, "tee_time_reminder", title, body,
+                    data={"booking_id": str(booking.id), "club_id": str(club.id), "hours_until": hours},
+                    email_subject=subject, email_html=html,
+                    background_tasks=None,  # sync send dentro del cron
+                )
+            # Marcar flag
+            setattr(booking, flag_attr, True)
+            count_sent += 1
+        return count_sent
+
+    # Ventana 24h: slot entre now+22h y now+26h
+    sent_24h = await _process_window(24, timedelta(hours=22), timedelta(hours=26), "reminder_24h_sent")
+    # Ventana 1h: slot entre now+30min y now+1h30min
+    sent_1h = await _process_window(1, timedelta(minutes=30), timedelta(hours=1, minutes=30), "reminder_1h_sent")
+
+    await db.flush()
+    return {"reminders_24h": sent_24h, "reminders_1h": sent_1h}

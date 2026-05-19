@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Bell, UserPlus, Play, CheckCircle2, TrendingDown, TrendingUp, CheckCheck } from 'lucide-react'
+import { ArrowLeft, Bell, UserPlus, Play, CheckCircle2, TrendingDown, TrendingUp, CheckCheck, Calendar, CalendarX, Building2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
@@ -17,21 +17,30 @@ interface Notif {
 }
 
 const TYPE_ICON: Record<string, React.ReactNode> = {
-  round_invite:     <UserPlus size={16} className="text-emerald-400" />,
-  round_started:    <Play size={16} className="text-blue-400" />,
-  round_finished:   <CheckCircle2 size={16} className="text-zinc-400" />,
-  handicap_updated: <TrendingDown size={16} className="text-yellow-400" />,
-  score_update:     <Play size={16} className="text-emerald-400" />,
-  bet_result:       <CheckCircle2 size={16} className="text-yellow-400" />,
+  round_invite:       <UserPlus size={16} className="text-emerald-400" />,
+  round_started:      <Play size={16} className="text-blue-400" />,
+  round_finished:     <CheckCircle2 size={16} className="text-zinc-400" />,
+  handicap_updated:   <TrendingDown size={16} className="text-yellow-400" />,
+  score_update:       <Play size={16} className="text-emerald-400" />,
+  bet_result:         <CheckCircle2 size={16} className="text-yellow-400" />,
+  // v1.20.0 — Clubs SaaS notifications
+  booking_confirmed:  <Calendar size={16} className="text-emerald-400" />,
+  booking_cancelled:  <CalendarX size={16} className="text-orange-400" />,
+  welcome_club:       <Building2 size={16} className="text-emerald-400" />,
+  tee_time_reminder:  <Bell size={16} className="text-amber-400" />,
 }
 
 const TYPE_BG: Record<string, string> = {
-  round_invite:     'bg-emerald-500/10 border-emerald-500/20',
-  round_started:    'bg-blue-500/10 border-blue-500/20',
-  round_finished:   'bg-zinc-800 border-zinc-700',
-  handicap_updated: 'bg-yellow-500/10 border-yellow-500/20',
-  score_update:     'bg-emerald-500/10 border-emerald-500/20',
-  bet_result:       'bg-yellow-500/10 border-yellow-500/20',
+  round_invite:       'bg-emerald-500/10 border-emerald-500/20',
+  round_started:      'bg-blue-500/10 border-blue-500/20',
+  round_finished:     'bg-zinc-800 border-zinc-700',
+  handicap_updated:   'bg-yellow-500/10 border-yellow-500/20',
+  score_update:       'bg-emerald-500/10 border-emerald-500/20',
+  bet_result:         'bg-yellow-500/10 border-yellow-500/20',
+  booking_confirmed:  'bg-emerald-500/10 border-emerald-500/20',
+  booking_cancelled:  'bg-orange-500/10 border-orange-500/20',
+  welcome_club:       'bg-emerald-500/10 border-emerald-500/20',
+  tee_time_reminder:  'bg-amber-500/10 border-amber-500/20',
 }
 
 function timeAgo(iso: string, locale: string): string {
