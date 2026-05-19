@@ -16,6 +16,7 @@ access_alarm_priority_manager,sentinela.alarm.priority.manager,model_sentinela_a
 access_device_alarm_config_user,sentinela.device.alarm.config.user,model_sentinela_device_alarm_config,base.group_user,1,1,1,1
 access_device_alarm_config_manager,sentinela.device.alarm.config.manager,model_sentinela_device_alarm_config,base.group_system,1,1,1,1
 access_alarm_handle_wizard_user,sentinela.alarm.handle.wizard.user,model_sentinela_alarm_handle_wizard,base.group_user,1,1,1,1
+access_alarm_wizard_contact_attempt_user,sentinela.alarm.wizard.contact.attempt.user,model_sentinela_alarm_wizard_contact_attempt,base.group_user,1,1,1,1
 access_monitoring_config_user,sentinela.monitoring.config.user,model_sentinela_monitoring_config,base.group_user,1,1,1,1
 access_monitoring_contact_user,sentinela.monitoring.contact.user,model_sentinela_monitoring_contact,base.group_user,1,1,1,1
 access_monitoring_contact_manager,sentinela.monitoring.contact.manager,model_sentinela_monitoring_contact,base.group_system,1,1,1,1

@@ -5,72 +5,128 @@
         <field name="model">sentinela.alarm.handle.wizard</field>
         <field name="arch" type="xml">
             <form string="Centro de Control de Alarma">
+                <header>
+                    <field name="state" widget="statusbar" statusbar_visible="verify,contact,dispatch,close"/>
+                </header>
                 <sheet>
                     <div class="oe_title mb-3">
                         <h1 class="d-flex align-items-center gap-2">
                             <span class="badge bg-dark text-white"><field name="account_number"/></span>
                             <field name="partner_id" readonly="1"/>
+                            <field name="priority_id" widget="badge" readonly="1"/>
                         </h1>
                         <h3 class="text-danger fw-bold"><field name="alarm_event_id" readonly="1"/></h3>
                     </div>
 
-                    <div class="row">
-                        <!-- COLUMNA IZQUIERDA: INFORMACION -->
-                        <div class="col-7 border-end">
-                            <group string="📍 Datos del Lugar">
-                                <field name="address_display" readonly="1" nolabel="1"/>
-                                <field name="site_phone" readonly="1" widget="phone" string="📞 Teléfono Lugar"/>
-                                <button name="action_open_maps" type="object" string="🗺️ Ver Ruta en Google Maps" 
-                                    class="btn-link" invisible="not google_maps_link"/>
-                                <field name="google_maps_link" invisible="1"/>
-                            </group>
-
-                            <group string="👥 Contactos del Cliente">
-                                <field name="contact_ids" readonly="1" nolabel="1">
-                                    <list>
-                                        <field name="user_number" string="ID"/>
-                                        <field name="name" string="Nombre"/>
-                                        <field name="phone" widget="phone" string="Teléfono"/>
-                                        <field name="relation" string="Relación"/>
-                                    </list>
-                                </field>
-                            </group>
-
-                            <group string="🚨 Números de Emergencia Locales">
-                                <div class="d-flex flex-wrap gap-2">
-                                    <span class="badge bg-danger p-2 fs-6">🚒 Bomberos: 911</span>
-                                    <span class="badge bg-primary p-2 fs-6">👮 Policía: 911</span>
-                                    <span class="badge bg-success p-2 fs-6">🚑 Cruz Roja: 065</span>
-                                </div>
-                            </group>
+                    <!-- ============ PASO 1 — VERIFICAR ============ -->
+                    <div invisible="state != 'verify'">
+                        <div class="alert alert-info" role="alert">
+                            <strong>Paso 1:</strong> Revisa la ubicación, los contactos y las señales recientes. Si es obviamente falsa alarma o el cliente ya confirmó OK, usa los atajos abajo para saltar al cierre.
                         </div>
-
-                        <!-- COLUMNA DERECHA: ACCION Y BITACORA -->
-                        <div class="col-5">
-                            <group string="✍️ Bitácora de Atención">
-                                <field name="notes" nolabel="1" widget="text" class="bg-light fw-bold" 
-                                    placeholder="REGISTRE CADA PASO AQUÍ... Ej: Llamada realizada, patrulla despachada."
-                                    style="min-height: 200px; border: 2px solid #ccc;"/>
-                            </group>
-                            
-                            <group string="⏱️ Rastro Reciente">
-                                <field name="recent_signal_ids" readonly="1" nolabel="1">
-                                    <list limit="3">
-                                        <field name="received_date" string="Hora"/>
-                                        <field name="description" string="Señal"/>
-                                    </list>
-                                </field>
-                            </group>
-                        </div>
+                        <group string="Datos del Lugar">
+                            <field name="address_display" readonly="1" nolabel="1"/>
+                            <field name="site_phone" readonly="1" widget="phone" string="Teléfono Lugar"/>
+                            <button name="action_open_maps" type="object" string="Ver Ruta en Google Maps"
+                                class="btn-link" invisible="not google_maps_link"/>
+                            <field name="google_maps_link" invisible="1"/>
+                        </group>
+                        <group string="Señales recientes del panel">
+                            <field name="recent_signal_ids" readonly="1" nolabel="1">
+                                <list limit="5">
+                                    <field name="received_date" string="Hora"/>
+                                    <field name="alarm_code" string="Código"/>
+                                    <field name="zone" string="Zona"/>
+                                    <field name="description" string="Descripción"/>
+                                </list>
+                            </field>
+                        </group>
+                        <group string="Números de Emergencia">
+                            <div class="d-flex flex-wrap gap-2">
+                                <span class="badge bg-danger p-2 fs-6">Bomberos: 911</span>
+                                <span class="badge bg-primary p-2 fs-6">Policía: 911</span>
+                                <span class="badge bg-success p-2 fs-6">Cruz Roja: 065</span>
+                            </div>
+                        </group>
                     </div>
+
+                    <!-- ============ PASO 2 — CONTACTAR ============ -->
+                    <div invisible="state != 'contact'">
+                        <div class="alert alert-warning" role="alert">
+                            <strong>Paso 2:</strong> Intenta contactar a las personas registradas. Marca el resultado de cada llamada.
+                        </div>
+                        <group string="Contactos del cliente">
+                            <field name="contact_attempt_ids" nolabel="1">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="contact_name" readonly="1"/>
+                                    <field name="contact_phone" widget="phone" readonly="1"/>
+                                    <field name="relation" readonly="1"/>
+                                    <field name="status"/>
+                                    <field name="attempt_notes"/>
+                                </list>
+                            </field>
+                        </group>
+                    </div>
+
+                    <!-- ============ PASO 3 — DESPACHAR ============ -->
+                    <div invisible="state != 'dispatch'">
+                        <div class="alert alert-warning" role="alert">
+                            <strong>Paso 3:</strong> Si la alarma es real o no hubo respuesta del cliente, despacha la respuesta correspondiente.
+                        </div>
+                        <group string="Acciones de despacho">
+                            <field name="patrol_dispatched"/>
+                            <field name="fsm_order_created"/>
+                            <field name="authorities_called"/>
+                            <field name="dispatch_notes" placeholder="Detalles del despacho (placa de patrulla, hora estimada, etc.)"/>
+                        </group>
+                        <group string="Botones rápidos">
+                            <button name="action_request_patrol_from_wizard" string="Solicitar autorización patrulla"
+                                    type="object" class="btn-warning" invisible="extra_service_authorized"/>
+                            <button name="action_dispatch_patrol" string="Despachar patrulla"
+                                    type="object" class="btn-danger"
+                                    invisible="not extra_service_authorized and not patrol_included"/>
+                            <button name="action_create_technical_ticket" string="Crear orden técnica (FSM)"
+                                    type="object" class="btn-info"/>
+                        </group>
+                    </div>
+
+                    <!-- ============ PASO 4 — CIERRE ============ -->
+                    <div invisible="state != 'close'">
+                        <div class="alert alert-success" role="alert">
+                            <strong>Paso 4:</strong> Selecciona el motivo de cierre. Las notas se consolidan automáticamente con la bitácora y contactos.
+                        </div>
+                        <group string="Motivo y notas finales">
+                            <field name="close_reason" required="state == 'close'"/>
+                            <field name="final_notes" placeholder="Notas finales que verá el cliente / quedará en el historial."/>
+                        </group>
+                    </div>
+
+                    <!-- Bitácora siempre visible -->
+                    <group string="Bitácora del operador (libre)">
+                        <field name="notes" nolabel="1" placeholder="Anota cualquier dato adicional aquí. Se guarda al cerrar."/>
+                    </group>
                 </sheet>
                 <footer>
-                    <button name="action_request_patrol_from_wizard" string="💰 SOLICITAR AUTORIZACION PATRULLA" type="object" class="btn-warning" icon="fa-telegram" invisible="extra_service_authorized"/>
-                    <button name="action_dispatch_patrol" string="🚨 DESPACHAR PATRULLA" type="object" class="btn-danger" icon="fa-shield" invisible="not extra_service_authorized and not patrol_included"/>
-                    <button name="action_create_technical_ticket" string="🔧 FALLA TECNICA" type="object" class="btn-warning" icon="fa-wrench"/>
-                    <button name="action_pause_event" string="⏸️ PONER EN PAUSA" type="object" class="btn-secondary" icon="fa-pause"/>
-                    <button name="action_close_event" string="✅ FINALIZAR Y CERRAR" type="object" class="btn-primary" icon="fa-check-circle"/>
-                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                    <!-- Navegación -->
+                    <button name="action_prev_step" string="Atrás" type="object"
+                            class="btn-secondary" invisible="state == 'verify'"/>
+                    <button name="action_next_step" string="Siguiente" type="object"
+                            class="btn-primary" invisible="state == 'close'"/>
+
+                    <!-- Atajos al cierre -->
+                    <button name="action_shortcut_false_alarm" string="Atajo: Falsa alarma"
+                            type="object" class="btn-outline-secondary"
+                            invisible="state == 'close'"/>
+                    <button name="action_shortcut_customer_ok" string="Atajo: Cliente OK"
+                            type="object" class="btn-outline-secondary"
+                            invisible="state == 'close'"/>
+
+                    <!-- Acciones de paso 4 -->
+                    <button name="action_finalize" string="Resolver y cerrar"
+                            type="object" class="btn-success" invisible="state != 'close'"/>
+                    <button name="action_pause_event" string="Pausar"
+                            type="object" class="btn-secondary"/>
+                    <button string="Cancelar" class="btn-link" special="cancel"/>
                 </footer>
             </form>
         </field>

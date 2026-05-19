@@ -114,7 +114,8 @@ export class MonitoringDashboard extends Component {
 
     async handleAlarm(eventId) {
         if (!eventId) return;
-        await this.orm.write("sentinela.alarm.event", [eventId], { status: 'in_progress' });
+        // F2.4: el wizard llama action_acknowledge en default_get para respetar
+        // claim/SLA. NO escribir status='in_progress' aquí — eso saltaba el lock.
         this.action.doAction({
             type: 'ir.actions.act_window',
             res_model: 'sentinela.alarm.handle.wizard',
