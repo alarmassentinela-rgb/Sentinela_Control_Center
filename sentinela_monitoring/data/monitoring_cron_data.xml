@@ -32,5 +32,21 @@
             <field name="interval_type">hours</field>
             <field name="active" eval="True"/>
         </record>
+
+        <record id="action_release_stale_locks" model="ir.actions.server">
+            <field name="name">Release Stale Event Locks</field>
+            <field name="model_id" ref="model_sentinela_alarm_event"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_release_stale_locks()</field>
+        </record>
+
+        <record id="ir_cron_release_stale_locks" model="ir.cron">
+            <field name="name">Sentinela: Liberación de Locks de Eventos Inactivos</field>
+            <field name="ir_actions_server_id" ref="action_release_stale_locks"/>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">2</field>
+            <field name="interval_type">minutes</field>
+            <field name="active" eval="True"/>
+        </record>
     </data>
 </odoo>

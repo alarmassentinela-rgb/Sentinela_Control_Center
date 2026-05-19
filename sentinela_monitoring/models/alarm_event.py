@@ -1,9 +1,14 @@
 from odoo import models, fields, api, _
+from odoo.exceptions import UserError, AccessError
 from datetime import datetime, timedelta
 import logging
 import json
 
 _logger = logging.getLogger(__name__)
+
+# F2.1 — minutos antes de que un cron libere automáticamente un claim sin actividad
+LOCK_TIMEOUT_MINUTES = 15
+
 
 class AlarmEvent(models.Model):
     _name = 'sentinela.alarm.event'
@@ -60,6 +65,22 @@ class AlarmEvent(models.Model):
     assigned_operator_id = fields.Many2one('res.users', string='Operador Asignado')
     assigned_technician_id = fields.Many2one('res.users', string='Técnico Asignado')
     response_team_id = fields.Many2one('sentinela.response.team', string='Equipo de Respuesta')
+
+    # F2.1 — Claim / Mutex operador
+    current_operator_id = fields.Many2one('res.users', string='Operador en Curso', tracking=True,
+        help='Operador que tomó el evento. Mientras esté seteado, otros operadores no pueden modificarlo.')
+    claimed_at = fields.Datetime(string='Tomado el', tracking=True,
+        help='Cuándo el operador en curso tomó el evento. Si pasa LOCK_TIMEOUT_MINUTES sin actividad, el cron libera el lock.')
+    is_locked_by_other = fields.Boolean(string='Bloqueado por otro', compute='_compute_lock_state')
+    can_release = fields.Boolean(string='Puedo soltar', compute='_compute_lock_state')
+
+    @api.depends('current_operator_id')
+    def _compute_lock_state(self):
+        uid = self.env.uid
+        for rec in self:
+            holder = rec.current_operator_id
+            rec.is_locked_by_other = bool(holder) and holder.id != uid
+            rec.can_release = bool(holder) and holder.id == uid
     
     location = fields.Char(string='Ubicación', related='device_id.location', store=True)
     latitude = fields.Float(string='Latitud', related='device_id.latitude', store=True)
@@ -287,10 +308,113 @@ class AlarmEvent(models.Model):
             })
         return signals
 
-    def action_acknowledge(self): self.write({'status': 'acknowledged', 'assigned_operator_id': self.env.uid})
-    def action_escalate(self): self.write({'status': 'escalated'})
-    def action_assign_technician(self): self.write({'status': 'in_progress', 'assigned_technician_id': self.env.uid})
-    def action_resolve(self): self.write({'status': 'resolved', 'end_date': datetime.now()})
+    # ---------- F2.1 Claim / Mutex ----------
+
+    def _ensure_claim_held(self):
+        """Levanta UserError si quien actúa no es el current_operator_id.
+        Si el evento no tiene operador en curso, también falla (el operador
+        debe Tomar primero)."""
+        for rec in self:
+            if not rec.current_operator_id:
+                raise UserError(_("Toma el evento (botón 'Tomar') antes de operarlo."))
+            if rec.current_operator_id.id != self.env.uid:
+                raise UserError(_(
+                    "El evento está en atención por %s desde %s. "
+                    "Pídele que lo suelte o usa 'Forzar Liberación' si tienes permisos."
+                ) % (rec.current_operator_id.name, rec.claimed_at))
+
+    def _try_claim(self):
+        """Toma el lock si está libre o expirado. Devuelve True si quedó tomado por self.env.uid.
+        Race-safe: re-lee desde DB con FOR UPDATE."""
+        self.ensure_one()
+        # cuando hay un operador, si el lock es viejo (>timeout) lo robamos
+        if self.current_operator_id:
+            if self.current_operator_id.id == self.env.uid:
+                # ya lo tengo: refresco timestamp
+                self.sudo().write({'claimed_at': fields.Datetime.now()})
+                return True
+            cutoff = fields.Datetime.now() - timedelta(minutes=LOCK_TIMEOUT_MINUTES)
+            if self.claimed_at and self.claimed_at >= cutoff:
+                return False  # otro lo tiene activo
+        self.sudo().write({
+            'current_operator_id': self.env.uid,
+            'claimed_at': fields.Datetime.now(),
+        })
+        return True
+
+    def action_claim_event(self):
+        """Toma el evento. Si ya está tomado por otro operador activo, falla."""
+        self.ensure_one()
+        if not self._try_claim():
+            raise UserError(_(
+                "El evento está en atención por %s desde %s."
+            ) % (self.current_operator_id.name, self.claimed_at))
+        return True
+
+    def action_release_event(self):
+        """Suelta el evento. Solo el holder actual puede soltarlo."""
+        self.ensure_one()
+        if self.current_operator_id and self.current_operator_id.id != self.env.uid:
+            raise UserError(_("Solo %s puede soltar este evento.") % self.current_operator_id.name)
+        self.sudo().write({'current_operator_id': False, 'claimed_at': False})
+        return True
+
+    def action_force_release(self):
+        """Libera un lock independientemente del holder. Solo admins (group_system)."""
+        self.ensure_one()
+        if not self.env.user.has_group('base.group_system'):
+            raise AccessError(_("Solo administradores pueden forzar la liberación."))
+        prev_holder = self.current_operator_id.name or '(libre)'
+        self.sudo().write({'current_operator_id': False, 'claimed_at': False})
+        self.message_post(body=_(
+            "Lock forzado a liberación por %s (estaba en %s)."
+        ) % (self.env.user.name, prev_holder))
+        return True
+
+    @api.model
+    def _cron_release_stale_locks(self):
+        """Libera locks con claimed_at más antiguo que LOCK_TIMEOUT_MINUTES."""
+        cutoff = fields.Datetime.now() - timedelta(minutes=LOCK_TIMEOUT_MINUTES)
+        stale = self.sudo().search([
+            ('current_operator_id', '!=', False),
+            ('claimed_at', '<', cutoff),
+        ])
+        if stale:
+            for rec in stale:
+                rec.message_post(body=_(
+                    "Lock auto-liberado por inactividad (>%dmin). Estaba en %s."
+                ) % (LOCK_TIMEOUT_MINUTES, rec.current_operator_id.name))
+            stale.write({'current_operator_id': False, 'claimed_at': False})
+            _logger.info("CLAIM_RELEASE: %s locks liberados por timeout", len(stale))
+        return len(stale)
+
+    # ---------- Acciones existentes con guard de claim ----------
+
+    def action_acknowledge(self):
+        for rec in self:
+            if not rec.current_operator_id:
+                rec._try_claim()  # auto-claim al reconocer
+            rec._ensure_claim_held()
+        self.write({'status': 'acknowledged', 'assigned_operator_id': self.env.uid})
+        return True
+
+    def action_escalate(self):
+        self._ensure_claim_held()
+        # escalar suelta el lock para que un supervisor lo tome
+        self.write({'status': 'escalated', 'current_operator_id': False, 'claimed_at': False})
+        return True
+
+    def action_assign_technician(self):
+        self._ensure_claim_held()
+        self.write({'status': 'in_progress', 'assigned_technician_id': self.env.uid})
+        return True
+
+    def action_resolve(self):
+        self._ensure_claim_held()
+        # resolver suelta el lock
+        self.write({'status': 'resolved', 'end_date': datetime.now(),
+                    'current_operator_id': False, 'claimed_at': False})
+        return True
     def _cron_fetch_ucm_recordings(self):
         """
         Robot que sincroniza grabaciones de forma transparente.

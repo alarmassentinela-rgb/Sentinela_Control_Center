@@ -7,18 +7,47 @@
         <field name="arch" type="xml">
             <form string="Evento de Alarma">
                 <header>
-                    <button name="action_acknowledge" string="Reconocer" type="object" class="btn-primary" invisible="status != 'active'"/>
-                    <button name="action_escalate" string="Escalar" type="object" class="btn-warning" invisible="status != 'active'"/>
-                    <button name="action_assign_technician" string="Asignar Técnico" type="object" class="btn-info" invisible="status != 'acknowledged'"/>
-                    <button name="create_fsm_order" string="Crear Orden FSM" type="object" class="btn-success" invisible="status != 'in_progress'"/>
-                    <button name="action_resolve" string="Resolver" type="object" class="btn-success" invisible="status != 'in_progress'"/>
-                    <button name="action_close" string="Cerrar" type="object" class="btn-default" invisible="status != 'resolved'"/>
+                    <!-- F2.1 claim/release -->
+                    <button name="action_claim_event" string="Tomar" type="object" class="btn-primary"
+                            invisible="current_operator_id or status in ('resolved','closed')"/>
+                    <button name="action_release_event" string="Soltar" type="object" class="btn-secondary"
+                            invisible="not can_release"/>
+                    <button name="action_force_release" string="Forzar Liberación" type="object" class="btn-danger"
+                            invisible="not is_locked_by_other"
+                            groups="base.group_system"
+                            confirm="¿Forzar la liberación del lock? El operador actual perderá el control del evento."/>
+
+                    <button name="action_acknowledge" string="Reconocer" type="object" class="btn-primary"
+                            invisible="status != 'active' or is_locked_by_other"/>
+                    <button name="action_escalate" string="Escalar" type="object" class="btn-warning"
+                            invisible="status != 'active' or is_locked_by_other"/>
+                    <button name="action_assign_technician" string="Asignar Técnico" type="object" class="btn-info"
+                            invisible="status != 'acknowledged' or is_locked_by_other"/>
+                    <button name="create_fsm_order" string="Crear Orden FSM" type="object" class="btn-success"
+                            invisible="status != 'in_progress' or is_locked_by_other"/>
+                    <button name="action_resolve" string="Resolver" type="object" class="btn-success"
+                            invisible="status != 'in_progress' or is_locked_by_other"/>
+                    <button name="action_close" string="Cerrar" type="object" class="btn-default"
+                            invisible="status != 'resolved' or is_locked_by_other"/>
                     <field name="status" widget="statusbar" statusbar_visible="active,acknowledged,in_progress,escalated,resolved,closed"/>
                 </header>
                 <sheet>
+                    <!-- Campos computed siempre cargados para evaluar visibilidad de botones -->
+                    <field name="is_locked_by_other" invisible="1"/>
+                    <field name="can_release" invisible="1"/>
+                    <widget name="web_ribbon" title="EN ATENCIÓN POR OTRO OPERADOR" bg_color="bg-warning"
+                            invisible="not is_locked_by_other"/>
+                    <widget name="web_ribbon" title="EN TUS MANOS" bg_color="bg-info"
+                            invisible="not can_release"/>
                     <div class="oe_title">
                         <h1><field name="name"/></h1>
                     </div>
+                    <group invisible="not current_operator_id">
+                        <group string="Lock activo">
+                            <field name="current_operator_id" readonly="1"/>
+                            <field name="claimed_at" readonly="1"/>
+                        </group>
+                    </group>
                     <group>
                                     <group string="Información del Evento">
                                         <field name="event_type"/>
