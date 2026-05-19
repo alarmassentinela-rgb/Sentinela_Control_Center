@@ -17,4 +17,5 @@ from . import res_partner_extension
 from . import res_partner_telephony
 from . import res_users
 from . import response_team
+from . import service_authorization_token
 from . import subscription_extension

@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Layout base standalone (no depende de web.frontend_layout / website) -->
+    <template id="authorization_base" name="Sentinela Authorization Base">
+        <html lang="es">
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                <title t-esc="title or 'Sentinela'"/>
+                <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"/>
+                <style>
+                    body { background: #f5f5f5; }
+                    .sentinela-brand { color: #d62828; font-weight: bold; }
+                </style>
+            </head>
+            <body>
+                <t t-out="0"/>
+            </body>
+        </html>
+    </template>
+
+    <!-- Página principal: el cliente ve detalles + 2 botones -->
+    <template id="authorization_form" name="Autorización de servicio Sentinela">
+        <t t-call="sentinela_monitoring.authorization_base">
+            <t t-set="title">Autorización de servicio · Sentinela</t>
+            <div class="container py-5" style="max-width: 640px;">
+                <div class="text-center mb-4">
+                    <h2 class="sentinela-brand">SENTINELA</h2>
+                    <p class="text-muted">Centro de Monitoreo 24/7</p>
+                </div>
+
+                <div class="card shadow-sm">
+                    <div class="card-header bg-warning text-dark">
+                        <h4 class="m-0">Solicitud de autorización</h4>
+                    </div>
+                    <div class="card-body">
+                        <p>Hola <strong t-esc="tk.partner_id.name"/>,</p>
+                        <p>Se activó una alarma en su domicilio.
+                           Su plan <strong>no incluye</strong> el servicio solicitado.
+                           Para enviar al patrullero se requiere su autorización del costo.</p>
+
+                        <table class="table table-bordered mt-4">
+                            <tbody>
+                                <tr>
+                                    <th style="width: 40%;">Evento</th>
+                                    <td><t t-esc="tk.alarm_event_id.name"/></td>
+                                </tr>
+                                <tr>
+                                    <th>Hora</th>
+                                    <td><t t-esc="tk.alarm_event_id.start_date"/></td>
+                                </tr>
+                                <tr>
+                                    <th>Servicio solicitado</th>
+                                    <td><t t-esc="dict(tk._fields['service_type'].selection).get(tk.service_type)"/></td>
+                                </tr>
+                                <tr class="table-warning">
+                                    <th>Costo (sin IVA)</th>
+                                    <td class="fw-bold fs-5">
+                                        $<t t-esc="'{:,.2f}'.format(tk.amount)"/>
+                                        <span t-esc="tk.currency_id.name or 'MXN'"/>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <div t-if="error" class="alert alert-danger" t-esc="error"/>
+
+                        <p class="small text-muted mt-3">
+                            Al hacer clic en <strong>AUTORIZO</strong> usted acepta el costo del
+                            servicio y autoriza a Sentinela a despachar al patrullero a su domicilio.
+                            Su respuesta queda registrada con fecha, hora, dirección IP y dispositivo
+                            como evidencia del consentimiento.
+                        </p>
+
+                        <form method="post" class="mt-4">
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                <button type="submit" name="decision" value="reject"
+                                        class="btn btn-outline-secondary btn-lg me-md-2">
+                                    RECHAZO
+                                </button>
+                                <button type="submit" name="decision" value="authorize"
+                                        class="btn btn-success btn-lg">
+                                    AUTORIZO
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <!-- Confirmación post-acción -->
+    <template id="authorization_done" name="Autorización procesada">
+        <t t-call="sentinela_monitoring.authorization_base">
+            <t t-set="title">Respuesta registrada · Sentinela</t>
+            <div class="container py-5" style="max-width: 640px;">
+                <div class="text-center mb-4">
+                    <h2 class="sentinela-brand">SENTINELA</h2>
+                </div>
+                <div t-if="tk.state == 'authorized'" class="alert alert-success">
+                    <h4 class="alert-heading">Autorización registrada</h4>
+                    <p>Gracias <strong t-esc="tk.partner_id.name"/>. El operador ha sido notificado
+                       y procederá a despachar al patrullero. Recibirá otro mensaje cuando esté en camino.</p>
+                </div>
+                <div t-if="tk.state == 'rejected'" class="alert alert-warning">
+                    <h4 class="alert-heading">Servicio rechazado</h4>
+                    <p>Gracias <strong t-esc="tk.partner_id.name"/>. Su respuesta quedó registrada.
+                       El operador procederá a cerrar el evento sin despachar al patrullero.</p>
+                </div>
+                <div class="small text-muted mt-4">
+                    <p>Folio: <code t-esc="tk.alarm_event_id.name"/></p>
+                    <p>Respondido el <t t-esc="tk.responded_at"/></p>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <!-- Token ya usado -->
+    <template id="authorization_already" name="Autorización ya procesada">
+        <t t-call="sentinela_monitoring.authorization_base">
+            <t t-set="title">Solicitud ya procesada · Sentinela</t>
+            <div class="container py-5" style="max-width: 640px;">
+                <div class="text-center mb-4">
+                    <h2 class="sentinela-brand">SENTINELA</h2>
+                </div>
+                <div class="alert alert-info">
+                    <h4 class="alert-heading">Esta solicitud ya fue respondida</h4>
+                    <p>El estado actual es: <strong>
+                        <t t-esc="dict(tk._fields['state'].selection).get(tk.state)"/>
+                    </strong></p>
+                    <p t-if="tk.responded_at">Respondido el <t t-esc="tk.responded_at"/>.</p>
+                </div>
+                <div class="small text-muted mt-4">
+                    <p>Folio: <code t-esc="tk.alarm_event_id.name"/></p>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <!-- Token inválido -->
+    <template id="authorization_invalid" name="Autorización inválida">
+        <t t-call="sentinela_monitoring.authorization_base">
+            <t t-set="title">Enlace inválido · Sentinela</t>
+            <div class="container py-5" style="max-width: 640px;">
+                <div class="text-center mb-4">
+                    <h2 class="sentinela-brand">SENTINELA</h2>
+                </div>
+                <div class="alert alert-danger">
+                    <h4 class="alert-heading">Enlace no válido o expirado</h4>
+                    <p>El link de autorización que utilizó no es válido. Si recibió este mensaje
+                       por error, contáctenos al teléfono de la central.</p>
+                </div>
+            </div>
+        </t>
+    </template>
+</odoo>

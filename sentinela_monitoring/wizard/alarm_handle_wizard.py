@@ -180,9 +180,34 @@ class AlarmHandleWizard(models.TransientModel):
     # ---------- Acciones de despacho (compatibilidad con existentes) ----------
 
     def action_request_patrol_from_wizard(self):
-        """Solicita autorización al cliente. NO crea venta todavía."""
+        """F2.7.1 — Crea token de autorización y envía magic link por Telegram
+        al cliente. NO crea venta hasta que el cliente autorice via web."""
         self.ensure_one()
-        self.alarm_event_id.action_request_service_authorization('patrol')
+        event = self.alarm_event_id
+        # Reusar token pending existente si lo hay (idempotente)
+        existing = self.env['sentinela.service.authorization.token'].sudo().search([
+            ('alarm_event_id', '=', event.id),
+            ('service_type', '=', 'patrol'),
+            ('state', '=', 'pending'),
+        ], limit=1)
+        if existing:
+            token = existing
+        else:
+            token = self.env['sentinela.service.authorization.token'].sudo().create({
+                'alarm_event_id': event.id,
+                'service_type': 'patrol',
+                'amount': self.patrol_extra_price or 0.0,
+            })
+        # Marcar request en el evento (compat con F2.6)
+        event.action_request_service_authorization('patrol', method='telegram')
+        # Enviar Telegram (puede fallar si cliente sin chat_id)
+        if event.partner_id.telegram_chat_id:
+            token.action_send_telegram()
+        else:
+            raise UserError(_(
+                "El cliente %s no tiene Telegram configurado. Usa 'Marcar autorizado' "
+                "manualmente después de confirmar por llamada."
+            ) % event.partner_id.name)
         return True
 
     def action_authorize_patrol_from_wizard(self):

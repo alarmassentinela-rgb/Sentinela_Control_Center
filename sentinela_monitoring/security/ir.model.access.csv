@@ -24,3 +24,5 @@ access_alarm_code_template_user,sentinela.alarm.code.template.user,model_sentine
 access_alarm_code_template_manager,sentinela.alarm.code.template.manager,model_sentinela_alarm_code_template,base.group_system,1,1,1,1
 access_alarm_code_template_line_user,sentinela.alarm.code.template.line.user,model_sentinela_alarm_code_template_line,base.group_user,1,1,1,1
 access_alarm_code_template_line_manager,sentinela.alarm.code.template.line.manager,model_sentinela_alarm_code_template_line,base.group_system,1,1,1,1
+access_service_authorization_token_user,sentinela.service.authorization.token.user,model_sentinela_service_authorization_token,base.group_user,1,1,1,1
+access_service_authorization_token_manager,sentinela.service.authorization.token.manager,model_sentinela_service_authorization_token,base.group_system,1,1,1,1
