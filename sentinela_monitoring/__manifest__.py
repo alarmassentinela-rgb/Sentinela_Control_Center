@@ -1,6 +1,6 @@
 {
     'name': 'Sentinela Monitoring System',
-    'version': '18.0.1.4.5',
+    'version': '18.0.1.4.6',
     'category': 'Industries/Security',
     'summary': 'Sistema de monitoreo de alarmas integrado con Odoo',
     'description': """Sistema completo de monitoreo de alarmas para centrales de monitoreo.""",

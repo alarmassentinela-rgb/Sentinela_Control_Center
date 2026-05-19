@@ -103,6 +103,7 @@ class AlarmEvent(models.Model):
         ('technical_fault', 'Falla técnica del equipo'),
         ('test_signal', 'Señal de prueba'),
         ('auto_offline_recovered', 'Panel offline recuperado (auto)'),
+        ('cliente_rechazo_servicio', 'Cliente rechazó servicio extra'),
         ('other', 'Otro (especificar en notas)'),
     ], string='Motivo de Cierre', tracking=True,
        help="Tipificación del cierre del evento. Obligatorio al resolver/cerrar.")
@@ -607,6 +608,28 @@ class AlarmEvent(models.Model):
             'target': 'current',
         }
 
+    def cleanup_test_fsm_orders(self):
+        """Helper SOLO para tests: elimina (sudo) las fsm.order vinculadas a
+        este evento. NO usar en producción — bypasea las protecciones de FSM."""
+        self.ensure_one()
+        orders = self.env['sentinela.fsm.order'].sudo().search(
+            [('alarm_event_id', '=', self.id)])
+        if orders:
+            orders.unlink()
+        return True
+
+    def get_fsm_orders_info(self):
+        """Devuelve resumen sudo de las fsm.order vinculadas. Para clientes
+        (api_user, tests) sin permisos directos sobre sentinela.fsm.order."""
+        self.ensure_one()
+        orders = self.env['sentinela.fsm.order'].sudo().search(
+            [('alarm_event_id', '=', self.id)], order='id desc')
+        return [{
+            'id': o.id, 'name': o.name, 'service_type': o.service_type,
+            'stage': o.stage, 'technician_id': o.technician_id.id or False,
+            'technician_name': o.technician_id.name or False,
+        } for o in orders]
+
     def get_sale_order_info(self):
         """Devuelve resumen sudo de la sale.order para clientes que no tienen
         permiso directo (e.g., api_user usado por receiver/tests)."""
@@ -899,7 +922,70 @@ class AlarmEvent(models.Model):
             
             rec.full_description = f"{code_name} .- {zone_desc}"
 
-    def create_fsm_order(self): self.write({'status': 'in_progress'}); return True
+    def create_fsm_order(self, technician_id=None, service_type='patrol'):
+        """F2.7.2 — Crea una sentinela.fsm.order vinculada a este evento.
+        Idempotente: si ya hay una orden patrol abierta para este evento,
+        la devuelve en lugar de crear duplicado.
+
+        Args:
+            technician_id: id de res.users del patrullero (opcional, requerido
+                           para llamar action_start inmediato después).
+            service_type: por defecto 'patrol'. Otros tipos posibles según el
+                           catálogo de fsm.order.service_type."""
+        self.ensure_one()
+        # Buscar orden existente abierta para este evento
+        existing = self.env['sentinela.fsm.order'].sudo().search([
+            ('alarm_event_id', '=', self.id),
+            ('stage', 'in', ('new', 'assigned', 'in_progress', 'paused')),
+            ('service_type', '=', service_type),
+        ], limit=1)
+        if existing:
+            self.write({'status': 'in_progress'})
+            return existing.id
+
+        if not self.partner_id:
+            raise UserError(_("El evento no tiene cliente — no se puede crear orden FSM."))
+
+        # Construir descripción rica para el patrullero
+        device = self.device_id
+        desc_parts = [
+            f"<b>EVENTO DE ALARMA</b>: {self.name}",
+            f"<b>Cuenta</b>: {self.account_number or '—'}",
+            f"<b>Código</b>: {(self.alarm_code_id.name or '').upper() if self.alarm_code_id else self.description}",
+            f"<b>Zona</b>: {self.zone or '—'}",
+        ]
+        if device.location:
+            desc_parts.append(f"<b>Domicilio</b>: {device.location}")
+        if self.subscription_id:
+            keyword = getattr(self.subscription_id, 'keyword', False)
+            if keyword:
+                desc_parts.append(f"<b>Palabra clave</b>: <code>{keyword}</code>")
+
+        vals = {
+            'partner_id': self.partner_id.id,
+            'service_type': service_type,
+            'alarm_event_id': self.id,
+            'description': '<br/>'.join(desc_parts),
+            'priority': '3' if self.priority_id and self.priority_id.level >= 8 else '2',
+            'scheduled_date': fields.Datetime.now(),
+        }
+        if self.subscription_id:
+            vals['subscription_id'] = self.subscription_id.id
+        if device and device.latitude and device.longitude:
+            vals['install_lat'] = device.latitude
+            vals['install_lon'] = device.longitude
+        if device and device.location:
+            vals['service_address_id'] = self.partner_id.id
+        if technician_id:
+            vals['technician_id'] = technician_id
+            vals['stage'] = 'assigned'
+
+        order = self.env['sentinela.fsm.order'].sudo().create(vals)
+        self.write({'status': 'in_progress'})
+        self.message_post(body=_(
+            "Orden de servicio %s creada (%s)."
+        ) % (order.name, dict(order._fields['service_type'].selection).get(service_type, service_type)))
+        return order.id
     @api.depends('start_date', 'end_date')
     def _compute_duration(self):
         for e in self: e.duration = 0.0

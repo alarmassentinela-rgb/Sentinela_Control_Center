@@ -73,20 +73,45 @@
                         <div class="alert alert-warning" role="alert">
                             <strong>Paso 3:</strong> Si la alarma es real o no hubo respuesta del cliente, despacha la respuesta correspondiente.
                         </div>
+
+                        <!-- F2.7.2: estado de inclusión por plan -->
+                        <group string="Estado de patrullaje según plan del cliente">
+                            <field name="patrol_inclusion_status" widget="badge"
+                                decoration-success="patrol_inclusion_status == 'included'"
+                                decoration-warning="patrol_inclusion_status == 'not_included'"
+                                decoration-danger="patrol_inclusion_status == 'no_subscription'"/>
+                            <field name="patrol_extra_price"
+                                invisible="patrol_inclusion_status == 'included'"
+                                widget="monetary"/>
+                            <field name="technician_id"
+                                domain="[('share', '=', False)]"
+                                options="{'no_create': True}"
+                                placeholder="Selecciona patrullero del response_team"/>
+                        </group>
+
                         <group string="Acciones de despacho">
                             <field name="patrol_dispatched"/>
                             <field name="fsm_order_created"/>
                             <field name="authorities_called"/>
                             <field name="dispatch_notes" placeholder="Detalles del despacho (placa de patrulla, hora estimada, etc.)"/>
                         </group>
+
                         <group string="Botones rápidos">
-                            <button name="action_request_patrol_from_wizard" string="Solicitar autorización patrulla"
-                                    type="object" class="btn-warning" invisible="extra_service_authorized"/>
-                            <button name="action_authorize_patrol_from_wizard" string="Autorizar y generar venta"
-                                    type="object" class="btn-info" invisible="extra_service_authorized"/>
-                            <button name="action_dispatch_patrol" string="Despachar patrulla"
+                            <!-- Solicitar autorización: solo si NO incluido y NO autorizado -->
+                            <button name="action_request_patrol_from_wizard"
+                                    string="Solicitar autorización (Telegram)"
+                                    type="object" class="btn-warning"
+                                    invisible="patrol_inclusion_status != 'not_included' or extra_service_authorized"/>
+                            <!-- Autorización manual: solo si NO incluido y aún no autorizado -->
+                            <button name="action_authorize_patrol_from_wizard"
+                                    string="Marcar autorizado y generar venta"
+                                    type="object" class="btn-info"
+                                    invisible="patrol_inclusion_status != 'not_included' or extra_service_authorized"/>
+                            <!-- Despachar: si incluido (siempre) o si no incluido + autorizado -->
+                            <button name="action_dispatch_patrol"
+                                    string="Enviar patrullero"
                                     type="object" class="btn-danger"
-                                    invisible="not extra_service_authorized and not patrol_included"/>
+                                    invisible="patrol_inclusion_status == 'no_subscription' or (patrol_inclusion_status == 'not_included' and not extra_service_authorized)"/>
                             <button name="action_create_technical_ticket" string="Crear orden técnica (FSM)"
                                     type="object" class="btn-info"/>
                         </group>

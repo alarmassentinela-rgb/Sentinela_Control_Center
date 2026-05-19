@@ -1,6 +1,9 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 from datetime import datetime
+import logging
+
+_logger = logging.getLogger(__name__)
 
 
 class AlarmWizardContactAttempt(models.TransientModel):
@@ -68,6 +71,38 @@ class AlarmHandleWizard(models.TransientModel):
     notes = fields.Text(string='Bitácora del Operador')
     extra_service_authorized = fields.Boolean(related='alarm_event_id.extra_service_authorized')
     patrol_included = fields.Boolean(default=False)
+
+    # F2.7.2 — Lógica condicional patrullaje según plan
+    patrol_inclusion_status = fields.Selection([
+        ('included', 'Incluido en plan'),
+        ('not_included', 'No incluido — requiere autorización'),
+        ('no_subscription', 'Sin suscripción — no se puede facturar'),
+    ], compute='_compute_patrol_inclusion', string='Estado de Patrullaje')
+    patrol_extra_price = fields.Float(compute='_compute_patrol_inclusion',
+                                       string='Costo por evento ($)')
+    technician_id = fields.Many2one('res.users', string='Patrullero',
+        help='Patrullero del response_team a despachar.')
+
+    @api.depends('alarm_event_id', 'alarm_event_id.subscription_id')
+    def _compute_patrol_inclusion(self):
+        """Lee subscription.service_inclusion_ids del evento y decide estado.
+        Si no hay suscripción asociada, marca 'no_subscription'."""
+        for rec in self:
+            sub = rec.alarm_event_id.subscription_id
+            if not sub:
+                rec.patrol_inclusion_status = 'no_subscription'
+                rec.patrol_extra_price = 0.0
+                continue
+            inc = sub.service_inclusion_ids.filtered(
+                lambda i: i.service_code == 'patrol')
+            if not inc:
+                # Plan sin matriz (legacy MON1T u otro) — comportamiento conservador
+                rec.patrol_inclusion_status = 'not_included'
+                rec.patrol_extra_price = 350.0
+                continue
+            row = inc[0]
+            rec.patrol_inclusion_status = 'included' if row.is_included else 'not_included'
+            rec.patrol_extra_price = 0.0 if row.is_included else row.extra_price
 
     @api.model
     def default_get(self, fields_list):
@@ -157,11 +192,37 @@ class AlarmHandleWizard(models.TransientModel):
         return True
 
     def action_dispatch_patrol(self):
-        """Despacha la patrulla. Si autorizada y aún sin venta, la crea."""
+        """F2.7.2 — Despacha la patrulla creando fsm.order real y disparando
+        action_start (Telegram cliente con tracking SentiCar)."""
         self.ensure_one()
-        self.patrol_dispatched = True
+        if not self.technician_id:
+            raise UserError(_("Selecciona un patrullero antes de despachar."))
+
+        # Validar autorización si no está incluido
+        if self.patrol_inclusion_status == 'not_included' and not self.alarm_event_id.extra_service_authorized:
+            raise UserError(_(
+                "El plan no incluye patrullaje y el cliente aún NO ha autorizado el cobro de "
+                "$%.2f. Solicita autorización primero."
+            ) % self.patrol_extra_price)
+
+        # Crear orden FSM patrullaje (idempotente — devuelve id)
+        order_id = self.alarm_event_id.create_fsm_order(
+            technician_id=self.technician_id.id,
+            service_type='patrol',
+        )
+        order = self.env['sentinela.fsm.order'].browse(order_id)
+        # Si autorizado pero sin venta aún → crear sale.order (F2.6)
         if self.alarm_event_id.extra_service_authorized and not self.alarm_event_id.sale_order_id:
             self.alarm_event_id._create_service_sale_order()
+
+        # Iniciar la orden (action_start dispara Telegram + tracking)
+        try:
+            order.action_start()
+        except Exception as e:
+            # No abortar el despacho si Telegram falla — la orden está creada y asignada
+            _logger.warning("action_start de fsm.order %s falló: %s", order.name, e)
+
+        self.patrol_dispatched = True
         return True
 
     def action_create_technical_ticket(self):
