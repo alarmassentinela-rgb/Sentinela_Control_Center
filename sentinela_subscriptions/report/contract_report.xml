@@ -58,6 +58,49 @@
                         <div class="contract-body">
                             <t t-out="doc.contract_content"/>
                         </div>
+
+                        <!-- Sección de Servicios Incluidos / No Incluidos -->
+                        <div class="contract-body" t-if="doc.service_inclusion_ids" style="margin-top: 30px;">
+                            <h3 style="border-bottom: 2px solid #333; padding-bottom: 5px;">
+                                SERVICIOS DEL CONTRATO
+                            </h3>
+                            <p style="margin-top: 10px;">
+                                Esta suscripción cubre los servicios marcados como <strong>INCLUIDOS</strong>.
+                                Los servicios <strong>NO INCLUIDOS</strong> pueden ser solicitados por evento
+                                con el costo aparte indicado, previa autorización del cliente.
+                            </p>
+                            <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                                <thead>
+                                    <tr style="background-color: #f0f0f0;">
+                                        <th style="border: 1px solid #999; padding: 8px; text-align: left;">Servicio</th>
+                                        <th style="border: 1px solid #999; padding: 8px; text-align: center;">Estado</th>
+                                        <th style="border: 1px solid #999; padding: 8px; text-align: right;">Precio por evento (sin IVA)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr t-foreach="doc.service_inclusion_ids" t-as="inc">
+                                        <td style="border: 1px solid #999; padding: 8px;">
+                                            <span t-out="inc.service_id.name"/>
+                                        </td>
+                                        <td style="border: 1px solid #999; padding: 8px; text-align: center;">
+                                            <strong t-if="inc.is_included" style="color: #1a7d2a;">INCLUIDO</strong>
+                                            <strong t-else="" style="color: #b8002e;">NO INCLUIDO</strong>
+                                        </td>
+                                        <td style="border: 1px solid #999; padding: 8px; text-align: right;">
+                                            <span t-if="inc.is_included">— (incluido en la mensualidad)</span>
+                                            <span t-else="">
+                                                $<span t-out="'{:,.2f}'.format(inc.extra_price)"/> MXN por evento
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <p style="margin-top: 15px; font-size: 11px; color: #666;">
+                                La autorización del costo por servicios no incluidos se realiza
+                                vía Telegram o llamada al cliente. El servicio se factura aparte
+                                en el siguiente ciclo de cobro.
+                            </p>
+                        </div>
                     </div>
                 </t>
             </t>

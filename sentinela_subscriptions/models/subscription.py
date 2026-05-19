@@ -932,7 +932,57 @@ class SentinelaSubscription(models.Model):
         for vals in vals_list:
             if vals.get('name', 'New') == 'New':
                 vals['name'] = self.env['ir.sequence'].next_by_code('sentinela.subscription') or 'New'
-        return super().create(vals_list)
+        subs = super().create(vals_list)
+        # Auto-derivar inclusion records desde la matriz del plan
+        for sub in subs:
+            sub._derive_service_inclusions()
+        return subs
+
+    def _derive_service_inclusions(self):
+        """Copia la matriz product.service.inclusion del plan a la suscripción.
+        No sobreescribe — solo crea registros para servicios que aún no existen
+        en la suscripción (idempotente y seguro para re-llamar)."""
+        for sub in self:
+            if not sub.product_id:
+                continue
+            template = sub.product_id.product_tmpl_id
+            existing_service_ids = set(sub.service_inclusion_ids.mapped('service_id.id'))
+            matrix = self.env['sentinela.product.service.inclusion'].sudo().search([
+                ('product_id', '=', template.id),
+            ])
+            for row in matrix:
+                if row.service_id.id in existing_service_ids:
+                    continue
+                self.env['sentinela.subscription.service.inclusion'].sudo().create({
+                    'subscription_id': sub.id,
+                    'service_id': row.service_id.id,
+                    'is_included': row.is_included,
+                    'extra_price': row.extra_price,
+                })
+
+    @api.constrains('service_inclusion_ids', 'product_id')
+    def _check_service_inclusions_complete(self):
+        """Si el plan tiene matriz definida en product.service.inclusion,
+        la suscripción debe tener todos los inclusion records derivados.
+        Permite legacy plans (sin matriz) y no-monitoreo (TK-Renta, R*MB, etc.)."""
+        for sub in self:
+            if not sub.product_id:
+                continue
+            template = sub.product_id.product_tmpl_id
+            plan_services = self.env['sentinela.product.service.inclusion'].sudo().search([
+                ('product_id', '=', template.id),
+            ])
+            if not plan_services:
+                continue  # plan legacy / no-monitoreo: se perdona
+            plan_service_ids = set(plan_services.mapped('service_id.id'))
+            sub_service_ids = set(sub.service_inclusion_ids.mapped('service_id.id'))
+            missing = plan_service_ids - sub_service_ids
+            if missing:
+                names = self.env['sentinela.service.definition'].sudo().browse(list(missing)).mapped('name')
+                raise ValidationError(_(
+                    "La suscripción '%s' (plan %s) no tiene definidos todos los servicios. "
+                    "Faltan: %s. Edita la sección 'Servicios Incluidos' antes de guardar."
+                ) % (sub.name, template.default_code or template.name, ', '.join(names)))
 
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
