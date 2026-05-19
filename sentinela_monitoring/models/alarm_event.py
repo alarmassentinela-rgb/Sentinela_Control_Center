@@ -100,16 +100,25 @@ class AlarmEvent(models.Model):
         raw_data = vals.get('raw_data')
         qualifier = vals.get('qualifier', 'E')
 
-        # 1. Buscar Dispositivo
+        # 1. Buscar Dispositivo — si no existe, CUARENTENA (no se crea device ni event)
         device = self.env['sentinela.monitoring.device'].sudo().search([('account_number', '=', account)], limit=1)
         if not device:
-            # Buscar suscripcion para crear dispositivo auto
-            sub = self.env['sentinela.subscription'].sudo().search([('monitoring_account_number', '=', account)], limit=1)
-            device = self.env['sentinela.monitoring.device'].sudo().create({
-                'name': f"Auto {account}", 'account_number': account, 
-                'partner_id': sub.partner_id.id if sub else 1, 'status': 'active', 
-                'subscription_id': sub.id if sub else False
+            self.env['sentinela.alarm.signal'].sudo().create({
+                'signal_type': 'alarm',
+                'is_quarantine': True,
+                'quarantine_account': account,
+                'alarm_code': f"{qualifier}{code}",
+                'zone': zone,
+                'raw_data': raw_data,
+                'description': f"Cuenta no registrada ({account}) — código {qualifier}{code} Z:{zone}",
+                'received_date': fields.Datetime.now(),
+                'status': 'received',
             })
+            self.env['bus.bus']._sendone('sentinela_monitoring', 'sentinela_monitoring', {'refresh': True})
+            status_rec = self.env['sentinela.receiver.status'].sudo().search([], limit=1)
+            if status_rec:
+                status_rec.write({'last_heartbeat': fields.Datetime.now()})
+            return True
 
         # 2. Inteligencia de Codigo y Prioridad
         alarm_code = self.env['sentinela.alarm.code'].sudo().search([('code', '=', code)], limit=1)

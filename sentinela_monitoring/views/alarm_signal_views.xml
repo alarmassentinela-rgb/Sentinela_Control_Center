@@ -7,14 +7,17 @@
         <field name="arch" type="xml">
             <form string="Señal de Alarma">
                 <header>
-                    <button name="action_acknowledge" string="Reconocer" type="object" class="btn-primary" invisible="status != 'received'"/>
-                    <button name="action_assign_technician" string="Asignar Técnico" type="object" class="btn-info" invisible="status not in ['received', 'processing', 'acknowledged']"/>
-                    <button name="action_mark_in_progress" string="En Progreso" type="object" class="btn-warning" invisible="status != 'assigned'"/>
-                    <button name="action_resolve" string="Resolver" type="object" class="btn-success" invisible="status != 'in_progress'"/>
-                    <button name="action_close" string="Cerrar" type="object" class="btn-default" invisible="status != 'resolved'"/>
+                    <button name="action_promote_to_device" string="Promover a Dispositivo" type="object" class="btn-primary" invisible="not is_quarantine"/>
+                    <button name="action_discard_quarantine" string="Descartar (Ruido)" type="object" class="btn-secondary" invisible="not is_quarantine"/>
+                    <button name="action_acknowledge" string="Reconocer" type="object" class="btn-primary" invisible="is_quarantine or status != 'received'"/>
+                    <button name="action_assign_technician" string="Asignar Técnico" type="object" class="btn-info" invisible="is_quarantine or status not in ['received', 'processing', 'acknowledged']"/>
+                    <button name="action_mark_in_progress" string="En Progreso" type="object" class="btn-warning" invisible="is_quarantine or status != 'assigned'"/>
+                    <button name="action_resolve" string="Resolver" type="object" class="btn-success" invisible="is_quarantine or status != 'in_progress'"/>
+                    <button name="action_close" string="Cerrar" type="object" class="btn-default" invisible="is_quarantine or status != 'resolved'"/>
                     <field name="status" widget="statusbar" statusbar_visible="received,acknowledged,assigned,in_progress,resolved,closed"/>
                 </header>
                 <sheet>
+                    <widget name="web_ribbon" title="EN CUARENTENA" bg_color="bg-warning" invisible="not is_quarantine"/>
                     <div class="oe_title">
                         <h1><field name="name"/></h1>
                     </div>
@@ -28,9 +31,13 @@
                             <field name="resolved_date"/>
                         </group>
                         <group string="Dispositivo y Cliente">
-                            <field name="device_id"/>
-                            <field name="partner_id"/>
-                            <field name="subscription_id"/>
+                            <field name="is_quarantine" invisible="1"/>
+                            <field name="quarantine_account" invisible="not is_quarantine" readonly="1"/>
+                            <field name="device_id" invisible="is_quarantine"/>
+                            <field name="partner_id" invisible="is_quarantine"/>
+                            <field name="subscription_id" invisible="is_quarantine"/>
+                            <field name="alarm_code" invisible="not is_quarantine" readonly="1"/>
+                            <field name="zone" invisible="not is_quarantine" readonly="1"/>
                         </group>
                     </group>
                     <group string="Ubicación">
@@ -58,13 +65,17 @@
         <field name="name">sentinela.alarm.signal.list</field>
         <field name="model">sentinela.alarm.signal</field>
         <field name="arch" type="xml">
-            <list string="Señales de Alarma">
+            <list string="Señales de Alarma" decoration-warning="is_quarantine == True">
                 <field name="name"/>
                 <field name="signal_type"/>
                 <field name="priority_id" widget="badge"/>
-                <field name="device_id"/>
+                <field name="device_id" optional="show"/>
+                <field name="quarantine_account" optional="show"/>
+                <field name="alarm_code" optional="hide"/>
+                <field name="zone" optional="hide"/>
                 <field name="partner_id"/>
                 <field name="received_date"/>
+                <field name="is_quarantine" optional="hide"/>
                 <field name="status"/>
             </list>
         </field>
@@ -123,23 +134,44 @@
                 <field name="signal_type"/>
                 <field name="priority_id" widget="badge"/>
                 <field name="device_id"/>
+                <field name="quarantine_account"/>
                 <field name="partner_id"/>
                 <field name="status"/>
                 <field name="received_date"/>
+                <separator/>
+                <filter name="normal" string="Normales" domain="[('is_quarantine', '=', False)]"/>
+                <filter name="quarantine" string="En Cuarentena" domain="[('is_quarantine', '=', True)]"/>
                 <separator/>
                 <filter name="priority_high" string="Prioridad Alta" domain="[('priority_id.level', '&gt;=', 8)]"/>
                 <filter name="received_today" string="Recibidas Hoy" domain="[('received_date', '&gt;=', time.strftime('%%Y-%%m-%%d 00:00:00')), ('received_date', '&lt;=', time.strftime('%%Y-%%m-%%d 23:59:59'))]"/>
                 <filter name="unassigned" string="Sin Asignar" domain="[('assigned_technician_id', '=', False)]"/>
                 <filter name="open" string="Abiertas" domain="[('status', 'in', ['received', 'processing', 'acknowledged', 'assigned', 'in_progress'])]"/>
+                <group expand="0" string="Agrupar por">
+                    <filter name="group_quarantine" string="Cuarentena" context="{'group_by': 'is_quarantine'}"/>
+                    <filter name="group_account" string="Cuenta Desconocida" context="{'group_by': 'quarantine_account'}"/>
+                </group>
             </search>
         </field>
     </record>
 
-    <!-- ACTION -->
+    <!-- ACTION — todas (default: solo normales) -->
     <record id="action_alarm_signal" model="ir.actions.act_window">
         <field name="name">Señales de Alarma</field>
         <field name="res_model">sentinela.alarm.signal</field>
         <field name="view_mode">kanban,list,form</field>
-        <field name="context">{'search_default_open': 1}</field>
+        <field name="context">{'search_default_normal': 1, 'search_default_open': 1}</field>
+    </record>
+
+    <!-- ACTION — solo cuarentena -->
+    <record id="action_alarm_signal_quarantine" model="ir.actions.act_window">
+        <field name="name">Señales en Cuarentena</field>
+        <field name="res_model">sentinela.alarm.signal</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('is_quarantine', '=', True)]</field>
+        <field name="context">{'search_default_quarantine': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No hay señales en cuarentena</p>
+            <p>Las señales de cuentas no registradas aparecen aquí. Promuévelas a dispositivo o descártalas.</p>
+        </field>
     </record>
 </odoo>

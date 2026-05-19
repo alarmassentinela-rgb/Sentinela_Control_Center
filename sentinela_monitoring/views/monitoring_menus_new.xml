@@ -37,6 +37,12 @@
         action="action_alarm_signal"
         sequence="30"/>
 
+    <menuitem id="menu_sentinela_alarm_signal_quarantine"
+        name="Señales en Cuarentena"
+        parent="menu_sentinela_monitoring_operations"
+        action="action_alarm_signal_quarantine"
+        sequence="35"/>
+
     <!-- DISPOSITIVOS -->
     <menuitem id="menu_sentinela_monitoring_devices"
         name="Dispositivos / Cuentas"
