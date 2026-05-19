@@ -7,6 +7,43 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.18.0] - 2026-05-19
+
+### Added — Auto-cobro de green fees con refund automático al cancelar
+
+Cierra el ciclo del booking que arrancó en v1.17: cuando un socio confirma una reserva con `fee_amount > 0` en cualquier `tee_time_booking_player`, ahora se generan `AccountTransaction(type='green_fee')` automáticamente en las cuentas correspondientes. Al cancelar el booking, se emiten refunds simétricos. Sin cambios obligatorios de UI — la página de detalle de cuenta ya mostraba todos los tipos.
+
+**Reglas de pago:**
+- `player_type='member'` → cargo a cuenta del propio socio
+- `player_type='guest'`:
+  - si `Club.guest_fee_to_sponsor=true` → cargo al sponsor
+  - si false + guest tiene user_id → cargo al guest
+  - sin user_id ni sponsor → SKIP (cash en sitio, queda solo `fee_amount` en la fila del player)
+- `player_type='public'` → cargo a cuenta propia si tiene user_id, else SKIP
+
+**Saldo negativo permitido** para auto-posteo de green fees. Un socio con `credit_limit=0` y `balance=0` puede reservar igual; el cargo queda como deuda. El club cobra en su flujo normal de pagos.
+
+**Backend (`app/api/v1/clubs.py`):**
+- `_apply_transaction` (existente) ahora acepta `enforce_credit_limit: bool = True`. Sigue siendo el default para charges manuales; v1.18 lo pasa en `False` para auto-cobro de green fees.
+- `_post_booking_fees(db, booking, slot, club, current_user)` (NUEVO) — itera `tee_time_booking_players`, calcula payer según reglas, 1 transaction por player con `reference_id=player.id` y `reference_type='tee_time_booking_player'`. Acumula totales y devuelve dict para el response.
+- `_refund_booking_fees(db, booking, current_user)` (NUEVO) — busca transactions de green_fee del booking, emite refund por cada una. Idempotente: skip si ya existe refund para ese player_id (prevención de doble-cancel).
+- `book_tee_time` ahora llama a `_post_booking_fees` al final y añade `total_charged` + `charges_count` al response.
+- `cancel_booking` ahora llama a `_refund_booking_fees` antes del status update y añade `refunded_total` + `refund_count` al response.
+- `GET /clubs/{id}/tee-times/bookings/{booking_id}/transactions` (NUEVO) — lista AccountTransaction asociadas al booking (charges + refunds). Permisos: booker o staff.
+
+**Frontend (`/club/[id]/tee-times`):**
+- Toast emerald arriba del listado de slots: tras booking exitoso muestra `"Reserva confirmada · $XXX cobrados (N cargos)"`. Tras cancel: `"Reserva cancelada · $XXX reembolsados"`. Botón X para cerrar manualmente. No bloqueante.
+- Nota del sidebar de fees actualizada: `"Los green fees se cobrarán automáticamente a la cuenta del responsable al confirmar la reserva. Cancelar genera un reembolso automático."` (antes decía "v1.18 (no se cobran aún)").
+
+### Notes
+
+- **No backfill**: bookings creados antes de v1.18 no reciben transactions retroactivas. Si se cancela uno viejo, el refund encuentra 0 charges y simplemente marca cancelled sin reembolsar.
+- **Cash players** (public sin user_id, guest sin sponsor con guest_fee_to_sponsor=false): el `fee_amount` queda en la fila del player como referencia, sin transaction. El club cobra en sitio. Reporte agregado de cash queda para v1.19+.
+- **Tracking visitas anuales por guest_email**: pendiente. `max_guest_visits_per_year` sigue siendo informativo.
+- **Notificaciones email/WA**: pendiente para v1.20.
+
+---
+
 ## [1.17.0] - 2026-05-19
 
 ### Added — Booking multi-jugador con guests nombrados + enforcement del híbrido

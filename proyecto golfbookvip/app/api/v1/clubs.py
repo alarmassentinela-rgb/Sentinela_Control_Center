@@ -1196,7 +1196,10 @@ async def book_tee_time(club_id: uuid.UUID, slot_id: int, data: BookingCreate,
         players_out.append(player_row)
     await db.flush()
 
-    # 9. Response (resolved con nombres)
+    # 9. Auto-cobro de green fees (v1.18.0): postea AccountTransaction por cada player payable
+    fees_result = await _post_booking_fees(db, booking, slot, club, current_user)
+
+    # 10. Response (resolved con nombres + info de cobro)
     resolved = await _resolve_players_for_booking(db, booking.id)
     total_fees = sum(r["fee_amount"] for r in resolved)
     return {
@@ -1205,6 +1208,8 @@ async def book_tee_time(club_id: uuid.UUID, slot_id: int, data: BookingCreate,
         "slot_id": slot_id,
         "players_count": len(data.players),
         "total_fees": total_fees,
+        "total_charged": fees_result["total_charged"],
+        "charges_count": fees_result["transactions_count"],
         "players": resolved,
     }
 
@@ -1251,6 +1256,143 @@ async def _resolve_players_for_booking(db, booking_id: uuid.UUID) -> list[dict]:
     return out
 
 
+# ─── Auto-cobro de green fees (v1.18.0) ────────────────────────────────────
+
+
+async def _post_booking_fees(db, booking: TeeTimeBooking, slot: TeeTimeSlot,
+                               club: Club, current_user: User) -> dict:
+    """Postea AccountTransaction(type='green_fee') por cada jugador del booking.
+
+    Reglas de pago:
+    - member → cargo a su propia cuenta
+    - guest → sponsor (si guest_fee_to_sponsor) o cuenta propia (si tiene user_id), else SKIP
+    - public → cuenta propia (si tiene user_id), else SKIP
+
+    1 transaction por player_row (reference_id=player.id, reference_type='tee_time_booking_player').
+    Salda negativo permitido (enforce_credit_limit=False).
+    """
+    players_res = await db.execute(
+        select(TeeTimeBookingPlayer).where(TeeTimeBookingPlayer.booking_id == booking.id)
+    )
+    players = players_res.scalars().all()
+
+    # Cargar nombres para descripción rica
+    user_ids = {p.user_id for p in players if p.user_id} | {p.sponsor_id for p in players if p.sponsor_id}
+    users_map: dict[uuid.UUID, User] = {}
+    if user_ids:
+        users_res = await db.execute(select(User).where(User.id.in_(user_ids)))
+        for u in users_res.scalars().all():
+            users_map[u.id] = u
+
+    def _name_of(p: TeeTimeBookingPlayer) -> str:
+        if p.user_id and p.user_id in users_map:
+            u = users_map[p.user_id]
+            return f"{u.first_name or ''} {u.last_name or ''}".strip() or u.email or "(sin nombre)"
+        return p.guest_name or "(sin nombre)"
+
+    total_charged = 0.0
+    tx_count = 0
+    by_payer: dict[str, float] = {}
+
+    for p in players:
+        fee = float(p.fee_amount or 0)
+        if fee <= 0:
+            continue
+
+        payer_id: Optional[uuid.UUID] = None
+        if p.player_type == "member":
+            payer_id = p.user_id
+        elif p.player_type == "guest":
+            if club.guest_fee_to_sponsor and p.sponsor_id:
+                payer_id = p.sponsor_id
+            else:
+                payer_id = p.user_id  # puede ser None
+        elif p.player_type == "public":
+            payer_id = p.user_id  # puede ser None
+
+        if payer_id is None:
+            continue  # cash: queda solo en player.fee_amount
+
+        acc = await _get_or_create_account(db, club.id, payer_id)
+        slot_label = f"{slot.date.isoformat()} {slot.time.strftime('%H:%M')}"
+        player_name = _name_of(p)
+        if payer_id != p.user_id and p.player_type == "guest":
+            # sponsor paga por guest → distinguir en la descripción
+            desc = f"Green fee — {slot_label} · Invitado: {player_name}"
+        else:
+            desc = f"Green fee — {slot_label} · {player_name} ({p.player_type})"
+
+        await _apply_transaction(
+            db, acc, "green_fee", fee, desc, current_user,
+            reference_id=str(p.id),
+            reference_type="tee_time_booking_player",
+            enforce_credit_limit=False,
+        )
+        total_charged += fee
+        tx_count += 1
+        key = str(payer_id)
+        by_payer[key] = by_payer.get(key, 0.0) + fee
+
+    return {"total_charged": total_charged, "transactions_count": tx_count, "by_payer": by_payer}
+
+
+async def _refund_booking_fees(db, booking: TeeTimeBooking, current_user: User) -> dict:
+    """Emite refund automático por cada green_fee posteado del booking. Idempotente:
+    si ya existe un refund para ese player_id, lo salta."""
+    # Cargar player_ids del booking
+    players_res = await db.execute(
+        select(TeeTimeBookingPlayer.id).where(TeeTimeBookingPlayer.booking_id == booking.id)
+    )
+    player_ids = [pid for (pid,) in players_res.all()]
+    if not player_ids:
+        return {"refunded_total": 0.0, "refund_count": 0}
+
+    # Cargar charges existentes (type='green_fee')
+    charges_res = await db.execute(
+        select(AccountTransaction).where(
+            AccountTransaction.reference_type == "tee_time_booking_player",
+            AccountTransaction.reference_id.in_(player_ids),
+            AccountTransaction.type == "green_fee",
+        )
+    )
+    charges = charges_res.scalars().all()
+    if not charges:
+        return {"refunded_total": 0.0, "refund_count": 0}
+
+    # Cargar refunds existentes para evitar duplicar
+    refunds_res = await db.execute(
+        select(AccountTransaction.reference_id).where(
+            AccountTransaction.reference_type == "tee_time_booking_player",
+            AccountTransaction.reference_id.in_(player_ids),
+            AccountTransaction.type == "refund",
+        )
+    )
+    refunded_player_ids = {rid for (rid,) in refunds_res.all()}
+
+    refunded_total = 0.0
+    refund_count = 0
+    for ch in charges:
+        if ch.reference_id in refunded_player_ids:
+            continue
+        # Cargar la cuenta del cargo original
+        acc_res = await db.execute(select(MemberAccount).where(MemberAccount.id == ch.account_id))
+        acc = acc_res.scalar_one_or_none()
+        if not acc:
+            continue
+        amount = float(ch.amount or 0)
+        original_desc = ch.description or "green fee"
+        desc = f"Refund por cancelación · {original_desc}"
+        await _apply_transaction(
+            db, acc, "refund", amount, desc, current_user,
+            reference_id=str(ch.reference_id),
+            reference_type="tee_time_booking_player",
+        )
+        refunded_total += amount
+        refund_count += 1
+
+    return {"refunded_total": refunded_total, "refund_count": refund_count}
+
+
 @router.delete("/{club_id}/tee-times/bookings/{booking_id}")
 async def cancel_booking(club_id: uuid.UUID, booking_id: uuid.UUID,
                           current_user: CurrentUser, db: DB):
@@ -1271,10 +1413,18 @@ async def cancel_booking(club_id: uuid.UUID, booking_id: uuid.UUID,
         if not role or ROLE_HIERARCHY.get(role, 0) < ROLE_HIERARCHY["manager"]:
             raise HTTPException(status_code=403, detail="No tienes permisos para cancelar esta reserva")
 
+    # Auto-refund de green fees posteados (v1.18.0). Idempotente: skip si ya hay refunds.
+    refund_result = await _refund_booking_fees(db, booking, current_user)
+
     booking.status = "cancelled"
     booking.cancelled_at = datetime.now(timezone.utc)
     await db.flush()
-    return {"id": str(booking.id), "status": "cancelled"}
+    return {
+        "id": str(booking.id),
+        "status": "cancelled",
+        "refunded_total": refund_result["refunded_total"],
+        "refund_count": refund_result["refund_count"],
+    }
 
 
 @router.get("/{club_id}/tee-times/bookings/{booking_id}")
@@ -1311,6 +1461,55 @@ async def get_booking_detail(club_id: uuid.UUID, booking_id: uuid.UUID,
         "players": players,
         "total_fees": sum(p["fee_amount"] for p in players),
     }
+
+
+@router.get("/{club_id}/tee-times/bookings/{booking_id}/transactions")
+async def list_booking_transactions(club_id: uuid.UUID, booking_id: uuid.UUID,
+                                      current_user: CurrentUser, db: DB):
+    """Lista AccountTransaction asociadas a un booking (charges + refunds de green fees). v1.18.0.
+    Permisos: booker o staff del club."""
+    res = await db.execute(
+        select(TeeTimeBooking, TeeTimeSlot)
+        .join(TeeTimeSlot, TeeTimeSlot.id == TeeTimeBooking.slot_id)
+        .where(TeeTimeBooking.id == booking_id, TeeTimeSlot.club_id == club_id)
+    )
+    row = res.first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Reserva no encontrada")
+    booking, _slot = row
+    if booking.user_id != current_user.id and not current_user.is_superadmin:
+        role = await _get_club_role(db, club_id, current_user)
+        if not role:
+            raise HTTPException(status_code=403, detail="No tienes permisos para ver esta reserva")
+
+    players_res = await db.execute(
+        select(TeeTimeBookingPlayer.id).where(TeeTimeBookingPlayer.booking_id == booking_id)
+    )
+    player_ids = [pid for (pid,) in players_res.all()]
+    if not player_ids:
+        return []
+
+    tx_res = await db.execute(
+        select(AccountTransaction).where(
+            AccountTransaction.reference_type == "tee_time_booking_player",
+            AccountTransaction.reference_id.in_(player_ids),
+        ).order_by(AccountTransaction.created_at)
+    )
+    rows = tx_res.scalars().all()
+    return [
+        {
+            "id": str(t.id),
+            "account_id": str(t.account_id),
+            "type": t.type,
+            "amount": float(t.amount or 0),
+            "balance_after": float(t.balance_after or 0),
+            "description": t.description,
+            "reference_id": str(t.reference_id) if t.reference_id else None,
+            "reference_type": t.reference_type,
+            "created_at": t.created_at.isoformat() if t.created_at else None,
+        }
+        for t in rows
+    ]
 
 
 @router.get("/{club_id}/tee-times/my-bookings")
@@ -1507,8 +1706,14 @@ async def list_transactions(club_id: uuid.UUID, user_id: uuid.UUID,
 async def _apply_transaction(db, acc: MemberAccount, type_: str, amount: float,
                               description: str, current_user: User,
                               reference_id: Optional[str] = None,
-                              reference_type: Optional[str] = None) -> AccountTransaction:
-    """Aplica transacción y actualiza balance atomically. amount siempre positivo excepto 'other'."""
+                              reference_type: Optional[str] = None,
+                              enforce_credit_limit: bool = True) -> AccountTransaction:
+    """Aplica transacción y actualiza balance atomically. amount siempre positivo excepto 'other'.
+
+    enforce_credit_limit=False permite saldo negativo más allá del credit_limit del socio
+    (usado por auto-cobro de green fees de v1.18: el booking ya está confirmado y el cargo
+    es derivado, no debe rechazarse aunque la cuenta no tenga línea de crédito).
+    """
     # decidir signo aplicado al balance
     if type_ in CREDIT_TYPES:
         delta = abs(amount)
@@ -1522,7 +1727,7 @@ async def _apply_transaction(db, acc: MemberAccount, type_: str, amount: float,
     new_balance = float(acc.balance or 0) + delta
 
     # validar credit_limit si el balance va a quedar negativo
-    if new_balance < 0:
+    if enforce_credit_limit and new_balance < 0:
         max_debt = -float(acc.credit_limit or 0)
         if new_balance < max_debt:
             raise HTTPException(

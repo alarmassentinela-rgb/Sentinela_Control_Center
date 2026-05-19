@@ -120,6 +120,7 @@ export default function TeeTimesPage() {
   const [bookPlayers, setBookPlayers] = useState<PlayerRow[]>([])
   const [booking, setBooking] = useState(false)
   const [bookErrors, setBookErrors] = useState<string[]>([])
+  const [flashMessage, setFlashMessage] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [currentUserName, setCurrentUserName] = useState<string>('')
   const [padron, setPadron] = useState<PadronMember[]>([])
@@ -305,8 +306,18 @@ export default function TeeTimesPage() {
           sponsor_id: p.sponsor_id || undefined,
         })),
       }
-      await api.post(`/clubs/${params.id}/tee-times/${bookingSlot.id}/book`, payload)
+      const res = await api.post(`/clubs/${params.id}/tee-times/${bookingSlot.id}/book`, payload)
       closeBookingModal()
+      const charged = res.data?.total_charged || 0
+      const count = res.data?.charges_count || 0
+      if (charged > 0) {
+        setFlashMessage(lbl(
+          `Reserva confirmada · $${charged.toFixed(0)} cobrados (${count} cargo${count !== 1 ? 's' : ''})`,
+          `Booking confirmed · $${charged.toFixed(0)} charged (${count} item${count !== 1 ? 's' : ''})`
+        ))
+      } else {
+        setFlashMessage(lbl('Reserva confirmada', 'Booking confirmed'))
+      }
       load()
     } catch (e: unknown) {
       const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
@@ -319,7 +330,16 @@ export default function TeeTimesPage() {
   const handleCancelBooking = async (bookingId: string) => {
     if (!confirm(lbl('¿Cancelar reserva?', 'Cancel booking?'))) return
     try {
-      await api.delete(`/clubs/${params.id}/tee-times/bookings/${bookingId}`)
+      const res = await api.delete(`/clubs/${params.id}/tee-times/bookings/${bookingId}`)
+      const refunded = res.data?.refunded_total || 0
+      if (refunded > 0) {
+        setFlashMessage(lbl(
+          `Reserva cancelada · $${refunded.toFixed(0)} reembolsados`,
+          `Booking cancelled · $${refunded.toFixed(0)} refunded`
+        ))
+      } else {
+        setFlashMessage(lbl('Reserva cancelada', 'Booking cancelled'))
+      }
       load()
     } catch { alert(lbl('Error', 'Error')) }
   }
@@ -365,6 +385,13 @@ export default function TeeTimesPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-5 space-y-4">
+        {flashMessage && (
+          <div className="bg-emerald-500/15 border border-emerald-500/40 text-emerald-200 px-4 py-2 rounded-xl text-sm flex items-center justify-between">
+            <span>{flashMessage}</span>
+            <button onClick={() => setFlashMessage(null)} className="text-emerald-400 hover:text-emerald-300"><X size={14} /></button>
+          </div>
+        )}
+
         {/* Day picker */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3 flex items-center gap-3">
           <button onClick={() => shiftDate(-1)}
@@ -928,8 +955,8 @@ export default function TeeTimesPage() {
               {totalFees > 0 && (
                 <p className="text-[10px] text-zinc-500 leading-relaxed">
                   {lbl(
-                    'Los green fees se calculan y persisten al reservar. El cobro real a la cuenta del responsable llega en v1.18.',
-                    'Green fees are calculated and persisted at booking. Actual charge to the responsible account ships in v1.18.'
+                    'Los green fees se cobrarán automáticamente a la cuenta del responsable al confirmar la reserva. Cancelar genera un reembolso automático.',
+                    'Green fees will be auto-charged to the responsible account on confirmation. Cancelling triggers an automatic refund.'
                   )}
                 </p>
               )}
