@@ -244,8 +244,8 @@ class FsmOrder(models.Model):
                 notification_type='start'
             )
 
-        # NOTIFICAR AL CLIENTE POR TELEGRAM (NUEVO)
-        if self.partner_id.telegram_chat_id:
+        # NOTIFICAR AL CLIENTE — F3: usa notify() para respetar canal preferido
+        if (self.partner_id.notification_channel or 'both') != 'none':
             tracking_url = self.get_tracking_url()
             if self.service_type == 'patrol':
                 msg = (f"🚨 *SENTINELA: EMERGENCIA EN CURSO*\n\n"
@@ -258,27 +258,29 @@ class FsmOrder(models.Model):
                        f"ha iniciado su orden de servicio *{self.name}* y se dirige a su domicilio.\n\n"
                        f"📍 *Ubicación:* {self.service_address_id.contact_address or self.partner_id.contact_address}\n\n"
                        f"🧭 *Siga a su técnico en tiempo real por SentiCar:* \n{tracking_url}")
-            
-            self.partner_id.send_telegram_message(msg)
-            self.message_post(body=f"📲 Notificación de '{'Patrulla' if self.service_type == 'patrol' else 'Técnico'} en camino' enviada al cliente con link de SentiCar.")
+
+            res = self.partner_id.notify(message=msg)
+            sent = [c for c, ok in res.items() if ok]
+            label = 'Patrulla' if self.service_type == 'patrol' else 'Técnico'
+            self.message_post(body=f"📲 '{label} en camino' enviado al cliente — canales: {', '.join(sent) or 'NINGUNO'}.")
 
     def action_arrival(self):
         """ Registra la llegada de la patrulla al sitio """
         self.ensure_one()
         self.arrival_date = fields.Datetime.now()
-        
+
         # Intentar obtener ubicación desde Traccar o por contexto
         # Nota: El controlador pasará las coordenadas GPS del móvil si están disponibles
-        
+
         self.message_post(body="📍 **ARRIBO AL SITIO:** El patrullero ha reportado su llegada al domicilio.")
-        
-        # Notificar al cliente por Telegram
-        if self.partner_id.telegram_chat_id:
+
+        # Notificar al cliente — F3: usa notify() multi-canal
+        if (self.partner_id.notification_channel or 'both') != 'none':
             msg = (f"🛡️ *Sentinela: Patrulla en sitio*\n\n"
                    f"Hola *{self.partner_id.name}*, le informamos que nuestra unidad de respuesta ya se encuentra en su domicilio (Folio: {self.name}).\n"
                    f"El patrullero iniciará la inspección perimetral de seguridad.")
-            self.partner_id.send_telegram_message(msg)
-            
+            self.partner_id.notify(message=msg)
+
         return True
 
     def action_finish(self):
