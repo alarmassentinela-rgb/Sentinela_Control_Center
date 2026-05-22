@@ -13,7 +13,7 @@ LOCK_TIMEOUT_MINUTES = 15
 class AlarmEvent(models.Model):
     _name = 'sentinela.alarm.event'
     _description = 'Evento de Alarma'
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _inherit = ['portal.mixin', 'mail.thread', 'mail.activity.mixin']
     _order = 'start_date desc'
 
     name = fields.Char(string='Nombre del Evento', required=True)
@@ -162,6 +162,12 @@ class AlarmEvent(models.Model):
         for rec in self:
             try: rec.subscription_state = rec.subscription_id.technical_state or 'none' if rec.subscription_id else 'none'
             except: rec.subscription_state = 'none'
+
+    def _compute_access_url(self):
+        """F3.2 — URL del portal del cliente para este evento."""
+        super()._compute_access_url()
+        for rec in self:
+            rec.access_url = f'/my/eventos/{rec.id}'
 
     def _clean_translated_name(self, val):
         if not val: return ""

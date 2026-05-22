@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Hook al home del portal (/my): agrega contador de eventos del cliente -->
+    <template id="portal_my_home_alarm_events" name="Portal — Mis Alarmas (link en home)"
+              inherit_id="portal.portal_my_home" customize_show="True" priority="40">
+        <xpath expr="//div[hasclass('o_portal_docs')]" position="inside">
+            <t t-call="portal.portal_docs_entry">
+                <t t-set="title">Alarmas y Eventos</t>
+                <t t-set="url" t-value="'/my/eventos'"/>
+                <t t-set="placeholder_count" t-value="'alarm_event_count'"/>
+            </t>
+        </xpath>
+    </template>
+
+    <!-- Lista paginada de eventos del cliente -->
+    <template id="portal_my_events" name="Mis Alarmas / Eventos">
+        <t t-call="portal.portal_layout">
+            <t t-set="breadcrumbs_searchbar" t-value="True"/>
+
+            <t t-call="portal.portal_searchbar">
+                <t t-set="title">Mis Alarmas</t>
+            </t>
+
+            <t t-if="not events">
+                <p class="alert alert-warning">No tienes eventos registrados en tu cuenta.</p>
+            </t>
+
+            <t t-if="events" t-call="portal.portal_table">
+                <thead>
+                    <tr class="active">
+                        <th>Folio</th>
+                        <th>Fecha</th>
+                        <th>Cuenta</th>
+                        <th>Tipo</th>
+                        <th>Prioridad</th>
+                        <th>Estado</th>
+                        <th class="text-end">Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr t-foreach="events" t-as="ev">
+                        <td>
+                            <a t-attf-href="/my/eventos/#{ev.id}">
+                                <t t-esc="ev.name"/>
+                            </a>
+                        </td>
+                        <td><span t-field="ev.start_date" t-options='{"widget": "datetime"}'/></td>
+                        <td><span t-field="ev.account_number"/></td>
+                        <td>
+                            <span t-out="dict(ev._fields['event_type'].selection).get(ev.event_type) or ev.event_type"/>
+                        </td>
+                        <td>
+                            <span class="badge bg-secondary"
+                                t-out="ev.priority_id.name or '—'"/>
+                        </td>
+                        <td>
+                            <span t-attf-class="badge #{('bg-danger' if ev.status == 'active' else ('bg-warning' if ev.status in ('acknowledged','in_progress') else ('bg-success' if ev.status == 'resolved' else 'bg-secondary')))}"
+                                t-out="dict(ev._fields['status'].selection).get(ev.status)"/>
+                        </td>
+                        <td class="text-end">
+                            <a t-attf-href="/my/eventos/#{ev.id}" class="btn btn-sm btn-primary">Ver</a>
+                        </td>
+                    </tr>
+                </tbody>
+            </t>
+        </t>
+    </template>
+
+    <!-- Detalle de un evento -->
+    <template id="portal_event_detail" name="Detalle del Evento">
+        <t t-call="portal.portal_layout">
+            <div class="card mt-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h4 class="m-0">Evento <t t-esc="event.name"/></h4>
+                    <a t-attf-href="/my/eventos/#{event.id}/pdf" class="btn btn-sm btn-success">
+                        Descargar reporte PDF
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5 class="text-muted">Datos del Evento</h5>
+                            <dl class="row">
+                                <dt class="col-sm-5">Cuenta</dt>
+                                <dd class="col-sm-7"><span t-field="event.account_number"/></dd>
+
+                                <dt class="col-sm-5">Tipo</dt>
+                                <dd class="col-sm-7">
+                                    <span t-out="dict(event._fields['event_type'].selection).get(event.event_type)"/>
+                                </dd>
+
+                                <dt class="col-sm-5">Prioridad</dt>
+                                <dd class="col-sm-7"><span t-field="event.priority_id.name"/></dd>
+
+                                <dt class="col-sm-5">Estado</dt>
+                                <dd class="col-sm-7">
+                                    <span t-out="dict(event._fields['status'].selection).get(event.status)"/>
+                                </dd>
+
+                                <dt class="col-sm-5">Inicio</dt>
+                                <dd class="col-sm-7"><span t-field="event.start_date" t-options='{"widget": "datetime"}'/></dd>
+
+                                <dt class="col-sm-5" t-if="event.end_date">Fin</dt>
+                                <dd class="col-sm-7" t-if="event.end_date"><span t-field="event.end_date" t-options='{"widget": "datetime"}'/></dd>
+
+                                <dt class="col-sm-5" t-if="event.close_reason">Motivo de cierre</dt>
+                                <dd class="col-sm-7" t-if="event.close_reason">
+                                    <span t-out="dict(event._fields['close_reason'].selection).get(event.close_reason)"/>
+                                </dd>
+                            </dl>
+                        </div>
+                        <div class="col-md-6">
+                            <h5 class="text-muted">Patrullaje</h5>
+                            <div t-if="patrol_order">
+                                <dl class="row">
+                                    <dt class="col-sm-5">Folio</dt>
+                                    <dd class="col-sm-7"><span t-field="patrol_order.name"/></dd>
+
+                                    <dt class="col-sm-5">Patrullero</dt>
+                                    <dd class="col-sm-7"><span t-field="patrol_order.technician_id.name"/></dd>
+
+                                    <dt class="col-sm-5" t-if="patrol_order.arrival_date">Hora de arribo</dt>
+                                    <dd class="col-sm-7" t-if="patrol_order.arrival_date">
+                                        <span t-field="patrol_order.arrival_date" t-options='{"widget": "datetime"}'/>
+                                    </dd>
+
+                                    <dt class="col-sm-5">Resultado</dt>
+                                    <dd class="col-sm-7">
+                                        <span t-out="dict(patrol_order._fields['patrol_result'].selection).get(patrol_order.patrol_result) if patrol_order.patrol_result else '—'"/>
+                                    </dd>
+                                </dl>
+                            </div>
+                            <div t-else="">
+                                <p class="text-muted">Este evento no requirió despacho de patrulla.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr/>
+                    <h5 class="text-muted">Notas de Resolución</h5>
+                    <div t-if="event.resolution_notes" class="bg-light p-3" style="white-space: pre-wrap;">
+                        <span t-field="event.resolution_notes"/>
+                    </div>
+                    <div t-else="">
+                        <p class="text-muted">Sin notas registradas.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-3">
+                <a href="/my/eventos" class="btn btn-link">← Volver a la lista</a>
+            </div>
+        </t>
+    </template>
+</odoo>
