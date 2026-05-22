@@ -643,6 +643,9 @@ class AlarmEvent(models.Model):
             'id': o.id, 'name': o.name, 'service_type': o.service_type,
             'stage': o.stage, 'technician_id': o.technician_id.id or False,
             'technician_name': o.technician_id.name or False,
+            'last_eta_minutes': o.last_eta_minutes or 0,
+            'eta_updates_sent': o.eta_updates_sent or 0,
+            'arrival_date': o.arrival_date and str(o.arrival_date) or False,
         } for o in orders]
 
     def get_sale_order_info(self):

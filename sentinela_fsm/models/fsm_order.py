@@ -117,6 +117,13 @@ class FsmOrder(models.Model):
     travel_time = fields.Float(string='Tiempo de Viaje (Horas)')
     work_time = fields.Float(string='Tiempo de Trabajo (Horas)', compute='_compute_work_time', store=True)
 
+    # F3.3 — ETA en vivo del patrullero
+    last_eta_minutes = fields.Integer(string='Última ETA (min)',
+        help='Minutos estimados para llegar al sitio según última posición GPS. 0 = sin dato.')
+    last_eta_at = fields.Datetime(string='Última ETA calculada el', readonly=True)
+    eta_updates_sent = fields.Integer(string='Updates ETA enviados', default=0, readonly=True,
+        help='Máximo 3 notificaciones por orden para evitar spam al cliente.')
+
     # Resolution
     patrol_result = fields.Selection([
         ('no_news', 'Sin Novedad (Todo Seguro)'),
@@ -263,6 +270,14 @@ class FsmOrder(models.Model):
             sent = [c for c, ok in res.items() if ok]
             label = 'Patrulla' if self.service_type == 'patrol' else 'Técnico'
             self.message_post(body=f"📲 '{label} en camino' enviado al cliente — canales: {', '.join(sent) or 'NINGUNO'}.")
+
+        # F3.3 — mandar primera ETA si es patrullaje y tenemos coordenadas
+        if self.service_type == 'patrol':
+            try:
+                self.action_send_eta_update(force=True)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning("ETA inicial falló para %s: %s", self.name, e)
 
     def action_arrival(self):
         """ Registra la llegada de la patrulla al sitio """
@@ -621,6 +636,111 @@ class FsmOrder(models.Model):
         
         self.message_post(body=f"📝 <b>REQUISICIÓN ENVIADA A VENTAS:</b> {req_notes}")
         return True
+
+    # ---------------- F3.3 ETA en vivo ----------------
+
+    MAX_ETA_UPDATES_PER_ORDER = 3
+    AVG_SPEED_KMH = 35.0  # ciudad mexicana promedio con tráfico
+
+    def _haversine_km(self, lat1, lon1, lat2, lon2):
+        """Distancia en km entre 2 puntos lat/lon (fórmula Haversine)."""
+        import math
+        R = 6371.0
+        phi1 = math.radians(lat1)
+        phi2 = math.radians(lat2)
+        dphi = math.radians(lat2 - lat1)
+        dlmb = math.radians(lon2 - lon1)
+        a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlmb / 2) ** 2
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        return R * c
+
+    def _destination_coords(self):
+        """Coordenadas del sitio: prioriza alarm_event.device, fallback partner."""
+        self.ensure_one()
+        if self.alarm_event_id and self.alarm_event_id.device_id:
+            dev = self.alarm_event_id.device_id
+            if dev.latitude and dev.longitude:
+                return dev.latitude, dev.longitude
+        if self.partner_id.partner_latitude and self.partner_id.partner_longitude:
+            return self.partner_id.partner_latitude, self.partner_id.partner_longitude
+        return None, None
+
+    def _patrol_current_coords(self):
+        """Lee coordenadas actuales del patrullero: 1) Traccar live, 2) last_gps_*."""
+        self.ensure_one()
+        # Intento 1: Traccar (live)
+        loc = self.get_last_location_from_traccar()
+        if loc and loc.get('lat') and loc.get('lon'):
+            return loc['lat'], loc['lon']
+        # Intento 2: cache last_gps_* del partner del technician
+        if self.technician_id and self.technician_id.partner_id:
+            p = self.technician_id.partner_id
+            if p.last_gps_lat and p.last_gps_lng:
+                return p.last_gps_lat, p.last_gps_lng
+        return None, None
+
+    def _compute_eta_minutes(self):
+        """Calcula ETA en minutos. Devuelve int o None."""
+        self.ensure_one()
+        dest_lat, dest_lon = self._destination_coords()
+        cur_lat, cur_lon = self._patrol_current_coords()
+        if not (dest_lat and dest_lon and cur_lat and cur_lon):
+            return None
+        distance_km = self._haversine_km(cur_lat, cur_lon, dest_lat, dest_lon)
+        if distance_km <= 0:
+            return 0
+        # ETA aproximado: distance / velocidad. Sumamos 50% por trafico/ruta real vs línea recta.
+        hours = (distance_km / self.AVG_SPEED_KMH) * 1.5
+        return max(1, int(round(hours * 60)))
+
+    def action_send_eta_update(self, force=False):
+        """Recalcula ETA y notifica al cliente si:
+        - El ETA cambió ≥ 2 min desde el último, O force=True.
+        - eta_updates_sent < MAX_ETA_UPDATES_PER_ORDER.
+        - El cliente acepta notificaciones (notification_channel != 'none').
+        Best-effort, no lanza."""
+        self.ensure_one()
+        if self.arrival_date:
+            return False  # ya llegó, no tiene sentido
+        if self.eta_updates_sent >= self.MAX_ETA_UPDATES_PER_ORDER and not force:
+            return False
+        if (self.partner_id.notification_channel or 'both') == 'none':
+            return False
+        eta = self._compute_eta_minutes()
+        if eta is None:
+            return False
+        # Cambio material
+        prev = self.last_eta_minutes or 0
+        if not force and prev > 0 and abs(prev - eta) < 2:
+            return False
+        msg = (f"🛡️ *Sentinela: Patrullero en camino*\n\n"
+               f"Hola *{self.partner_id.name}*, su patrullero está a aproximadamente "
+               f"*{eta} minutos* de llegar a su domicilio (Folio: {self.name}).")
+        res = self.partner_id.notify(message=msg)
+        if any(res.values()):
+            self.write({
+                'last_eta_minutes': eta,
+                'last_eta_at': fields.Datetime.now(),
+                'eta_updates_sent': self.eta_updates_sent + 1,
+            })
+            self.message_post(body=f"📍 ETA enviada al cliente: {eta} min. Canales: {', '.join(c for c, ok in res.items() if ok)}.")
+            return True
+        return False
+
+    @api.model
+    def _cron_send_eta_updates(self):
+        """Cron periódico: actualiza ETA de patrullas activas sin arribo aún."""
+        orders = self.sudo().search([
+            ('service_type', '=', 'patrol'),
+            ('stage', 'in', ('assigned', 'in_progress')),
+            ('arrival_date', '=', False),
+            ('eta_updates_sent', '<', self.MAX_ETA_UPDATES_PER_ORDER),
+        ])
+        sent = 0
+        for o in orders:
+            if o.action_send_eta_update():
+                sent += 1
+        return sent
 
     def get_last_location_from_traccar(self):
         """ Obtiene la última posición del técnico desde Traccar """

@@ -26,5 +26,22 @@
             <field name="sequence">50</field>
             <field name="service_type">patrol</field>
         </record>
+
+        <!-- F3.3 — Cron ETA en vivo del patrullero -->
+        <record id="action_send_eta_updates" model="ir.actions.server">
+            <field name="name">Send ETA Updates</field>
+            <field name="model_id" ref="model_sentinela_fsm_order"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_send_eta_updates()</field>
+        </record>
+
+        <record id="ir_cron_send_eta_updates" model="ir.cron">
+            <field name="name">Sentinela FSM: ETA en vivo del patrullero</field>
+            <field name="ir_actions_server_id" ref="action_send_eta_updates"/>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">3</field>
+            <field name="interval_type">minutes</field>
+            <field name="active" eval="True"/>
+        </record>
     </data>
 </odoo>
