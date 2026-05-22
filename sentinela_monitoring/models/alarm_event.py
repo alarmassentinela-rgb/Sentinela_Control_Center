@@ -832,14 +832,15 @@ class AlarmEvent(models.Model):
             return None, None
 
     def action_send_closure_report(self):
-        """F2.7.3 — Genera el PDF consolidado del evento y lo envía al cliente
-        por Telegram como documento adjunto. Idempotente: si ya se envió
-        un reporte en los últimos 5min, omite (evita duplicados por re-click).
-        No lanza excepciones — best-effort para no bloquear cierres."""
+        """F2.7.3 + F3 — Genera el PDF consolidado del evento y lo envía al
+        cliente por sus canales preferidos (Telegram y/o WhatsApp según
+        notification_channel). Best-effort: no lanza excepciones."""
         self.ensure_one()
         partner = self.partner_id
-        if not partner or not partner.telegram_chat_id:
-            self.message_post(body=_("Reporte de cierre NO enviado: cliente sin Telegram configurado."))
+        if not partner:
+            return False
+        if (partner.notification_channel or 'both') == 'none':
+            self.message_post(body=_("Reporte de cierre NO enviado: cliente con canal='none'."))
             return False
         pdf, filename = self._render_master_report_pdf()
         if not pdf:
@@ -856,14 +857,17 @@ class AlarmEvent(models.Model):
         if patrol_orders:
             caption_parts.append(f"Patrullero: {patrol_orders[0].technician_id.name or '—'}")
         caption = "\n".join(caption_parts)
-        ok = partner.send_telegram_document(filename, pdf, caption=caption)
-        if ok:
+        res = partner.notify(message=caption, document=pdf, filename=filename, caption=caption)
+        sent = [c for c, ok in res.items() if ok]
+        if sent:
             self.message_post(body=_(
-                "📑 Reporte de cierre enviado al cliente vía Telegram (%s)."
-            ) % filename)
+                "📑 Reporte de cierre enviado al cliente (%s) — canales: %s."
+            ) % (filename, ', '.join(sent)))
         else:
-            self.message_post(body=_("Reporte de cierre: el envío Telegram falló."))
-        return ok
+            self.message_post(body=_(
+                "Reporte de cierre: ningún canal entregó. Estado: %s"
+            ) % res)
+        return any(res.values())
 
     # Backwards-compatible alias del botón viejo en views
     def action_send_master_report(self):

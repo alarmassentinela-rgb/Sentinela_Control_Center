@@ -1,4 +1,10 @@
 from odoo import models, fields
+import base64
+import logging
+import re
+
+_logger = logging.getLogger(__name__)
+
 
 class ResPartner(models.Model):
     _inherit = 'res.partner'
@@ -10,6 +16,17 @@ class ResPartner(models.Model):
     last_gps_update = fields.Datetime(string='Última Actualización GPS')
     manual_geolocation = fields.Boolean(string='Geolocalización Manual', default=False)
     telegram_chat_id = fields.Char(string='Telegram Chat ID', help="ID de chat para notificaciones automáticas")
+
+    # F3 — Canal de notificación del cliente
+    notification_channel = fields.Selection([
+        ('both', 'Telegram + WhatsApp'),
+        ('telegram', 'Solo Telegram'),
+        ('whatsapp', 'Solo WhatsApp'),
+        ('none', 'Sin notificaciones automáticas'),
+    ], string='Canal de notificación', default='both',
+       help='Por dónde el sistema envía alertas (camino patrulla, autorizaciones, reporte cierre, etc).')
+    whatsapp_number = fields.Char(string='WhatsApp (opcional)',
+        help='Si está vacío, se usa mobile/phone. Formato libre — el sistema normaliza a E.164.')
 
     def _get_telegram_token(self):
         params = self.env['ir.config_parameter'].sudo()
@@ -28,6 +45,118 @@ class ResPartner(models.Model):
             return res.ok
         except:
             return False
+
+    # ---------------- F3 WhatsApp vía EvoApi ----------------
+
+    def _get_evoapi_config(self):
+        params = self.env['ir.config_parameter'].sudo()
+        return {
+            'url': params.get_param('sentinela_monitoring.evoapi_url') or 'http://192.168.3.2:8080',
+            'key': params.get_param('sentinela_monitoring.evoapi_key') or '61EBE23C75A5787BAD62C9D20D7CE5CA',
+            'instance': params.get_param('sentinela_monitoring.evoapi_instance') or 'SentinelaWA',
+        }
+
+    def _whatsapp_number(self):
+        """Normaliza el número del partner a formato E.164 sin '+' para EvoApi.
+        Mexicano default: agrega '521' si parece nacional 10 dígitos.
+        Returns string o None si no hay número."""
+        self.ensure_one()
+        raw = self.whatsapp_number or self.mobile or self.phone
+        if not raw:
+            return None
+        digits = re.sub(r'\D', '', raw)
+        if not digits:
+            return None
+        # Mexicano: 10 dígitos → agregar 521 (México móvil con prefijo histórico)
+        if len(digits) == 10:
+            return f"521{digits}"
+        # Ya tiene país (52 + 10): asegurar 521 + 10 para móviles
+        if len(digits) == 12 and digits.startswith('52') and not digits.startswith('521'):
+            return f"521{digits[2:]}"
+        return digits
+
+    def send_whatsapp_message(self, message):
+        """F3.1 — Envía mensaje texto al cliente vía EvoApi/WhatsApp.
+        Best-effort: devuelve True/False sin lanzar."""
+        self.ensure_one()
+        number = self._whatsapp_number()
+        if not number:
+            return False
+        cfg = self._get_evoapi_config()
+        import requests
+        try:
+            res = requests.post(
+                f"{cfg['url']}/message/sendText/{cfg['instance']}",
+                headers={'apikey': cfg['key'], 'Content-Type': 'application/json'},
+                json={'number': number, 'text': message},
+                timeout=15,
+            )
+            return res.ok
+        except Exception as e:
+            _logger.warning("WhatsApp sendText failed for %s: %s", self.name, e)
+            return False
+
+    def send_whatsapp_document(self, filename, content_bytes, caption=None):
+        """F3.1 — Envía PDF/documento al cliente vía EvoApi. Returns bool."""
+        self.ensure_one()
+        number = self._whatsapp_number()
+        if not number:
+            return False
+        cfg = self._get_evoapi_config()
+        import requests
+        media_b64 = base64.b64encode(content_bytes).decode('utf-8')
+        payload = {
+            'number': number,
+            'mediatype': 'document',
+            'mimetype': 'application/pdf',
+            'media': media_b64,
+            'fileName': filename,
+        }
+        if caption:
+            payload['caption'] = caption[:1024]
+        try:
+            res = requests.post(
+                f"{cfg['url']}/message/sendMedia/{cfg['instance']}",
+                headers={'apikey': cfg['key'], 'Content-Type': 'application/json'},
+                json=payload,
+                timeout=30,
+            )
+            return res.ok
+        except Exception as e:
+            _logger.warning("WhatsApp sendMedia failed for %s: %s", self.name, e)
+            return False
+
+    # ---------------- F3 Wrapper de notificación ----------------
+
+    def notify(self, message, document=None, filename=None, caption=None):
+        """F3 — Notifica al partner usando el canal preferido en notification_channel.
+        Args:
+            message: texto del mensaje (sirve también como caption del documento).
+            document: bytes del PDF/imagen (opcional). Si presente, se envía como adjunto.
+            filename: nombre del archivo (requerido si document presente).
+            caption: caption diferente al message (override). Si None, usa message.
+
+        Returns: dict {'telegram': bool|None, 'whatsapp': bool|None}
+            None = canal no usado por preferencia
+            True/False = resultado del envío"""
+        self.ensure_one()
+        ch = self.notification_channel or 'both'
+        result = {'telegram': None, 'whatsapp': None}
+        cap = caption if caption is not None else message
+
+        if ch in ('telegram', 'both'):
+            if document:
+                result['telegram'] = self.send_telegram_document(filename, document, caption=cap)
+            else:
+                result['telegram'] = self.send_telegram_message(message)
+
+        if ch in ('whatsapp', 'both'):
+            if document:
+                result['whatsapp'] = self.send_whatsapp_document(filename, document, caption=cap)
+            else:
+                result['whatsapp'] = self.send_whatsapp_message(message)
+
+        return result
 
     def send_telegram_document(self, filename, content_bytes, caption=None):
         """F2.7.3 — Envía un archivo PDF (u otro binary) al cliente vía Telegram.

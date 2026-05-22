@@ -71,14 +71,19 @@ class ServiceAuthorizationToken(models.Model):
         return f"{base}/sentinela/autorizar/{self.token}"
 
     def action_send_telegram(self):
-        """Manda Telegram al cliente con el link de autorización."""
+        """F2.7.1 + F3 — Manda el magic link al cliente por su canal preferido
+        (notification_channel: telegram y/o whatsapp)."""
         self.ensure_one()
         partner = self.partner_id
-        if not partner.telegram_chat_id:
+        # Verificar que hay al menos un canal disponible
+        ch = partner.notification_channel or 'both'
+        has_tg = ch in ('telegram', 'both') and partner.telegram_chat_id
+        has_wa = ch in ('whatsapp', 'both') and (partner.whatsapp_number or partner.mobile or partner.phone)
+        if not has_tg and not has_wa:
             raise UserError(_(
-                "El cliente %s no tiene telegram_chat_id configurado. "
-                "Captura el chat en su ficha o usa autorización manual."
-            ) % partner.name)
+                "El cliente %s no tiene canal disponible (notification_channel=%s, "
+                "telegram_chat_id=%s, mobile=%s). Captura datos o usa autorización manual."
+            ) % (partner.name, ch, bool(partner.telegram_chat_id), bool(partner.mobile)))
         url = self.get_authorization_url()
         service_name = dict(self._fields['service_type'].selection).get(self.service_type, self.service_type)
         msg = (
@@ -92,16 +97,18 @@ class ServiceAuthorizationToken(models.Model):
             f"_Su respuesta queda registrada con fecha, hora y dispositivo para "
             f"efectos de comprobación del consentimiento._"
         )
-        partner.send_telegram_message(msg)
+        res = partner.notify(message=msg)
+        any_sent = any(res.values())
         self.write({
-            'telegram_sent': True,
-            'telegram_sent_at': fields.Datetime.now(),
+            'telegram_sent': bool(res.get('telegram')) or bool(res.get('whatsapp')),
+            'telegram_sent_at': fields.Datetime.now() if any_sent else False,
             'telegram_message': msg,
         })
+        channels_sent = [c for c, ok in res.items() if ok]
         self.alarm_event_id.message_post(body=_(
-            "Telegram con autorización enviado al cliente (token %s)."
-        ) % self.token[:8])
-        return True
+            "Autorización enviada al cliente (token %s) — canales: %s."
+        ) % (self.token[:8], ', '.join(channels_sent) or 'NINGUNO'))
+        return any_sent
 
     def _record_response(self, ip=None, user_agent=None):
         """Helper para registrar IP/UA al responder."""

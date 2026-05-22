@@ -12,10 +12,26 @@
                         invisible="not phone"/>
             </xpath>
             <xpath expr="//field[@name='mobile']" position="after">
-                <button name="action_dial_ucm_ami" type="object" 
-                        string="LLAMAR UCM" icon="fa-mobile" 
+                <button name="action_dial_ucm_ami" type="object"
+                        string="LLAMAR UCM" icon="fa-mobile"
                         class="btn-primary ms-2"
                         invisible="not mobile"/>
+            </xpath>
+            <!-- F3 — Configuración del canal de notificación. Se inserta al final del notebook con position=inside. -->
+            <xpath expr="//notebook" position="inside">
+                <page string="Notificaciones Sentinela" name="sentinela_notifications">
+                    <group>
+                        <group string="Canal preferido">
+                            <field name="notification_channel"/>
+                            <field name="telegram_chat_id" placeholder="ej. 7965190381"/>
+                            <field name="whatsapp_number" placeholder="vacío = usa mobile"/>
+                        </group>
+                        <group string="GPS / Tracking (Patrullas)">
+                            <field name="is_patrol"/>
+                            <field name="traccar_device_id" invisible="not is_patrol"/>
+                        </group>
+                    </group>
+                </page>
             </xpath>
         </field>
     </record>
