@@ -526,6 +526,15 @@ class AlarmEvent(models.Model):
         # resolver suelta el lock
         self.write({'status': 'resolved', 'end_date': datetime.now(),
                     'current_operator_id': False, 'claimed_at': False})
+        # F2.7.3 — auto-envío del reporte consolidado al cliente vía Telegram.
+        # Best-effort: try/except envuelve el método (que ya no lanza),
+        # pero protege ante cualquier error inesperado de red.
+        for rec in self:
+            if rec.partner_id and rec.partner_id.telegram_chat_id:
+                try:
+                    rec.action_send_closure_report()
+                except Exception as e:
+                    _logger.warning("F2.7.3: envío de reporte falló para evento %s: %s", rec.name, e)
         return True
 
     # ---------- F2.6 Cobranza al atender ----------
@@ -804,36 +813,61 @@ class AlarmEvent(models.Model):
             self.message_post(body=f"❌ <b>Error AMI:</b> No se pudo conectar al conmutador: {str(e)}")
             return False
 
-    def action_send_master_report(self):
-        """
-        Genera y envía el reporte consolidado (Señales + Patrulla + Operador)
-        """
+    def _render_master_report_pdf(self):
+        """F2.7.3 — Renderiza el reporte master_incident como bytes PDF.
+        Devuelve (pdf_bytes, filename) o (None, None) si falla."""
         self.ensure_one()
-        
-        # 1. Validar que la patrulla haya terminado (si hubo)
+        try:
+            report = self.env.ref('sentinela_monitoring.action_report_master_incident', raise_if_not_found=False)
+            if not report:
+                _logger.warning("F2.7.3: report action_report_master_incident no existe")
+                return None, None
+            pdf_content, _ctype = report.sudo()._render_qweb_pdf(
+                'sentinela_monitoring.action_report_master_incident', self.ids)
+            safe_name = (self.name or 'EVENTO').replace('/', '_').replace(' ', '_')
+            filename = f"Reporte_Sentinela_{safe_name}.pdf"
+            return pdf_content, filename
+        except Exception as e:
+            _logger.exception("F2.7.3: error generando PDF del evento %s: %s", self.name, e)
+            return None, None
+
+    def action_send_closure_report(self):
+        """F2.7.3 — Genera el PDF consolidado del evento y lo envía al cliente
+        por Telegram como documento adjunto. Idempotente: si ya se envió
+        un reporte en los últimos 5min, omite (evita duplicados por re-click).
+        No lanza excepciones — best-effort para no bloquear cierres."""
+        self.ensure_one()
+        partner = self.partner_id
+        if not partner or not partner.telegram_chat_id:
+            self.message_post(body=_("Reporte de cierre NO enviado: cliente sin Telegram configurado."))
+            return False
+        pdf, filename = self._render_master_report_pdf()
+        if not pdf:
+            self.message_post(body=_("Reporte de cierre: falló la generación del PDF."))
+            return False
         patrol_orders = self.fsm_order_ids.filtered(lambda o: o.service_type == 'patrol')
-        for order in patrol_orders:
-            if not order.is_authorized_by_operator:
-                 raise models.ValidationError(_("Debe autorizar el reporte del patrullero %s antes de enviar el informe maestro.") % order.name)
+        caption_parts = [
+            f"📋 *Reporte de Evento {self.name}*",
+            f"Cuenta: {self.account_number or '—'}",
+        ]
+        if self.close_reason:
+            reason_label = dict(self._fields['close_reason'].selection).get(self.close_reason, self.close_reason)
+            caption_parts.append(f"Cierre: {reason_label}")
+        if patrol_orders:
+            caption_parts.append(f"Patrullero: {patrol_orders[0].technician_id.name or '—'}")
+        caption = "\n".join(caption_parts)
+        ok = partner.send_telegram_document(filename, pdf, caption=caption)
+        if ok:
+            self.message_post(body=_(
+                "📑 Reporte de cierre enviado al cliente vía Telegram (%s)."
+            ) % filename)
+        else:
+            self.message_post(body=_("Reporte de cierre: el envío Telegram falló."))
+        return ok
 
-        # 2. Lógica de envío (PDF Maestro)
-        # Por ahora enviamos una notificación de éxito
-        self.message_post(body="📑 <b>Informe Maestro Generado:</b> Se ha consolidado la bitácora de señales con el reporte de patrullaje y se ha enviado al cliente.")
-        
-        # Notificar por Telegram si el cliente tiene chat_id
-        if self.partner_id.telegram_chat_id:
-            msg = (f"📋 *Sentinela: Informe Maestro de Incidente*\n\n"
-                   f"Estimado cliente, se ha generado el reporte final del evento *{self.name}*.\n\n"
-                   f"✅ *Dictamen Central:* {self.operator_final_remarks or 'Atendido con éxito.'}\n")
-            
-            if patrol_orders:
-                # msg += f"🛡️ *Dictamen Patrulla:* {patrol_orders[0].patrol_result or 'Inspección completada.'}\n"
-                msg += f"🛡️ *Dictamen Patrulla:* Inspección completada.\n"
-            
-            msg += f"\nEl reporte detallado en PDF ha sido enviado a su correo electrónico."
-            self.partner_id.send_telegram_message(msg)
-
-        return True
+    # Backwards-compatible alias del botón viejo en views
+    def action_send_master_report(self):
+        return self.action_send_closure_report()
 
     def action_capture_snapshot(self):
         """
