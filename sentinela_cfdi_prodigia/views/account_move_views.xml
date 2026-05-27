@@ -6,11 +6,11 @@
         <field name="inherit_id" ref="account.view_move_form"/>
         <field name="arch" type="xml">
             <xpath expr="//header" position="inside">
-                <button name="action_prodigia_stamp" 
+                <button name="action_cfdi_stamp_prodigia" 
                         string="Timbrar con Prodigia" 
                         type="object" 
                         class="oe_highlight"
-                        invisible="cfdi_status == 'sent' or move_type not in ('out_invoice', 'out_refund')"/>
+                        invisible="cfdi_status == 'valid' or move_type not in ('out_invoice', 'out_refund')"/>
             </xpath>
             <xpath expr="//notebook" position="inside">
                 <page string="Facturación Mexicana (Prodigia)" name="prodigia_mx">

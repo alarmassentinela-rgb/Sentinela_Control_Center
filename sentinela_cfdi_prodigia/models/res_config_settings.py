@@ -30,10 +30,10 @@ class ResConfigSettings(models.TransientModel):
         config_parameter='sentinela_cfdi_prodigia.client_code',
     )
     prodigia_test_mode = fields.Boolean(
-        string='Modo de Prueba Prodigia',
+        string='Modo Prueba (No timbres reales)',
         config_parameter='sentinela_cfdi_prodigia.test_mode',
         default=True,
-        help='Si está activo, los CFDI se timbrarán en modo de prueba en Prodigia.'
+        help="Activado: los timbres se envían como prueba al SAT. Desactivar solo en producción.",
     )
 
 

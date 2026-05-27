@@ -75,6 +75,13 @@ class SentinelaSignDocument(models.Model):
         self._generate_signed_pdf()
         
         self.state = 'signed'
+        # Notificar al modelo origen si es una suscripcion
+        if self.res_model == 'sentinela.subscription' and self.res_id:
+            sub = self.env['sentinela.subscription'].browse(self.res_id)
+            if sub.exists() and sub.state == 'pending_signature':
+                sub.write({'state': 'confirmed'})
+                sub.message_post(body=u'\u2705 <b>Contrato firmado digitalmente.</b> '
+                    u'Firmado por: %s. Listo para activar servicio.' % self.signed_by)
         return True
 
     def _generate_signed_pdf(self):
