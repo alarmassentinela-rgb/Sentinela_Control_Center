@@ -61,16 +61,6 @@ class ResPartner(models.Model):
              "Ambos documentos aplican para cobranza y generan saldo pendiente."
     )
 
-    # --- Condiciones CFDI ---
-    invoice_cfdi_usage = fields.Selection([
-        ('G01', 'Adquisición de mercancías'),
-        ('G03', 'Gastos en general'),
-        ('I01', 'Construcciones'),
-        ('S01', 'Sin efectos fiscales'),
-        ('CP01', 'Pagos'),
-        ('P01', 'Por definir (Obsoleto CFDI 4.0)')
-    ], string='Uso CFDI', default='G03')
-
     subscription_count = fields.Integer(compute='_compute_subscription_count', string='# Subscriptions')
     
     def _compute_subscription_count(self):

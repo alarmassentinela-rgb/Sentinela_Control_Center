@@ -86,7 +86,21 @@ class SentinelaSubscription(models.Model):
     ], string='Modalidad de Contrato (legacy)', default='monthly')
     early_termination_fee = fields.Monetary(string='Penalización por Cancelar Antes de Plazo', currency_field='currency_id')
     contract_signed = fields.Boolean(string='Contrato Firmado', default=False, tracking=True)
-    contract_body_html = fields.Html(string='Contrato (HTML)', compute='_compute_contract_body_html', store=False)
+    contract_date = fields.Date(string='Fecha del Contrato', tracking=True,
+        help='Fecha de celebración del contrato. Se llena automáticamente al generar el contrato por primera vez.')
+    contract_date_human = fields.Char(string='Fecha del Contrato (texto)', compute='_compute_contract_date_human')
+
+    @api.depends('contract_date')
+    def _compute_contract_date_human(self):
+        meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                 'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+        for rec in self:
+            if rec.contract_date:
+                rec.contract_date_human = f'{rec.contract_date.day} de {meses[rec.contract_date.month-1]} de {rec.contract_date.year}'
+            else:
+                rec.contract_date_human = '—'
+    contract_body_html = fields.Html(string='Contrato (HTML)', compute='_compute_contract_body_html',
+                                     store=False, sanitize=False, sanitize_attributes=False, sanitize_style=False)
     # DEPRECATED v18.0.1.3.0 — duplicado de commitment_period. Eliminado de la vista.
     # commitment_months = fields.Integer(related='commitment_period', string='Plazo (meses)', readonly=True)
     # DEPRECATED v18.0.1.3.0 — decorativo, no respetaba lógica. Eliminado de la vista.
@@ -150,6 +164,79 @@ class SentinelaSubscription(models.Model):
     location_notes = fields.Text(string='Referencias de Ubicación')
     latitude = fields.Char(string='Latitud')
     longitude = fields.Char(string='Longitud')
+    def action_open_map(self):
+        """Abre Google Maps en una nueva pestaña centrado en las coordenadas."""
+        self.ensure_one()
+        if not self.latitude or not self.longitude:
+            raise UserError(_('No hay coordenadas guardadas. Usa "Obtener Coordenadas" primero.'))
+        return {
+            'type': 'ir.actions.act_url',
+            'url': f'https://www.google.com/maps?q={self.latitude},{self.longitude}&z=17',
+            'target': 'new',
+        }
+
+    def action_geocode_address(self):
+        """Geocodifica la dirección del servicio usando base_geolocalize.
+        Estrategia de fallback en cascada:
+          1. Dirección completa (street + street2 + zip + ciudad + estado)
+          2. Calle limpia (sin "#NNN ENTRE X y Y") + zip + ciudad + estado
+          3. Solo zip + ciudad + estado (precisión a nivel CP)
+        """
+        self.ensure_one()
+        import re
+        Geocoder = self.env['base.geocoder']
+        state_name = self.address_state_id.name if self.address_state_id else None
+        if not (self.address_street or self.address_zip or self.address_city):
+            raise UserError(_('Se requiere al menos calle/CP/ciudad en la dirección del servicio antes de geocodificar.'))
+
+        def try_query(parts, precision_label):
+            q = ', '.join(filter(None, parts))
+            if not q:
+                return None, None
+            try:
+                r = Geocoder.geo_find(q)
+            except Exception:
+                r = None
+            return (r, precision_label) if r else (None, None)
+
+        # Intento 1 — dirección completa
+        result, precision = try_query(
+            [self.address_street, self.address_street2, self.address_zip,
+             self.address_city, state_name, 'México'],
+            'exacta')
+
+        # Intento 2 — limpiar números/anotaciones de la calle
+        if not result and self.address_street:
+            clean = re.sub(r'#\s*\d+\S*|ENTRE\s+\S+\s+y\s+\S+|N[oº]\s*\d+', '',
+                           self.address_street, flags=re.IGNORECASE).strip(' ,')
+            if clean and clean.lower() != self.address_street.lower():
+                result, precision = try_query(
+                    [clean, self.address_zip, self.address_city, state_name, 'México'],
+                    'media (sin número)')
+
+        # Intento 3 — solo CP + ciudad + estado
+        if not result:
+            result, precision = try_query(
+                [self.address_zip, self.address_city, state_name, 'México'],
+                'aproximada (código postal)')
+
+        if not result:
+            raise UserError(_(
+                'No se encontraron coordenadas para esta dirección.\n'
+                'Verifica que el CP, ciudad y estado estén correctos, o ingresa las coordenadas manualmente.'
+            ))
+        lat, lng = result[0], result[1]
+        self.write({'latitude': str(lat), 'longitude': str(lng)})
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Coordenadas obtenidas (precisión: %s)') % precision,
+                'message': _('Lat: %.6f, Lng: %.6f\nAjusta manualmente si no es exacto.') % (lat, lng),
+                'type': 'success' if precision == 'exacta' else 'warning',
+                'sticky': False,
+            }
+        }
     
     # --- Extensions ---
     extension_due_date = fields.Date(string='Vencimiento de Prórroga', tracking=True)
@@ -178,9 +265,30 @@ class SentinelaSubscription(models.Model):
     vehicle_plate = fields.Char(string='Placa')
     vehicle_vin = fields.Char(string='VIN / NIV')
 
-    # --- Internet WISP — Antena CPE ---
+    # --- Internet WISP — Antena CPE exterior (Ubiquiti/MikroTik) ---
+    antenna_product_id = fields.Many2one('product.template', string='Antena (catálogo)',
+        domain="[('syscom_brand','in',['UBIQUITI','MIKROTIK'])]",
+        help="Selecciona la antena del catálogo (Ubiquiti/MikroTik). Marca y modelo se llenan solos. Si es de otra marca no catalogada, déjalo vacío y captura manual.")
     antenna_brand = fields.Char(string='Marca Antena')
     antenna_model = fields.Char(string='Modelo Antena')
+    antenna_serial = fields.Char(string='Número de Serie Antena')
+    # Router/Módem WiFi interior (cualquier marca: TP-Link, Hikvision, etc.)
+    router_product_id = fields.Many2one('product.template', string='Router/Módem (catálogo)',
+        help="Selecciona el router/módem del catálogo (cualquier marca). Marca y modelo se llenan solos. Si no está catalogado, déjalo vacío y captura manual.")
+    # Panel de tráfico en vivo (embebido, se llena con el botón Actualizar Tráfico)
+    live_traffic_status = fields.Char(string='Estado', readonly=True)
+    live_traffic_ip = fields.Char(string='IP en línea', readonly=True)
+    live_traffic_rx = fields.Char(string='⬇ Bajada (RX)', readonly=True)
+    live_traffic_tx = fields.Char(string='⬆ Subida (TX)', readonly=True)
+    live_traffic_updated = fields.Datetime(string='Última lectura', readonly=True)
+    live_traffic_graph = fields.Char(string='Gráfica', readonly=True)  # dummy para el widget OWL
+    # Señal de la antena CPE (airOS, vía SSH mca-status)
+    antenna_signal_dbm = fields.Char(string='Señal', readonly=True)
+    antenna_snr = fields.Char(string='SNR', readonly=True)
+    antenna_signal_quality = fields.Char(string='Calidad de Señal', readonly=True)
+    antenna_link_rate = fields.Char(string='Enlace TX/RX', readonly=True)
+    antenna_distance = fields.Char(string='Distancia', readonly=True)
+    antenna_signal_updated = fields.Datetime(string='Señal actualizada', readonly=True)
 
     # --- Internet WISP (PPPoE & Router) ---
     router_id = fields.Many2one('sentinela.router', string='Mikrotik Router')
@@ -196,7 +304,9 @@ class SentinelaSubscription(models.Model):
     gateway_address = fields.Char(string='Gateway')
     subnet_mask = fields.Char(string='Máscara de Subred')
     vlan_id = fields.Char(string='VLAN ID')
-    mikrotik_profile_id = fields.Many2one('sentinela.mikrotik.profile', string='Perfil MikroTik')
+    mikrotik_profile_id = fields.Many2one('sentinela.mikrotik.profile', string='Perfil MikroTik',
+        compute='_compute_mikrotik_profile_id', store=True, readonly=False,
+        help="Se hereda automáticamente del perfil del plan. Si el plan no tiene perfil, se puede elegir manualmente.")
     product_mikrotik_profile_id = fields.Many2one(
         'sentinela.mikrotik.profile',
         related='product_id.mikrotik_profile_id',
@@ -243,8 +353,54 @@ class SentinelaSubscription(models.Model):
 
     @api.depends('contract_body')
     def _compute_contract_body_html(self):
+        """Renderiza el cuerpo del contrato con estilo de documento + logo de la compañía."""
+        company = self.env.company
+        logo_url = f'/web/image/res.company/{company.id}/logo'
+        company_name = company.name or 'Sentinela'
+        company_vat = company.vat or ''
+        css = (
+            '<style>'
+            '.sentinela-contract { background:#fff; max-width:850px; margin:0 auto; '
+            'padding:40px 60px; font-family: Georgia, "Times New Roman", serif; '
+            'color:#222; line-height:1.55; box-shadow:0 0 8px rgba(0,0,0,0.08); '
+            'border:1px solid #ddd; }'
+            '.sentinela-contract .sc-header { border-bottom:2px solid #1f4e79; '
+            'padding-bottom:10px; margin-bottom:25px; }'
+            '.sentinela-contract .sc-header h2 { margin:6px 0 2px 0; color:#1f4e79; font-size:18px; }'
+            '.sentinela-contract .sc-header small { color:#666; font-size:12px; }'
+            '.sentinela-contract h1, .sentinela-contract h2, .sentinela-contract h3 { color:#1f4e79; }'
+            '.sentinela-contract p { text-align:justify; margin: 0.6em 0; }'
+            '.sentinela-contract .sc-empty { padding:30px; background:#f8f8f8; '
+            'border:1px dashed #ccc; text-align:center; color:#888; font-style:italic; }'
+            '</style>'
+        )
+        # Construir header con folio + fecha a la derecha
+        # se completa por suscripción dentro del for de abajo
+        header_template = (
+            '<div class="sc-header" style="display:flex; justify-content:space-between; align-items:center;">'
+            '<div>'
+            f'<img src="{logo_url}" alt="{company_name}" '
+            'style="height:50px; width:auto; max-width:180px; vertical-align:middle; margin-right:14px;"/>'
+            '<span style="font-size:18px; color:#1f4e79; font-weight:bold; vertical-align:middle;">CONTRATO DE SERVICIO</span>'
+            '</div>'
+            '<div style="text-align:right; font-size:12px; color:#444;">'
+            'Folio: <b>{folio}</b><br/>'
+            'Fecha: <b>{fecha}</b>'
+            '</div>'
+            '</div>'
+        )
         for rec in self:
-            rec.contract_body_html = rec.contract_body or ''
+            header_html = header_template.format(folio=rec.name or '—', fecha=rec.contract_date_human)
+            if rec.contract_body and rec.contract_body.strip():
+                body = rec.contract_body
+            else:
+                body = (
+                    '<div class="sc-empty">Aún no se ha redactado el contrato. '
+                    'Usa el botón <b>"Redactar / Actualizar Contrato"</b> arriba para generarlo a partir de la plantilla.</div>'
+                )
+            rec.contract_body_html = (
+                f'{css}<div class="sentinela-contract">{header_html}{body}</div>'
+            )
 
     # --- Financials ---
     invoice_ids = fields.One2many('account.move', 'subscription_id', string='Invoices')
@@ -255,6 +411,61 @@ class SentinelaSubscription(models.Model):
     # --- Digital Signature Integration ---
     sign_document_id = fields.Many2one('sentinela.sign.document', string='Documento de Firma', readonly=True)
     sign_state = fields.Selection(related='sign_document_id.state', string='Estado de Firma', readonly=True)
+    contract_status_label = fields.Char(string='Estado del Contrato', compute='_compute_contract_status_label')
+
+    @api.depends('contract_body', 'sign_document_id', 'sign_state', 'contract_signed')
+    def _compute_contract_status_label(self):
+        for rec in self:
+            if rec.contract_signed and (not rec.sign_state or rec.sign_state != 'signed'):
+                rec.contract_status_label = '📝 Firmado en papel'
+            elif rec.sign_state == 'signed':
+                rec.contract_status_label = '✅ Firmado digitalmente'
+            elif rec.sign_state == 'sent':
+                rec.contract_status_label = '📤 Enviado al cliente, esperando firma'
+            elif rec.sign_state == 'cancel':
+                rec.contract_status_label = '⛔ Solicitud de firma cancelada'
+            elif rec.contract_body and rec.contract_body.strip():
+                rec.contract_status_label = '🟡 Redactado, pendiente enviar'
+            else:
+                rec.contract_status_label = '🔴 Sin contrato redactado'
+
+    def action_print_contract(self):
+        """Descarga el contrato como PDF usando el report Qweb."""
+        self.ensure_one()
+        if not self.contract_body or not self.contract_body.strip():
+            raise UserError(_('Redacta el contrato primero (botón "Redactar Contrato").'))
+        return self.env.ref('sentinela_subscriptions.action_report_subscription_contract').report_action(self)
+
+    def action_send_contract_for_signature(self):
+        """Genera (si no existe) el sign_document y lo envía por email al cliente."""
+        self.ensure_one()
+        if not self.contract_body or not self.contract_body.strip():
+            raise UserError(_('Redacta el contrato primero (botón "Redactar Contrato" en la cabecera).'))
+        if not self.partner_id.email:
+            raise UserError(_('El cliente %s no tiene email configurado. Agrega un email en su ficha.') % self.partner_id.name)
+        # Crear sign_document si no existe (o si está cancelado/firmado anterior, crear uno nuevo)
+        if not self.sign_document_id or self.sign_document_id.state in ('signed', 'cancel'):
+            sign_doc = self.env['sentinela.sign.document'].create({
+                'partner_id': self.partner_id.id,
+                'res_model': self._name,
+                'res_id': self.id,
+                'filename': f"Contrato_{self.name}.pdf",
+                'file': base64.b64encode((self.contract_body or '').encode('utf-8')),
+            })
+            self.sign_document_id = sign_doc.id
+        # Enviar email (cambia estado a 'sent')
+        self.sign_document_id.action_send_email()
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Contrato enviado'),
+                'message': _('Se envió el contrato a %s (%s) para firma electrónica.') % (
+                    self.partner_id.name, self.partner_id.email),
+                'type': 'success',
+                'sticky': False,
+            }
+        }
 
     currency_id = fields.Many2one('res.currency', default=lambda self: self.env.company.currency_id)
     payment_term_id = fields.Many2one('account.payment.term', string='Plazos de Pago')
@@ -342,24 +553,78 @@ class SentinelaSubscription(models.Model):
         for rec in self:
             rec.pppoe_password_locked = not rec.pppoe_password_locked
 
+    def action_alta_router_pppoe(self):
+        """Cliente NUEVO: asigna el siguiente ctaNNNN libre del router y crea su secret PPPoE.
+        Acción explícita del usuario — ignora sync_active. Si el usuario ya existe, NO lo
+        sobreescribe (protege a Argus): lanza error."""
+        self.ensure_one()
+        if self.service_type != 'internet' or self.internet_mgmt_mode != 'pppoe':
+            raise UserError(_('Esta acción es solo para suscripciones de Internet por PPPoE.'))
+        if not self.router_id:
+            raise UserError(_('Asigna primero el Router MikroTik.'))
+        if not self.mikrotik_profile_id:
+            raise UserError(_('Asigna primero el Perfil MikroTik (se hereda del plan).'))
+        import routeros_api, re
+        conn = routeros_api.RouterOsApiPool(
+            self.router_id.ip_address, username=self.router_id.api_user,
+            password=self.router_id.api_password or '', port=self.router_id.api_port,
+            plaintext_login=True)
+        try:
+            api = conn.get_api()
+            secrets = api.get_resource('/ppp/secret')
+            all_secrets = secrets.get()
+            # Si no tiene usuario asignado, calcular el siguiente ctaNNNN libre
+            if not self.pppoe_user:
+                nums = [int(m.group(1)) for s in all_secrets
+                        for m in [re.match(r'cta(\d+)$', s.get('name', '') or '')] if m]
+                nxt = (max(nums) + 1) if nums else 1
+                self.pppoe_user = 'cta%04d' % nxt
+            # Protección: no sobreescribir un secret existente (p.ej. de Argus)
+            if any(s.get('name') == self.pppoe_user for s in all_secrets):
+                raise UserError(_('El usuario %s ya existe en el router. No se sobreescribe. '
+                                  'Revisa o deja el campo vacío para asignar uno nuevo.') % self.pppoe_user)
+            # Password por defecto patrón Argus (.ctaNNNN.) si el usuario no capturó uno
+            if not self.pppoe_password:
+                self.pppoe_password = '.%s.' % self.pppoe_user
+            secrets.add(
+                name=self.pppoe_user, password=self.pppoe_password, service='pppoe',
+                profile=self.mikrotik_profile_id.name, comment='Odoo SUB/%s' % self.name)
+            conn.disconnect()
+        except UserError:
+            try: conn.disconnect()
+            except Exception: pass
+            raise
+        except Exception as e:
+            try: conn.disconnect()
+            except Exception: pass
+            raise UserError(_('Error al dar de alta en el router: %s') % e)
+        self.message_post(body=_('✅ <b>Alta en router:</b> secret PPPoE <b>%s</b> creado con perfil <b>%s</b>. El CPE ya puede autenticar.') % (self.pppoe_user, self.mikrotik_profile_id.name))
+        return {'type': 'ir.actions.client', 'tag': 'display_notification',
+                'params': {'title': _('Alta en router exitosa'),
+                           'message': _('Usuario %s creado en el MikroTik.') % self.pppoe_user,
+                           'type': 'success', 'sticky': False}}
+
     # --- Billing Automation ---
     def _cron_generate_pre_invoices(self):
-        """ Generates Sale Orders (Quotes) 5 days before due date, respecting grouping preferences """
+        """ Generates Sale Orders (Quotes) for subscriptions due within the next 5 days
+        (including overdue ones), respecting grouping preferences. Robust: uses <= so a
+        missed cron run or a back-dated next_billing_date never loses a billing window. """
         today = fields.Date.today()
         target_date = today + timedelta(days=5)
-        
-        # Find active subscriptions due in exactly 5 days
+
+        # Find active subscriptions due on/before the 5-day horizon (catches overdue too)
         subs_to_notify = self.search([
             ('state', '=', 'active'),
-            ('next_billing_date', '=', target_date)
+            ('next_billing_date', '<=', target_date)
         ])
         
         SaleOrder = self.env['sale.order']
         grouped_subs = {}
         
         for sub in subs_to_notify:
-            # Check duplicates per sub first
-            existing = sub.sale_order_ids.filtered(lambda s: s.date_order.date() == today and s.state in ['draft', 'sent'])
+            # Avoid duplicates: skip if this sub already has an OPEN quote (any day),
+            # not just one created today. Prevents daily re-generation for overdue subs.
+            existing = sub.sale_order_ids.filtered(lambda s: s.state in ['draft', 'sent'])
             if existing:
                 continue
 
@@ -618,14 +883,18 @@ class SentinelaSubscription(models.Model):
         self.ensure_one()
         if not self.contract_template_id:
             raise UserError("No hay una plantilla de contrato definida para este plan.")
-        
+
+        # Setea fecha del contrato la primera vez = fecha de alta del servicio (no la sobrescribe si ya existe)
+        if not self.contract_date:
+            self.contract_date = self.start_date
+
         # Render the template using mail.render.mixin logic from template
         rendered_content = self.contract_template_id._render_template(
-            self.contract_template_id.content, 
-            'sentinela.subscription', 
+            self.contract_template_id.content,
+            'sentinela.subscription',
             [self.id]
         )[self.id]
-        
+
         self.contract_body = rendered_content
         self.message_post(body="📄 <b>Contrato Generado:</b> Se ha actualizado el contenido del contrato digital.")
 
@@ -746,7 +1015,7 @@ class SentinelaSubscription(models.Model):
                 plaintext_login=True,
             )
             api = conn.get_api()
-            sessions = api.get_resource('/ppp/active').call('print', {'?name': self.pppoe_user})
+            sessions = api.get_resource('/ppp/active').get(name=self.pppoe_user)
             if sessions:
                 s = sessions[0]
                 self.write({'ip_address': s.get('address', self.ip_address)})
@@ -761,26 +1030,202 @@ class SentinelaSubscription(models.Model):
             raise UserError(f"Error al consultar MikroTik: {e}")
 
     def action_open_ping_wizard(self):
+        """Ping ICMP real desde el router hacia la IP del cliente (latencia + % pérdida)."""
         self.ensure_one()
-        return {
-            'type': 'ir.actions.act_window',
-            'name': 'Ping / Diagnóstico',
-            'res_model': 'sentinela.mikrotik.traffic',
-            'view_mode': 'form',
-            'target': 'new',
-            'context': {'default_subscription_id': self.id},
-        }
+        if not self.router_id:
+            raise UserError(_('Asigna primero el Router MikroTik.'))
+        import routeros_api
+        conn = routeros_api.RouterOsApiPool(
+            self.router_id.ip_address, username=self.router_id.api_user,
+            password=self.router_id.api_password or '', port=int(self.router_id.api_port or 8728),
+            plaintext_login=True)
+        try:
+            api = conn.get_api()
+            target_ip = self.ip_address
+            # En PPPoE, tomar la IP de la sesión activa (más confiable)
+            if self.internet_mgmt_mode == 'pppoe' and self.pppoe_user:
+                sess = api.get_resource('/ppp/active').get(name=self.pppoe_user)
+                if not sess:
+                    conn.disconnect()
+                    raise UserError(_('El cliente no tiene sesión PPPoE activa (offline). No se puede hacer ping.'))
+                target_ip = sess[0].get('address', target_ip)
+            if not target_ip:
+                conn.disconnect()
+                raise UserError(_('No hay IP asignada para hacer ping. Verifica la conexión primero.'))
+            res = api.get_resource('/').call('ping', {'address': target_ip, 'count': '5'})
+            conn.disconnect()
+        except UserError:
+            try: conn.disconnect()
+            except Exception: pass
+            raise
+        except Exception as e:
+            try: conn.disconnect()
+            except Exception: pass
+            raise UserError(_('Error al hacer ping desde el router: %s') % e)
+        last = res[-1] if res else {}
+        sent = last.get('sent', '5'); recv = last.get('received', '0')
+        loss = last.get('packet-loss', '?'); avg = last.get('avg-rtt', '?')
+        max_rtt = last.get('max-rtt', '?')
+        try:
+            ploss = int(loss)
+            tipo = 'success' if ploss == 0 else ('warning' if ploss < 100 else 'danger')
+        except Exception:
+            tipo = 'warning'
+        self.message_post(body=_('📡 <b>Ping a %s:</b> %s/%s recibidos, pérdida %s%%, latencia avg %s / max %s.') % (
+            target_ip, recv, sent, loss, avg, max_rtt))
+        return {'type': 'ir.actions.client', 'tag': 'display_notification',
+                'params': {'title': _('Ping a %s') % target_ip,
+                           'message': _('%s/%s recibidos · pérdida %s%% · latencia %s (max %s)') % (recv, sent, loss, avg, max_rtt),
+                           'type': tipo, 'sticky': False}}
 
     def action_view_traffic(self):
+        """Actualiza el panel de tráfico en vivo EMBEBIDO en el formulario (sin popup)."""
         self.ensure_one()
-        return {
-            'type': 'ir.actions.act_window',
-            'name': 'Tráfico MikroTik',
-            'res_model': 'sentinela.mikrotik.traffic',
-            'view_mode': 'form',
-            'target': 'new',
-            'context': {'default_subscription_id': self.id},
-        }
+        if not self.router_id:
+            raise UserError(_('Asigna primero el Router MikroTik.'))
+        import routeros_api
+        conn = routeros_api.RouterOsApiPool(
+            self.router_id.ip_address, username=self.router_id.api_user,
+            password=self.router_id.api_password or '', port=int(self.router_id.api_port or 8728),
+            plaintext_login=True)
+        ip = self.ip_address or '—'; rx = tx = 0.0; status = 'Sin datos'
+        try:
+            api = conn.get_api()
+            if self.internet_mgmt_mode == 'pppoe' and self.pppoe_user:
+                sess = api.get_resource('/ppp/active').get(name=self.pppoe_user)
+                if sess:
+                    ip = sess[0].get('address', ip)
+                    iface = sess[0].get('interface') or ('<pppoe-%s>' % self.pppoe_user)
+                    stats = api.get_resource('/interface').call('monitor-traffic', {'interface': iface, 'once': 'true'})
+                    if stats:
+                        rx = round(int(stats[0].get('rx-bits-per-second', 0)) / 1000000.0, 2)
+                        tx = round(int(stats[0].get('tx-bits-per-second', 0)) / 1000000.0, 2)
+                        status = '🟢 En línea'
+                else:
+                    status = '🔴 Desconectado'
+            conn.disconnect()
+        except Exception as e:
+            try: conn.disconnect()
+            except Exception: pass
+            raise UserError(_('Error al consultar tráfico: %s') % e)
+        self.write({
+            'live_traffic_status': status, 'live_traffic_ip': ip,
+            'live_traffic_rx': '%s Mbps' % rx, 'live_traffic_tx': '%s Mbps' % tx,
+            'live_traffic_updated': fields.Datetime.now(),
+        })
+        return True
+
+    def action_signal_antenna(self):
+        """Lee la señal/calidad del enlace de la antena CPE (Ubiquiti airOS) vía SSH mca-status."""
+        self.ensure_one()
+        if self.service_type != 'internet':
+            raise UserError(_('Esta acción es solo para suscripciones de Internet.'))
+        # IP del CPE: de la sesión PPPoE activa (la real)
+        ip = self.ip_address
+        if self.router_id and self.internet_mgmt_mode == 'pppoe' and self.pppoe_user:
+            import routeros_api
+            try:
+                rconn = routeros_api.RouterOsApiPool(
+                    self.router_id.ip_address, username=self.router_id.api_user,
+                    password=self.router_id.api_password or '', port=int(self.router_id.api_port or 8728),
+                    plaintext_login=True)
+                rapi = rconn.get_api()
+                sess = rapi.get_resource('/ppp/active').get(name=self.pppoe_user)
+                if sess:
+                    ip = sess[0].get('address', ip)
+                rconn.disconnect()
+            except Exception:
+                pass
+        if not ip:
+            raise UserError(_('No hay IP del cliente. Usa "Verificar Conexión" primero (debe estar en línea).'))
+        # SSH a la antena airOS
+        import paramiko, re
+        airos_user = self.env['ir.config_parameter'].sudo().get_param('sentinela.airos_user', 'sentinela')
+        airos_pwd = self.env['ir.config_parameter'].sudo().get_param('sentinela.airos_password', 'SentinelaW1sp')
+        cli = paramiko.SSHClient()
+        cli.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        try:
+            cli.connect(ip, port=22, username=airos_user, password=airos_pwd, look_for_keys=False,
+                        allow_agent=False, timeout=12,
+                        disabled_algorithms={'pubkeys': ['rsa-sha2-256', 'rsa-sha2-512']})
+            _in, out, _err = cli.exec_command('mca-status')
+            data = out.read().decode('utf-8', 'ignore')
+            cli.close()
+        except Exception as ex:
+            try: cli.close()
+            except Exception: pass
+            raise UserError(_('No se pudo leer la antena %s: %s') % (ip, str(ex)[:120]))
+        d = {k: v.strip() for k, v in re.findall(r'(\w+)=([^,\r\n]+)', data)}
+        try:
+            sig = int(d.get('signal', 0) or 0)
+        except Exception:
+            sig = 0
+        try:
+            noise = int(d.get('noise', 0) or 0)
+        except Exception:
+            noise = 0
+        snr = (sig - noise) if (sig and noise) else 0
+        if sig == 0:
+            quality = '❓ Sin datos'
+        elif sig >= -65:
+            quality = '🟢 Excelente'
+        elif sig >= -75:
+            quality = '🟢 Buena'
+        elif sig >= -82:
+            quality = '🟡 Regular'
+        else:
+            quality = '🔴 Mala (revisar antena)'
+        self.write({
+            'antenna_signal_dbm': '%s dBm' % sig,
+            'antenna_snr': '%s dB' % snr,
+            'antenna_signal_quality': quality,
+            'antenna_link_rate': '%s / %s Mbps' % (d.get('wlanTxRate', '?'), d.get('wlanRxRate', '?')),
+            'antenna_distance': '%s m' % d.get('distance', '?'),
+            'antenna_signal_updated': fields.Datetime.now(),
+        })
+        plat = d.get('platform', 'CPE')
+        self.message_post(body=_('📡 <b>Señal de antena (%s):</b> %s dBm · SNR %s dB · %s · enlace %s/%s Mbps · %sm') % (
+            plat, sig, snr, quality, d.get('wlanTxRate', '?'), d.get('wlanRxRate', '?'), d.get('distance', '?')))
+        return {'type': 'ir.actions.client', 'tag': 'display_notification',
+                'params': {'title': _('Señal: %s') % quality,
+                           'message': _('%s dBm · SNR %s dB · enlace %s/%s Mbps · %s') % (
+                               sig, snr, d.get('wlanTxRate', '?'), d.get('wlanRxRate', '?'), plat),
+                           'type': 'success' if sig >= -75 and sig != 0 else 'warning', 'sticky': False}}
+
+    def get_live_traffic(self):
+        """Devuelve el tráfico actual (dict) para la gráfica animada OWL. Solo lectura."""
+        self.ensure_one()
+        res = {'rx': 0, 'tx': 0, 'ip': self.ip_address or '—', 'status': 'Sin datos'}
+        if not self.router_id:
+            res['status'] = 'Sin router'
+            return res
+        import routeros_api
+        conn = None
+        try:
+            conn = routeros_api.RouterOsApiPool(
+                self.router_id.ip_address, username=self.router_id.api_user,
+                password=self.router_id.api_password or '', port=int(self.router_id.api_port or 8728),
+                plaintext_login=True)
+            api = conn.get_api()
+            if self.internet_mgmt_mode == 'pppoe' and self.pppoe_user:
+                sess = api.get_resource('/ppp/active').get(name=self.pppoe_user)
+                if sess:
+                    res['ip'] = sess[0].get('address', res['ip'])
+                    iface = sess[0].get('interface') or ('<pppoe-%s>' % self.pppoe_user)
+                    stats = api.get_resource('/interface').call('monitor-traffic', {'interface': iface, 'once': 'true'})
+                    if stats:
+                        res['rx'] = round(int(stats[0].get('rx-bits-per-second', 0)) / 1000000.0, 2)
+                        res['tx'] = round(int(stats[0].get('tx-bits-per-second', 0)) / 1000000.0, 2)
+                        res['status'] = 'En línea'
+                else:
+                    res['status'] = 'Desconectado'
+            conn.disconnect()
+        except Exception as e:
+            if conn:
+                try: conn.disconnect()
+                except Exception: pass
+            res['status'] = 'Error: %s' % str(e)[:40]
+        return res
 
     def action_request_pppoe_credentials(self):
         self.ensure_one()
@@ -907,6 +1352,17 @@ class SentinelaSubscription(models.Model):
             else:
                 sub.commitment_end_date = False
 
+    @api.depends('product_id')
+    def _compute_mikrotik_profile_id(self):
+        """Hereda el perfil MikroTik del plan de forma confiable (no depende del onchange UI).
+        Si el plan no tiene perfil, conserva el valor manual existente."""
+        for sub in self:
+            prof = sub.product_id.mikrotik_profile_id
+            if prof:
+                sub.mikrotik_profile_id = prof
+            elif not sub.mikrotik_profile_id:
+                sub.mikrotik_profile_id = False
+
     @api.onchange('product_id')
     def _onchange_product_id(self):
         for sub in self:
@@ -916,10 +1372,22 @@ class SentinelaSubscription(models.Model):
                 sub.price_unit = sub.product_id.list_price
             if sub.product_id.default_recurring_interval and not sub.recurring_interval:
                 sub.recurring_interval = sub.product_id.default_recurring_interval
-            if sub.product_id.mikrotik_profile_id and not sub.mikrotik_profile_id:
-                sub.mikrotik_profile_id = sub.product_id.mikrotik_profile_id
             if sub.product_id.service_type and not sub.service_type:
                 sub.service_type = sub.product_id.service_type
+
+    @api.onchange('antenna_product_id')
+    def _onchange_antenna_product_id(self):
+        for sub in self:
+            if sub.antenna_product_id:
+                sub.antenna_brand = sub.antenna_product_id.syscom_brand or sub.antenna_brand
+                sub.antenna_model = sub.antenna_product_id.name
+
+    @api.onchange('router_product_id')
+    def _onchange_router_product_id(self):
+        for sub in self:
+            if sub.router_product_id:
+                sub.equipment_brand = sub.router_product_id.syscom_brand or sub.equipment_brand
+                sub.equipment_model = sub.router_product_id.name
 
     @api.onchange('start_date', 'recurring_interval')
     def _onchange_start_date(self):
@@ -945,7 +1413,7 @@ class SentinelaSubscription(models.Model):
         for sub in self:
             if not sub.product_id:
                 continue
-            template = sub.product_id.product_tmpl_id
+            template = sub.product_id
             existing_service_ids = set(sub.service_inclusion_ids.mapped('service_id.id'))
             matrix = self.env['sentinela.product.service.inclusion'].sudo().search([
                 ('product_id', '=', template.id),
@@ -968,7 +1436,7 @@ class SentinelaSubscription(models.Model):
         for sub in self:
             if not sub.product_id:
                 continue
-            template = sub.product_id.product_tmpl_id
+            template = sub.product_id
             plan_services = self.env['sentinela.product.service.inclusion'].sudo().search([
                 ('product_id', '=', template.id),
             ])

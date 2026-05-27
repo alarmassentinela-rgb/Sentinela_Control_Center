@@ -71,7 +71,6 @@
                                 domain="[('is_subscription', '=', True), ('service_type', '=', service_type)]"
                                 help="Selecciona primero el tipo de servicio arriba para filtrar los planes."/>
                             <field name="price_unit" string="Precio Mensual"/>
-                            <field name="next_billing_date" string="Próxima Renovación"/>
                         </group>
                     </group>
 
@@ -83,20 +82,6 @@
                                     <field name="monitoring_account_number"/>
                                     <field name="security_code" password="True"/>
                                     <field name="master_password" password="True"/>
-                                </group>
-                                <group string="Estado Técnico">
-                                    <field name="technical_state" readonly="1"/>
-                                    <field name="technical_state_date" readonly="1"/>
-                                </group>
-                                <group string="Panel / Equipo">
-                                    <field name="equipment_brand" string="Marca Panel"/>
-                                    <field name="equipment_model" string="Modelo Panel"/>
-                                    <field name="equipment_serial" string="Número de Serie"/>
-                                </group>
-                                <group string="Coordenadas de Sitio">
-                                    <field name="latitude"/>
-                                    <field name="longitude"/>
-                                    <field name="location_notes" placeholder="Referencias de acceso, llaves, etc."/>
                                 </group>
                             </group>
                         </page>
@@ -154,6 +139,17 @@
                         <!-- ═══ DATOS TÉCNICOS / EQUIPAMIENTO ═══ -->
                         <page string="🔧 Datos Técnicos" name="equipment">
                             <group>
+                                <!-- ESTADO TÉCNICO (solo alarmas) -->
+                                <group string="Estado Técnico" invisible="service_type != 'alarm'">
+                                    <field name="technical_state" readonly="1"/>
+                                    <field name="technical_state_date" readonly="1"/>
+                                </group>
+                                <!-- PANEL DE ALARMA (solo alarmas) -->
+                                <group string="Panel de Alarma" invisible="service_type != 'alarm'">
+                                    <field name="equipment_brand" string="Marca Panel"/>
+                                    <field name="equipment_model" string="Modelo Panel"/>
+                                    <field name="equipment_serial" string="Número de Serie"/>
+                                </group>
                                 <!-- CONECTIVIDAD INTERNET -->
                                 <group string="Conectividad" invisible="service_type != 'internet'">
                                     <field name="router_id" options="{'no_create': True}" required="service_type == 'internet'"/>
@@ -188,17 +184,22 @@
                                         <button name="toggle_pppoe_password_lock" type="object" class="btn-link p-0 ms-1"
                                             title="Bloquear/Desbloquear" icon="fa-unlock" invisible="pppoe_password_locked"/>
                                     </div>
+                                    <button name="action_alta_router_pppoe" type="object" class="btn-primary" icon="fa-plus-circle"
+                                        string="Dar de alta en router (asigna cta + crea secret)"
+                                        confirm="Se asignará el siguiente usuario cta libre del router y se creará su secret PPPoE con el password capturado. ¿Continuar?"/>
                                 </group>
-                                <!-- HARDWARE CPE -->
-                                <group string="CPE / Receptor">
-                                    <field name="equipment_brand" string="Marca"/>
-                                    <field name="equipment_model" string="Modelo"/>
-                                    <field name="equipment_serial" string="Número de Serie"/>
-                                </group>
-                                <!-- ANTENA Y MÓDEM -->
-                                <group string="Antena / Radio" invisible="service_type != 'internet'">
+                                <!-- HARDWARE INTERNET WISP (solo internet) -->
+                                <group string="Antena CPE Exterior (Ubiquiti)" invisible="service_type != 'internet'">
+                                    <field name="antenna_product_id" options="{'no_create': True}" placeholder="Buscar del catálogo (Ubiquiti/MikroTik)..."/>
                                     <field name="antenna_brand" string="Marca Antena"/>
                                     <field name="antenna_model" string="Modelo Antena"/>
+                                    <field name="antenna_serial" string="Número de Serie"/>
+                                </group>
+                                <group string="Router / Módem WiFi (Interior)" invisible="service_type != 'internet'">
+                                    <field name="router_product_id" options="{'no_create': True}" placeholder="Buscar del catálogo (cualquier marca)..."/>
+                                    <field name="equipment_brand" string="Marca Router"/>
+                                    <field name="equipment_model" string="Modelo Router"/>
+                                    <field name="equipment_serial" string="Número de Serie"/>
                                 </group>
                                 <group string="Módem Cliente" invisible="service_type != 'internet'">
                                     <field name="modem_user" string="Usuario"/>
@@ -212,10 +213,29 @@
                                 <button name="action_open_ping_wizard" string="Ping / Diagnóstico"
                                     type="object" class="btn-secondary me-2" invisible="state != 'active'"/>
                                 <button name="action_view_traffic" string="Ver Tráfico"
-                                    type="object" class="btn-secondary me-2" invisible="state != 'active'"/>
+                                    type="object" class="btn-info me-2" invisible="state != 'active'"/>
                                 <button name="action_check_connection" string="Verificar Conexión"
-                                    type="object" class="btn-secondary" invisible="state != 'active'"/>
+                                    type="object" class="btn-secondary me-2" invisible="state != 'active'"/>
+                                <button name="action_signal_antenna" string="📡 Señal Antena"
+                                    type="object" class="btn-warning" invisible="state != 'active'"/>
                             </div>
+                            <!-- PANEL SEÑAL DE ANTENA -->
+                            <group string="📡 Señal de la Antena CPE" invisible="not antenna_signal_updated">
+                                <group>
+                                    <field name="antenna_signal_quality"/>
+                                    <field name="antenna_signal_dbm"/>
+                                    <field name="antenna_snr"/>
+                                </group>
+                                <group>
+                                    <field name="antenna_link_rate"/>
+                                    <field name="antenna_distance"/>
+                                    <field name="antenna_signal_updated"/>
+                                </group>
+                            </group>
+                            <!-- GRÁFICA DE TRÁFICO EN VIVO (animada, móvil-friendly) -->
+                            <separator string="📊 Tráfico en Vivo" invisible="state != 'active' or service_type != 'internet'"/>
+                            <field name="live_traffic_graph" widget="traffic_graph" nolabel="1"
+                                invisible="state != 'active' or service_type != 'internet'"/>
                         </page>
 
                         <!-- ═══ INSTALACIÓN ═══ -->
@@ -228,22 +248,67 @@
                                     <field name="address_state_id" string="Estado"/>
                                     <field name="address_zip" string="Código Postal"/>
                                 </group>
-                                <group string="Coordenadas GPS">
+                                <group string="Coordenadas del Sitio">
                                     <field name="latitude" string="Latitud"/>
                                     <field name="longitude" string="Longitud"/>
+                                    <field name="location_notes" string="Notas de Acceso" placeholder="Referencias de acceso, llaves, etc."/>
+                                    <button name="action_geocode_address" type="object"
+                                            string="📍 Obtener Coordenadas de la Dirección"
+                                            class="btn-secondary"
+                                            help="Llena automáticamente latitud y longitud a partir de la dirección del servicio."/>
+                                    <button name="action_open_map" type="object"
+                                            string="🗺️ Abrir en Google Maps"
+                                            class="btn-link"
+                                            invisible="not latitude or not longitude"/>
                                 </group>
                             </group>
                         </page>
 
                         <!-- ═══ CONTRATO DIGITAL ═══ -->
                         <page string="📄 Contrato Digital" name="contract">
+                            <div class="alert alert-info mb-2" role="alert">
+                                <strong>Estado: </strong>
+                                <field name="contract_status_label" readonly="1" nolabel="1" class="oe_inline"/>
+                            </div>
+                            <div class="o_row mb-3">
+                                <button name="action_generate_contract" type="object"
+                                        string="📝 Redactar / Actualizar Contrato"
+                                        class="btn-primary"
+                                        invisible="state in ('cancelled','closed')"/>
+                                <button name="action_print_contract" type="object"
+                                        string="📥 Descargar PDF"
+                                        class="btn-secondary"
+                                        invisible="not contract_body"/>
+                                <button name="action_send_contract_for_signature" type="object"
+                                        string="📤 Enviar para Firma Electrónica"
+                                        class="btn-success"
+                                        invisible="contract_signed or sign_state == 'signed' or not contract_body"
+                                        confirm="¿Enviar el contrato al email del cliente para firma electrónica?"/>
+                                <button name="action_view_sign_document" type="object"
+                                        string="👁 Abrir Documento de Firma"
+                                        class="btn-secondary"
+                                        invisible="not sign_document_id"/>
+                                <button name="action_mark_contract_signed" type="object"
+                                        string="✍ Marcar como Firmado en Papel"
+                                        class="btn-link"
+                                        invisible="contract_signed or sign_state == 'signed'"/>
+                            </div>
                             <group>
-                                <group string="Firma Digital">
+                                <group string="Información de la Firma">
+                                    <field name="contract_template_id" readonly="1"/>
+                                    <field name="contract_date"/>
                                     <field name="sign_document_id" readonly="1" options="{'no_create': True}"/>
-                                    <field name="contract_signed" readonly="1" widget="boolean_toggle"/>
+                                    <field name="sign_state" widget="badge"
+                                           decoration-info="sign_state == 'sent'"
+                                           decoration-success="sign_state == 'signed'"
+                                           decoration-muted="sign_state == 'draft'"
+                                           decoration-danger="sign_state == 'cancel'"
+                                           invisible="not sign_document_id"/>
+                                    <field name="contract_signed" widget="boolean_toggle" readonly="1"/>
                                 </group>
                             </group>
-                            <field name="contract_body_html" widget="html" options="{'safe': True}"/>
+                            <separator string="📄 Vista Previa del Contrato"/>
+                            <field name="contract_body_html" widget="html" options="{'safe': True}" nolabel="1"/>
                         </page>
 
                         <!-- ═══ NOTAS ═══ -->

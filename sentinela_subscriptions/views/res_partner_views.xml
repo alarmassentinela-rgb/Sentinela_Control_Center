@@ -4,6 +4,7 @@
         <field name="name">res.partner.form.subscription</field>
         <field name="model">res.partner</field>
         <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="priority">40</field>
         <field name="arch" type="xml">
             <div name="button_box" position="inside">
                 <button class="oe_stat_button" type="object" name="action_view_subscriptions"
@@ -11,8 +12,8 @@
                     <field string="Suscripciones" name="subscription_count" widget="statinfo"/>
                 </button>
             </div>
-            <page name="sales_purchases" position="inside">
-                <group string="Configuración Sentinela" name="sentinela_config_global">
+            <page name="mexico_tax" position="inside">
+                <group string="Condiciones de Pago y Facturación" name="sentinela_config_global">
                     <group string="Especificaciones de Condiciones de Venta">
                         <field name="invoice_grouping_method"/>
                         <label for="invoice_payment_condition"/>
@@ -25,9 +26,8 @@
                         <field name="invoice_payment_method"/>
                         <field name="invoice_zip"/>
                     </group>
-                    <group string="Condiciones para el CFDI">
+                    <group string="Comprobante Fiscal">
                         <field name="requiere_factura" widget="boolean_toggle"/>
-                        <field name="invoice_cfdi_usage" invisible="not requiere_factura"/>
                     </group>
                 </group>
             </page>

@@ -4,17 +4,28 @@
         <field name="name">res.partner.form.mexico</field>
         <field name="model">res.partner</field>
         <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="priority">30</field>
         <field name="arch" type="xml">
             <page name="sales_purchases" position="after">
-                <page string="Facturación México" name="mexico_tax">
+                <page string="💳 Facturación / CFDI" name="mexico_tax">
                     <group>
-                        <group string="Datos CFDI 4.0">
+                        <group string="Datos Fiscales CFDI 4.0" name="cfdi_fiscal_data">
                             <field name="l10n_mx_edi_fiscal_regime"/>
                             <field name="l10n_mx_edi_usage"/>
                         </group>
                     </group>
                 </page>
             </page>
+
+            <!-- Mover el campo nativo "Posición Fiscal" a la pestaña Facturación/CFDI -->
+            <xpath expr="//group[@name='cfdi_fiscal_data']" position="inside">
+                <field name="property_account_position_id" position="move"/>
+            </xpath>
+
+            <!-- Ocultar el grupo nativo "Información Fiscal" que queda vacío -->
+            <xpath expr="//group[@name='fiscal_information']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
         </field>
     </record>
 </odoo>

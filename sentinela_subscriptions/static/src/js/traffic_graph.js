@@ -3,7 +3,7 @@
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { Component, onWillStart, onMounted, onWillUnmount, useRef, useState } from "@odoo/owl";
-import { loadBundle } from "@web/core/assets";
+import { loadJS } from "@web/core/assets";
 
 export class TrafficGraph extends Component {
     setup() {
@@ -11,152 +11,97 @@ export class TrafficGraph extends Component {
         this.canvasRef = useRef("canvas");
         this.chart = null;
         this.intervalId = null;
-        
+
         this.state = useState({
             rx_speed: 0,
             tx_speed: 0,
-            current_ip: "Cargando...",
+            current_ip: "—",
             status: "Iniciando...",
         });
 
-        // Removed loadBundle as we use direct CDN script
+        // Carga Chart.js LOCAL de Odoo (no CDN externo)
+        onWillStart(async () => {
+            await loadJS("/web/static/lib/Chart/Chart.js");
+        });
 
         onMounted(() => {
-            this.waitForChart();
+            this.initChart();
+            this.startPolling();
         });
 
         onWillUnmount(() => {
-            if (this.intervalId) {
-                clearInterval(this.intervalId);
-            }
-            if (this.chart) {
-                this.chart.destroy();
-            }
+            if (this.intervalId) clearInterval(this.intervalId);
+            if (this.chart) this.chart.destroy();
         });
-    }
-
-    waitForChart() {
-        if (typeof Chart !== 'undefined') {
-            this.initChart();
-            this.startPolling();
-        } else {
-            // Retry every 100ms
-            setTimeout(() => this.waitForChart(), 100);
-        }
     }
 
     initChart() {
         try {
-            const ctx = this.canvasRef.el.getContext("2d");
-            
-            // Safety check for Chart.js
-            if (typeof Chart === 'undefined') {
+            if (typeof Chart === "undefined") {
                 this.state.status = "Error: Chart.js no cargó";
-                console.error("Chart.js is not defined in the global scope.");
                 return;
             }
-
+            const ctx = this.canvasRef.el.getContext("2d");
             this.chart = new Chart(ctx, {
                 type: "line",
                 data: {
                     labels: [],
                     datasets: [
-                        {
-                            label: "Bajada (Rx) Mbps",
-                            data: [],
-                            borderColor: "green",
-                            tension: 0.3,
-                            fill: false
-                        },
-                        {
-                            label: "Subida (Tx) Mbps",
-                            data: [],
-                            borderColor: "blue",
-                            tension: 0.3,
-                            fill: false
-                        }
-                    ]
+                        { label: "⬇ Bajada Mbps", data: [], borderColor: "#28a745", backgroundColor: "rgba(40,167,69,.1)", tension: 0.3, fill: true },
+                        { label: "⬆ Subida Mbps", data: [], borderColor: "#007bff", backgroundColor: "rgba(0,123,255,.1)", tension: 0.3, fill: true },
+                    ],
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true
-                        }
-                    },
-                    animation: {
-                        duration: 0 
-                    }
-                }
+                    plugins: { legend: { labels: { boxWidth: 12, font: { size: 10 } } } },
+                    scales: { y: { beginAtZero: true } },
+                    animation: { duration: 0 },
+                },
             });
         } catch (e) {
-            console.error("Error initializing Chart:", e);
-            this.state.status = "Error Graficador";
+            this.state.status = "Error graficador";
         }
     }
 
     startPolling() {
-        // Initial Fetch
         this.fetchData();
-        // Loop every 5 seconds
-        this.intervalId = setInterval(() => this.fetchData(), 5000);
+        this.intervalId = setInterval(() => this.fetchData(), 4000);
     }
 
     async fetchData() {
+        const recId = this.props.record && this.props.record.resId;
+        if (!recId) {
+            this.state.status = "Guarda el registro primero";
+            return;
+        }
         try {
-            // "this.props.record.resId" gives the Wizard ID
-            const result = await this.orm.call(
-                "sentinela.mikrotik.traffic",
-                "fetch_traffic_stats",
-                [this.props.record.resId]
-            );
-            
-            console.log("Traffic Data:", result); // Debugging
-
-            // Update State
+            const result = await this.orm.call("sentinela.subscription", "get_live_traffic", [[recId]]);
             this.state.rx_speed = result.rx;
             this.state.tx_speed = result.tx;
             this.state.current_ip = result.ip;
-            this.state.status = result.status; // Always show backend status
-
-            // Safety Check: Chart might not be ready yet
+            this.state.status = result.status;
             if (!this.chart) {
-                console.warn("Chart not initialized yet, skipping draw.");
-                // Try to init if canvas is available
-                if (this.canvasRef.el) {
-                     this.initChart();
-                }
+                if (this.canvasRef.el) this.initChart();
                 return;
             }
-
-            // Update Chart
             const now = new Date().toLocaleTimeString();
             this.chart.data.labels.push(now);
             this.chart.data.datasets[0].data.push(result.rx);
             this.chart.data.datasets[1].data.push(result.tx);
-
-            // Keep only last 20 points
             if (this.chart.data.labels.length > 20) {
                 this.chart.data.labels.shift();
                 this.chart.data.datasets[0].data.shift();
                 this.chart.data.datasets[1].data.shift();
             }
-
             this.chart.update();
-
         } catch (error) {
-            console.error("Traffic Graph Error:", error);
-            this.state.status = "Error JS: Ver consola";
+            this.state.status = "Error de conexión";
         }
     }
 }
 
 TrafficGraph.template = "sentinela_subscriptions.TrafficGraph";
 
-// Register as a field widget
-export const trafficGraphField = {
-    component: TrafficGraph,
-};
-
+export const trafficGraphField = { component: TrafficGraph };
 registry.category("fields").add("traffic_graph", trafficGraphField);

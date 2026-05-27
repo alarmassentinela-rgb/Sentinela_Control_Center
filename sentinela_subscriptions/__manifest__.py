@@ -1,8 +1,8 @@
 {
     'name': 'Sentinela Subscriptions',
-    'version': '18.0.1.3.6',
+    'version': '18.0.1.3.46',
     'category': 'Sales/Subscriptions',
-    'depends': ['base', 'mail', 'product', 'account', 'sale', 'sentinela_digital_sign'],
+    'depends': ['base', 'mail', 'product', 'account', 'sale', 'sentinela_digital_sign', 'sentinela_cfdi_prodigia'],
     'data': [
         'security/subscription_security.xml',
         'security/ir.model.access.csv',
@@ -28,6 +28,12 @@
         'wizard/mikrotik_traffic_views.xml',
         'wizard/subscription_selection_wizard_views.xml',
     ],
+    'assets': {
+        'web.assets_backend': [
+            'sentinela_subscriptions/static/src/js/traffic_graph.js',
+            'sentinela_subscriptions/static/src/xml/traffic_graph.xml',
+        ],
+    },
     'installable': True,
     'application': True,
     'post_init_hook': 'post_init_hook',
