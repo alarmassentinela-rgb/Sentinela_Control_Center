@@ -177,7 +177,7 @@ class AccountMove(models.Model):
             concepto.set("Cantidad", f"{line.quantity:.6f}")
             concepto.set("ClaveUnidad", line.product_id.l10n_mx_edi_um_code_sat or "E48")
             concepto.set("Unidad", line.product_uom_id.name or "Servicio")
-            concepto.set("Descripcion", line.name[:1000]) # Límite SAT
+            concepto.set("Descripcion", (line.name or '')[:1000].replace('|', '/')) # Límite SAT; el pipe rompe la cadena original del CFDI (es su separador)
             concepto.set("ValorUnitario", f"{line.price_unit:.6f}")
             concepto.set("Importe", f"{line.price_subtotal:.2f}")
             concepto.set("ObjetoImp", "02" if line.tax_ids else "01")

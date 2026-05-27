@@ -646,7 +646,7 @@ class SentinelaSubscription(models.Model):
         line_cmds = []
         for sub in subs_list:
             period_end = sub.next_billing_date + relativedelta(months=int(sub.recurring_interval)) - timedelta(days=1)
-            desc = f"Servicio: {sub.product_id.name} | Contrato: {sub.name} | Periodo: {sub.next_billing_date} al {period_end}"
+            desc = f"Servicio: {sub.product_id.name} - Contrato: {sub.name} - Periodo: {sub.next_billing_date} al {period_end}"
             line_cmds.append((0, 0, {
                 'product_id': sub.product_id.id,
                 'name': desc,
