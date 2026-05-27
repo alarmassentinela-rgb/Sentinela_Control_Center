@@ -10,7 +10,7 @@
         <field name="margin_left">15</field>
         <field name="margin_right">15</field>
         <field name="header_line" eval="False"/>
-        <field name="header_spacing">0</field>
+        <field name="header_spacing">8</field>
         <field name="dpi">90</field>
     </record>
 
@@ -29,34 +29,41 @@
         <t t-call="web.html_container">
             <t t-foreach="docs" t-as="doc">
                 <t t-call="web.basic_layout">
+                    <!-- HEADER: se repite automáticamente en cada página -->
+                    <div class="header">
+                        <table style="width: 100%; border-bottom: 2px solid #1f4e79; padding-bottom: 6px; border-collapse: collapse;">
+                            <tr>
+                                <td style="vertical-align: middle; text-align: left;">
+                                    <img t-if="res_company.logo" t-att-src="image_data_uri(res_company.logo)"
+                                         style="height: 45px; width: auto; max-width: 170px; vertical-align: middle; margin-right: 12px;"/>
+                                    <span style="font-size: 16px; color: #1f4e79; font-weight: bold; vertical-align: middle;">CONTRATO DE SERVICIO</span>
+                                </td>
+                                <td style="text-align: right; font-size: 11px; color: #444; vertical-align: middle; white-space: nowrap;">
+                                    Folio: <strong><t t-out="doc.name"/></strong><br/>
+                                    Fecha: <strong><t t-out="doc.contract_date_human"/></strong>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+
                     <div class="page">
                         <style>
-                            .contract-body { 
-                                text-align: justify; 
-                                font-size: 13px; 
+                            .contract-body {
+                                text-align: justify;
+                                font-size: 13px;
                                 line-height: 1.5;
                                 font-family: Arial, sans-serif;
                                 margin: 0 20px;
                             }
-                            /* Logo en cada página */
-                            .contract-header {
-                                text-align: center;
-                                margin-bottom: 30px;
-                            }
-                            .page-break-before { 
-                                page-break-before: always; 
+                            .page-break-before {
+                                page-break-before: always;
                                 display: block;
                                 margin-top: 20px;
                             }
                         </style>
-                        
-                        <!-- Logo manual para control total -->
-                        <div class="contract-header">
-                            <img t-if="res_company.logo" t-att-src="image_data_uri(res_company.logo)" style="max-height: 80px;"/>
-                        </div>
 
                         <div class="contract-body">
-                            <t t-out="doc.contract_content"/>
+                            <t t-out="doc.contract_body"/>
                         </div>
 
                         <!-- Sección de Servicios Incluidos / No Incluidos -->

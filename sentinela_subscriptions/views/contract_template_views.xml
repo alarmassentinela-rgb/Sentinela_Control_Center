@@ -34,9 +34,17 @@
                         <div class="col-9" style="background-color: #e8ecef; padding: 40px 20px; border-radius: 8px; border: 1px solid #ccc;">
                             <div style="background-color: white; width: 100%; max-width: 800px; margin: 0 auto; padding: 60px 50px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); min-height: 1100px;">
                                 
-                                <!-- Indicador de Encabezado Automático -->
-                                <div style="border-bottom: 1px dashed #ccc; color: #aaa; text-align: center; margin-bottom: 40px; font-size: 12px;">
-                                    [ El logo de Sentinela aparecerá aquí automáticamente en el PDF ]
+                                <!-- Header visual igual a la vista previa del contrato -->
+                                <div style="border-bottom: 2px solid #1f4e79; padding-bottom: 10px; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <img src="/web/image/res.company/1/logo"
+                                             style="height: 50px; width: auto; max-width: 180px; vertical-align: middle; margin-right: 14px;"/>
+                                        <span style="font-size: 18px; color: #1f4e79; font-weight: bold; vertical-align: middle;">CONTRATO DE SERVICIO</span>
+                                    </div>
+                                    <div style="text-align: right; font-size: 11px; color: #888; font-style: italic;">
+                                        Folio y Fecha<br/>
+                                        (se llenan al generar)
+                                    </div>
                                 </div>
 
                                 <field name="content" widget="html" nolabel="1" 

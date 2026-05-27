@@ -18,15 +18,15 @@
                             confirm="¿Forzar la liberación del lock? El operador actual perderá el control del evento."/>
 
                     <button name="action_acknowledge" string="Reconocer" type="object" class="btn-primary"
-                            invisible="status != 'active' or is_locked_by_other"/>
+                            invisible="status not in ('active','paused') or is_locked_by_other"/>
                     <button name="action_escalate" string="Escalar" type="object" class="btn-warning"
                             invisible="status != 'active' or is_locked_by_other"/>
                     <button name="action_assign_technician" string="Asignar Técnico" type="object" class="btn-info"
-                            invisible="status != 'acknowledged' or is_locked_by_other"/>
+                            invisible="status not in ('acknowledged','paused') or is_locked_by_other"/>
                     <button name="create_fsm_order" string="Crear Orden FSM" type="object" class="btn-success"
                             invisible="status != 'in_progress' or is_locked_by_other"/>
                     <button name="action_resolve" string="Resolver" type="object" class="btn-success"
-                            invisible="status != 'in_progress' or is_locked_by_other"/>
+                            invisible="status not in ('in_progress','paused') or is_locked_by_other"/>
                     <button name="action_close" string="Cerrar" type="object" class="btn-default"
                             invisible="status != 'resolved' or is_locked_by_other"/>
                     <field name="status" widget="statusbar" statusbar_visible="active,acknowledged,in_progress,escalated,resolved,closed"/>

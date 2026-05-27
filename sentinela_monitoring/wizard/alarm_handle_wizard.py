@@ -170,12 +170,12 @@ class AlarmHandleWizard(models.TransientModel):
     def action_shortcut_false_alarm(self):
         self.ensure_one()
         self.write({'state': 'close', 'close_reason': 'false_alarm'})
-        return True
+        return self.action_finalize()
 
     def action_shortcut_customer_ok(self):
         self.ensure_one()
         self.write({'state': 'close', 'close_reason': 'customer_confirmed_ok'})
-        return True
+        return self.action_finalize()
 
     # ---------- Acciones de despacho (compatibilidad con existentes) ----------
 

@@ -45,15 +45,36 @@ class SentinelaContractTemplate(models.Model):
         
         # Inyectar estilos para simular HOJA TAMAÑO CARTA (8.5 x 11 in)
         # 816px de ancho aprox a 96dpi
+        company_id = self.env.company.id
+        # Tamaño hoja carta a 96dpi: 816 x 1056 px
+        # Marcadores de salto de página: línea roja punteada cada 1056px
+        page_break_bg = (
+            "background-color: white; "
+            "background-image: repeating-linear-gradient("
+            "to bottom, "
+            "transparent 0, "
+            "transparent 1048px, "
+            "rgba(220,53,69,0.55) 1048px, "
+            "rgba(220,53,69,0.55) 1056px); "
+        )
         styled_html = f'''
             <div style="background-color: #525659; padding: 30px 0; min-height: 1000px; display: flex; flex-direction: column; align-items: center;">
-                <div style="background: white; width: 816px; min-height: 1056px; padding: 30mm 60px 20mm 60px; box-shadow: 0 0 20px rgba(0,0,0,0.5); font-family: Arial, sans-serif; position: relative; box-sizing: border-box;">
-                    
-                    <!-- Simulación de Encabezado Real -->
-                    <div style="text-align: center; margin-bottom: 20px;">
-                        <img src="/web/binary/company_logo" style="max-height: 80px;"/>
-                        <div style="font-size: 10px; color: #666; margin-top: 5px;">[ Simulación de Encabezado de Impresión ]</div>
-                    </div>
+                <div style="{page_break_bg} width: 816px; min-height: 1056px; padding: 22mm 60px 20mm 60px; box-shadow: 0 0 20px rgba(0,0,0,0.5); font-family: Arial, sans-serif; position: relative; box-sizing: border-box;">
+
+                    <!-- Header igual al PDF y la vista previa del contrato -->
+                    <table style="width: 100%; border-bottom: 2px solid #1f4e79; padding-bottom: 6px; margin-bottom: 20px; border-collapse: collapse;">
+                        <tr>
+                            <td style="vertical-align: middle; text-align: left;">
+                                <img src="/web/image/res.company/{company_id}/logo"
+                                     style="height: 45px; width: auto; max-width: 170px; vertical-align: middle; margin-right: 12px;"/>
+                                <span style="font-size: 16px; color: #1f4e79; font-weight: bold; vertical-align: middle;">CONTRATO DE SERVICIO</span>
+                            </td>
+                            <td style="text-align: right; font-size: 11px; color: #888; vertical-align: middle; white-space: nowrap; font-style: italic;">
+                                Folio y Fecha<br/>
+                                (se llenan al generar)
+                            </td>
+                        </tr>
+                    </table>
 
                     <div style="font-size: 13px; line-height: 1.5; color: #333; text-align: justify;">
                         {rendered_html}
