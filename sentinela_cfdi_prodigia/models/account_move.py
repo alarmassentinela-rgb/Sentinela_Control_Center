@@ -1,9 +1,410 @@
-from odoo import models, fields, api
-import requests
+import base64
 import json
 import logging
+import requests
+from lxml import etree
+from datetime import datetime, timedelta
+
+from odoo import fields, models, _
+from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
+
+
+class AccountMove(models.Model):
+    _inherit = 'account.move'
+
+    cfdi_uuid = fields.Char(string='CFDI UUID', copy=False, readonly=True)
+    cfdi_xml = fields.Binary(string='CFDI XML', copy=False, attachment=True, readonly=True)
+    cfdi_xml_filename = fields.Char(string='CFDI XML Nombre')
+    cfdi_pdf = fields.Binary(string='CFDI PDF', copy=False, attachment=True, readonly=True)
+    cfdi_pdf_filename = fields.Char(string='CFDI PDF Nombre')
+    cfdi_status = fields.Selection([
+        ('draft', 'Borrador'),
+        ('pending', 'Pendiente de Timbrado'),
+        ('valid', 'Timbrado Válido'),
+        ('cancel', 'Cancelado'),
+        ('error', 'Error'),
+    ], string='Estado CFDI', default='draft', copy=False, readonly=True, tracking=True)
+    cfdi_message = fields.Text(string='Mensaje CFDI', copy=False, readonly=True)
+
+    # Campo de forma de pago SAT (usado en vista y en _generate_cfdi_xml)
+    l10n_mx_edi_payment_method_id_code = fields.Selection([
+        ('01', '01 - Efectivo'),
+        ('02', '02 - Cheque nominativo'),
+        ('03', '03 - Transferencia electrónica de fondos'),
+        ('04', '04 - Tarjeta de crédito'),
+        ('05', '05 - Monedero electrónico'),
+        ('06', '06 - Dinero electrónico'),
+        ('08', '08 - Vales de despensa'),
+        ('12', '12 - Dación en pago'),
+        ('28', '28 - Tarjeta de débito'),
+        ('29', '29 - Tarjeta de servicios'),
+        ('99', '99 - Por definir'),
+    ], string='Forma de Pago (SAT)', default='99', copy=False)
+
+    # == Campos para el reporte PDF del CFDI ==
+    l10n_mx_edi_cfdi_certificate_serial_number = fields.Char(string='No. de Serie del Certificado', copy=False, readonly=True)
+    l10n_mx_edi_cfdi_timestamp = fields.Char(string='Fecha y Hora de Timbrado', copy=False, readonly=True)
+    l10n_mx_edi_cfdi_seal = fields.Char(string='Sello Digital del CFDI', copy=False, readonly=True)
+    l10n_mx_edi_cfdi_sat_seal = fields.Char(string='Sello Digital del SAT', copy=False, readonly=True)
+    l10n_mx_edi_cfdi_original_chain = fields.Text(string='Cadena Original del Timbre', copy=False, readonly=True)
+    l10n_mx_edi_cfdi_qr = fields.Binary(string='Código QR del CFDI', compute='_compute_cfdi_qr_code', copy=False)
+
+    def _compute_cfdi_qr_code(self):
+        for move in self:
+            if not move.cfdi_uuid:
+                move.l10n_mx_edi_cfdi_qr = False
+                continue
+            
+            # Formato del QR: https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id=<UUID>&re=<RFC_Emisor>&rr=<RFC_Receptor>&tt=<Total>&fe=<8_ultimos_caracteres_del_sello>
+            qr_string = "https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?" + "&".join([
+                f"id={move.cfdi_uuid}",
+                f"re={move.company_id.vat}",
+                f"rr={move.partner_id.vat}",
+                f"tt={move.amount_total:.2f}",
+                f"fe={move.l10n_mx_edi_cfdi_seal[-8:] if move.l10n_mx_edi_cfdi_seal else ''}",
+            ])
+
+            try:
+                import qrcode
+                import base64
+                from io import BytesIO
+
+                qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=10, border=4)
+                qr.add_data(qr_string)
+                qr.make(fit=True)
+                img = qr.make_image(fill_color="black", back_color="white")
+                
+                buffered = BytesIO()
+                img.save(buffered, format="PNG")
+                qr_img_b64 = base64.b64encode(buffered.getvalue())
+                move.l10n_mx_edi_cfdi_qr = qr_img_b64
+            except ImportError:
+                _logger.warning("La librería 'qrcode' no está instalada. No se puede generar el código QR. Ejecute 'pip3 install qrcode'.")
+                move.l10n_mx_edi_cfdi_qr = False
+
+
+    def _get_prodigia_config(self):
+        get_param = self.env['ir.config_parameter'].sudo().get_param
+        return {
+            'url': get_param('sentinela_cfdi_prodigia.api_url'),
+            'user': get_param('sentinela_cfdi_prodigia.user'),
+            'password': get_param('sentinela_cfdi_prodigia.password'),
+            'contract': get_param('sentinela_cfdi_prodigia.contract'),
+            'test_mode': get_param('sentinela_cfdi_prodigia.test_mode', 'True').lower() == 'true',
+        }
+
+    def _generate_cfdi_xml(self):
+        self.ensure_one()
+        
+        # Validaciones básicas
+        if not self.company_id.vat:
+            raise UserError("El Emisor (Compañía) debe tener RFC.")
+        if not self.partner_id.vat:
+            raise UserError("El Receptor (Cliente) debe tener RFC.")
+        if not self.partner_id.l10n_mx_edi_fiscal_regime:
+            raise UserError("El Cliente debe tener Régimen Fiscal configurado.")
+
+        # Construcción de XML 4.0
+        NSMAP = {
+            'cfdi': "http://www.sat.gob.mx/cfd/4",
+            'xsi': "http://www.w3.org/2001/XMLSchema-instance"
+        }
+        
+        root = etree.Element("{http://www.sat.gob.mx/cfd/4}Comprobante", nsmap=NSMAP)
+        root.set("{http://www.w3.org/2001/XMLSchema-instance}schemaLocation", "http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd")
+        root.set("Version", "4.0")
+        root.set("Serie", (self.name or "").split('/')[0] or "FACT")
+        root.set("Folio", (self.name or "").split('/')[-1] or "1")
+        
+        # Odoo corre en UTC, pero el SAT requiere hora local del lugar de expedición.
+        # Restamos 6 horas (CST) y un margen de seguridad de 5 mins.
+        fecha_emision = (datetime.now() - timedelta(hours=6, minutes=5)).strftime('%Y-%m-%dT%H:%M:%S')
+        root.set("Fecha", fecha_emision)
+        root.set("Sello", "") # Vacío para que lo calcule Prodigia
+        root.set("NoCertificado", "") # Vacío
+        root.set("Certificado", "") # Vacío
+        root.set("SubTotal", f"{self.amount_untaxed:.2f}")
+        root.set("Moneda", self.currency_id.name)
+        root.set("Total", f"{self.amount_total:.2f}")
+        root.set("TipoDeComprobante", "I")
+        root.set("Exportacion", "01")
+        # MetodoPago: leer del partner (PPD o PUE), fallback PUE
+        metodo_pago = self.partner_id.invoice_payment_method if hasattr(self.partner_id, 'invoice_payment_method') and self.partner_id.invoice_payment_method else 'PUE'
+        root.set("MetodoPago", metodo_pago)
+        # FormaPago: si es PPD usar 99 (por definir), si es PUE leer del campo del partner
+        if metodo_pago == 'PPD':
+            forma_pago = '99'
+        else:
+            forma_pago = self.partner_id.invoice_payment_form if hasattr(self.partner_id, 'invoice_payment_form') and self.partner_id.invoice_payment_form else '99'
+        root.set("FormaPago", forma_pago)
+        root.set("LugarExpedicion", self.company_id.zip or "00000")
+
+        # Emisor
+        emisor = etree.SubElement(root, "{http://www.sat.gob.mx/cfd/4}Emisor")
+        emisor.set("Rfc", self.company_id.vat)
+        
+        # Priorizar Razón Social Fiscal si existe, si no, usar nombre de la compañía
+        nombre_base = self.company_id.l10n_mx_edi_fiscal_name or self.company_id.name
+        nombre_emisor = nombre_base.upper()
+        
+        # Limpieza de nombre de emisor para CFDI 4.0
+        for suffix in [", S.A. DE C.V.", " S.A. DE C.V.", " SA DE CV", " S DE RL DE CV", ", S. DE R.L. DE C.V."]:
+            nombre_emisor = nombre_emisor.replace(suffix, "")
+        
+        emisor.set("Nombre", nombre_emisor.strip())
+        emisor.set("RegimenFiscal", self.company_id.l10n_mx_edi_fiscal_regime or "601")
+
+        # Receptor
+        receptor = etree.SubElement(root, "{http://www.sat.gob.mx/cfd/4}Receptor")
+        receptor.set("Rfc", self.partner_id.vat)
+        nombre_receptor = (getattr(self.partner_id, "l10n_mx_edi_fiscal_name", None) or self.partner_id.name).upper()
+        receptor.set("Nombre", nombre_receptor)
+        receptor.set("DomicilioFiscalReceptor", self.partner_id.zip or "00000")
+        receptor.set("RegimenFiscalReceptor", self.partner_id.l10n_mx_edi_fiscal_regime)
+        receptor.set("UsoCFDI", self.partner_id.l10n_mx_edi_usage or "G03")
+
+        # Conceptos e Impuestos
+        conceptos = etree.SubElement(root, "{http://www.sat.gob.mx/cfd/4}Conceptos")
+        impuestos_agrupados = {} # Para el total global
+        
+        for line in self.invoice_line_ids.filtered(lambda l: l.display_type == 'product'):
+            concepto = etree.SubElement(conceptos, "{http://www.sat.gob.mx/cfd/4}Concepto")
+            concepto.set("ClaveProdServ", line.product_id.l10n_mx_edi_code_sat or "01010101")
+            if line.product_id.default_code:
+                concepto.set("NoIdentificacion", line.product_id.default_code)
+            concepto.set("Cantidad", f"{line.quantity:.6f}")
+            concepto.set("ClaveUnidad", line.product_id.l10n_mx_edi_um_code_sat or "E48")
+            concepto.set("Unidad", line.product_uom_id.name or "Servicio")
+            concepto.set("Descripcion", line.name[:1000]) # Límite SAT
+            concepto.set("ValorUnitario", f"{line.price_unit:.6f}")
+            concepto.set("Importe", f"{line.price_subtotal:.2f}")
+            concepto.set("ObjetoImp", "02" if line.tax_ids else "01")
+
+            if line.tax_ids:
+                impuestos_c = etree.SubElement(concepto, "{http://www.sat.gob.mx/cfd/4}Impuestos")
+                traslados_c = etree.SubElement(impuestos_c, "{http://www.sat.gob.mx/cfd/4}Traslados")
+                for tax in line.tax_ids:
+                    tax_code = tax.l10n_mx_edi_tax_code or "002"
+                    tasa = tax.amount / 100.0
+                    importe_tax = round(line.price_subtotal * tasa, 2)
+                    
+                    traslado_c = etree.SubElement(traslados_c, "{http://www.sat.gob.mx/cfd/4}Traslado")
+                    traslado_c.set("Base", f"{line.price_subtotal:.2f}")
+                    traslado_c.set("Impuesto", tax_code)
+                    traslado_c.set("TipoFactor", "Tasa")
+                    traslado_c.set("TasaOCuota", f"{tasa:.64f}".rstrip('0').rstrip('.') if tasa > 0 else "0.000000")
+                    # El SAT pide exactamente 6 decimales en TasaOCuota
+                    traslado_c.set("TasaOCuota", f"{tasa:.6f}")
+                    traslado_c.set("Importe", f"{importe_tax:.2f}")
+                    
+                    # Agrupar para el total global
+                    key = (tax_code, f"{tasa:.6f}")
+                    if key not in impuestos_agrupados:
+                        impuestos_agrupados[key] = {'base': 0.0, 'importe': 0.0}
+                    impuestos_agrupados[key]['base'] += line.price_subtotal
+                    impuestos_agrupados[key]['importe'] += importe_tax
+
+        # Impuestos Globales (solo si hay traslados)
+        if impuestos_agrupados:
+            impuestos_g = etree.SubElement(root, "{http://www.sat.gob.mx/cfd/4}Impuestos")
+            total_traslado = sum(v['importe'] for v in impuestos_agrupados.values())
+            impuestos_g.set("TotalImpuestosTrasladados", f"{total_traslado:.2f}")
+            traslados_g = etree.SubElement(impuestos_g, "{http://www.sat.gob.mx/cfd/4}Traslados")
+            for (t_code, t_tasa), data in impuestos_agrupados.items():
+                traslado_g = etree.SubElement(traslados_g, "{http://www.sat.gob.mx/cfd/4}Traslado")
+                traslado_g.set("Base", f"{data['base']:.2f}")
+                traslado_g.set("Impuesto", t_code)
+                traslado_g.set("TipoFactor", "Tasa")
+                traslado_g.set("TasaOCuota", t_tasa)
+                traslado_g.set("Importe", f"{data['importe']:.2f}")
+
+        xml_str = etree.tostring(root, xml_declaration=True, encoding='UTF-8', pretty_print=True)
+        return xml_str
+
+    def action_cfdi_stamp_prodigia(self):
+        for move in self:
+            if move.state != 'posted':
+                raise UserError(_('La factura debe estar publicada para poder timbrarla.'))
+
+            config = self._get_prodigia_config()
+            if not all([config['url'], config['user'], config['password'], config['contract']]):
+                raise UserError(_('Por favor, configure las credenciales y el CONTRATO de Prodigia en los Ajustes.'))
+
+            try:
+                xml_to_stamp = move._generate_cfdi_xml()
+                xml_b64 = base64.b64encode(xml_to_stamp).decode()
+
+                headers = {'Content-Type': 'application/json'}
+                auth = (config['user'], config['password'])
+                payload = {
+                    "xmlBase64": xml_b64,
+                    "contrato": config['contract'],
+                    "prueba": str(config['test_mode']).lower(),
+                    "opciones": ["CALCULAR_SELLO"]
+                }
+                
+                _logger.info("--- CFDI XML ENVIADO ---")
+                _logger.info(xml_to_stamp.decode())
+                _logger.info("------------------------")
+
+                move.write({'cfdi_status': 'pending', 'cfdi_message': 'Enviando a Prodigia...'})
+                
+                response = requests.post(config['url'], headers=headers, auth=auth, json=payload, timeout=30)
+                _logger.info(f"RESPUESTA PAC STATUS: {response.status_code}")
+                _logger.info(f"RESPUESTA PAC BODY: {response.text}")
+                
+                if response.status_code in [200, 202]:
+                    # Prodigia siempre devuelve XML (no JSON)
+                    resp_tree = etree.fromstring(response.content)
+                    timbrado_ok = resp_tree.findtext('timbradoOk', 'false').strip().lower() == 'true'
+                    mensaje_pac = resp_tree.findtext('mensaje') or ''
+                    codigo_pac = resp_tree.findtext('codigo') or ''
+
+                    if timbrado_ok:
+                        xml_timbrado_b64 = resp_tree.findtext('xmlBase64') or resp_tree.findtext('xml') or ''
+                        stamped_xml = base64.b64decode(xml_timbrado_b64)
+                        tree = etree.fromstring(stamped_xml)
+
+                        # --- Extraer datos del CFDI para el reporte ---
+                        tfd_node = tree.find('.//{http://www.sat.gob.mx/TimbreFiscalDigital}TimbreFiscalDigital')
+                        if tfd_node is not None:
+                            uuid = tfd_node.attrib.get('UUID', 'No encontrado')
+                            no_certificado_sat = tfd_node.attrib.get('NoCertificadoSAT', '')
+                            fecha_timbrado = tfd_node.attrib.get('FechaTimbrado', '')
+                            sello_sat = tfd_node.attrib.get('SelloSAT', '')
+                            sello_cfd = tfd_node.attrib.get('SelloCFD', '')
+                            rfc_pac = tfd_node.attrib.get('RfcProvCertif', '')
+
+                            cadena_original = '||'.join([
+                                '1.1',
+                                uuid,
+                                fecha_timbrado,
+                                rfc_pac,
+                                sello_cfd,
+                                no_certificado_sat,
+                            ]) + '||'
+
+                            comprobante_node = tree.find('.')
+                            sello_comprobante = comprobante_node.attrib.get('Sello', '')
+
+                            move.write({
+                                'cfdi_status': 'valid',
+                                'cfdi_uuid': uuid,
+                                'cfdi_xml': base64.b64encode(stamped_xml),
+                                'cfdi_xml_filename': f'{move.name.replace("/", "_")}-CFDI.xml',
+                                'cfdi_message': mensaje_pac or 'Factura timbrada exitosamente.',
+                                'l10n_mx_edi_cfdi_certificate_serial_number': no_certificado_sat,
+                                'l10n_mx_edi_cfdi_timestamp': fecha_timbrado,
+                                'l10n_mx_edi_cfdi_seal': sello_comprobante,
+                                'l10n_mx_edi_cfdi_sat_seal': sello_sat,
+                                'l10n_mx_edi_cfdi_original_chain': cadena_original,
+                            })
+                        else:
+                            move.write({'cfdi_status': 'error', 'cfdi_message': 'No se encontró el Timbre Fiscal Digital en el XML de respuesta.'})
+                    else:
+                        move.write({'cfdi_status': 'error', 'cfdi_message': f'[{codigo_pac}] {mensaje_pac}'})
+                else:
+                    move.write({'cfdi_status': 'error', 'cfdi_message': f'Error PAC ({response.status_code}): {response.text}'})
+
+            except Exception as e:
+                move.write({'cfdi_status': 'error', 'cfdi_message': f'Error de proceso: {str(e)}'})
+        return True
+
+    # Alias para compatibilidad con vistas existentes en DB
+    def action_prodigia_stamp(self):
+        return self.action_cfdi_stamp_prodigia()
+
+    # === Métodos helper para el reporte PDF CFDI ===
+
+    def _get_fecha_certificacion(self):
+        self.ensure_one()
+        return self.l10n_mx_edi_cfdi_timestamp or ''
+
+    def _get_certificado_sat(self):
+        self.ensure_one()
+        return self.l10n_mx_edi_cfdi_certificate_serial_number or ''
+
+    def _get_certificado_contribuyente(self):
+        self.ensure_one()
+        # Extraer NoCertificado del XML timbrado si está disponible
+        if self.cfdi_xml:
+            try:
+                from lxml import etree
+                import base64
+                xml_bytes = base64.b64decode(self.cfdi_xml)
+                tree = etree.fromstring(xml_bytes)
+                return tree.attrib.get('NoCertificado', '')
+            except Exception:
+                pass
+        return ''
+
+    def _get_cadena_original_sat(self):
+        self.ensure_one()
+        return self.l10n_mx_edi_cfdi_original_chain or ''
+
+    def _get_sello_cfd(self):
+        self.ensure_one()
+        return self.l10n_mx_edi_cfdi_seal or ''
+
+    def _get_sello_sat(self):
+        self.ensure_one()
+        return self.l10n_mx_edi_cfdi_sat_seal or ''
+
+
+
+    def _get_cfdi_qr_b64(self):
+        self.ensure_one()
+        if not self.cfdi_uuid:
+            return ''
+        try:
+            import qrcode
+            import io
+            import base64
+            # URL de verificacion SAT CFDI
+            sello = self._get_sello_cfd()
+            fe = sello[-8:] if sello else ''
+            rfc_emisor = self.company_id.vat or ''
+            rfc_receptor = self.partner_id.vat or 'XAXX010101000'
+            total = '%.6f' % self.amount_total
+            url = ('https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx'
+                   '?id=%s&re=%s&rr=%s&tt=%s&fe=%s'
+                   % (self.cfdi_uuid, rfc_emisor, rfc_receptor, total, fe))
+            qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_M,
+                                box_size=3, border=2)
+            qr.add_data(url)
+            qr.make(fit=True)
+            img = qr.make_image(fill_color='black', back_color='white')
+            buf = io.BytesIO()
+            img.save(buf, 'PNG')
+            return base64.b64encode(buf.getvalue()).decode('ascii')
+        except Exception:
+            return ''
+
+    def _get_company_logo_b64(self):
+        self.ensure_one()
+        try:
+            logo = self.company_id.sudo().logo
+            if not logo:
+                return ''
+            if isinstance(logo, bytes):
+                return logo.decode('ascii')
+            return str(logo)
+        except Exception:
+            return ''
+
+    def action_download_cfdi_xml(self):
+        self.ensure_one()
+        if not self.cfdi_xml:
+            from odoo.exceptions import UserError
+            raise UserError('No hay XML timbrado para descargar.')
+        return {
+            'type': 'ir.actions.act_url',
+            'url': f'/web/content/account.move/{self.id}/cfdi_xml/{self.cfdi_xml_filename}?download=true',
+            'target': 'self',
+        }
+
 
 SAT_PAYMENT_METHODS = [
     ('01', '01 - Efectivo'),
@@ -14,44 +415,22 @@ SAT_PAYMENT_METHODS = [
     ('06', '06 - Dinero electrónico'),
     ('08', '08 - Vales de despensa'),
     ('12', '12 - Dación en pago'),
+    ('13', '13 - Pago por subrogación'),
+    ('14', '14 - Pago por consignación'),
+    ('15', '15 - Condonación'),
+    ('17', '17 - Compensación'),
+    ('23', '23 - Novación'),
+    ('24', '24 - Confusión'),
+    ('25', '25 - Remisión de deuda'),
+    ('26', '26 - Prescripción o caducidad'),
+    ('27', '27 - A satisfacción del acreedor'),
     ('28', '28 - Tarjeta de débito'),
     ('29', '29 - Tarjeta de servicios'),
+    ('30', '30 - Aplicación de anticipos'),
+    ('31', '31 - Intermediario pagos'),
     ('99', '99 - Por definir'),
 ]
 
-class AccountMove(models.Model):
-    _inherit = 'account.move'
-
-    cfdi_status = fields.Selection([
-        ('none', 'No Timbrado'),
-        ('sent', 'Timbrado'),
-        ('error', 'Error'),
-        ('cancelled', 'Cancelado')
-    ], string='Estado CFDI', default='none', copy=False)
-    
-    cfdi_uuid = fields.Char(string='Folio Fiscal (UUID)', copy=False)
-    cfdi_message = fields.Text(string='Mensaje PAC', copy=False)
-    
-    l10n_mx_edi_payment_method_id_code = fields.Selection(
-        SAT_PAYMENT_METHODS,
-        string='Forma de Pago',
-        default='99',
-        help="Indica la forma física en que se recibió o recibirá el pago."
-    )
-
-    def action_prodigia_stamp(self):
-        for move in self:
-            if move.cfdi_status == 'sent':
-                continue
-            
-            try:
-                # Lógica de timbrado (se mantiene igual, usando move.l10n_mx_edi_payment_method_id_code)
-                _logger.info(f"Timbrando factura {move.name} con forma de pago {move.l10n_mx_edi_payment_method_id_code}")
-                # ... resto del código de timbrado ...
-                move.write({'cfdi_status': 'sent', 'cfdi_uuid': 'PROVISIONAL-UUID-12345'})
-            except Exception as e:
-                move.write({'cfdi_status': 'error', 'cfdi_message': str(e)})
-        return True
 
 class AccountPaymentRegister(models.TransientModel):
     _inherit = 'account.payment.register'
@@ -59,13 +438,15 @@ class AccountPaymentRegister(models.TransientModel):
     l10n_mx_edi_payment_method_id_code = fields.Selection(
         SAT_PAYMENT_METHODS,
         string='Forma de Pago (SAT)',
-        default='03'
+        default='03',
     )
 
     def _create_payments(self):
-        payments = super(AccountPaymentRegister, self)._create_payments()
+        payments = super()._create_payments()
         for payment in payments:
             if self.l10n_mx_edi_payment_method_id_code:
                 for move in payment.reconciled_invoice_ids:
-                    move.write({'l10n_mx_edi_payment_method_id_code': self.l10n_mx_edi_payment_method_id_code})
+                    move.write({
+                        'l10n_mx_edi_payment_method_id_code': self.l10n_mx_edi_payment_method_id_code,
+                    })
         return payments

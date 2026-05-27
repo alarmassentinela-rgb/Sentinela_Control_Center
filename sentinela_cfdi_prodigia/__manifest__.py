@@ -13,7 +13,7 @@
         'views/res_partner_views.xml',
         'views/product_views.xml',
         'views/res_company_views.xml',
-        # 'views/report_invoice_document_inherit.xml', # DESACTIVADO TEMPORALMENTE
+        'views/report_invoice.xml',
     ],
     'installable': True,
     'application': False,
