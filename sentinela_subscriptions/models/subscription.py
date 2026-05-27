@@ -606,80 +606,76 @@ class SentinelaSubscription(models.Model):
 
     # --- Billing Automation ---
     def _cron_generate_pre_invoices(self):
-        """ Generates Sale Orders (Quotes) for subscriptions due within the next 5 days
-        (including overdue ones), respecting grouping preferences. Robust: uses <= so a
-        missed cron run or a back-dated next_billing_date never loses a billing window. """
+        """ Genera FACTURAS (account.move) para las suscripciones cuyo cobro vence hoy o antes.
+        La factura publicada genera el saldo por cobrar; sirve como "remisión" (sin timbrar) o
+        como factura fiscal (cuando se implemente el timbrado CFDI real). Sin anticipo: se genera
+        el día exacto de next_billing_date (<= hoy también recupera atrasadas). Respeta la
+        agrupación del cliente. El avance de next_billing_date evita duplicados. """
         today = fields.Date.today()
-        target_date = today + timedelta(days=5)
-
-        # Find active subscriptions due on/before the 5-day horizon (catches overdue too)
-        subs_to_notify = self.search([
+        subs_to_bill = self.search([
             ('state', '=', 'active'),
-            ('next_billing_date', '<=', target_date)
+            ('next_billing_date', '<=', today),
         ])
-        
-        SaleOrder = self.env['sale.order']
         grouped_subs = {}
-        
-        for sub in subs_to_notify:
-            # Avoid duplicates: skip if this sub already has an OPEN quote (any day),
-            # not just one created today. Prevents daily re-generation for overdue subs.
-            existing = sub.sale_order_ids.filtered(lambda s: s.state in ['draft', 'sent'])
-            if existing:
-                continue
-
+        for sub in subs_to_bill:
             method = sub.partner_id.invoice_grouping_method or 'individual'
             if method == 'global':
-                key = (sub.partner_id.id, 'global') 
+                key = (sub.partner_id.id, 'global')
             elif method == 'by_branch':
                 addr_id = sub.service_address_id.id if sub.service_address_id else False
                 key = (sub.partner_id.id, addr_id)
             else:
                 key = (sub.partner_id.id, sub.id)
-            
-            if key not in grouped_subs:
-                grouped_subs[key] = []
-            grouped_subs[key].append(sub)
-            
+            grouped_subs.setdefault(key, []).append(sub)
+
         for key, subs_list in grouped_subs.items():
             try:
-                partner_id = key[0]
-                first_sub = subs_list[0]
-                origin_names = ", ".join([s.name for s in subs_list])
-                so_vals = {
-                    'partner_id': partner_id,
-                    'origin': f"Renovación: {origin_names}",
-                    'subscription_id': first_sub.id if len(subs_list) == 1 else False,
-                    'order_line': []
-                }
-                
-                if first_sub.partner_id.invoice_grouping_method == 'by_branch' and first_sub.service_address_id:
-                    so_vals['partner_shipping_id'] = first_sub.service_address_id.id
-                
-                for sub in subs_list:
-                    period_end = sub.next_billing_date + relativedelta(months=int(sub.recurring_interval)) - timedelta(days=1)
-                    desc = f"Servicio: {sub.product_id.name} | Contrato: {sub.name} | Periodo: {sub.next_billing_date} al {period_end}"
-                    line_vals = {
-                        'product_id': sub.product_id.id,
-                        'name': desc,
-                        'product_uom_qty': 1,
-                        'price_unit': sub.price_unit,
-                        'subscription_id': sub.id,
-                    }
-                    so_vals['order_line'].append((0, 0, line_vals))
-                
-                so = SaleOrder.create(so_vals)
-                for sub in subs_list:
-                    sub.write({'sale_order_ids': [(4, so.id)]})
-                
-                template = self.env.ref('sale.email_template_edi_sale', raise_if_not_found=False)
-                if template:
-                    so.message_post_with_source(template, email_layout_xmlid='mail.mail_notification_layout_with_responsible_signature')
-                    so.state = 'sent'
-                
-                _logger.info(f"PRE-INVOICE: Generated SO {so.name} for {len(subs_list)} subscriptions")
+                self._billing_generate_invoice(subs_list)
             except Exception as e:
-                _logger.error(f"Failed to generate pre-invoice group {key}: {str(e)}")
+                _logger.error(f"BILLING: Falló la generación para grupo {key}: {str(e)}")
+
+    def _billing_generate_invoice(self, subs_list):
+        """ Crea y publica UNA factura (account.move) para el grupo de suscripciones dado,
+        envía por correo si alguna tiene auto_send_mail, y avanza su next_billing_date al
+        siguiente ciclo. El impuesto sale del producto (16%) y la posición fiscal del cliente
+        lo ajusta (8% frontera). El timbrado CFDI queda pendiente del módulo Prodigia real:
+        las marcadas con auto_invoice quedan publicadas listas para timbrar. """
+        Move = self.env['account.move']
+        partner = subs_list[0].partner_id
+        first_sub = subs_list[0]
+        line_cmds = []
+        for sub in subs_list:
+            period_end = sub.next_billing_date + relativedelta(months=int(sub.recurring_interval)) - timedelta(days=1)
+            desc = f"Servicio: {sub.product_id.name} | Contrato: {sub.name} | Periodo: {sub.next_billing_date} al {period_end}"
+            line_cmds.append((0, 0, {
+                'product_id': sub.product_id.id,
+                'name': desc,
+                'quantity': 1,
+                'price_unit': sub.price_unit,
+            }))
+        move = Move.create({
+            'move_type': 'out_invoice',
+            'partner_id': partner.id,
+            'invoice_date': fields.Date.today(),
+            'fiscal_position_id': partner.property_account_position_id.id or False,
+            'invoice_payment_term_id': first_sub.payment_term_id.id or False,
+            'invoice_origin': f"Renovación: {', '.join(s.name for s in subs_list)}",
+            'subscription_id': first_sub.id if len(subs_list) == 1 else False,
+            'invoice_line_ids': line_cmds,
+        })
+        move.action_post()  # genera el saldo por cobrar
+
+        if any(s.auto_send_mail for s in subs_list) and partner.email:
+            template = self.env.ref('account.email_template_edi_invoice', raise_if_not_found=False)
+            if template:
+                template.send_mail(move.id, force_send=True)
+
+        for sub in subs_list:
+            sub.next_billing_date = sub.next_billing_date + relativedelta(months=int(sub.recurring_interval))
+
+        stamp_note = " (marcada para timbrar CFDI)" if any(s.auto_invoice for s in subs_list) else ""
+        _logger.info(f"BILLING: Factura {move.name} publicada para {len(subs_list)} suscripción(es){stamp_note}")
+        return move
 
     # --- Extensions & Suspensions ---
     def apply_extension(self, days, reason):
