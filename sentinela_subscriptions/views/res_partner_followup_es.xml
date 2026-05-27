@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Traducción al español de la pestaña "Seguimiento de Pagos" (om_account_followup) -->
+    <record id="view_partner_followup_es" model="ir.ui.view">
+        <field name="name">res.partner.followup.es</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="om_account_followup.view_partner_inherit_followup_form"/>
+        <field name="arch" type="xml">
+            <button name="do_button_print" position="attributes">
+                <attribute name="string">Imprimir Pagos Vencidos</attribute>
+                <attribute name="help">Imprime el reporte de pagos vencidos, independiente de la línea de seguimiento.</attribute>
+            </button>
+            <button name="do_partner_mail" position="attributes">
+                <attribute name="string">Enviar Correo de Vencidos</attribute>
+                <attribute name="help">Si no se especifica en el último nivel de seguimiento, se envía con la plantilla de correo por defecto.</attribute>
+            </button>
+
+            <xpath expr="//p[field[@name='latest_followup_date']]" position="replace">
+                <p invisible="not latest_followup_date">
+                    El <field name="latest_followup_date" class="oe_inline"/>, el último seguimiento de pago fue:
+                    <field name="latest_followup_level_id" class="oe_inline"/>
+                </p>
+            </xpath>
+
+            <field name="payment_responsible_id" position="attributes">
+                <attribute name="string">Responsable de Cobranza</attribute>
+                <attribute name="placeholder">Responsable de la cobranza del cliente</attribute>
+            </field>
+            <label for="payment_next_action" position="attributes">
+                <attribute name="string">Próxima Acción</attribute>
+            </label>
+            <button name="action_done" position="attributes">
+                <attribute name="string">⇾ Marcar como Hecho</attribute>
+                <attribute name="help">Clic para marcar la acción como realizada.</attribute>
+            </button>
+            <field name="payment_next_action" position="attributes">
+                <attribute name="placeholder">Acción a realizar, p. ej. Llamar por teléfono, Verificar si ya pagó, ...</attribute>
+            </field>
+            <label for="payment_note" position="attributes">
+                <attribute name="string">Nota de Cobranza</attribute>
+            </label>
+            <field name="payment_note" position="attributes">
+                <attribute name="placeholder">Ej.: Prometió pagar el 50% antes del 15 de mayo y el resto antes del 1 de julio.</attribute>
+            </field>
+
+            <xpath expr="//p[hasclass('oe_grey')]" position="replace">
+                <p class="oe_grey">
+                    A continuación, el historial de transacciones de este cliente. Puede marcar
+                    "Sin seguimiento" para excluir una transacción de las próximas acciones de cobranza.
+                </p>
+            </xpath>
+
+            <xpath expr="//field[@name='unreconciled_aml_ids']/list" position="attributes">
+                <attribute name="string">Cargos Pendientes de Pago</attribute>
+            </xpath>
+            <xpath expr="//field[@name='unreconciled_aml_ids']/list/field[@name='result']" position="attributes">
+                <attribute name="string">Importe Pendiente</attribute>
+            </xpath>
+
+            <field name="payment_amount_due" position="attributes">
+                <attribute name="string">Total Adeudado</attribute>
+            </field>
+        </field>
+    </record>
+</odoo>

@@ -1,8 +1,8 @@
 {
     'name': 'Sentinela Subscriptions',
-    'version': '18.0.1.3.46',
+    'version': '18.0.1.3.47',
     'category': 'Sales/Subscriptions',
-    'depends': ['base', 'mail', 'product', 'account', 'sale', 'sentinela_digital_sign', 'sentinela_cfdi_prodigia'],
+    'depends': ['base', 'mail', 'product', 'account', 'sale', 'sentinela_digital_sign', 'sentinela_cfdi_prodigia', 'om_account_followup'],
     'data': [
         'security/subscription_security.xml',
         'security/ir.model.access.csv',
@@ -18,6 +18,7 @@
         'views/contract_template_views.xml',
         'views/res_config_settings_views.xml',
         'views/res_partner_views.xml',
+        'views/res_partner_followup_es.xml',
         'views/account_move_views.xml',
         'views/menus.xml',
         'report/contract_report.xml',
