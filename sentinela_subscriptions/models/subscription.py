@@ -334,7 +334,7 @@ class SentinelaSubscription(models.Model):
 
     @api.depends('antenna_brand', 'antenna_model', 'router_id', 'router_id.ip_address',
                  'router_id.pppoe_server_name', 'service_address_id', 'address_street',
-                 'address_city', 'address_zip', 'monitoring_account_number')
+                 'address_street2', 'address_city', 'address_zip', 'monitoring_account_number')
     def _compute_contract_fields(self):
         for rec in self:
             rec.contract_antena_marca = rec.antenna_brand or ''
@@ -344,6 +344,7 @@ class SentinelaSubscription(models.Model):
             rec.contract_pppoe_servidor = rec.router_id.pppoe_server_name if rec.router_id else ''
             parts = filter(None, [
                 rec.address_street,
+                rec.address_street2,
                 rec.address_city,
                 rec.address_state_id.name if rec.address_state_id else '',
                 rec.address_zip,
