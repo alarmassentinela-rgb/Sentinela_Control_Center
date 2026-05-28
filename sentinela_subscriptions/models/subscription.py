@@ -2,6 +2,7 @@ from odoo import models, fields, api, _
 from odoo.exceptions import UserError, ValidationError
 from dateutil.relativedelta import relativedelta
 from datetime import date, timedelta
+import calendar
 import base64
 import logging
 
@@ -606,8 +607,6 @@ class SentinelaSubscription(models.Model):
                            'type': 'success', 'sticky': False}}
 
     # --- Billing Automation ---
-    GROUPING_HORIZON_DAYS = 30  # Ventana para agrupar subs en modo global/by_branch
-
     def _cron_generate_pre_invoices(self):
         """ Genera FACTURAS (account.move) para las suscripciones cuyo cobro vence hoy o antes.
         La factura publicada genera el saldo por cobrar; sirve como "remisión" (sin timbrar) o
@@ -616,10 +615,10 @@ class SentinelaSubscription(models.Model):
 
         Agrupación según preferencia del cliente (res.partner.invoice_grouping_method):
         - individual: 1 factura por suscripción.
-        - by_branch: 1 factura por (cliente, dirección de servicio). Cuando UNA sub del grupo
-          vence, se incluyen además todas las subs del mismo grupo cuya next_billing_date caiga
-          dentro de los próximos GROUPING_HORIZON_DAYS — así un cliente con fechas mixtas
-          recibe UNA sola factura por dirección por ciclo, no varias separadas.
+        - by_branch: 1 factura por (cliente, dirección de servicio). Cuando la primera sub del
+          grupo vence en el mes, jala todas las del mismo grupo cuya next_billing_date caiga
+          dentro del MISMO MES CALENDARIO (de hoy hasta fin de mes). Las del mes siguiente
+          esperan a su propio mes.
         - global: igual que by_branch, pero el grupo es solo (cliente,*).
         El avance de next_billing_date evita duplicados (cada sub mantiene su ciclo natural). """
         today = fields.Date.today()
@@ -630,7 +629,7 @@ class SentinelaSubscription(models.Model):
         if not subs_due:
             return
 
-        horizon = today + timedelta(days=self.GROUPING_HORIZON_DAYS)
+        end_of_month = today.replace(day=calendar.monthrange(today.year, today.month)[1])
         grouped_subs = {}
         for sub in subs_due:
             method = sub.partner_id.invoice_grouping_method or 'individual'
@@ -647,14 +646,14 @@ class SentinelaSubscription(models.Model):
                 group = self.search([
                     ('state', '=', 'active'),
                     ('partner_id', '=', sub.partner_id.id),
-                    ('next_billing_date', '<=', horizon),
+                    ('next_billing_date', '<=', end_of_month),
                 ])
             elif method == 'by_branch':
                 group = self.search([
                     ('state', '=', 'active'),
                     ('partner_id', '=', sub.partner_id.id),
                     ('service_address_id', '=', sub.service_address_id.id if sub.service_address_id else False),
-                    ('next_billing_date', '<=', horizon),
+                    ('next_billing_date', '<=', end_of_month),
                 ])
             else:
                 group = sub
