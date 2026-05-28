@@ -606,19 +606,33 @@ class SentinelaSubscription(models.Model):
                            'type': 'success', 'sticky': False}}
 
     # --- Billing Automation ---
+    GROUPING_HORIZON_DAYS = 30  # Ventana para agrupar subs en modo global/by_branch
+
     def _cron_generate_pre_invoices(self):
         """ Genera FACTURAS (account.move) para las suscripciones cuyo cobro vence hoy o antes.
         La factura publicada genera el saldo por cobrar; sirve como "remisión" (sin timbrar) o
         como factura fiscal (cuando se implemente el timbrado CFDI real). Sin anticipo: se genera
-        el día exacto de next_billing_date (<= hoy también recupera atrasadas). Respeta la
-        agrupación del cliente. El avance de next_billing_date evita duplicados. """
+        el día exacto de next_billing_date (<= hoy también recupera atrasadas).
+
+        Agrupación según preferencia del cliente (res.partner.invoice_grouping_method):
+        - individual: 1 factura por suscripción.
+        - by_branch: 1 factura por (cliente, dirección de servicio). Cuando UNA sub del grupo
+          vence, se incluyen además todas las subs del mismo grupo cuya next_billing_date caiga
+          dentro de los próximos GROUPING_HORIZON_DAYS — así un cliente con fechas mixtas
+          recibe UNA sola factura por dirección por ciclo, no varias separadas.
+        - global: igual que by_branch, pero el grupo es solo (cliente,*).
+        El avance de next_billing_date evita duplicados (cada sub mantiene su ciclo natural). """
         today = fields.Date.today()
-        subs_to_bill = self.search([
+        subs_due = self.search([
             ('state', '=', 'active'),
             ('next_billing_date', '<=', today),
         ])
+        if not subs_due:
+            return
+
+        horizon = today + timedelta(days=self.GROUPING_HORIZON_DAYS)
         grouped_subs = {}
-        for sub in subs_to_bill:
+        for sub in subs_due:
             method = sub.partner_id.invoice_grouping_method or 'individual'
             if method == 'global':
                 key = (sub.partner_id.id, 'global')
@@ -627,11 +641,28 @@ class SentinelaSubscription(models.Model):
                 key = (sub.partner_id.id, addr_id)
             else:
                 key = (sub.partner_id.id, sub.id)
-            grouped_subs.setdefault(key, []).append(sub)
+            if key in grouped_subs:
+                continue  # Grupo ya expandido por otra sub vencida del mismo grupo
+            if method == 'global':
+                group = self.search([
+                    ('state', '=', 'active'),
+                    ('partner_id', '=', sub.partner_id.id),
+                    ('next_billing_date', '<=', horizon),
+                ])
+            elif method == 'by_branch':
+                group = self.search([
+                    ('state', '=', 'active'),
+                    ('partner_id', '=', sub.partner_id.id),
+                    ('service_address_id', '=', sub.service_address_id.id if sub.service_address_id else False),
+                    ('next_billing_date', '<=', horizon),
+                ])
+            else:
+                group = sub
+            grouped_subs[key] = group
 
-        for key, subs_list in grouped_subs.items():
+        for key, group in grouped_subs.items():
             try:
-                self._billing_generate_invoice(subs_list)
+                self._billing_generate_invoice(group)
             except Exception as e:
                 _logger.error(f"BILLING: Falló la generación para grupo {key}: {str(e)}")
 
@@ -640,10 +671,16 @@ class SentinelaSubscription(models.Model):
         envía por correo si alguna tiene auto_send_mail, y avanza su next_billing_date al
         siguiente ciclo. El impuesto sale del producto (16%) y la posición fiscal del cliente
         lo ajusta (8% frontera). El timbrado CFDI queda pendiente del módulo Prodigia real:
-        las marcadas con auto_invoice quedan publicadas listas para timbrar. """
+        las marcadas con auto_invoice quedan publicadas listas para timbrar.
+
+        Asocia la factura a TODAS las subs del grupo vía M2M (`subscription_ids`), y además
+        mantiene el Many2one `subscription_id` cuando solo hay una (compatibilidad con vistas
+        y One2many.invoice_ids existentes). Para modo by_branch, fija `partner_shipping_id`
+        a la dirección de servicio para que la factura muestre la sucursal correspondiente. """
         Move = self.env['account.move']
         partner = subs_list[0].partner_id
         first_sub = subs_list[0]
+        method = partner.invoice_grouping_method or 'individual'
         line_cmds = []
         for sub in subs_list:
             period_end = sub.next_billing_date + relativedelta(months=int(sub.recurring_interval)) - timedelta(days=1)
@@ -654,7 +691,7 @@ class SentinelaSubscription(models.Model):
                 'quantity': 1,
                 'price_unit': sub.price_unit,
             }))
-        move = Move.create({
+        move_vals = {
             'move_type': 'out_invoice',
             'partner_id': partner.id,
             'invoice_date': fields.Date.today(),
@@ -662,8 +699,12 @@ class SentinelaSubscription(models.Model):
             'invoice_payment_term_id': first_sub.payment_term_id.id or False,
             'invoice_origin': f"Renovación: {', '.join(s.name for s in subs_list)}",
             'subscription_id': first_sub.id if len(subs_list) == 1 else False,
+            'subscription_ids': [(6, 0, subs_list.ids)],
             'invoice_line_ids': line_cmds,
-        })
+        }
+        if method == 'by_branch' and first_sub.service_address_id:
+            move_vals['partner_shipping_id'] = first_sub.service_address_id.id
+        move = Move.create(move_vals)
         move.action_post()  # genera el saldo por cobrar
 
         if any(s.auto_send_mail for s in subs_list) and partner.email:
@@ -1462,4 +1503,10 @@ class SaleOrderLine(models.Model):
 class AccountMove(models.Model):
     _inherit = 'account.move'
     subscription_id = fields.Many2one('sentinela.subscription', string='Suscripción / Contrato')
+    subscription_ids = fields.Many2many(
+        'sentinela.subscription',
+        'account_move_subscription_rel',
+        'move_id', 'subscription_id',
+        string='Suscripciones agrupadas',
+        help='Todas las suscripciones que aporta esta factura. Usado para clientes con preferencia de facturación global o por sucursal.')
     is_renewal_processed = fields.Boolean(default=False, copy=False)
