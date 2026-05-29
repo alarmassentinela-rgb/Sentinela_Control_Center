@@ -2,7 +2,7 @@
 import { useEffect, useState, Fragment } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { Flag, ArrowLeft, Play, MapPin, Calendar, Loader2, CheckCircle2, Copy, Check, QrCode, DollarSign, ChevronDown, ChevronUp, Save, Edit2, X, Info, Trash2, Users, Shuffle, Radio, Eye, EyeOff, Send, Swords, ArrowUp, ArrowDown, Layers, AlertTriangle, RotateCcw, Plus, Minus } from 'lucide-react'
+import { Flag, ArrowLeft, Play, MapPin, Calendar, Loader2, CheckCircle2, Copy, Check, QrCode, DollarSign, ChevronDown, ChevronUp, Save, Edit2, X, Info, Trash2, Users, Shuffle, Radio, Eye, EyeOff, Send, Swords, ArrowUp, ArrowDown, Layers, AlertTriangle, RotateCcw, Plus, Minus, UserPlus } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
@@ -2203,6 +2203,45 @@ export default function RoundDetailPage() {
   }
 
   const [removingPlayer, setRemovingPlayer] = useState<string | null>(null)
+  // Buscar y agregar jugador manualmente (p.ej. compañero sin internet que no pudo confirmar por el link)
+  const [showAddSearch, setShowAddSearch] = useState(false)
+  const [searchQ, setSearchQ] = useState('')
+  const [searchResults, setSearchResults] = useState<{ id: string; username: string; first_name: string; last_name: string; handicap_index: number | null }[]>([])
+  const [searching, setSearching] = useState(false)
+  const [addingUser, setAddingUser] = useState<string | null>(null)
+  const [addError, setAddError] = useState<string | null>(null)
+
+  const doUserSearch = async (q: string) => {
+    setSearchQ(q)
+    setAddError(null)
+    if (q.trim().length < 2) { setSearchResults([]); return }
+    setSearching(true)
+    try {
+      const r = await api.get(`/users/search?q=${encodeURIComponent(q.trim())}`)
+      const already = new Set(players.map(pl => pl.user_id))
+      setSearchResults((r.data as { id: string }[]).filter(u => !already.has(u.id)) as typeof searchResults)
+    } catch {
+      setSearchResults([])
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const addPlayerByUser = async (userId: string) => {
+    setAddingUser(userId)
+    setAddError(null)
+    try {
+      await api.post(`/rounds/${id}/invite/${userId}`)
+      const r = await api.get(`/rounds/${id}/players`)
+      setPlayers(r.data)
+      setSearchResults(prev => prev.filter(u => u.id !== userId))
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setAddError(detail ?? lbl('Error al agregar jugador', 'Error adding player'))
+    } finally {
+      setAddingUser(null)
+    }
+  }
   const handleRemovePlayer = async (userId: string, name: string) => {
     if (!confirm(lbl(
       `¿Quitar a ${name} de la ronda? Sus scores serán eliminados.`,
@@ -2960,9 +2999,56 @@ export default function RoundDetailPage() {
 
         {/* Players */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
-          <h2 className="font-semibold text-white mb-4">
-            {lbl('Jugadores', 'Players')} <span className="text-zinc-500 font-normal text-sm ml-1">({players.length})</span>
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-white">
+              {lbl('Jugadores', 'Players')} <span className="text-zinc-500 font-normal text-sm ml-1">({players.length})</span>
+            </h2>
+            {amCreator && (round.status === 'scheduled' || round.status === 'active') && (
+              <button
+                onClick={() => { setShowAddSearch(v => !v); setSearchQ(''); setSearchResults([]); setAddError(null) }}
+                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 transition-colors">
+                <UserPlus size={13} /> {lbl('Agregar jugador', 'Add player')}
+              </button>
+            )}
+          </div>
+
+          {/* Buscar y agregar jugador manualmente */}
+          {showAddSearch && amCreator && (round.status === 'scheduled' || round.status === 'active') && (
+            <div className="mb-4 p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5">
+              <p className="text-xs text-zinc-400 mb-2">
+                {lbl('Busca por nombre o usuario y agrégalo directo (útil si no puede confirmar por el link, p.ej. sin internet).',
+                     'Search by name or username and add directly (useful if they can\'t confirm via the link, e.g. no internet).')}
+              </p>
+              <input
+                autoFocus value={searchQ} onChange={e => doUserSearch(e.target.value)}
+                placeholder={lbl('Nombre o usuario…', 'Name or username…')}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-emerald-500/50 outline-none" />
+              {addError && <p className="text-xs text-red-400 mt-2">{addError}</p>}
+              {searching && <p className="text-xs text-zinc-500 mt-2">{lbl('Buscando…', 'Searching…')}</p>}
+              {!searching && searchQ.trim().length >= 2 && searchResults.length === 0 && (
+                <p className="text-xs text-zinc-500 mt-2">{lbl('Sin resultados (o ya están en la ronda).', 'No results (or already in the round).')}</p>
+              )}
+              {searchResults.length > 0 && (
+                <div className="mt-3 divide-y divide-zinc-800 border border-zinc-800 rounded-lg overflow-hidden">
+                  {searchResults.map(u => (
+                    <div key={u.id} className="flex items-center justify-between px-3 py-2 bg-zinc-900/40">
+                      <div>
+                        <p className="text-sm text-white">{u.first_name} {u.last_name}</p>
+                        <p className="text-xs text-zinc-500">@{u.username} · HCP {u.handicap_index?.toFixed(1) ?? '—'}</p>
+                      </div>
+                      <button
+                        onClick={() => addPlayerByUser(u.id)} disabled={addingUser !== null}
+                        className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-500 text-white hover:bg-emerald-400 disabled:opacity-40 transition-colors">
+                        {addingUser === u.id ? <Loader2 size={12} className="animate-spin" /> : <UserPlus size={12} />}
+                        {lbl('Agregar', 'Add')}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="divide-y divide-zinc-800">
             {players.map((p) => {
               const entry = board.find(b => b.user_id === p.user_id)
