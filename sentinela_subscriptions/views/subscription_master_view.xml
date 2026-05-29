@@ -118,15 +118,16 @@
                                 </group>
                             </group>
                         </page>
-                        <page string="🚗 Rastreo GPS (Senticar)" name="gps" invisible="service_type != 'gps'">
+                        <page string="🚗 Rastreo GPS" name="gps" invisible="service_type != 'gps'">
                             <group>
                                 <group string="Identificación">
                                     <field name="gps_imei" readonly="is_contract_locked"/>
                                     <field name="sim_iccid" readonly="is_contract_locked"/>
                                     <field name="serial_number_id" readonly="is_contract_locked"/>
                                 </group>
-                                <group string="Software">
-                                    <!-- <field name="gps_platform_id" readonly="is_contract_locked"/> -->
+                                <group string="Plataforma de Rastreo">
+                                    <field name="gps_platform" readonly="is_contract_locked"/>
+                                    <field name="gps_platform_device_id" readonly="is_contract_locked"/>
                                 </group>
                             </group>
                         </page>

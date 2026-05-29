@@ -253,12 +253,18 @@ class SentinelaSubscription(models.Model):
     master_password = fields.Char(string='Clave Maestra (Panel)')
     gps_imei = fields.Char(string='IMEI del Equipo')
     sim_iccid = fields.Char(string='ICCID de la SIM')
-    # gps_platform_id = fields.Char(string='ID en Plataforma')
+    gps_platform = fields.Selection([
+        ('tracksolid', 'Tracksolid Pro'),
+        ('smake', 'Smake'),
+        ('senticar', 'SentiCar'),
+    ], string='Plataforma de Rastreo')
+    gps_platform_device_id = fields.Char(string='ID / Usuario en Plataforma',
+        help="Identificador del equipo en la plataforma de rastreo (Tracksolid Pro / Smake / SentiCar).")
     equipment_brand = fields.Char(string='Marca')
     equipment_model = fields.Char(string='Modelo')
     equipment_serial = fields.Char(string='Número de Serie (Manual)')
 
-    # --- Vehículo (GPS / SentiCar) ---
+    # --- Vehículo (GPS / Rastreo) ---
     vehicle_brand = fields.Char(string='Marca Vehículo')
     vehicle_model = fields.Char(string='Modelo Vehículo')
     vehicle_year = fields.Integer(string='Año Vehículo')
@@ -332,10 +338,16 @@ class SentinelaSubscription(models.Model):
         string='Domicilio de Servicio (Contrato)', compute='_compute_contract_fields', store=False)
     contract_cuenta_monitoreo = fields.Char(
         string='Cuenta Monitoreo (Contrato)', compute='_compute_contract_fields', store=False)
+    contract_gps_platform = fields.Char(
+        string='Plataforma de Rastreo (Contrato)', compute='_compute_contract_fields', store=False)
+    contract_equipment_clause = fields.Html(
+        string='Cláusula de Equipo (Contrato)', compute='_compute_contract_fields', store=False, sanitize=False)
 
     @api.depends('antenna_brand', 'antenna_model', 'router_id', 'router_id.ip_address',
                  'router_id.pppoe_server_name', 'service_address_id', 'address_street',
-                 'address_street2', 'address_city', 'address_zip', 'monitoring_account_number')
+                 'address_street2', 'address_city', 'address_zip', 'monitoring_account_number',
+                 'gps_platform', 'equipment_ownership', 'commitment_period', 'is_forced_contract',
+                 'early_termination_fee', 'penalty_amount')
     def _compute_contract_fields(self):
         for rec in self:
             rec.contract_antena_marca = rec.antenna_brand or ''
@@ -352,6 +364,44 @@ class SentinelaSubscription(models.Model):
             ])
             rec.contract_domicilio_servicio = ', '.join(parts)
             rec.contract_cuenta_monitoreo = rec.monitoring_account_number or ''
+            plat_map = dict(rec._fields['gps_platform'].selection or [])
+            rec.contract_gps_platform = plat_map.get(rec.gps_platform) or 'la plataforma de rastreo contratada'
+            rec.contract_equipment_clause = rec._build_equipment_clause()
+
+    def _build_equipment_clause(self):
+        """Construye la cláusula TERCERA (EQUIPO) del contrato según el régimen del equipo."""
+        self.ensure_one()
+        from markupsafe import Markup
+        money = lambda v: '${:,.2f} MXN'.format(v or 0.0)
+        meses = self.commitment_period or 0
+        fee = money(self.early_termination_fee or self.penalty_amount or 0.0)
+        if self.equipment_ownership == 'customer':
+            html = (
+                '<p><strong>TERCERA. EQUIPO.</strong> El dispositivo de rastreo (GPS) y la SIM son propiedad de '
+                'EL SUSCRIPTOR. EL PROVEEDOR presta únicamente el servicio de localización a través de la plataforma '
+                'contratada; no se entrega equipo en comodato ni en arrendamiento, ni existe plazo forzoso por concepto '
+                'de equipo.</p>'
+            )
+        elif self.equipment_ownership == 'leasing':
+            extra = (' El plazo forzoso es de <strong>%s meses</strong>; la cancelación anticipada antes de cumplirlo '
+                     'generará una penalización de <strong>%s</strong>.' % (meses, fee)) if meses else ''
+            html = (
+                '<p><strong>TERCERA. EQUIPO (ARRENDAMIENTO CON OPCIÓN A COMPRA).</strong> El dispositivo de rastreo '
+                '(GPS) y la SIM se entregan en arrendamiento con opción a compra. Durante el plazo forzoso, la renta '
+                'mensual incluye el costo del equipo. Al concluir dicho plazo y estando EL SUSCRIPTOR al corriente en '
+                'sus pagos, el equipo pasará a ser de su <strong>propiedad</strong>.' + extra + '</p>'
+            )
+        else:  # company / comodato (default)
+            extra = (' El contrato tiene un plazo forzoso de <strong>%s meses</strong> por el equipo en comodato; la '
+                     'cancelación anticipada generará una penalización de <strong>%s</strong>.' % (meses, fee)) if (self.is_forced_contract and meses) else ''
+            html = (
+                '<p><strong>TERCERA. EQUIPO (COMODATO).</strong> Para la prestación del servicio, EL PROVEEDOR instala '
+                'en el vehículo un dispositivo de rastreo (GPS) y una SIM entregados en comodato, que son y seguirán '
+                'siendo propiedad de EL PROVEEDOR. EL SUSCRIPTOR se obliga a conservarlos en buen estado y a devolverlos '
+                'al término del contrato. En caso de daño por negligencia, manipulación indebida, retiro no autorizado o '
+                'no devolución, cubrirá el costo de reposición vigente.' + extra + '</p>'
+            )
+        return Markup(html)
 
     @api.depends('contract_body')
     def _compute_contract_body_html(self):

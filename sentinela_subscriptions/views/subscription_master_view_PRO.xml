@@ -44,7 +44,7 @@
 
                     <div class="oe_title">
                         <h1>
-                            <span invisible="service_type != 'gps'" style="color: #e91e63;">🚀 SentiCar - </span>
+                            <span invisible="service_type != 'gps'" style="color: #e91e63;">🚗 Rastreo GPS - </span>
                             <span invisible="service_type != 'alarm'" style="color: #2196f3;">🚀 Sentinela - </span>
                             <span invisible="service_type != 'internet'" style="color: #4caf50;">🚀 WavesInternet - </span>
                             <field name="name" readonly="1" class="oe_inline"/>
@@ -86,9 +86,13 @@
                             </group>
                         </page>
 
-                        <!-- ═══ GPS / SENTICAR ═══ -->
+                        <!-- ═══ GPS / RASTREO ═══ -->
                         <page string="🚗 GPS" name="gps" invisible="service_type != 'gps'">
                             <group>
+                                <group string="Plataforma de Rastreo">
+                                    <field name="gps_platform"/>
+                                    <field name="gps_platform_device_id"/>
+                                </group>
                                 <group string="Dispositivo GPS">
                                     <field name="gps_imei"/>
                                     <field name="sim_iccid"/>
