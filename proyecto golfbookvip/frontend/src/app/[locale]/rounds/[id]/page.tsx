@@ -2212,6 +2212,8 @@ export default function RoundDetailPage() {
     try {
       const res = await api.delete(`/rounds/${id}/players/${userId}`)
       setTeamsData(res.data)
+      // Quitar de la lista principal de jugadores (para que la fila desaparezca al instante)
+      setPlayers(prev => prev.filter(pl => pl.user_id !== userId))
       // Refresh matchups after removing player
       const mRes = await api.get(`/rounds/${id}/matchups`).catch(() => ({ data: null }))
       if (mRes.data?.has_matchups) setMatchupsData(mRes.data)
@@ -3002,18 +3004,32 @@ export default function RoundDetailPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      {entry && entry.holes_played > 0 ? (
-                        <>
-                          <p className="text-sm font-bold text-white">{entry.total_gross}</p>
-                          <p className="text-xs text-zinc-500">{entry.holes_played} {lbl('hoyos', 'holes')}</p>
-                        </>
-                      ) : (
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                          p.status === 'confirmed' ? 'text-emerald-400 bg-emerald-400/10' : 'text-zinc-500 bg-zinc-800'
-                        }`}>
-                          {p.status === 'confirmed' ? lbl('Confirmado', 'Confirmed') : lbl('Invitado', 'Invited')}
-                        </span>
+                    <div className="flex items-center gap-2">
+                      <div className="text-right">
+                        {entry && entry.holes_played > 0 ? (
+                          <>
+                            <p className="text-sm font-bold text-white">{entry.total_gross}</p>
+                            <p className="text-xs text-zinc-500">{entry.holes_played} {lbl('hoyos', 'holes')}</p>
+                          </>
+                        ) : (
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            p.status === 'confirmed' ? 'text-emerald-400 bg-emerald-400/10' : 'text-zinc-500 bg-zinc-800'
+                          }`}>
+                            {p.status === 'confirmed' ? lbl('Confirmado', 'Confirmed') : lbl('Invitado', 'Invited')}
+                          </span>
+                        )}
+                      </div>
+                      {/* Quitar jugador (creador, ronda no finalizada, no a sí mismo) — p.ej. un no-show */}
+                      {amCreator && !isMe && (round.status === 'scheduled' || round.status === 'active') && (
+                        <button
+                          onClick={() => handleRemovePlayer(p.user_id, `${p.first_name} ${p.last_name}`)}
+                          disabled={removingPlayer !== null}
+                          title={lbl('Quitar jugador de la ronda', 'Remove player from round')}
+                          className="p-1.5 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-red-400/10 disabled:opacity-30 transition-all">
+                          {removingPlayer === p.user_id
+                            ? <Loader2 size={13} className="animate-spin" />
+                            : <X size={13} />}
+                        </button>
                       )}
                     </div>
                   </div>
