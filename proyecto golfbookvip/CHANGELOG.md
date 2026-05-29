@@ -7,6 +7,27 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.23.0] - 2026-05-29
+
+### Added — Formato Medal Play por equipos con puntos por posición de grupo
+
+Nuevo formato de torneo (estrenado en la ronda "Kike Jr. Birthday"): **Individual Medal Play** + equipos balanceados por handicap + puntos por posición **NET** dentro de cada grupo de salida. El equipo con más puntos es el **Campeón por Equipos**.
+
+**Reglas de puntos por grupo:** 1.º = +2 · 2.º = +1 · último = −1 (siempre, sin importar el tamaño del grupo) · resto = 0. Empates resueltos por **tarjeta / countback** en net "según las ventajas" (últimos 9 → 6 → 3 hoyos → hoyo 18 → hoyo por hoyo; el net por hoyo ya incluye los strokes por stroke index).
+
+- `app/services/team_points.py` (NUEVO): motor puro — `countback_key`, `points_for_position`, `rank_group`, `compute_team_points`.
+- `GET /rounds/{round_id}/team-points` (público): grupos con posición/puntos por jugador, tabla de equipos, campeón y bandera de empate. Requiere `teams_published` + `tee_group` asignado; excluye retirados/observers.
+- Frontend `/live/[code]`: sección "Campeón por Equipos" + desglose "Grupos de Salida"; oculta el marcador best-ball (hoyos ganados) cuando aplica este formato.
+
+### Notes — Sincronización de trabajo previo desplegado
+
+Este release también lleva al repo dos cambios que estaban en producción pero nunca se commitearon:
+
+- **`max_handicap` por ronda** (tope de Course Handicap): `effective_handicap` en `scoring.py`, columna en `round.py`, schema y call-sites en `rounds.py`, páginas `rounds/[id]` y `rounds/new`.
+- **Service Worker kill-switch v5** (`sw.js`): sin caché ni fetch handler — evita que un rebuild del frontend deje a usuarios PWA en "sin conexión".
+
+---
+
 ## [1.22.0] - 2026-05-19
 
 ### Added — Bot conversacional Telegram (6 comandos de lectura)
