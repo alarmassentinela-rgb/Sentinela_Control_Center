@@ -1411,6 +1411,17 @@ class SentinelaSubscription(models.Model):
                 sub.recurring_interval = sub.product_id.default_recurring_interval
             if sub.product_id.service_type and not sub.service_type:
                 sub.service_type = sub.product_id.service_type
+            # Prellenar Servicios Incluidos desde la matriz del plan (si no hay nada cargado)
+            if not sub.service_inclusion_ids:
+                matrix = self.env['sentinela.product.service.inclusion'].sudo().search([
+                    ('product_id', '=', sub.product_id.id),
+                ])
+                if matrix:
+                    sub.service_inclusion_ids = [(0, 0, {
+                        'service_id': row.service_id.id,
+                        'is_included': row.is_included,
+                        'extra_price': row.extra_price,
+                    }) for row in matrix]
 
     @api.onchange('antenna_product_id')
     def _onchange_antenna_product_id(self):
@@ -1434,11 +1445,25 @@ class SentinelaSubscription(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        Matrix = self.env['sentinela.product.service.inclusion'].sudo()
         for vals in vals_list:
             if vals.get('name', 'New') == 'New':
                 vals['name'] = self.env['ir.sequence'].next_by_code('sentinela.subscription') or 'New'
+            # Pre-derivar la matriz del plan EN vals (antes de super().create) para que
+            # el constraint _check_service_inclusions_complete encuentre los services al
+            # evaluarse. Si el caller ya pasó service_inclusion_ids, no se sobrescribe.
+            product_id = vals.get('product_id')
+            if product_id and not vals.get('service_inclusion_ids'):
+                rows = Matrix.search([('product_id', '=', product_id)])
+                if rows:
+                    vals['service_inclusion_ids'] = [(0, 0, {
+                        'service_id': row.service_id.id,
+                        'is_included': row.is_included,
+                        'extra_price': row.extra_price,
+                    }) for row in rows]
         subs = super().create(vals_list)
-        # Auto-derivar inclusion records desde la matriz del plan
+        # Pase idempotente: garantiza inclusion records si algún caller inyectó
+        # service_inclusion_ids parciales o si el plan se cambió en write posterior.
         for sub in subs:
             sub._derive_service_inclusions()
         return subs
