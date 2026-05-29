@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, status
-from sqlalchemy import select, delete, func
+from sqlalchemy import select, delete, func, update
 from typing import Optional
 import uuid, secrets, string
 from datetime import date as date_type
@@ -541,7 +541,7 @@ async def submit_score(round_id: uuid.UUID, data: ScoreSubmit, current_user: Cur
         score = Score(round_id=round_id, user_id=target_user_id, hole_number=data.hole_number,
                       entered_by=current_user.id)
         db.add(score)
-        scoring_svc.apply_score_to_model(score, data, hole.par, stroke_index, course_handicap, round_.game_format)
+        scoring_svc.apply_score_to_model(score, data, hole.par, stroke_index, course_handicap, round_.game_format, round_.max_handicap)
     else:
         # Score ya existe — detectar conflicto
         if (score.entered_by and str(score.entered_by) != str(current_user.id)
@@ -553,7 +553,7 @@ async def submit_score(round_id: uuid.UUID, data: ScoreSubmit, current_user: Cur
             conflict_detected = True
         else:
             # Mismo que ingresó antes, o no había entered_by → actualizar limpiamente
-            scoring_svc.apply_score_to_model(score, data, hole.par, stroke_index, course_handicap, round_.game_format)
+            scoring_svc.apply_score_to_model(score, data, hole.par, stroke_index, course_handicap, round_.game_format, round_.max_handicap)
             score.entered_by = current_user.id
             score.has_conflict = False
             score.conflict_score = None
@@ -1214,8 +1214,8 @@ async def generate_teams(round_id: uuid.UUID, num_teams: int = 2, current_user: 
     round_ = round_result.scalar_one_or_none()
     if not round_:
         raise HTTPException(status_code=403, detail="Solo el creador puede gestionar equipos")
-    if not 2 <= num_teams <= 4:
-        raise HTTPException(status_code=400, detail="Número de equipos: 2 a 4")
+    if not 2 <= num_teams <= 12:
+        raise HTTPException(status_code=400, detail="Número de equipos: 2 a 12")
 
     result = await db.execute(
         select(RoundPlayer, User)
@@ -1441,6 +1441,33 @@ async def set_participant_mode(
         message={"event": "participant_mode_changed", "user_id": str(user_id), "mode": mode},
     )
     return {"message": "Modo actualizado", "user_id": str(user_id), "mode": mode}
+
+
+@router.delete("/{round_id}/teams")
+async def clear_teams(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
+    """Borra todos los equipos de la ronda (team_number, tee_order, match_order) sin tocar
+    scores, balances ni firmas. Solo creator. Resetea teams_published a False.
+    """
+    round_result = await db.execute(
+        select(Round).where(Round.id == round_id, Round.created_by == current_user.id)
+    )
+    round_ = round_result.scalar_one_or_none()
+    if not round_:
+        raise HTTPException(status_code=403, detail="Solo el creador puede limpiar equipos")
+
+    await db.execute(
+        update(RoundPlayer)
+        .where(RoundPlayer.round_id == round_id)
+        .values(team_number=None, tee_order=None, match_order=None)
+    )
+    round_.teams_published = False
+    await db.flush()
+
+    await manager.broadcast_to_round(
+        round_id=str(round_id),
+        message={"event": "teams_cleared"},
+    )
+    return {"message": "Equipos eliminados", "round_id": str(round_id)}
 
 
 @router.post("/{round_id}/teams/publish")
@@ -2020,7 +2047,7 @@ async def resolve_conflict(
         from app.services import scoring as scoring_svc
         data = ScoreSubmit(hole_number=hole_number, gross_score=correct_score)
         scoring_svc.apply_score_to_model(score, data, hole.par, hole.stroke_index or hole_number,
-                                          rp.course_handicap or 0, round_.game_format)
+                                          rp.course_handicap or 0, round_.game_format, round_.max_handicap)
     else:
         score.gross_score = correct_score
 
@@ -2370,6 +2397,74 @@ async def get_florida_scores(round_id: uuid.UUID, current_user: CurrentUser, db:
     }
 
 
+@router.get("/{round_id}/team-points")
+async def get_team_points(round_id: uuid.UUID, db: DB):
+    """Medal Play por equipos: puntos por posición NET dentro de cada grupo de salida.
+
+    1°=+2, 2°=+1, último=-1 (siempre), resto=0. Empates por tarjeta (countback) en net.
+    Suma por equipo → Campeón por Equipos. Público (sin auth), como el scoreboard en vivo.
+    Requiere equipos publicados (teams_published) y grupos de salida (tee_group) asignados.
+    """
+    from app.services import team_points as tp_svc
+
+    round_result = await db.execute(select(Round).where(Round.id == round_id))
+    round_ = round_result.scalar_one_or_none()
+    if not round_:
+        raise HTTPException(status_code=404, detail="Jugada no encontrada")
+
+    if not round_.teams_published:
+        return {"has_teams": False, "has_groups": False, "groups": [], "teams": [],
+                "champion_team": None, "is_tie": False, "holes_to_play": round_.holes_to_play}
+
+    players_result = await db.execute(
+        select(RoundPlayer, User)
+        .join(User, User.id == RoundPlayer.user_id)
+        .where(RoundPlayer.round_id == round_id)
+    )
+    rows = players_result.all()
+
+    scores_result = await db.execute(
+        select(Score).where(Score.round_id == round_id).order_by(Score.hole_number)
+    )
+    all_scores = scores_result.scalars().all()
+
+    # net por hoyo por jugador (cae a gross si no hay net calculado)
+    per_hole: dict = {}
+    for s in all_scores:
+        uid = str(s.user_id)
+        net = s.net_score if s.net_score is not None else s.gross_score
+        if net is None:
+            continue
+        per_hole.setdefault(uid, {})[s.hole_number] = net
+
+    players = []
+    for rp, u in rows:
+        # solo jugadores que realmente juegan (excluir retirados / no-playing)
+        if rp.participant_mode != "playing" or rp.withdrawn_at is not None:
+            continue
+        uid = str(rp.user_id)
+        hn = per_hole.get(uid, {})
+        total_net = sum(hn.values()) if hn else None
+        players.append({
+            "user_id": uid,
+            "name": f"{u.first_name} {u.last_name}",
+            "team_number": rp.team_number,
+            "tee_group": rp.tee_group,
+            "starting_hole": rp.starting_hole,
+            "course_handicap": rp.course_handicap,
+            "per_hole_net": hn,
+            "total_net": total_net,
+            "holes_played": len(hn),
+        })
+
+    result = tp_svc.compute_team_points(players, round_.holes_to_play)
+    # anotar color por equipo (mismo esquema que el resto del front)
+    for t in result["teams"]:
+        t["color"] = TEAM_COLORS[(t["team_number"] - 1) % 4]
+    result["has_teams"] = any(p["team_number"] is not None for p in players)
+    return result
+
+
 # ─── Dev/Testing: Auto-fill scores ────────────────────────────────────────────
 
 @router.post("/{round_id}/dev/fill-scores")
@@ -2477,7 +2572,7 @@ async def dev_fill_scores(round_id: uuid.UUID, current_user: CurrentUser, db: DB
             db.add(score)
             # Reusar scoring_svc para que net/stableford/flags se calculen igual
             data = ScoreSubmit(hole_number=h.hole_number, gross_score=gross, putts=putts)
-            scoring_svc.apply_score_to_model(score, data, par, si, c_hcp, round_.game_format)
+            scoring_svc.apply_score_to_model(score, data, par, si, c_hcp, round_.game_format, round_.max_handicap)
             inserted += 1
 
     await db.flush()

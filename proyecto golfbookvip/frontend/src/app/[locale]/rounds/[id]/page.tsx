@@ -2,7 +2,7 @@
 import { useEffect, useState, Fragment } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { Flag, ArrowLeft, Play, MapPin, Calendar, Loader2, CheckCircle2, Copy, Check, QrCode, DollarSign, ChevronDown, ChevronUp, Save, Edit2, X, Info, Trash2, Users, Shuffle, Radio, Eye, EyeOff, Send, Swords, ArrowUp, ArrowDown, Layers, AlertTriangle, RotateCcw } from 'lucide-react'
+import { Flag, ArrowLeft, Play, MapPin, Calendar, Loader2, CheckCircle2, Copy, Check, QrCode, DollarSign, ChevronDown, ChevronUp, Save, Edit2, X, Info, Trash2, Users, Shuffle, Radio, Eye, EyeOff, Send, Swords, ArrowUp, ArrowDown, Layers, AlertTriangle, RotateCcw, Plus, Minus } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
@@ -20,6 +20,7 @@ interface Round {
   started_at: string | null
   finished_at: string | null
   is_handicap_valid: boolean
+  max_handicap: number | null
   invite_code: string | null
   created_by: string | null
   notes: string | null
@@ -1968,7 +1969,7 @@ export default function RoundDetailPage() {
   const [savingBet, setSavingBet] = useState(false)
   const [editing, setEditing] = useState(false)
   const [courses, setCourses] = useState<Course[]>([])
-  const [editForm, setEditForm] = useState({ name: '', course_id: '', game_format: '', team_size: 2, holes_to_play: 18, scheduled_at: '', is_handicap_valid: true, notes: '' })
+  const [editForm, setEditForm] = useState({ name: '', course_id: '', game_format: '', team_size: 2, holes_to_play: 18, scheduled_at: '', is_handicap_valid: true, max_handicap: 0, notes: '' })
   const [savingEdit, setSavingEdit] = useState(false)
   const [skins, setSkins] = useState<SkinHole[]>([])
   const [skinstotals, setSkinsTotal] = useState<Record<string, number>>({})
@@ -1981,6 +1982,7 @@ export default function RoundDetailPage() {
   const [showTeams, setShowTeams] = useState(false)
   const [numTeams, setNumTeams] = useState(2)
   const [generatingTeams, setGeneratingTeams] = useState(false)
+  const [clearingTeams, setClearingTeams] = useState(false)
   const [movingPlayer, setMovingPlayer] = useState<string | null>(null)
   const [teamsError, setTeamsError] = useState('')
   const [finishing, setFinishing] = useState(false)
@@ -2084,6 +2086,7 @@ export default function RoundDetailPage() {
         holes_to_play: round.holes_to_play,
         scheduled_at: round.scheduled_at.slice(0, 16),
         is_handicap_valid: round.is_handicap_valid,
+        max_handicap: round.max_handicap ?? 0,
         notes: round.notes ?? '',
       })
     }
@@ -2101,6 +2104,7 @@ export default function RoundDetailPage() {
         holes_to_play: editForm.holes_to_play,
         scheduled_at: new Date(editForm.scheduled_at).toISOString(),
         is_handicap_valid: editForm.is_handicap_valid,
+        max_handicap: editForm.max_handicap > 0 ? editForm.max_handicap : null,
         notes: editForm.notes || null,
       })
       setRound(prev => prev ? { ...prev, ...res.data } : prev)
@@ -2141,6 +2145,23 @@ export default function RoundDetailPage() {
       setTeamsError(detail ?? lbl('Error al generar equipos', 'Error generating teams'))
     } finally {
       setGeneratingTeams(false)
+    }
+  }
+
+  const handleClearTeams = async () => {
+    const confirmMsg = lbl('¿Quitar todos los equipos? Los jugadores quedan en la ronda, solo se eliminan las agrupaciones.', 'Remove all teams? Players stay in the round, only team groupings are removed.')
+    if (!confirm(confirmMsg)) return
+    setClearingTeams(true)
+    setTeamsError('')
+    try {
+      await api.delete(`/rounds/${id}/teams`)
+      const refreshed = await api.get(`/rounds/${id}/teams`).catch(() => ({ data: null }))
+      setTeamsData(refreshed.data)
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setTeamsError(detail ?? lbl('Error al quitar equipos', 'Error removing teams'))
+    } finally {
+      setClearingTeams(false)
     }
   }
 
@@ -2676,6 +2697,17 @@ export default function RoundDetailPage() {
                 </label>
               </div>
               <div>
+                <label className="text-xs text-zinc-500 block mb-1">{lbl('Tope de handicap (0 = sin tope)', 'Handicap cap (0 = no cap)')}</label>
+                <input type="number" min={0} max={54} value={editForm.max_handicap}
+                  onChange={e => setEditForm(f => ({...f, max_handicap: Math.max(0, Math.min(54, Number(e.target.value) || 0))}))}
+                  className="w-28 bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-emerald-500" />
+                {editForm.max_handicap > 0 && (
+                  <p className="text-[11px] text-zinc-500 mt-1">
+                    {lbl(`Jugadores con CH > ${editForm.max_handicap} se topan a ${editForm.max_handicap}. Scores ya capturados no se recalculan.`, `Players with CH > ${editForm.max_handicap} are capped at ${editForm.max_handicap}. Already-captured scores are not recomputed.`)}
+                  </p>
+                )}
+              </div>
+              <div>
                 <label className="text-xs text-zinc-500 block mb-1">{lbl('Notas', 'Notes')}</label>
                 <textarea value={editForm.notes} onChange={e => setEditForm(f => ({...f, notes: e.target.value}))} rows={2}
                   placeholder={lbl('Instrucciones, reglas locales...', 'Instructions, local rules...')}
@@ -2756,6 +2788,11 @@ export default function RoundDetailPage() {
               </button>
             )}
             <span className="bg-zinc-800 px-3 py-1 rounded-full">{round.holes_to_play} {lbl('hoyos', 'holes')}</span>
+            {round.max_handicap && round.max_handicap > 0 ? (
+              <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-3 py-1 rounded-full">
+                {lbl(`Tope HCP ${round.max_handicap}`, `HCP cap ${round.max_handicap}`)}
+              </span>
+            ) : null}
             {round.game_format === 'florida' && (
               <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-3 py-1 rounded-full">
                 {round.team_size ?? 2} {lbl('jug/equipo', 'players/team')}
@@ -3062,18 +3099,25 @@ export default function RoundDetailPage() {
                         'Teams are generated by similar handicap. You can manually move players between teams before publishing.'
                       )}
                     </p>
-                    <div className="flex gap-2">
-                      {[2, 3, 4].map(n => (
-                        <button key={n} onClick={() => setNumTeams(n)}
-                          className={`flex-1 py-2 rounded-xl text-sm font-bold border transition-all ${
-                            numTeams === n
-                              ? 'bg-blue-500/20 border-blue-400/50 text-blue-300'
-                              : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-500'
-                          }`}>
-                          {n} {lbl('equipos', 'teams')}
+                    <div className="flex items-center justify-between gap-3 bg-zinc-800/60 rounded-xl px-4 py-3">
+                      <span className="text-sm text-zinc-400">{lbl('Número de equipos', 'Number of teams')}</span>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => setNumTeams(Math.max(2, numTeams - 1))}
+                          disabled={numTeams <= 2}
+                          className="w-9 h-9 rounded-lg bg-zinc-700 hover:bg-zinc-600 disabled:opacity-30 text-white flex items-center justify-center transition-colors">
+                          <Minus size={16} />
                         </button>
-                      ))}
+                        <span className="text-lg font-bold text-blue-300 min-w-[2.5rem] text-center">{numTeams}</span>
+                        <button onClick={() => setNumTeams(Math.min(12, numTeams + 1))}
+                          disabled={numTeams >= 12}
+                          className="w-9 h-9 rounded-lg bg-zinc-700 hover:bg-zinc-600 disabled:opacity-30 text-white flex items-center justify-center transition-colors">
+                          <Plus size={16} />
+                        </button>
+                      </div>
                     </div>
+                    <p className="text-xs text-zinc-500">
+                      {lbl(`Ej: 20 jugadores ÷ ${numTeams} ≈ ${Math.ceil(20/numTeams)} por equipo`, `e.g.: 20 players ÷ ${numTeams} ≈ ${Math.ceil(20/numTeams)} per team`)}
+                    </p>
                     <button onClick={handleGenerateTeams} disabled={generatingTeams}
                       className="w-full flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-400 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-colors">
                       {generatingTeams
@@ -3083,6 +3127,15 @@ export default function RoundDetailPage() {
                         ? lbl('Regenerar equipos', 'Regenerate teams')
                         : lbl('Generar equipos', 'Generate teams')}
                     </button>
+                    {teamsData?.has_teams && !teamsData.teams_published && (
+                      <button onClick={handleClearTeams} disabled={clearingTeams}
+                        className="w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 disabled:opacity-60 text-red-400 font-semibold py-2.5 rounded-xl border border-red-500/30 transition-colors text-sm">
+                        {clearingTeams
+                          ? <Loader2 size={14} className="animate-spin" />
+                          : <Trash2 size={14} />}
+                        {lbl('Quitar equipos', 'Remove teams')}
+                      </button>
+                    )}
                     {teamsError && <p className="text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">{teamsError}</p>}
                   </div>
                 )}

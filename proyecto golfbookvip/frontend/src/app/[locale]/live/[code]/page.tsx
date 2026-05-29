@@ -83,6 +83,41 @@ interface LiveMatchupsData {
   holes_to_play: number
 }
 
+// ─── Team-points format (Medal Play por equipos con puntos por grupo) ───────────
+interface TeamPointsPlayer {
+  user_id: string
+  name: string
+  team_number: number | null
+  course_handicap: number | null
+  total_net: number | null
+  holes_played: number
+  position: number
+  points: number
+  tiebreak_used: boolean
+}
+interface TeamPointsGroup {
+  group_number: number
+  starting_hole: number | null
+  complete: boolean
+  players: TeamPointsPlayer[]
+}
+interface TeamPointsTeam {
+  team_number: number
+  name: string
+  player_count: number
+  total_points: number
+  color: string
+}
+interface TeamPointsData {
+  has_teams: boolean
+  has_groups: boolean
+  groups: TeamPointsGroup[]
+  teams: TeamPointsTeam[]
+  champion_team: number | null
+  is_tie: boolean
+  holes_to_play: number
+}
+
 // ─── Team UI config ───────────────────────────────────────────────────────────
 
 const TEAM_UI: Record<string, {
@@ -141,6 +176,7 @@ export default function LiveScoreboardPage() {
   const [showPlayers, setShowPlayers] = useState<Record<number, boolean>>({})
   const [secondsAgo, setSecondsAgo]   = useState(0)
   const [matchupsLive, setMatchupsLive] = useState<LiveMatchupsData | null>(null)
+  const [teamPoints, setTeamPoints] = useState<TeamPointsData | null>(null)
   const [wsStatus, setWsStatus] = useState<'none' | 'connected' | 'disconnected'>('none')
   const wsRef  = useRef<WebSocket | null>(null)
   const pingRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -160,6 +196,12 @@ export default function LiveScoreboardPage() {
       if (d.round.game_format === 'match' && d.round.has_teams) {
         const mRes = await api.get(`/rounds/${d.round.id}/matchups`).catch(() => ({ data: null }))
         if (mRes.data?.has_matchups) setMatchupsLive(mRes.data)
+      }
+      // Load team-points standings (Medal Play por equipos con puntos por grupo)
+      if (d.round.has_teams) {
+        const tpRes = await api.get(`/rounds/${d.round.id}/team-points`).catch(() => ({ data: null }))
+        if (tpRes.data?.has_groups) setTeamPoints(tpRes.data)
+        else setTeamPoints(null)
       }
       return d
     } catch {
@@ -252,6 +294,11 @@ export default function LiveScoreboardPage() {
   const isFinished = round.status === 'finished'
   const holesPlayed = hole_results.filter(h => h.status !== 'pending').length
   const fmt = FORMAT_LABELS[round.game_format] ?? { es: round.game_format, en: round.game_format }
+  // Formato "Medal Play por equipos con puntos por grupo": cuando hay grupos de salida
+  // con puntos, esa es la tabla autoritativa. Ocultamos el marcador best-ball (hoyos
+  // ganados) y el hoyo-por-hoyo, que no aplican a este formato.
+  const pointsFormat = !!teamPoints?.has_groups
+  const fmtNum = (n: number) => (n % 1 === 0 ? `${n}` : n.toFixed(1))
 
   return (
     <div className="min-h-screen pb-10">
@@ -355,8 +402,133 @@ export default function LiveScoreboardPage() {
           )}
         </div>
 
-        {/* ── Team Standings ── */}
-        {round.has_teams && teams.length > 0 && (
+        {/* ── Campeón por Equipos (puntos por posición de grupo) ── */}
+        {pointsFormat && teamPoints && teamPoints.teams.length > 0 && (
+          <div className="bg-zinc-900/85 border border-zinc-800 rounded-2xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-zinc-800 flex items-center gap-2">
+              <Trophy size={15} className="text-amber-400" />
+              <h2 className="font-semibold text-white text-sm">{lbl('Campeón por Equipos', 'Team Champion')}</h2>
+              <span className="text-xs text-zinc-500 ml-auto">{lbl('puntos', 'points')}</span>
+            </div>
+
+            <div className="divide-y divide-zinc-800">
+              {teamPoints.teams.map((team, idx) => {
+                const ui = TEAM_UI[team.color] ?? TEAM_UI.emerald
+                const isChampion = !teamPoints.is_tie && team.team_number === teamPoints.champion_team && isFinished
+                const isLeading = idx === 0 && !teamPoints.is_tie
+                return (
+                  <div key={team.team_number} className={`px-5 py-4 ${isLeading ? ui.bg : ''} transition-colors`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                          isLeading ? `${ui.dot} text-zinc-900` : 'bg-zinc-800 text-zinc-500'
+                        }`}>
+                          {idx + 1}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`w-3 h-3 rounded-full ${ui.dot}`} />
+                          <span className={`font-bold text-base ${ui.text}`}>{team.name}</span>
+                          {isChampion && <Trophy size={14} className="text-amber-400" />}
+                          <span className="text-xs text-zinc-600">
+                            <Users size={11} className="inline mr-0.5" />{team.player_count}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className={`text-2xl font-black ${team.total_points > 0 ? ui.text : team.total_points < 0 ? 'text-red-400' : 'text-zinc-400'}`}>
+                          {team.total_points > 0 ? '+' : ''}{fmtNum(team.total_points)}
+                        </div>
+                        <div className="text-xs text-zinc-500">{lbl('puntos', 'pts')}</div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            {teamPoints.is_tie && (
+              <div className="px-5 py-2.5 bg-amber-500/5 border-t border-zinc-800 text-xs text-amber-400/90">
+                {lbl('Empate en el liderato — pendiente de definir.', 'Tie at the top — to be decided.')}
+              </div>
+            )}
+            {!isFinished && (
+              <div className="px-5 py-2.5 border-t border-zinc-800 text-xs text-zinc-500">
+                {lbl('Provisional — los puntos se confirman al terminar la ronda.', 'Provisional — points confirm when the round ends.')}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Desglose por grupo de salida ── */}
+        {pointsFormat && teamPoints && teamPoints.groups.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 px-1">
+              <Flag size={14} className="text-emerald-400" />
+              <h3 className="font-semibold text-white text-sm">{lbl('Grupos de Salida', 'Starting Groups')}</h3>
+            </div>
+            {teamPoints.groups.map(group => (
+              <div key={group.group_number} className="bg-zinc-900/85 border border-zinc-800 rounded-2xl overflow-hidden">
+                <div className="px-5 py-2.5 border-b border-zinc-800 flex items-center justify-between">
+                  <span className="text-sm font-semibold text-white">
+                    {lbl('Grupo', 'Group')} {group.group_number}
+                    {group.starting_hole != null && (
+                      <span className="text-xs text-zinc-500 font-normal ml-2">
+                        {lbl('Hoyo', 'Hole')} {group.starting_hole}
+                      </span>
+                    )}
+                  </span>
+                  {!group.complete && (
+                    <span className="text-xs text-zinc-600">{lbl('en juego', 'in play')}</span>
+                  )}
+                </div>
+                <div className="grid grid-cols-[auto_1fr_auto_auto] gap-x-3 px-5 py-2 text-xs text-zinc-600 border-b border-zinc-800/60">
+                  <span>#</span>
+                  <span>{lbl('Jugador', 'Player')}</span>
+                  <span className="text-right">{lbl('Neto', 'Net')}</span>
+                  <span className="text-right">{lbl('Pts', 'Pts')}</span>
+                </div>
+                <div className="divide-y divide-zinc-800/50">
+                  {group.players.map(p => {
+                    const tColor = teamPoints.teams.find(t => t.team_number === p.team_number)?.color ?? 'emerald'
+                    const ui = TEAM_UI[tColor] ?? TEAM_UI.emerald
+                    return (
+                      <div key={p.user_id} className="grid grid-cols-[auto_1fr_auto_auto] gap-x-3 items-center px-5 py-2.5">
+                        <span className="text-sm font-bold text-zinc-500 w-4">{p.position}</span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${ui.dot}`} />
+                            <span className="text-sm font-medium text-white truncate">{p.name}</span>
+                            {p.tiebreak_used && (
+                              <span title={lbl('Desempate por tarjeta', 'Decided by scorecard countback')}
+                                className="text-[10px] text-amber-400/80 border border-amber-400/30 rounded px-1 leading-tight flex-shrink-0">
+                                {lbl('tarjeta', 'card')}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-xs text-zinc-600">HCP {p.course_handicap ?? '—'} · E{p.team_number ?? '—'}</span>
+                        </div>
+                        <span className="text-right text-sm text-zinc-300">
+                          {p.total_net != null && p.holes_played > 0 ? p.total_net : '—'}
+                        </span>
+                        <span className={`text-right text-sm font-bold w-8 ${
+                          p.points > 0 ? 'text-emerald-400' : p.points < 0 ? 'text-red-400' : 'text-zinc-600'
+                        }`}>
+                          {p.points > 0 ? '+' : ''}{fmtNum(p.points)}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+            <p className="text-xs text-zinc-600 px-1">
+              {lbl('1.º del grupo +2 · 2.º +1 · último −1 · empates por tarjeta (net).',
+                   '1st in group +2 · 2nd +1 · last −1 · ties by scorecard (net).')}
+            </p>
+          </div>
+        )}
+
+        {/* ── Team Standings (best-ball / hoyos ganados) — oculto en formato por puntos ── */}
+        {round.has_teams && teams.length > 0 && !pointsFormat && (
           <div className="bg-zinc-900/85 border border-zinc-800 rounded-2xl overflow-hidden">
             <div className="px-5 py-3 border-b border-zinc-800 flex items-center gap-2">
               <Trophy size={15} className="text-amber-400" />
@@ -442,8 +614,8 @@ export default function LiveScoreboardPage() {
           </div>
         )}
 
-        {/* ── Hole-by-hole results ── */}
-        {hole_results.length > 0 && (
+        {/* ── Hole-by-hole results — oculto en formato por puntos ── */}
+        {hole_results.length > 0 && !pointsFormat && (
           <div className="bg-zinc-900/85 border border-zinc-800 rounded-2xl overflow-hidden">
             <div className="px-5 py-3 border-b border-zinc-800">
               <h2 className="font-semibold text-white text-sm">{lbl('Hoyo por Hoyo', 'Hole by Hole')}</h2>

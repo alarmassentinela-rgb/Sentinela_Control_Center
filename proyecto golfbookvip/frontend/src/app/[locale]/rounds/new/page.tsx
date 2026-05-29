@@ -149,6 +149,7 @@ function NewRoundForm() {
     team_size: 2,
     holes_to_play: 18,
     is_handicap_valid: true,
+    max_handicap: 0,
     scheduled_at: new Date().toISOString().slice(0, 16),
   })
   const [teeColor, setTeeColor] = useState('blue')
@@ -172,6 +173,7 @@ function NewRoundForm() {
         team_size: form.game_format === 'florida' ? form.team_size : 1,
         holes_to_play: form.holes_to_play,
         is_handicap_valid: form.is_handicap_valid,
+        max_handicap: form.max_handicap > 0 ? form.max_handicap : null,
         scheduled_at: new Date(form.scheduled_at).toISOString(),
         scoring_type: 'gross',
       })
@@ -333,6 +335,28 @@ function NewRoundForm() {
               <label htmlFor="hcp_valid" className="text-sm text-zinc-300">
                 {lbl('Ronda válida para hándicap WHS', 'Count for WHS handicap')}
               </label>
+            </div>
+
+            {/* Tope de handicap */}
+            <div>
+              <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-2 block">
+                {lbl('Tope de handicap', 'Handicap cap')}
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  min={0}
+                  max={54}
+                  value={form.max_handicap}
+                  onChange={(e) => setForm({ ...form, max_handicap: Math.max(0, Math.min(54, Number(e.target.value) || 0)) })}
+                  className="w-24 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-emerald-500"
+                />
+                <span className="text-xs text-zinc-500">
+                  {form.max_handicap > 0
+                    ? lbl(`Jugadores con CH > ${form.max_handicap} se topan a ${form.max_handicap}`, `Players with CH > ${form.max_handicap} are capped at ${form.max_handicap}`)
+                    : lbl('0 = sin tope (CH real)', '0 = no cap (real CH)')}
+                </span>
+              </div>
             </div>
 
             {error && <p className="text-sm text-red-400">{error}</p>}

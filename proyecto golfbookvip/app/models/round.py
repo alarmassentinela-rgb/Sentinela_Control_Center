@@ -31,6 +31,7 @@ class Round(Base):
     weather_conditions: Mapped[Optional[str]] = mapped_column(String(100))
     notes: Mapped[Optional[str]] = mapped_column(Text)
     is_handicap_valid: Mapped[bool] = mapped_column(Boolean, default=True)
+    max_handicap: Mapped[Optional[int]] = mapped_column(Integer)
     invite_code: Mapped[Optional[str]] = mapped_column(String(12), unique=True)
     teams_published: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now())

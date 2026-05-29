@@ -15,6 +15,7 @@ class RoundCreate(BaseModel):
     scheduled_at: datetime
     holes_to_play: int = 18
     is_handicap_valid: bool = True
+    max_handicap: Optional[int] = None
     notes: Optional[str] = None
 
 
@@ -32,6 +33,7 @@ class RoundOut(BaseModel):
     holes_to_play: int
     team_size: int = 1
     is_handicap_valid: bool
+    max_handicap: Optional[int] = None
     invite_code: Optional[str] = None
     created_by: Optional[uuid.UUID] = None
     notes: Optional[str] = None
@@ -48,6 +50,7 @@ class RoundUpdate(BaseModel):
     holes_to_play: Optional[int] = None
     scheduled_at: Optional[datetime] = None
     is_handicap_valid: Optional[bool] = None
+    max_handicap: Optional[int] = None
     notes: Optional[str] = None
 
 
