@@ -2241,6 +2241,27 @@ export default function RoundDetailPage() {
   const [searching, setSearching] = useState(false)
   const [addingUser, setAddingUser] = useState<string | null>(null)
   const [addError, setAddError] = useState<string | null>(null)
+  // Ajuste manual del handicap de juego (golpes) por jugador en esta ronda
+  const [editingHcp, setEditingHcp] = useState<string | null>(null)
+  const [hcpInput, setHcpInput] = useState('')
+  const [savingHcp, setSavingHcp] = useState(false)
+
+  const handleSetHandicap = async (userId: string) => {
+    const ch = parseInt(hcpInput)
+    if (isNaN(ch) || ch < 0 || ch > 54) { alert(lbl('Handicap inválido (0–54)', 'Invalid handicap (0–54)')); return }
+    setSavingHcp(true)
+    try {
+      await api.patch(`/rounds/${id}/players/${userId}/handicap?course_handicap=${ch}`)
+      const pl = await api.get(`/rounds/${id}/players`).catch(() => ({ data: null }))
+      if (pl.data) setPlayers(pl.data)
+      setEditingHcp(null)
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      alert(detail ?? lbl('Error al ajustar handicap', 'Error setting handicap'))
+    } finally {
+      setSavingHcp(false)
+    }
+  }
 
   const doUserSearch = async (q: string) => {
     setSearchQ(q)
@@ -3104,6 +3125,30 @@ export default function RoundDetailPage() {
                             HCP {p.handicap_index?.toFixed(1) ?? '—'}
                             {p.course_handicap != null && ` · CH ${p.course_handicap}`}
                           </p>
+                          {/* Ajustar handicap de juego (golpes) — creador, ronda no finalizada */}
+                          {amCreator && (round.status === 'scheduled' || round.status === 'active') && (
+                            editingHcp === p.user_id ? (
+                              <span className="flex items-center gap-1">
+                                <input type="number" min="0" max="54" value={hcpInput} autoFocus
+                                  onChange={e => setHcpInput(e.target.value)}
+                                  onKeyDown={e => { if (e.key === 'Enter') handleSetHandicap(p.user_id); if (e.key === 'Escape') setEditingHcp(null) }}
+                                  className="w-12 bg-zinc-800 border border-emerald-500/50 rounded px-1 py-0.5 text-xs text-white text-center focus:outline-none" />
+                                <button onClick={() => handleSetHandicap(p.user_id)} disabled={savingHcp}
+                                  title={lbl('Guardar', 'Save')}
+                                  className="text-emerald-400 hover:text-emerald-300 disabled:opacity-40">
+                                  {savingHcp ? <Loader2 size={12} className="animate-spin" /> : <Check size={13} />}
+                                </button>
+                                <button onClick={() => setEditingHcp(null)} title={lbl('Cancelar', 'Cancel')}
+                                  className="text-zinc-500 hover:text-red-400"><X size={12} /></button>
+                              </span>
+                            ) : (
+                              <button title={lbl('Ajustar handicap de juego (golpes en esta ronda)', 'Set playing handicap (strokes this round)')}
+                                onClick={() => { setEditingHcp(p.user_id); setHcpInput(String(p.course_handicap ?? '')) }}
+                                className="flex items-center gap-0.5 text-[10px] text-zinc-600 hover:text-emerald-400 transition-colors border border-zinc-700 hover:border-emerald-500/40 rounded px-1 py-0.5">
+                                <Edit2 size={10} /> {lbl('Hcp', 'Hcp')}
+                              </button>
+                            )
+                          )}
                           {teeCfg && (
                             <span className={`flex items-center gap-1 text-xs ${teeCfg.text}`}>
                               <span className={`w-2.5 h-2.5 rounded-full ${teeCfg.dot}`} />

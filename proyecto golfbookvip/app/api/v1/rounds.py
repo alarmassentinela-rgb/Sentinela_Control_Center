@@ -1394,6 +1394,72 @@ async def remove_player_from_round(round_id: uuid.UUID, user_id: uuid.UUID, curr
     return _build_teams(result.all(), round_.teams_published)
 
 
+@router.patch("/{round_id}/players/{user_id}/handicap")
+async def set_player_handicap(
+    round_id: uuid.UUID,
+    user_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: DB,
+    course_handicap: int,
+    handicap_index: Optional[float] = None,
+):
+    """El creador fija MANUALMENTE el handicap de juego (golpes de ventaja) de un
+    jugador en ESTA jugada — para casos reales: jugadores que no llevan bien su
+    handicap o que usan otra app/sistema. Edita round_players.course_handicap (lo
+    que usa el scoring). Si la ronda ya tiene scores capturados de ese jugador, los
+    recalcula con el nuevo handicap. No toca el handicap index global del usuario.
+    """
+    round_result = await db.execute(
+        select(Round).where(Round.id == round_id, Round.created_by == current_user.id)
+    )
+    round_ = round_result.scalar_one_or_none()
+    if not round_:
+        raise HTTPException(status_code=403, detail="Solo el creador puede ajustar el handicap")
+    if round_.status == "finished":
+        raise HTTPException(status_code=400, detail="No se puede modificar una ronda finalizada")
+    if not 0 <= course_handicap <= 54:
+        raise HTTPException(status_code=400, detail="Handicap de juego fuera de rango (0–54)")
+
+    rp_res = await db.execute(
+        select(RoundPlayer).where(RoundPlayer.round_id == round_id, RoundPlayer.user_id == user_id)
+    )
+    rp = rp_res.scalar_one_or_none()
+    if not rp:
+        raise HTTPException(status_code=404, detail="Jugador no encontrado en esta jugada")
+
+    rp.course_handicap = course_handicap
+    if handicap_index is not None:
+        rp.handicap_index = handicap_index
+
+    # Recalcular scores ya capturados de este jugador con el nuevo handicap
+    holes_res = await db.execute(select(CourseHole).where(CourseHole.course_id == round_.course_id))
+    holes = {h.hole_number: (h.par, h.stroke_index) for h in holes_res.scalars().all()}
+    scores_res = await db.execute(
+        select(Score).where(Score.round_id == round_id, Score.user_id == user_id)
+    )
+    eff = scoring_svc.effective_handicap(course_handicap, round_.max_handicap)
+    recalculated = 0
+    for s in scores_res.scalars().all():
+        ph = holes.get(s.hole_number)
+        if not ph or s.gross_score is None:
+            continue
+        par, si = ph
+        s.net_score = s.gross_score - scoring_svc.strokes_received(eff, si)
+        if round_.game_format in ("stableford", "stableford_modified"):
+            s.stableford_points = scoring_svc.calculate_stableford(
+                s.gross_score, par, eff, si, round_.game_format == "stableford_modified"
+            )
+        recalculated += 1
+
+    await db.flush()
+    return {
+        "user_id": str(user_id),
+        "course_handicap": rp.course_handicap,
+        "handicap_index": float(rp.handicap_index) if rp.handicap_index is not None else None,
+        "scores_recalculated": recalculated,
+    }
+
+
 @router.post("/{round_id}/players/{user_id}/withdraw")
 async def withdraw_player(
     round_id: uuid.UUID,
