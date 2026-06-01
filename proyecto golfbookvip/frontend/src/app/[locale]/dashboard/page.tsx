@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Flag, LogOut, User, TrendingUp, Calendar, BarChart2, Settings, MapPin, Users, ChevronRight, Play, Clock, CheckCircle2, UserPlus, Rss, Bell, ShieldCheck, Building2 } from 'lucide-react'
+import { Flag, LogOut, User, TrendingUp, Calendar, BarChart2, Settings, MapPin, Users, ChevronRight, Play, Clock, CheckCircle2, UserPlus, Rss, Bell, ShieldCheck, Building2, HelpCircle } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 import AleaCredit from '@/components/layout/AleaCredit'
@@ -108,6 +108,11 @@ export default function DashboardPage() {
                 <ShieldCheck size={20} />
               </Link>
             )}
+            <Link href={`/${locale}/ayuda`}
+              title={locale === 'es' ? 'Ayuda' : 'Help'}
+              className="text-zinc-400 hover:text-white transition-colors">
+              <HelpCircle size={20} />
+            </Link>
             <Link href={`/${locale}/notifications`}
               className="relative text-zinc-400 hover:text-white transition-colors">
               <Bell size={20} />
