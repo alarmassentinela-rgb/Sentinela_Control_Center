@@ -752,12 +752,19 @@ class SentinelaSubscription(models.Model):
         method = partner.invoice_grouping_method or 'individual'
         line_cmds = []
         for sub in subs_list:
-            period_end = sub.next_billing_date + relativedelta(months=int(sub.recurring_interval)) - timedelta(days=1)
+            months = int(sub.recurring_interval)
+            period_end = sub.next_billing_date + relativedelta(months=months) - timedelta(days=1)
+            # Cantidad facturada = nº de meses del ciclo.
+            # EXCEPCIÓN alarmas: usan productos por periodo (MBASICO-3/-6/-12) cuyo price_unit
+            # YA es el precio del periodo completo, así que van con cantidad=1 (no multiplicar).
+            # Internet/GPS/Mantenimiento guardan TARIFA MENSUAL → se multiplica por los meses
+            # del ciclo para que "pagar 6 meses por adelantado" cobre 6× la mensualidad.
+            qty = 1 if sub.service_type == 'alarm' else months
             desc = f"Servicio: {sub.product_id.name} - Contrato: {sub.name} - Periodo: {sub.next_billing_date} al {period_end}"
             line_cmds.append((0, 0, {
                 'product_id': sub.product_id.id,
                 'name': desc,
-                'quantity': 1,
+                'quantity': qty,
                 'price_unit': sub.price_unit,
             }))
         move_vals = {
