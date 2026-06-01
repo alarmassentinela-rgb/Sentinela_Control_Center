@@ -1649,68 +1649,114 @@ class AccountMove(models.Model):
         string='Meses adelantados aplicados', default=0, copy=False, readonly=True,
         help="Meses por los que ya se empujó el ciclo. Se usa para revertir exactamente si la factura se cancela.")
 
-    def _advance_payment_months(self):
-        """ Meses cubiertos por esta factura para su suscripción: suma de la cantidad de las
-        líneas cuyo producto pertenece al plan de la suscripción. Para un cobro adelantado de
-        6 meses, la línea del plan lleva cantidad=6 → devuelve 6. Mismo criterio que el cobro
-        recurrente (cantidad = nº de meses). """
+    def _advance_subscription(self):
+        """ Suscripción cuyo ciclo afecta este movimiento:
+        - Factura de adelanto (out_invoice): su propia subscription_id.
+        - Nota de crédito (out_refund) que revierte una factura de adelanto: la sub de la
+          factura ORIGINAL (vía reversed_entry_id). Si es nota de crédito manual marcada
+          como adelanto: su propia subscription_id. """
         self.ensure_one()
-        if not self.subscription_id:
+        if self.move_type == 'out_refund' and self.reversed_entry_id and self.reversed_entry_id.is_advance_payment:
+            return self.reversed_entry_id.subscription_id
+        return self.subscription_id
+
+    def _advance_direction(self):
+        """ +1 = empuja el ciclo (factura de adelanto), -1 = lo regresa (nota de crédito de un
+        adelanto), 0 = este movimiento no afecta el ciclo. """
+        self.ensure_one()
+        if self.move_type == 'out_invoice' and self.is_advance_payment and self.subscription_id:
+            return 1
+        if self.move_type == 'out_refund':
+            if self.reversed_entry_id and self.reversed_entry_id.is_advance_payment and self.reversed_entry_id.subscription_id:
+                return -1
+            if self.is_advance_payment and self.subscription_id:
+                return -1
+        return 0
+
+    def _advance_plan_months(self, sub):
+        """ Meses (suma de cantidades de las líneas del producto-plan de la sub) en ESTE move.
+        Cobro adelantado de 6 meses → línea del plan con cantidad=6 → devuelve 6. En una nota
+        de crédito total/parcial, devuelve los meses efectivamente acreditados. """
+        self.ensure_one()
+        if not sub:
             return 0
-        plan_tmpl_id = self.subscription_id.product_id.id
+        plan_tmpl_id = sub.product_id.id
         months = 0
         for line in self.invoice_line_ids:
             if line.product_id and line.product_id.product_tmpl_id.id == plan_tmpl_id:
                 months += int(round(line.quantity))
         return months
 
-    def _apply_advance_payment(self):
-        """ Empuja next_billing_date de la suscripción por los meses facturados. Idempotente:
-        is_renewal_processed actúa de candado para no avanzar dos veces (re-post, timbrado, etc.). """
+    def _advance_on_post(self):
+        """ Al publicar: factura de adelanto empuja el ciclo; nota de crédito lo regresa.
+        Idempotente vía is_renewal_processed. La nota de crédito nunca regresa más meses de los
+        que aún sigan aplicados en la factura original (soporta crédito parcial y múltiple). """
         for move in self:
-            if not (move.is_advance_payment and move.subscription_id) or move.is_renewal_processed:
+            direction = move._advance_direction()
+            if not direction or move.is_renewal_processed:
                 continue
-            months = move._advance_payment_months()
+            sub = move._advance_subscription()
+            if not sub:
+                continue
+            months = move._advance_plan_months(sub)
+            original = move.reversed_entry_id if (direction < 0 and move.reversed_entry_id and move.reversed_entry_id.is_advance_payment) else False
+            if direction < 0 and original:
+                months = min(months, original.advance_months_applied)
             if months <= 0:
                 continue
-            sub = move.subscription_id
             old_date = sub.next_billing_date or fields.Date.today()
-            sub.next_billing_date = old_date + relativedelta(months=months)
+            sub.next_billing_date = old_date + relativedelta(months=direction * months)
             move.advance_months_applied = months
             move.is_renewal_processed = True
-            sub.message_post(body=_(
-                "💰 <b>Cobro adelantado:</b> %s mes(es) facturados en %s. "
-                "Próxima renovación movida de <b>%s</b> a <b>%s</b>."
-            ) % (months, move.name or 'borrador', old_date, sub.next_billing_date))
+            if direction < 0 and original:
+                original.advance_months_applied -= months
+            if direction > 0:
+                sub.message_post(body=_(
+                    "💰 <b>Cobro adelantado:</b> %s mes(es) facturados en %s. "
+                    "Próxima renovación movida de <b>%s</b> a <b>%s</b>."
+                ) % (months, move.name or 'borrador', old_date, sub.next_billing_date))
+            else:
+                sub.message_post(body=_(
+                    "↩️ <b>Nota de crédito:</b> %s mes(es) acreditados en %s. "
+                    "Próxima renovación regresa de <b>%s</b> a <b>%s</b>."
+                ) % (months, move.name or 'borrador', old_date, sub.next_billing_date))
 
-    def _revert_advance_payment(self):
-        """ Regresa next_billing_date exactamente los meses que se habían empujado, al cancelar
-        o regresar a borrador una factura de cobro adelantado ya aplicada. """
+    def _advance_on_unpost(self):
+        """ Al cancelar / regresar a borrador, deshace el efecto que ESTE move había aplicado:
+        - Factura de adelanto: regresa el ciclo los meses que empujó.
+        - Nota de crédito ya aplicada: vuelve a empujar el ciclo y le devuelve los meses a la
+          factura original. """
         for move in self:
-            if not (move.is_advance_payment and move.subscription_id) or not move.is_renewal_processed:
+            direction = move._advance_direction()
+            if not direction or not move.is_renewal_processed:
                 continue
             months = move.advance_months_applied
             if months <= 0:
                 continue
-            sub = move.subscription_id
+            sub = move._advance_subscription()
+            if not sub:
+                continue
             old_date = sub.next_billing_date or fields.Date.today()
-            sub.next_billing_date = old_date - relativedelta(months=months)
+            # Deshacer = aplicar el signo contrario al que este move había usado.
+            sub.next_billing_date = old_date - relativedelta(months=direction * months)
+            if direction < 0 and move.reversed_entry_id and move.reversed_entry_id.is_advance_payment:
+                move.reversed_entry_id.advance_months_applied += months
             move.advance_months_applied = 0
             move.is_renewal_processed = False
             sub.message_post(body=_(
-                "↩️ <b>Cobro adelantado revertido:</b> factura %s cancelada. "
-                "Próxima renovación regresa de <b>%s</b> a <b>%s</b>."
-            ) % (move.name or 'borrador', old_date, sub.next_billing_date))
+                "🔄 <b>Ajuste de ciclo revertido</b> (%s cancelada/en borrador): "
+                "próxima renovación ahora <b>%s</b>."
+            ) % (move.name or 'borrador', sub.next_billing_date))
 
     def action_post(self):
         res = super().action_post()
-        self._apply_advance_payment()
+        self._advance_on_post()
         return res
 
     def button_draft(self):
-        self._revert_advance_payment()
+        self._advance_on_unpost()
         return super().button_draft()
 
     def button_cancel(self):
-        self._revert_advance_payment()
+        self._advance_on_unpost()
         return super().button_cancel()
