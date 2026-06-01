@@ -14,8 +14,9 @@ const FORMATS = [
   { value: 'stableford',          labelEs: 'Stableford',          labelEn: 'Stableford' },
   { value: 'stableford_modified', labelEs: 'Stableford Modificado', labelEn: 'Modified Stableford' },
   { value: 'match',               labelEs: 'Match Play',          labelEn: 'Match Play' },
-  { value: 'skins',               labelEs: 'Skines',              labelEn: 'Skins' },
   { value: 'florida',             labelEs: 'Florida',             labelEn: 'Florida' },
+  // 'skins' se quitó del selector: es una APUESTA (sección Apuestas), no un formato de scoring.
+  // Se conservan las etiquetas FORMAT_LABEL en las vistas para rondas históricas con game_format='skins'.
 ]
 
 const FORMAT_SHORT: Record<string, { titleEs: string; titleEn: string; descEs: string; descEn: string; rulesEs: {label:string;value:string}[]; rulesEn: {label:string;value:string}[]; egEs: {desc:string;result:string;h?:boolean}[]; egEn: {desc:string;result:string;h?:boolean}[]; noteEs?: string; noteEn?: string }> = {
