@@ -49,6 +49,12 @@ def select_differentials(differentials: list[float]) -> list[float]:
     return sorted(differentials)[:n]
 
 
+def whs_adjustment(count: int) -> float:
+    """Ajuste oficial WHS cuando hay menos de 20 tarjetas. Se SUMA al promedio (es ≤ 0).
+    3 tarjetas → −2.0 · 4 → −1.0 · 6 → −1.0 · resto → 0."""
+    return {3: -2.0, 4: -1.0, 6: -1.0}.get(min(count, 20), 0.0)
+
+
 def apply_caps(new_index: float, low_index: float) -> tuple[float, bool, bool]:
     """
     Soft cap: si el índice sube más de 3.0 sobre el low, el exceso se reduce al 50%.
@@ -87,7 +93,8 @@ async def recalculate_handicap(user_id: str, db: AsyncSession) -> Optional[float
     if not selected:
         return None
 
-    raw_index = round(sum(selected) / len(selected) - 0.0, 1)
+    adjustment = whs_adjustment(len(diffs_rows))
+    raw_index = round(sum(selected) / len(selected) + adjustment, 1)
 
     # Low handicap index (mínimo histórico de los últimos 12 meses)
     result2 = await db.execute(
@@ -115,7 +122,7 @@ async def recalculate_handicap(user_id: str, db: AsyncSession) -> Optional[float
         user_id=user_id,
         handicap_index=final_index,
         previous_index=prev_index,
-        differentials_used={"values": selected},
+        differentials_used={"values": selected, "adjustment": adjustment, "scores_count": len(diffs_rows)},
         calculation_date=date.today(),
         rounds_counted=len(selected),
         soft_cap_applied=soft_cap,

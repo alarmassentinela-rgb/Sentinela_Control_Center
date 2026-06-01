@@ -248,6 +248,61 @@ async def get_handicap_history(current_user: CurrentUser, db: DB):
     ]
 
 
+@router.get("/me/handicap-detail")
+async def get_handicap_detail(current_user: CurrentUser, db: DB):
+    """Desglose transparente del Handicap Index (WHS): tarjetas más recientes, cuáles
+    cuentan para el cálculo, la regla aplicada (mejores N de M + ajuste) y el estado
+    (provisional/establecido). Para que el jugador entienda por qué subió o bajó."""
+    from sqlalchemy import desc
+    from app.models.handicap import ScoreDifferential
+    from app.models.course import Course
+    from app.services.handicap import select_differentials, whs_adjustment
+
+    res = await db.execute(
+        select(ScoreDifferential, Course)
+        .outerjoin(Course, Course.id == ScoreDifferential.course_id)
+        .where(ScoreDifferential.user_id == current_user.id, ScoreDifferential.is_counting == True)
+        .order_by(desc(ScoreDifferential.played_at))
+        .limit(20)
+    )
+    rows = res.all()
+    diffs = [float(sd.differential) for sd, _ in rows]
+    count = len(diffs)
+
+    selected = select_differentials(diffs)  # [] si <3
+    adjustment = whs_adjustment(count) if count >= 3 else 0.0
+
+    # Marcar las N diferenciales más bajas como "usadas en el cálculo"
+    used_flags = [False] * len(rows)
+    if selected:
+        for i in sorted(range(len(diffs)), key=lambda j: diffs[j])[:len(selected)]:
+            used_flags[i] = True
+
+    status = "none" if count < 3 else ("provisional" if count < 20 else "established")
+
+    differentials = [
+        {
+            "played_at": sd.played_at.isoformat(),
+            "course_name": course.name if course else None,
+            "differential": float(sd.differential),
+            "adjusted_gross_score": sd.adjusted_gross_score,
+            "course_rating": float(sd.course_rating),
+            "slope_rating": sd.slope_rating,
+            "used_in_calc": used_flags[idx],
+        }
+        for idx, (sd, course) in enumerate(rows)
+    ]
+
+    return {
+        "handicap_index": float(current_user.handicap_index) if current_user.handicap_index is not None else None,
+        "initial_handicap": float(current_user.initial_handicap) if getattr(current_user, "initial_handicap", None) is not None else None,
+        "rounds_count": count,
+        "status": status,
+        "rule": ({"used": len(selected), "of": count, "adjustment": adjustment} if selected else None),
+        "differentials": differentials,
+    }
+
+
 @router.get("/me/following")
 async def get_following(current_user: CurrentUser, db: DB):
     result = await db.execute(

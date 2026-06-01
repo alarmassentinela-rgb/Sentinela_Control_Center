@@ -6,7 +6,7 @@ import {
   Flag, ArrowLeft, TrendingUp, Edit2, Save, X, Loader2,
   Award, Target, BarChart2, Star, AlertCircle, CheckCircle2,
   Crown, ChevronDown, ChevronUp, Crosshair, Circle,
-  Bell, Mail, Send, Check, Copy
+  Bell, Mail, Send, Check, Copy, Info
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
@@ -58,6 +58,17 @@ interface RoundHistoryItem {
 }
 
 // ─── HCP Trend SVG ────────────────────────────────────────────────────────────
+
+interface HcpDifferential {
+  played_at: string; course_name: string | null; differential: number
+  adjusted_gross_score: number; course_rating: number; slope_rating: number; used_in_calc: boolean
+}
+interface HcpDetail {
+  handicap_index: number | null; initial_handicap: number | null
+  rounds_count: number; status: 'none' | 'provisional' | 'established'
+  rule: { used: number; of: number; adjustment: number } | null
+  differentials: HcpDifferential[]
+}
 
 function HcpTrendChart({ history, locale }: { history: HcpHistory[]; locale: string }) {
   if (history.length < 2) return null
@@ -181,6 +192,8 @@ export default function ProfilePage() {
   const [editing, setEditing]   = useState(false)
   const [saving, setSaving]     = useState(false)
   const [showHistory, setShowHistory]   = useState(false)
+  const [hcpDetail, setHcpDetail]       = useState<HcpDetail | null>(null)
+  const [showCalc, setShowCalc]         = useState(false)
   const [showRounds, setShowRounds]     = useState(false)
   const [hcpInitMode, setHcpInitMode]   = useState(false)
   const [hcpInitVal, setHcpInitVal]     = useState('')
@@ -199,13 +212,15 @@ export default function ProfilePage() {
       api.get('/users/me/handicap-history').catch(() => ({ data: [] })),
       api.get('/users/me/stats').catch(() => ({ data: null })),
       api.get('/users/me/round-history').catch(() => ({ data: [] })),
-    ]).then(([meRes, histRes, statsRes, roundsRes]) => {
+      api.get('/users/me/handicap-detail').catch(() => ({ data: null })),
+    ]).then(([meRes, histRes, statsRes, roundsRes, hcpDetailRes]) => {
       const u = meRes.data as UserProfile
       setUser(u)
       setForm({ first_name: u.first_name, last_name: u.last_name, phone: u.phone ?? '', city: u.city ?? '', country: u.country ?? '' })
       setHistory(histRes.data)
       if (statsRes.data) setStats(statsRes.data)
       setRounds(roundsRes.data)
+      if (hcpDetailRes.data) setHcpDetail(hcpDetailRes.data)
     }).finally(() => setLoading(false))
   }, [locale, router])
 
@@ -564,8 +579,66 @@ export default function ProfilePage() {
                 </p>
               )}
 
+              {/* Estado: provisional / establecido */}
+              {hcpDetail && hcpDetail.status !== 'none' && (
+                <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full mb-2 ${
+                  hcpDetail.status === 'established' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'
+                }`}>
+                  {hcpDetail.status === 'established'
+                    ? lbl('Establecido', 'Established')
+                    : lbl(`Provisional · ${hcpDetail.rounds_count}/20 tarjetas`, `Provisional · ${hcpDetail.rounds_count}/20 cards`)}
+                </span>
+              )}
+
               {/* SVG Trend Chart */}
               <HcpTrendChart history={history} locale={locale} />
+
+              {/* ¿Cómo se calcula? — transparencia WHS */}
+              {hcpDetail && hcpDetail.differentials.length > 0 && (
+                <div className="mt-3">
+                  <button onClick={() => setShowCalc(v => !v)}
+                    className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 transition-colors">
+                    <Info size={13} /> {lbl('¿Cómo se calcula mi handicap?', 'How is my handicap calculated?')}
+                    {showCalc ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                  </button>
+                  {showCalc && (
+                    <div className="border border-zinc-800 rounded-xl p-3 mt-2 space-y-3 bg-zinc-950/40">
+                      {hcpDetail.rule && (
+                        <p className="text-xs text-zinc-400">
+                          {lbl(`Promedio de las mejores ${hcpDetail.rule.used} de ${hcpDetail.rule.of} tarjetas`,
+                               `Average of the best ${hcpDetail.rule.used} of ${hcpDetail.rule.of} cards`)}
+                          {hcpDetail.rule.adjustment !== 0 && (
+                            <span className="text-amber-300"> · {lbl('ajuste', 'adjustment')} {hcpDetail.rule.adjustment}</span>
+                          )}
+                        </p>
+                      )}
+                      <div className="space-y-0.5">
+                        <div className="grid grid-cols-[auto_1fr_auto_auto] gap-2 text-[10px] text-zinc-600 px-1">
+                          <span>{lbl('Fecha', 'Date')}</span><span>{lbl('Campo', 'Course')}</span>
+                          <span className="text-right">{lbl('Dif.', 'Diff.')}</span><span className="text-right">{lbl('Cuenta', 'Counts')}</span>
+                        </div>
+                        {hcpDetail.differentials.map((d, i) => (
+                          <div key={i} className={`grid grid-cols-[auto_1fr_auto_auto] gap-2 items-center text-xs px-1 py-1 rounded ${d.used_in_calc ? 'bg-emerald-500/10' : ''}`}>
+                            <span className="text-zinc-600 text-[10px]">{new Date(d.played_at).toLocaleDateString(locale === 'es' ? 'es-MX' : 'en-US', { day: '2-digit', month: 'short' })}</span>
+                            <span className="text-zinc-400 truncate">{d.course_name ?? '—'}</span>
+                            <span className="text-right text-zinc-300 font-mono">{d.differential.toFixed(1)}</span>
+                            <span className="text-right">{d.used_in_calc ? <span className="text-emerald-400 font-bold">✓</span> : <span className="text-zinc-700">—</span>}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-zinc-500 leading-relaxed border-t border-zinc-800 pt-2">
+                        {lbl(
+                          'WHS oficial: tu índice es el promedio de tus mejores diferenciales de las últimas 20 tarjetas (con 20+ usa las mejores 8). Con pocas tarjetas usa menos y aplica un ajuste a la baja. Es PROVISIONAL hasta llegar a 20 tarjetas.',
+                          'Official WHS: your index is the average of your best differentials from the last 20 cards (20+ uses the best 8). With few cards it uses fewer and applies a downward adjustment. It stays PROVISIONAL until you reach 20 cards.'
+                        )}{' '}
+                        <a href="https://www.usga.org/handicapping/roh/2024-rules-of-handicapping.html" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline">
+                          {lbl('Ver reglas oficiales WHS →', 'See official WHS rules →')}
+                        </a>
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* History list */}
               {showHistory && (
