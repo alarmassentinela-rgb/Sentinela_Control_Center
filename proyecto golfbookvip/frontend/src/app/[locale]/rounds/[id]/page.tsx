@@ -2133,6 +2133,37 @@ export default function RoundDetailPage() {
     }
   }
 
+  // Auto-armado del formato Medal Play por equipos: equipos balanceados por HCP
+  // + grupos de salida con un jugador de cada equipo por grupo, en un solo paso.
+  const handleAutoSetup = async () => {
+    if (!confirm(lbl(
+      `¿Auto-armar ${numTeams} equipos + grupos de salida (un jugador de cada equipo por grupo) y publicar? Reemplaza equipos y grupos actuales.`,
+      `Auto-build ${numTeams} teams + tee groups (one player per team per group) and publish? This replaces current teams and groups.`
+    ))) return
+    setGeneratingTeams(true)
+    setTeamsError('')
+    try {
+      const res = await api.post(`/rounds/${id}/auto-setup?num_teams=${numTeams}&publish=true`)
+      setTeamsData(res.data)
+      const tg = await api.get(`/rounds/${id}/tee-groups`).catch(() => ({ data: null }))
+      if (tg.data) setTeeGroupsData(tg.data)
+      const pl = await api.get(`/rounds/${id}/players`).catch(() => ({ data: null }))
+      if (pl.data) setPlayers(pl.data)
+      setShowTeams(true)
+      setShowTeeGroups(true)
+      const ng = res.data?.num_groups, lg = res.data?.last_group_size, pg = res.data?.players_per_group
+      alert(lbl(
+        `Listo: ${numTeams} equipos · ${ng} grupos de ${pg}${lg && lg !== pg ? ` (último de ${lg})` : ''}. Equipos publicados.`,
+        `Done: ${numTeams} teams · ${ng} groups of ${pg}${lg && lg !== pg ? ` (last of ${lg})` : ''}. Teams published.`
+      ))
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setTeamsError(detail ?? lbl('Error al auto-armar', 'Error auto-building'))
+    } finally {
+      setGeneratingTeams(false)
+    }
+  }
+
   const handleGenerateTeams = async () => {
     setGeneratingTeams(true)
     setTeamsError('')
@@ -3220,6 +3251,25 @@ export default function RoundDetailPage() {
                     <p className="text-xs text-zinc-500">
                       {lbl(`Ej: 20 jugadores ÷ ${numTeams} ≈ ${Math.ceil(20/numTeams)} por equipo`, `e.g.: 20 players ÷ ${numTeams} ≈ ${Math.ceil(20/numTeams)} per team`)}
                     </p>
+
+                    {/* Auto-armado del formato Medal Play por equipos */}
+                    <button onClick={handleAutoSetup} disabled={generatingTeams}
+                      className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-colors">
+                      {generatingTeams ? <Loader2 size={16} className="animate-spin" /> : <Layers size={16} />}
+                      {lbl('Auto-armar equipos + grupos (Medal Play)', 'Auto-build teams + groups (Medal Play)')}
+                    </button>
+                    <p className="text-xs text-zinc-500 -mt-1">
+                      {lbl(
+                        `Crea ${numTeams} equipos balanceados por hándicap y los grupos de salida con UN jugador de cada equipo por grupo (${numTeams}/grupo). Los sobrantes caen en el último grupo. Publica al instante.`,
+                        `Creates ${numTeams} handicap-balanced teams and tee groups with ONE player from each team per group (${numTeams}/group). Leftovers go in the last group. Publishes instantly.`
+                      )}
+                    </p>
+                    <div className="flex items-center gap-2 py-1">
+                      <div className="flex-1 h-px bg-zinc-800" />
+                      <span className="text-[10px] text-zinc-600 uppercase tracking-wide">{lbl('o armado manual', 'or manual setup')}</span>
+                      <div className="flex-1 h-px bg-zinc-800" />
+                    </div>
+
                     <button onClick={handleGenerateTeams} disabled={generatingTeams}
                       className="w-full flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-400 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-colors">
                       {generatingTeams

@@ -1245,6 +1245,88 @@ async def generate_teams(round_id: uuid.UUID, num_teams: int = 2, current_user: 
     return _build_teams(sorted_rows, False)
 
 
+@router.post("/{round_id}/auto-setup")
+async def auto_setup_format(
+    round_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: DB,
+    num_teams: int = 4,
+    shotgun: bool = False,
+    publish: bool = True,
+):
+    """Auto-arma el formato Medal Play por equipos en un solo paso:
+    - Equipos balanceados por handicap (round-robin sobre el orden de HCP).
+    - Grupos de salida con UN jugador de cada equipo por grupo (sin compañeros juntos).
+    - num_teams = jugadores por grupo. Sobrantes caen en el último grupo (más chico).
+    - shotgun: cada grupo arranca en su propio hoyo; si no, todos en el hoyo 1.
+    Excluye retirados/observadores (les limpia equipo y grupo). Creador only.
+    """
+    round_result = await db.execute(
+        select(Round).where(Round.id == round_id, Round.created_by == current_user.id)
+    )
+    round_ = round_result.scalar_one_or_none()
+    if not round_:
+        raise HTTPException(status_code=403, detail="Solo el creador puede armar el formato")
+    if round_.status == "finished":
+        raise HTTPException(status_code=400, detail="No se puede modificar una ronda finalizada")
+    if not 2 <= num_teams <= 12:
+        raise HTTPException(status_code=400, detail="Número de equipos: 2 a 12")
+
+    result = await db.execute(
+        select(RoundPlayer, User)
+        .join(User, User.id == RoundPlayer.user_id)
+        .where(RoundPlayer.round_id == round_id)
+    )
+    rows = result.all()
+    playing = [(rp, u) for rp, u in rows if rp.participant_mode == "playing" and rp.withdrawn_at is None]
+    if len(playing) < num_teams:
+        raise HTTPException(status_code=400, detail=f"Se necesitan al menos {num_teams} jugadores activos")
+
+    def hcp_key(item):
+        rp, _ = item
+        if rp.course_handicap is not None:
+            return rp.course_handicap
+        return float(rp.handicap_index) if rp.handicap_index else 99
+
+    playing.sort(key=hcp_key)
+    holes = round_.holes_to_play or 18
+
+    # team = (rank-1) % N + 1  → equipos balanceados
+    # group = (rank-1) // N + 1 → cada grupo toma uno de cada equipo (consecutivos = equipos distintos)
+    for idx, (rp, _) in enumerate(playing):
+        group = (idx // num_teams) + 1
+        rp.team_number = (idx % num_teams) + 1
+        rp.tee_group = group
+        rp.starting_hole = (((group - 1) % holes) + 1) if shotgun else 1
+        rp.tee_order = idx
+
+    # Limpiar a quienes no juegan
+    for rp, _ in rows:
+        if rp.participant_mode != "playing" or rp.withdrawn_at is not None:
+            rp.team_number = None
+            rp.tee_group = None
+            rp.starting_hole = None
+
+    round_.teams_published = bool(publish)
+    await db.flush()
+
+    refreshed = await db.execute(
+        select(RoundPlayer, User).join(User, User.id == RoundPlayer.user_id)
+        .where(RoundPlayer.round_id == round_id)
+    )
+    rrows = refreshed.all()
+    n_groups = (len(playing) + num_teams - 1) // num_teams
+    leftover = len(playing) % num_teams
+    return {
+        **_build_teams(rrows, round_.teams_published),
+        "num_teams": num_teams,
+        "num_groups": n_groups,
+        "players_per_group": num_teams,
+        "last_group_size": leftover if leftover else num_teams,
+        "shotgun": shotgun,
+    }
+
+
 @router.put("/{round_id}/teams/assign")
 async def assign_player_team(round_id: uuid.UUID, player_id: uuid.UUID, team_number: int, current_user: CurrentUser, db: DB):
     """Moves a player to a different team (creator only, resets published flag)."""
