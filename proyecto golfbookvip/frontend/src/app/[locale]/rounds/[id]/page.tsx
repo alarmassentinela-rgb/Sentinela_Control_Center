@@ -3675,6 +3675,8 @@ export default function RoundDetailPage() {
                   })
                   const totalAssigned = Object.values(groupSizes).reduce((s, n) => s + n, 0)
                   const totalPlayers = allPlayers.length
+                  // Objetivo por grupo dinámico (jugadores ÷ grupos). Soporta grupos de 5+ sin marcarlos como error.
+                  const targetPerGroup = Math.max(1, Math.ceil(totalPlayers / Math.max(1, numTeeGroups)))
 
                   const autoAssignByHcp = () => {
                     // Ordena por course_handicap asc (los de menos HCP primero), nulls al final
@@ -3766,7 +3768,7 @@ export default function RoundDetailPage() {
                           +
                         </button>
                         <span className="text-xs text-zinc-500 ml-2">
-                          {lbl(`hasta ${numTeeGroups * 4} jugadores (4/grupo)`, `up to ${numTeeGroups * 4} players (4/group)`)}
+                          {lbl(`${totalPlayers} jugadores ≈ ${targetPerGroup}/grupo`, `${totalPlayers} players ≈ ${targetPerGroup}/group`)}
                         </span>
                       </div>
                     </div>
@@ -3778,8 +3780,8 @@ export default function RoundDetailPage() {
                         {Array.from({length: numTeeGroups}, (_, i) => i+1).map(g => {
                           const startHole = Object.values(teeGroupDraft).find(d => d.tee_group === g)?.starting_hole ?? 1
                           const count = groupSizes[g] ?? 0
-                          const isFull = count >= 4
-                          const isOver = count > 4
+                          const isFull = count >= targetPerGroup
+                          const isOver = count > targetPerGroup
                           return (
                             <div key={g} className="flex items-center gap-2 bg-zinc-800 rounded-xl px-3 py-2">
                               <span className="text-xs font-bold text-orange-400 flex-shrink-0">G{g}</span>
@@ -3787,7 +3789,7 @@ export default function RoundDetailPage() {
                                 isOver ? 'bg-red-500/20 text-red-300 border border-red-500/40'
                                 : isFull ? 'bg-emerald-500/15 text-emerald-300'
                                 : 'bg-zinc-700 text-zinc-400'
-                              }`}>{count}/4</span>
+                              }`}>{count}/{targetPerGroup}</span>
                               <span className="text-xs text-zinc-500 ml-auto">H</span>
                               <input
                                 type="number" min="1" max={round.holes_to_play} value={startHole}
