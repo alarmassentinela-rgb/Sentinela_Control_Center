@@ -160,6 +160,7 @@ function ScoreDistribution({ stats, locale }: { stats: Stats; locale: string }) 
 
 const FORMAT_SHORT: Record<string, { es: string; en: string }> = {
   stroke:              { es: 'Stroke', en: 'Stroke' },
+  gran_premio:         { es: 'G.Premio', en: 'GP' },
   stableford:          { es: 'Stab.',  en: 'Stab.'  },
   stableford_modified: { es: 'Stab.M', en: 'Stab.M' },
   match:               { es: 'Match',  en: 'Match'  },

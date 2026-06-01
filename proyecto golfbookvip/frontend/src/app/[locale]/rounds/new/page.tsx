@@ -10,6 +10,7 @@ interface Course { id: string; name: string; city: string | null }
 
 const FORMATS = [
   { value: 'stroke',              labelEs: 'Stroke Play (Medal)', labelEn: 'Stroke Play (Medal)' },
+  { value: 'gran_premio',         labelEs: 'Gran Premio',         labelEn: 'Gran Premio' },
   { value: 'stableford',          labelEs: 'Stableford',          labelEn: 'Stableford' },
   { value: 'stableford_modified', labelEs: 'Stableford Modificado', labelEn: 'Modified Stableford' },
   { value: 'match',               labelEs: 'Match Play',          labelEn: 'Match Play' },
@@ -26,6 +27,17 @@ const FORMAT_SHORT: Record<string, { titleEs: string; titleEn: string; descEs: s
     rulesEn: [{ label:'Birdie (−1)', value:'−1 stroke' },{ label:'Par', value:'0' },{ label:'Bogey (+1)', value:'+1 stroke' },{ label:'Net score', value:'Gross − Course HCP' }],
     egEs: [{ desc:'Juegas 85, HCP 10 → neto 75', result:'75' },{ desc:'Rival: 80, HCP 4 → neto 76', result:'76' },{ desc:'Tú ganas en neto', result:'¡Victoria!', h:true }],
     egEn: [{ desc:'You shoot 85, HCP 10 → net 75', result:'75' },{ desc:'Rival: 80, HCP 4 → net 76', result:'76' },{ desc:'You win net', result:'Win!', h:true }],
+  },
+  gran_premio: {
+    titleEs: 'Gran Premio', titleEn: 'Gran Premio',
+    descEs: 'Medal Play individual jugado POR EQUIPOS. Los jugadores se reparten en equipos balanceados por hándicap y salen en grupos donde compiten contra rivales de OTROS equipos (un jugador de cada equipo por grupo). En cada grupo se reparten puntos según la posición en score NETO, y esos puntos suman a tu equipo. Gana el equipo con más puntos acumulados.',
+    descEn: 'Individual Medal Play played AS TEAMS. Players are split into handicap-balanced teams and tee off in groups where they face rivals from OTHER teams (one player per team per group). Each group awards points by NET position, and those points add to your team. The team with the most total points wins.',
+    rulesEs: [{ label:'1.º del grupo', value:'+2 pts' },{ label:'2.º del grupo', value:'+1 pt' },{ label:'Último del grupo', value:'−1 pt' },{ label:'Los demás', value:'0 pts' },{ label:'Posición', value:'Por score NETO' },{ label:'Empate', value:'Tarjeta (countback) neto' }],
+    rulesEn: [{ label:'1st in group', value:'+2 pts' },{ label:'2nd in group', value:'+1 pt' },{ label:'Last in group', value:'−1 pt' },{ label:'The rest', value:'0 pts' },{ label:'Position', value:'By NET score' },{ label:'Tiebreak', value:'Scorecard countback (net)' }],
+    egEs: [{ desc:'Grupo de 4 — uno de cada equipo', result:'' },{ desc:'1.º neto 70', result:'+2 a su equipo', h:true },{ desc:'2.º neto 72', result:'+1', h:true },{ desc:'3.º neto 75', result:'0', h:true },{ desc:'4.º (último) neto 80', result:'−1', h:true }],
+    egEn: [{ desc:'Group of 4 — one per team', result:'' },{ desc:'1st net 70', result:'+2 to team', h:true },{ desc:'2nd net 72', result:'+1', h:true },{ desc:'3rd net 75', result:'0', h:true },{ desc:'4th (last) net 80', result:'−1', h:true }],
+    noteEs: 'Usa el botón "Auto-armar equipos + grupos" en la ronda para repartir todo con un clic (equipos parejos + un jugador de cada equipo por grupo). El "Campeón por Equipos" aparece en la vista en vivo. Grupos de 3, 4 o 5 según el número de equipos.',
+    noteEn: 'Use the "Auto-build teams + groups" button in the round to set everything in one click (balanced teams + one player per team per group). The "Team Champion" shows in the live view. Groups of 3, 4 or 5 depending on the number of teams.',
   },
   stableford: {
     titleEs: 'Stableford', titleEn: 'Stableford',

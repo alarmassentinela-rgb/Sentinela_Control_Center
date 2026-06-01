@@ -42,7 +42,7 @@ interface TopPlayer { user_id: string; name: string; username: string; handicap_
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const FORMAT_LABEL: Record<string, string> = {
-  stroke: 'Stroke', stableford: 'Stableford', stableford_modified: 'Stab. Mod.',
+  stroke: 'Stroke', gran_premio: 'Gran Premio', stableford: 'Stableford', stableford_modified: 'Stab. Mod.',
   match: 'Match Play', skins: 'Skines', florida: 'Florida',
 }
 

@@ -80,7 +80,7 @@ function presetToDates(preset: string): { start?: string; end?: string } {
 }
 
 const FORMAT_LABEL: Record<string, string> = {
-  stroke: 'Stroke', stableford: 'Stableford', stableford_modified: 'Stab. Mod.',
+  stroke: 'Stroke', gran_premio: 'Gran Premio', stableford: 'Stableford', stableford_modified: 'Stab. Mod.',
   match: 'Match', skins: 'Skins', florida: 'Florida',
 }
 

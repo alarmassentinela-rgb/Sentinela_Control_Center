@@ -29,6 +29,7 @@ interface FeedItem {
 
 const FORMAT_LABEL: Record<string, { es: string; en: string }> = {
   stroke:               { es: 'Stroke Play',     en: 'Stroke Play' },
+  gran_premio:          { es: 'Gran Premio',      en: 'Gran Premio' },
   stableford:           { es: 'Stableford',       en: 'Stableford' },
   stableford_modified:  { es: 'Stableford Mod.',  en: 'Mod. Stableford' },
   match:                { es: 'Match Play',       en: 'Match Play' },

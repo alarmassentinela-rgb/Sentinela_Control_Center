@@ -25,7 +25,7 @@ interface Summary {
 interface MeUser { first_name: string; last_name: string; email: string; username: string }
 
 const FORMAT_LABEL: Record<string, string> = {
-  stroke: 'Stroke Play', stableford: 'Stableford', stableford_modified: 'Stableford Mod.',
+  stroke: 'Stroke Play', gran_premio: 'Gran Premio', stableford: 'Stableford', stableford_modified: 'Stableford Mod.',
   match: 'Match Play', skins: 'Skins', florida: 'Florida',
 }
 
