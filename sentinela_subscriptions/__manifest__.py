@@ -1,6 +1,6 @@
 {
     'name': 'Sentinela Subscriptions',
-    'version': '18.0.1.3.59',
+    'version': '18.0.1.3.60',
     'category': 'Sales/Subscriptions',
     'depends': ['base', 'mail', 'product', 'account', 'sale', 'sentinela_digital_sign', 'sentinela_cfdi_prodigia', 'om_account_followup'],
     'data': [
@@ -28,6 +28,7 @@
         'wizard/subscription_transfer_views.xml',
         'wizard/mikrotik_traffic_views.xml',
         'wizard/subscription_selection_wizard_views.xml',
+        'wizard/subscription_advance_wizard_views.xml',
     ],
     'assets': {
         'web.assets_backend': [

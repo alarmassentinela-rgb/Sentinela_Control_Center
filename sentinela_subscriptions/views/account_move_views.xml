@@ -6,7 +6,13 @@
         <field name="inherit_id" ref="account.view_move_form"/>
         <field name="arch" type="xml">
             <field name="partner_id" position="after">
-                <field name="subscription_id" readonly="1" options="{'no_create': True}"/>
+                <field name="subscription_id" options="{'no_create': True}"
+                    readonly="state != 'draft'"
+                    help="Liga esta factura a una suscripción. Necesario para el cobro adelantado manual."/>
+                <field name="is_advance_payment" readonly="state != 'draft'"
+                    invisible="not subscription_id"/>
+                <field name="advance_months_applied" readonly="1"
+                    invisible="not is_advance_payment or advance_months_applied == 0"/>
             </field>
         </field>
     </record>
