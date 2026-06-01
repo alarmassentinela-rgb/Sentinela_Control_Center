@@ -3830,16 +3830,14 @@ export default function RoundDetailPage() {
                         {Array.from({length: numTeeGroups}, (_, i) => i+1).map(g => {
                           const startHole = Object.values(teeGroupDraft).find(d => d.tee_group === g)?.starting_hole ?? 1
                           const count = groupSizes[g] ?? 0
-                          const isFull = count >= targetPerGroup
-                          const isOver = count > targetPerGroup
+                          const isEmpty = count === 0
                           return (
                             <div key={g} className="flex items-center gap-2 bg-zinc-800 rounded-xl px-3 py-2">
                               <span className="text-xs font-bold text-orange-400 flex-shrink-0">G{g}</span>
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono flex-shrink-0 ${
-                                isOver ? 'bg-red-500/20 text-red-300 border border-red-500/40'
-                                : isFull ? 'bg-emerald-500/15 text-emerald-300'
-                                : 'bg-zinc-700 text-zinc-400'
-                              }`}>{count}/{targetPerGroup}</span>
+                              <span title={lbl('Jugadores en el grupo (tamaños distintos permitidos)', 'Players in the group (different sizes allowed)')}
+                                className={`text-[10px] px-1.5 py-0.5 rounded font-mono flex-shrink-0 ${
+                                isEmpty ? 'bg-zinc-700 text-zinc-500' : 'bg-emerald-500/15 text-emerald-300'
+                              }`}>{count}</span>
                               <span className="text-xs text-zinc-500 ml-auto">H</span>
                               <input
                                 type="number" min="1" max={round.holes_to_play} value={startHole}
@@ -3870,8 +3868,8 @@ export default function RoundDetailPage() {
                           return (
                             <div key={p.player_id} className="flex items-center gap-3 bg-zinc-800/50 rounded-xl px-3 py-2.5">
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-white truncate">{p.name}</p>
-                                <p className="text-xs text-zinc-500">HCP {p.course_handicap ?? '—'}</p>
+                                <p className="text-sm font-medium text-white break-words">{p.name}</p>
+                                <p className="text-xs text-zinc-500">@{p.username} · HCP {p.course_handicap ?? '—'}</p>
                               </div>
                               {numTeeGroups <= 6 ? (
                                 <div className="flex gap-1 flex-wrap justify-end">
