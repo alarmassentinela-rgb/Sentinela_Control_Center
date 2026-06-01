@@ -1,5 +1,5 @@
 from odoo import models, fields, api, _
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import UserError, ValidationError, AccessError
 from dateutil.relativedelta import relativedelta
 from datetime import date, timedelta
 import calendar
@@ -523,6 +523,23 @@ class SentinelaSubscription(models.Model):
     payment_term_id = fields.Many2one('account.payment.term', string='Plazos de Pago')
     auto_invoice = fields.Boolean(string='Generar Factura (No Remisión)', default=False)
     auto_send_mail = fields.Boolean(string='Enviar automáticamente por Correo', default=False)
+    billing_mode = fields.Selection([
+        ('normal', 'Normal'),
+        ('courtesy', 'Cortesía'),
+    ], string='Tipo de Facturación', default='normal', required=True, tracking=True,
+       help="Normal: se factura y entra a cobranza/suspensión. "
+            "Cortesía: el servicio queda activo pero NO se le genera factura/remisión, "
+            "NO entra a cobranza, recordatorios ni auto-suspensión. "
+            "Solo un administrador (Gestor de Suscripciones) puede cambiarlo.")
+    can_edit_billing_mode = fields.Boolean(
+        compute='_compute_can_edit_billing_mode',
+        help="True si el usuario actual es Gestor de Suscripciones (puede editar el Tipo de Facturación).")
+
+    @api.depends_context('uid')
+    def _compute_can_edit_billing_mode(self):
+        is_mgr = self.env.user.has_group('sentinela_subscriptions.group_subscription_manager')
+        for rec in self:
+            rec.can_edit_billing_mode = is_mgr
     days_to_suspend = fields.Integer(
         string='Días para Auto-Suspensión',
         default=5,
@@ -675,6 +692,7 @@ class SentinelaSubscription(models.Model):
         subs_due = self.search([
             ('state', '=', 'active'),
             ('next_billing_date', '<=', today),
+            ('billing_mode', '!=', 'courtesy'),
         ])
         if not subs_due:
             return
@@ -697,6 +715,7 @@ class SentinelaSubscription(models.Model):
                     ('state', '=', 'active'),
                     ('partner_id', '=', sub.partner_id.id),
                     ('next_billing_date', '<=', end_of_month),
+                    ('billing_mode', '!=', 'courtesy'),
                 ])
             elif method == 'by_branch':
                 group = self.search([
@@ -704,6 +723,7 @@ class SentinelaSubscription(models.Model):
                     ('partner_id', '=', sub.partner_id.id),
                     ('service_address_id', '=', sub.service_address_id.id if sub.service_address_id else False),
                     ('next_billing_date', '<=', end_of_month),
+                    ('billing_mode', '!=', 'courtesy'),
                 ])
             else:
                 group = sub
@@ -797,7 +817,7 @@ class SentinelaSubscription(models.Model):
         """ Suspende automáticamente suscripciones con facturas vencidas más allá
         de su umbral configurado (days_to_suspend, default 5 días). """
         today = fields.Date.today()
-        active_subs = self.search([('state', '=', 'active')])
+        active_subs = self.search([('state', '=', 'active'), ('billing_mode', '!=', 'courtesy')])
         suspended_count = 0
         tpl_suspended = self.env.ref(
             'sentinela_subscriptions.mail_template_subscription_suspended',
@@ -919,7 +939,7 @@ class SentinelaSubscription(models.Model):
             'sentinela_subscriptions.mail_template_subscription_pre_suspend',
             raise_if_not_found=False,
         )
-        active_subs = self.search([('state', '=', 'active')])
+        active_subs = self.search([('state', '=', 'active'), ('billing_mode', '!=', 'courtesy')])
         soft_count = 0
         urgent_count = 0
         for sub in active_subs:
@@ -1493,10 +1513,25 @@ class SentinelaSubscription(models.Model):
             if sub.start_date and sub.recurring_interval and not sub.next_billing_date:
                 sub.next_billing_date = sub.start_date + relativedelta(months=int(sub.recurring_interval))
 
+    def _assert_billing_mode_manager(self):
+        """Candado: solo el Gestor de Suscripciones (o el sistema) cambia el Tipo de Facturación."""
+        if self.env.su or self.env.user.has_group('sentinela_subscriptions.group_subscription_manager'):
+            return
+        raise AccessError(_(
+            "Solo un administrador (Gestor de Suscripciones) puede cambiar el Tipo de Facturación "
+            "(Normal / Cortesía)."))
+
+    def write(self, vals):
+        if 'billing_mode' in vals and any(rec.billing_mode != vals['billing_mode'] for rec in self):
+            self._assert_billing_mode_manager()
+        return super().write(vals)
+
     @api.model_create_multi
     def create(self, vals_list):
         Matrix = self.env['sentinela.product.service.inclusion'].sudo()
         for vals in vals_list:
+            if vals.get('billing_mode', 'normal') != 'normal':
+                self._assert_billing_mode_manager()
             if vals.get('name', 'New') == 'New':
                 vals['name'] = self.env['ir.sequence'].next_by_code('sentinela.subscription') or 'New'
             # Pre-derivar la matriz del plan EN vals (antes de super().create) para que

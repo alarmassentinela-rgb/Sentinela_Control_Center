@@ -159,6 +159,8 @@
                         <page string="📅 Facturación y Plazos" name="billing">
                             <group>
                                 <group string="Calendario">
+                                    <field name="can_edit_billing_mode" invisible="1"/>
+                                    <field name="billing_mode" widget="radio" options="{'horizontal': True}" readonly="is_contract_locked or not can_edit_billing_mode"/>
                                     <field name="start_date" readonly="is_contract_locked"/>
                                     <field name="next_billing_date" readonly="is_contract_locked"/>
                                     <field name="payment_term_id" readonly="is_contract_locked"/>

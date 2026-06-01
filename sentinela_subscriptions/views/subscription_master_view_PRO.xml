@@ -41,6 +41,8 @@
 
                     <!-- CAMPO OCULTO REQUERIDO POR INVISIBLE CONDITIONS -->
                     <field name="service_type" invisible="1"/>
+                    <field name="can_edit_billing_mode" invisible="1"/>
+                    <widget name="web_ribbon" title="CORTESÍA" bg_color="text-bg-info" invisible="billing_mode != 'courtesy'"/>
 
                     <div class="oe_title">
                         <h1>
@@ -122,7 +124,8 @@
                                     <field name="extension_due_date" invisible="not extension_due_date"/>
                                 </group>
                                 <group string="Preferencias de Facturación">
-                                    <field name="auto_invoice" widget="boolean_toggle"/>
+                                    <field name="billing_mode" widget="radio" options="{'horizontal': True}" readonly="not can_edit_billing_mode"/>
+                                    <field name="auto_invoice" widget="boolean_toggle" invisible="billing_mode == 'courtesy'"/>
                                     <field name="auto_send_mail" widget="boolean_toggle"/>
                                     <field name="days_to_suspend"
                                         help="Después de cuántos días vencida la factura el sistema corta el servicio. Default 5."/>
