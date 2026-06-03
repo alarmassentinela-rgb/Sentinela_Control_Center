@@ -761,14 +761,18 @@ class FsmOrder(models.Model):
         
         import requests
         from requests.auth import HTTPBasicAuth
-        
-        # URL local del servidor Traccar
-        url = "http://172.20.0.2:8082/api/positions" # IP interna del contenedor traccar
+
+        # Config de la API de Traccar (Ajustes de Central → Radar SentiCar / Traccar).
+        # Fallback a los valores históricos si no se ha configurado.
+        ICP = self.env['ir.config_parameter'].sudo()
+        base = (ICP.get_param('sentinela.traccar_api_url') or 'http://172.20.0.2:8082').rstrip('/')
+        user = ICP.get_param('sentinela.traccar_api_user') or 'admin'
+        password = ICP.get_param('sentinela.traccar_api_password') or 'admin'
+        url = f"{base}/api/positions"
         params = {'deviceId': traccar_id}
-        
+
         try:
-            # Intentamos con admin/admin por defecto, esto debería configurarse en system parameters
-            res = requests.get(url, params=params, auth=HTTPBasicAuth('admin', 'admin'), timeout=5)
+            res = requests.get(url, params=params, auth=HTTPBasicAuth(user, password), timeout=5)
             if res.ok and res.json():
                 pos = res.json()[0]
                 return {

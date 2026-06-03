@@ -21,6 +21,27 @@
                             <field name="patrol_service_product_id"/>
                         </setting>
                     </block>
+                    <block title="Radar SentiCar / Traccar" name="traccar_config">
+                        <setting string="Radar en el Dashboard" help="URL que se incrusta en el iframe del radar SentiCar.">
+                            <field name="traccar_url"/>
+                        </setting>
+                        <setting string="API de Posiciones (rastreo en vivo / ETA)" help="Conexión a la API de Traccar que usa la Gestión de Servicios para ubicar patrulleros y calcular ETA.">
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="traccar_api_url" class="col-lg-4 o_light_label"/>
+                                    <field name="traccar_api_url"/>
+                                </div>
+                                <div class="row">
+                                    <label for="traccar_api_user" class="col-lg-4 o_light_label"/>
+                                    <field name="traccar_api_user"/>
+                                </div>
+                                <div class="row">
+                                    <label for="traccar_api_password" class="col-lg-4 o_light_label"/>
+                                    <field name="traccar_api_password" password="True"/>
+                                </div>
+                            </div>
+                        </setting>
+                    </block>
                 </app>
             </xpath>
         </field>

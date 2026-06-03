@@ -35,4 +35,39 @@
             </xpath>
         </field>
     </record>
+
+    <!-- Gap 7: Vista dedicada para mapear Patrulleros ↔ dispositivo Traccar -->
+    <record id="view_patrol_device_list" model="ir.ui.view">
+        <field name="name">res.partner.patrol.device.list</field>
+        <field name="model">res.partner</field>
+        <field name="arch" type="xml">
+            <list string="Patrulleros (GPS)" editable="bottom">
+                <field name="name"/>
+                <field name="phone"/>
+                <field name="traccar_device_id" placeholder="ID en Traccar"/>
+                <field name="last_gps_update" readonly="1"/>
+                <field name="last_gps_lat" readonly="1" optional="hide"/>
+                <field name="last_gps_lng" readonly="1" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_patrol_devices" model="ir.actions.act_window">
+        <field name="name">Patrulleros (GPS)</field>
+        <field name="res_model">res.partner</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="view_patrol_device_list"/>
+        <field name="domain">[('is_patrol', '=', True)]</field>
+        <field name="context">{'default_is_patrol': True}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Marca contactos o usuarios como "Patrulla" para mapear su dispositivo Traccar.</p>
+            <p>El rastreo en vivo y el ETA de SentiCar dependen del ID de dispositivo Traccar configurado aquí.</p>
+        </field>
+    </record>
+
+    <menuitem id="menu_sentinela_patrol_devices"
+        name="Patrulleros (GPS)"
+        parent="menu_sentinela_monitoring_config"
+        action="action_patrol_devices"
+        sequence="15"/>
 </odoo>

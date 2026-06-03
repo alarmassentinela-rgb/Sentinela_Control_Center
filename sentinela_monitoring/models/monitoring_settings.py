@@ -16,6 +16,25 @@ class MonitoringSettings(models.TransientModel):
         help="La URL que se incrustará en el Radar del Dashboard."
     )
 
+    # Conexión a la API de Traccar (posiciones GPS de patrulleros/técnicos).
+    # La consume sentinela_fsm (get_last_location_from_traccar) y el ETA en vivo.
+    traccar_api_url = fields.Char(
+        string='URL API de Traccar',
+        config_parameter='sentinela.traccar_api_url',
+        default='http://172.20.0.2:8082',
+        help="Base de la API REST de Traccar (sin /api). Ej. http://172.20.0.2:8082"
+    )
+    traccar_api_user = fields.Char(
+        string='Usuario API Traccar',
+        config_parameter='sentinela.traccar_api_user',
+        default='admin',
+    )
+    traccar_api_password = fields.Char(
+        string='Contraseña API Traccar',
+        config_parameter='sentinela.traccar_api_password',
+        default='admin',
+    )
+
     # F2.6 — Cobranza al atender
     patrol_service_product_id = fields.Many2one(
         'product.product',
