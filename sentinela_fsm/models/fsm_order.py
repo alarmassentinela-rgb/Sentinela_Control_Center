@@ -52,7 +52,8 @@ class FsmOrder(models.Model):
     
     service_type = fields.Selection([
         ('install', 'Instalación'),
-        ('repair', 'Reparación'),
+        ('repair', 'Reparación / Falla (Correctivo)'),
+        ('maintenance', 'Mantenimiento Preventivo'),
         ('transfer', 'Traslado'),
         ('removal', 'Retiro de Equipo / Desinstalación'),
         ('patrol', 'Patrullaje / Respuesta'),
@@ -373,8 +374,15 @@ class FsmOrder(models.Model):
                 sub_vals['equipment_serial'] = main_equipment[0].lot_id.name
             
             # Actualizar Fecha de Último Mantenimiento si es un servicio técnico
-            if self.service_type in ['install', 'repair', 'other']:
+            if self.service_type in ['install', 'repair', 'maintenance', 'other']:
                 sub_vals['last_maintenance_date'] = fields.Date.today()
+
+            # Si es mantenimiento preventivo, reprogramar el siguiente ciclo desde HOY
+            # (el cron pudo haberlo adelantado ya; esto lo ancla a la fecha real de servicio).
+            if self.service_type == 'maintenance' and self.subscription_id.maintenance_frequency not in (False, '0'):
+                from dateutil.relativedelta import relativedelta
+                months = int(self.subscription_id.maintenance_frequency)
+                sub_vals['next_maintenance_date'] = fields.Date.today() + relativedelta(months=months)
             
             # Punto 4: Cierre automático por Retiro de Equipo
             if self.service_type == 'removal':

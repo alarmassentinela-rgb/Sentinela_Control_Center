@@ -135,7 +135,7 @@
                                 </list>
                             </field>
                         </page>
-                        <page string="Instalación / Unidad" name="vehicle_info" invisible="service_type not in ['install', 'repair', 'transfer']">
+                        <page string="Instalación / Unidad" name="vehicle_info" invisible="service_type not in ['install', 'repair', 'maintenance', 'transfer']">
                             <group string="📍 Ubicación Real de la Instalación">
                                 <group>
                                     <field name="install_lat"/>

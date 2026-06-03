@@ -13,6 +13,11 @@
                 </xpath>
                 <xpath expr="//notebook" position="inside">
                     <page string="🔧 Historial Técnico (FSM)" name="fsm_history">
+                        <group string="Mantenimiento Preventivo (Póliza)">
+                            <field name="maintenance_frequency"/>
+                            <field name="next_maintenance_date" invisible="maintenance_frequency == '0'"/>
+                            <field name="last_maintenance_date"/>
+                        </group>
                         <field name="fsm_order_ids" readonly="1"/>
                     </page>
                 </xpath>
