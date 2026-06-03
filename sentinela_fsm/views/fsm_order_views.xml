@@ -88,10 +88,10 @@
                             <field name="description" placeholder="Detalle del reporte..."/>
                         </group>
                         <group string="Programación">
-                            <field name="service_type" readonly="not is_fsm_manager"/>
+                            <field name="service_type" readonly="not is_fsm_manager and stage != 'new'"/>
                             <field name="technician_id" readonly="not is_fsm_manager"/>
                             <field name="scheduled_date" readonly="not is_fsm_manager"/>
-                            <field name="priority" widget="priority" readonly="not is_fsm_manager"/>
+                            <field name="priority" widget="priority" readonly="not is_fsm_manager and stage != 'new'"/>
                             <field name="duration_expected" readonly="not is_fsm_manager"/>
                         </group>
                     </group>

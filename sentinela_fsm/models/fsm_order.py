@@ -218,6 +218,12 @@ class FsmOrder(models.Model):
         return True
 
     def action_assign(self):
+        # No se puede programar sin técnico ni fecha: la tarea no le aparecería
+        # a nadie en su lista de pendientes.
+        if not self.technician_id:
+            raise models.ValidationError(_("Asigna un técnico antes de programar la orden."))
+        if not self.scheduled_date:
+            raise models.ValidationError(_("Define la fecha y hora programada antes de asignar la orden al técnico."))
         self.stage = 'assigned'
         # Send Notification Email
         template = self.env.ref('sentinela_fsm.mail_template_fsm_assigned', raise_if_not_found=False)

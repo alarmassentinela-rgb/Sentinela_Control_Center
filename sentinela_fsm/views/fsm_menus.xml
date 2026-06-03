@@ -2,6 +2,17 @@
 <odoo>
     <menuitem id="menu_fsm_root" name="Gestion de Servicios" web_icon="sentinela_fsm,static/description/icon.png" sequence="30"/>
 
+    <!-- Intake rápido para recepción: abre un ticket nuevo en blanco -->
+    <record id="action_fsm_new_ticket" model="ir.actions.act_window">
+        <field name="name">Nuevo Reporte / Ticket</field>
+        <field name="res_model">sentinela.fsm.order</field>
+        <field name="view_mode">form</field>
+        <field name="target">current</field>
+        <field name="context">{'default_service_type': 'repair'}</field>
+    </record>
+
+    <menuitem id="menu_fsm_new_ticket" name="Nuevo Reporte" parent="menu_fsm_root" action="action_fsm_new_ticket" sequence="1"/>
+
     <menuitem id="menu_fsm_dashboard" name="Tablero" parent="menu_fsm_root" action="action_fsm_order" sequence="10"/>
 
     <record id="action_fsm_my_orders" model="ir.actions.act_window">

@@ -64,7 +64,11 @@
                         
                         <div class="d-flex justify-content-between align-items-center">
                             <span t-if="order.service_type == 'install'" class="badge bg-success">Instalación</span>
-                            <span t-if="order.service_type == 'repair'" class="badge bg-warning text-dark">Reparación</span>
+                            <span t-if="order.service_type == 'repair'" class="badge bg-warning text-dark">Reparación / Falla</span>
+                            <span t-if="order.service_type == 'maintenance'" class="badge bg-info text-dark">Mantenimiento</span>
+                            <span t-if="order.service_type == 'transfer'" class="badge bg-secondary">Traslado</span>
+                            <span t-if="order.service_type == 'removal'" class="badge bg-danger">Retiro</span>
+                            <span t-if="order.service_type == 'patrol'" class="badge bg-dark">Patrullaje</span>
                             <span t-if="order.stage == 'assigned'" class="badge bg-info">ASIGNADO</span>
                             <span t-if="order.stage == 'in_progress'" class="badge bg-primary">EN PROCESO</span>
                             <span t-if="order.stage == 'paused'" class="badge bg-secondary">PAUSADO</span>
