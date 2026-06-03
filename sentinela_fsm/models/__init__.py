@@ -9,4 +9,5 @@ from . import fsm_notification
 from . import fsm_chat
 from . import fsm_route_optimization
 from . import res_users
+from . import product_template
 from . import sale_order

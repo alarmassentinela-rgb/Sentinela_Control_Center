@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_order_form_fsm" model="ir.ui.view">
+        <field name="name">sale.order.form.fsm</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <!-- Botón en la barra superior para generar una orden manual -->
+            <xpath expr="//header" position="inside">
+                <button name="action_open_generate_fsm_wizard" type="object"
+                    string="Generar Orden de Servicio" class="btn-secondary"
+                    icon="fa-wrench"/>
+            </xpath>
+            <!-- Smart button con el contador de órdenes generadas -->
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_fsm_orders" type="object"
+                    class="oe_stat_button" icon="fa-wrench"
+                    invisible="fsm_order_count == 0">
+                    <field name="fsm_order_count" widget="statinfo" string="Órdenes Servicio"/>
+                </button>
+            </xpath>
+        </field>
+    </record>
+</odoo>

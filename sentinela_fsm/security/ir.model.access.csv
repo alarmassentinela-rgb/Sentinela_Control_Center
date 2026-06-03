@@ -23,3 +23,5 @@ access_fsm_route_line_manager,fsm.route.line.manager,model_sentinela_fsm_route_l
 access_fsm_chat_send_message_wizard_user,fsm.chat.send.message.wizard.user,model_sentinela_fsm_chat_send_message_wizard,group_fsm_user,1,1,1,1
 access_fsm_create_route_wizard_manager,fsm.create.route.wizard.manager,model_sentinela_fsm_create_route_wizard,group_fsm_manager,1,1,1,1
 access_fsm_order_pause_wizard_user,fsm.order.pause.wizard.user,model_sentinela_fsm_order_pause_wizard,group_fsm_user,1,1,1,1
+access_fsm_generate_order_wizard_user,fsm.generate.order.wizard.user,model_sentinela_fsm_generate_order_wizard,group_fsm_user,1,1,1,1
+access_fsm_generate_order_wizard_mgr,fsm.generate.order.wizard.mgr,model_sentinela_fsm_generate_order_wizard,group_fsm_manager,1,1,1,1

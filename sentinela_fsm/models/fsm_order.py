@@ -24,6 +24,8 @@ class FsmOrder(models.Model):
     # Context
     subscription_id = fields.Many2one('sentinela.subscription', string='Suscripción Relacionada',
         domain="[('partner_id', '=', partner_id)]") # Domain in python definition works for standard views
+    sale_order_id = fields.Many2one('sale.order', string='Venta de Origen', readonly=True, copy=False,
+        help='Orden de venta que originó esta orden de servicio (trazabilidad).')
     description = fields.Html(string='Descripción del Problema/Solicitud', required=True)
 
     # Scheduling

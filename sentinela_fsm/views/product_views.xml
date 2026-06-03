@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="product_template_form_view_fsm" model="ir.ui.view">
+        <field name="name">product.template.form.fsm</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="sentinela_subscriptions.product_template_form_view_subscription"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='subscription_config']/group[1]" position="inside">
+                <group string="Orden de Servicio (FSM)">
+                    <field name="generates_fsm_order"/>
+                    <field name="fsm_service_type" invisible="not generates_fsm_order"
+                        required="generates_fsm_order"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>
