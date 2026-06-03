@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_patrol_dispatch_wizard_form" model="ir.ui.view">
+        <field name="name">sentinela.patrol.dispatch.wizard.form</field>
+        <field name="model">sentinela.patrol.dispatch.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Enviar Patrullero">
+                <div class="alert alert-info" role="status">
+                    Se creará la orden de patrullaje con la información del evento y las
+                    coordenadas del cliente, y se notificará al patrullero. El cliente
+                    recibirá el aviso "va en camino" + el link de rastreo en vivo cuando
+                    el patrullero confirme su salida desde su app.
+                </div>
+                <group>
+                    <group>
+                        <field name="alarm_event_id" invisible="1"/>
+                        <field name="partner_id"/>
+                        <field name="account_number"/>
+                        <field name="address"/>
+                    </group>
+                    <group>
+                        <field name="technician_id"
+                            options="{'no_create': True, 'no_open': True}"/>
+                    </group>
+                </group>
+                <group string="Instrucciones (opcional)">
+                    <field name="notes" nolabel="1"
+                        placeholder="Ej. Acceso por portón trasero, perro en patio, contacto en sitio..."/>
+                </group>
+                <footer>
+                    <button name="action_dispatch" string="Despachar Patrullero" type="object" class="btn-primary"/>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_patrol_dispatch_wizard" model="ir.actions.act_window">
+        <field name="name">Enviar Patrullero</field>
+        <field name="res_model">sentinela.patrol.dispatch.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="context">{'default_alarm_event_id': active_id}</field>
+    </record>
+</odoo>

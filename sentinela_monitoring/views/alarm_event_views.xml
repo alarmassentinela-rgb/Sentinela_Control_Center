@@ -23,6 +23,8 @@
                             invisible="status != 'active' or is_locked_by_other"/>
                     <button name="action_assign_technician" string="Asignar Técnico" type="object" class="btn-info"
                             invisible="status not in ('acknowledged','paused') or is_locked_by_other"/>
+                    <button name="%(action_patrol_dispatch_wizard)d" string="🚓 Enviar Patrullero" type="action" class="btn-danger"
+                            invisible="status not in ('acknowledged','in_progress','paused') or is_locked_by_other"/>
                     <button name="create_fsm_order" string="Crear Orden FSM" type="object" class="btn-success"
                             invisible="status != 'in_progress' or is_locked_by_other"/>
                     <button name="action_resolve" string="Resolver" type="object" class="btn-success"
