@@ -7,6 +7,20 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.24.0] - 2026-06-04
+
+### Added — Modo Sol (alto contraste para leer en el campo)
+
+El tema oscuro fotográfico de la app es difícil de leer bajo el sol directo en el campo. Se agrega un **botón flotante "Modo Sol" (☀️/🌙)** que activa un tema claro de alto contraste: fondo blanco (tapa las fotos de fondo), textos oscuros, tarjetas blancas y acentos (emerald/red/amber/blue/orange) oscurecidos para que sigan siendo legibles sobre blanco. Se prende/apaga a voluntad y se recuerda en `localStorage`; el diseño oscuro normal queda intacto para uso bajo techo.
+
+Implementado como una capa de override CSS (`html[data-theme="sun"]`) en `globals.css` — sin tocar las ~50 pantallas una por una — más un script anti-flash `beforeInteractive` en el layout.
+
+- `frontend/src/components/SunModeToggle.tsx` (NUEVO): botón flotante + persistencia.
+- `frontend/src/app/globals.css`: overrides de Modo Sol (fondos, textos, bordes, acentos, inputs).
+- `frontend/src/app/[locale]/layout.tsx`: script anti-flash + montaje del botón.
+
+---
+
 ## [1.23.1] - 2026-06-04
 
 ### Fixed — Jugadores agregados manualmente no aparecían para capturar score

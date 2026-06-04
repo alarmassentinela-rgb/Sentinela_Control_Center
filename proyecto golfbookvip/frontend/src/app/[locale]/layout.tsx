@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next'
+import Script from 'next/script'
 import { Geist } from 'next/font/google'
 import { notFound } from 'next/navigation'
 import { locales, type Locale, getDictionary } from '@/lib/i18n'
@@ -6,6 +7,7 @@ import { DictionaryProvider } from '@/components/DictionaryProvider'
 import BackgroundProvider from '@/components/BackgroundProvider'
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration'
 import ChatWidget from '@/components/ChatWidget'
+import SunModeToggle from '@/components/SunModeToggle'
 import '../globals.css'
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist' })
@@ -59,11 +61,16 @@ export default async function LocaleLayout({
   return (
     <html lang={locale} className={`${geist.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col text-zinc-100">
+        {/* Anti-flash: aplica Modo Sol antes del primer pintado si el usuario lo dejó activo */}
+        <Script id="gbv-sun-mode-init" strategy="beforeInteractive">
+          {`try{if(localStorage.getItem('gbv-sun-mode')==='1'){document.documentElement.setAttribute('data-theme','sun')}}catch(e){}`}
+        </Script>
         <DictionaryProvider dict={dict} locale={locale as Locale}>
           <BackgroundProvider>
             {children}
           </BackgroundProvider>
         </DictionaryProvider>
+        <SunModeToggle />
         <ChatWidget />
         <ServiceWorkerRegistration />
       </body>

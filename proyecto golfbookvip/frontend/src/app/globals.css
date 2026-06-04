@@ -39,3 +39,82 @@ header.bg-zinc-900 {
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
+
+/* ════════════════════════════════════════════════════════════
+   MODO SOL — alto contraste para leer la app bajo el sol en el campo.
+   Se activa con el botón flotante (data-theme="sun" en <html>).
+   Convierte el tema oscuro fotográfico en claro: fondo blanco,
+   textos oscuros, tarjetas blancas y acentos legibles.
+   ════════════════════════════════════════════════════════════ */
+
+/* Sábana blanca sólida que tapa las fotos de fondo (z-index entre las
+   capas de imagen -20/-19/-10 y el contenido en 0). */
+html[data-theme="sun"] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-color: #f4f4f5;
+  z-index: -5;
+}
+html[data-theme="sun"] body { background-color: #f4f4f5 !important; }
+
+/* Fondos oscuros → claros (conservando jerarquía visual) */
+html[data-theme="sun"] .bg-zinc-950,
+html[data-theme="sun"] .bg-zinc-900 { background-color: #ffffff !important; }
+html[data-theme="sun"] .bg-zinc-800 { background-color: #e7e5e4 !important; }
+html[data-theme="sun"] .bg-zinc-700 { background-color: #d6d3d1 !important; }
+html[data-theme="sun"] .bg-zinc-600 { background-color: #a8a29e !important; }
+html[data-theme="sun"] .bg-black    { background-color: #ffffff !important; }
+
+/* Header y tarjetas glass → claras (anula las reglas glass de arriba) */
+html[data-theme="sun"] header.bg-zinc-900 {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+  border-color: #d4d4d8 !important;
+}
+html[data-theme="sun"] .bg-zinc-900.border.border-zinc-800.rounded-2xl,
+html[data-theme="sun"] .bg-zinc-900.border.border-zinc-800.rounded-xl {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+}
+
+/* Textos claros → oscuros (los zinc-600/700/900 ya son oscuros, no se tocan) */
+html[data-theme="sun"] .text-white,
+html[data-theme="sun"] .text-zinc-100,
+html[data-theme="sun"] .text-zinc-200,
+html[data-theme="sun"] .text-zinc-300 { color: #18181b !important; }
+html[data-theme="sun"] .text-zinc-400 { color: #3f3f46 !important; }
+html[data-theme="sun"] .text-zinc-500 { color: #52525b !important; }
+
+/* Bordes oscuros → claros */
+html[data-theme="sun"] .border-zinc-800,
+html[data-theme="sun"] .border-zinc-700,
+html[data-theme="sun"] .border-zinc-600 { border-color: #d4d4d8 !important; }
+
+/* Acentos: los tonos claros (200/300/400/500) pierden contraste sobre
+   blanco → se oscurecen a un tono legible. Los 600/700 se dejan igual. */
+html[data-theme="sun"] .text-emerald-200,
+html[data-theme="sun"] .text-emerald-300,
+html[data-theme="sun"] .text-emerald-400,
+html[data-theme="sun"] .text-emerald-500 { color: #047857 !important; }
+html[data-theme="sun"] .text-red-200,
+html[data-theme="sun"] .text-red-300,
+html[data-theme="sun"] .text-red-400,
+html[data-theme="sun"] .text-red-500 { color: #b91c1c !important; }
+html[data-theme="sun"] .text-amber-200,
+html[data-theme="sun"] .text-amber-300,
+html[data-theme="sun"] .text-amber-400,
+html[data-theme="sun"] .text-yellow-200,
+html[data-theme="sun"] .text-yellow-300,
+html[data-theme="sun"] .text-yellow-400,
+html[data-theme="sun"] .text-yellow-500 { color: #b45309 !important; }
+html[data-theme="sun"] .text-blue-200,
+html[data-theme="sun"] .text-blue-300,
+html[data-theme="sun"] .text-blue-400 { color: #1d4ed8 !important; }
+html[data-theme="sun"] .text-orange-300,
+html[data-theme="sun"] .text-orange-400 { color: #c2410c !important; }
+
+/* Inputs: que el texto escrito se vea oscuro y el placeholder gris medio */
+html[data-theme="sun"] input,
+html[data-theme="sun"] textarea,
+html[data-theme="sun"] select { color: #18181b !important; }
+html[data-theme="sun"] input::placeholder,
+html[data-theme="sun"] textarea::placeholder { color: #71717a !important; }
