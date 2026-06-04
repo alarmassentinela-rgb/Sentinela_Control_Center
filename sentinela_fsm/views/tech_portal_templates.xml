@@ -481,9 +481,16 @@
                         </div>
                     </div>
 
-                    <div class="d-flex gap-2 mt-4">
-                        <button type="button" class="btn btn-outline-primary w-50" onclick="captureLocationAndSubmit('save')">Guardar</button>
-                        <button type="button" class="btn btn-success w-50 shadow" onclick="captureLocationAndSubmit('finish')">FINALIZAR</button>
+                    <div class="mt-4">
+                        <button type="button" class="btn btn-outline-secondary btn-sm w-100 mb-3" onclick="captureLocationAndSubmit('save')">
+                            <i class="fa fa-floppy-o me-1"/> Guardar avance (sigue en proceso)
+                        </button>
+                        <button type="button" class="btn btn-success btn-lg w-100 fw-bold py-3 shadow btn-action" onclick="captureLocationAndSubmit('finish')">
+                            <i class="fa fa-check-circle me-2"/> FINALIZAR SERVICIO
+                        </button>
+                        <p class="text-center extra-small text-muted mt-2 mb-0">
+                            <i class="fa fa-lock me-1"/> Al finalizar, la orden se cierra y se avisa a Central. No se puede reabrir desde la app.
+                        </p>
                         <input type="hidden" name="action" id="form_action" value="save"/>
                     </div>
                 </form>
@@ -541,7 +548,7 @@
                 function captureLocationAndSubmit(action) {
                     document.getElementById('form_action').value = action;
                     if (action == 'finish') {
-                        if(!confirm('¿Seguro que deseas finalizar el trabajo?')) return;
+                        if(!confirm('¿FINALIZAR y CERRAR esta orden? Ya no podrás editarla desde la app.')) return;
                     }
                     
                     // Capturar firma antes de enviar
