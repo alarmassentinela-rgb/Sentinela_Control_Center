@@ -392,16 +392,21 @@ async def invite_player(round_id: uuid.UUID, user_id: uuid.UUID, current_user: C
         c = c_res.scalar_one_or_none()
         course_ch = _calc_ch(invited_user.handicap_index, c)
 
+    from datetime import datetime, timezone
     db.add(RoundPlayer(
         round_id=round_id,
         user_id=user_id,
         handicap_index=invited_user.handicap_index if invited_user else None,
         course_handicap=course_ch,
         tee_color='white',
-        status="invited",
+        # Igual que el join por liga: agregar manualmente confirma al jugador.
+        # Antes quedaba "invited" sin endpoint para confirmar, por lo que nunca
+        # aparecía para capturar score (start/submit/play filtran confirmed/playing).
+        status="confirmed",
+        confirmed_at=datetime.now(timezone.utc),
     ))
     db.add(RoundPlayerBalance(round_id=round_id, user_id=user_id))
-    return {"message": "Invitación enviada"}
+    return {"message": "Jugador agregado"}
 
 
 @router.post("/{round_id}/start")

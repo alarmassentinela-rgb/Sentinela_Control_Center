@@ -7,6 +7,16 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.23.1] - 2026-06-04
+
+### Fixed — Jugadores agregados manualmente no aparecían para capturar score
+
+Al agregar un jugador desde la búsqueda (botón "Agregar"), quedaba con `status="invited"`. No existía ningún endpoint para pasar de "invited" a "confirmed", y toda la captura de score (`start_round`, `submit_score`, pantalla `/play`, finalización) filtra solo `confirmed`/`playing`. Resultado: solo el creador (confirmed al crear) y quien entraba por la liga (confirmed al unirse) aparecían para capturar; los agregados manualmente quedaban invisibles.
+
+- `app/api/v1/rounds.py` → `invite_player`: ahora agregar manualmente confirma al jugador de una vez (`status="confirmed"` + `confirmed_at`), igual que el join por liga.
+
+---
+
 ## [1.23.0] - 2026-05-29
 
 ### Added — Formato Medal Play por equipos con puntos por posición de grupo
