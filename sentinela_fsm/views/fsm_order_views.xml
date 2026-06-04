@@ -59,6 +59,33 @@
         </field>
     </record>
 
+    <!-- PIVOT — análisis de desempeño sobre órdenes reales (campos almacenados) -->
+    <record id="view_fsm_order_pivot" model="ir.ui.view">
+        <field name="name">sentinela.fsm.order.pivot</field>
+        <field name="model">sentinela.fsm.order</field>
+        <field name="arch" type="xml">
+            <pivot string="Análisis de Órdenes" sample="1">
+                <field name="technician_id" type="row"/>
+                <field name="stage" type="col"/>
+                <field name="actual_duration" type="measure"/>
+                <field name="travel_time" type="measure"/>
+                <field name="customer_rating" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+
+    <!-- GRAPH — órdenes por técnico/estado -->
+    <record id="view_fsm_order_graph" model="ir.ui.view">
+        <field name="name">sentinela.fsm.order.graph</field>
+        <field name="model">sentinela.fsm.order</field>
+        <field name="arch" type="xml">
+            <graph string="Órdenes por Técnico" type="bar" sample="1">
+                <field name="technician_id"/>
+                <field name="stage"/>
+            </graph>
+        </field>
+    </record>
+
     <!-- LIST VIEW — colores por estado para leer pendientes de un vistazo -->
     <record id="view_fsm_order_list" model="ir.ui.view">
         <field name="name">sentinela.fsm.order.list</field>
@@ -314,6 +341,20 @@
         <field name="help" type="html">
           <p class="o_view_nocontent_smiling_face">
             Crear la primera Orden de Servicio
+          </p>
+        </field>
+    </record>
+
+    <!-- ANÁLISIS DE DESEMPEÑO — pivot/gráfica/lista sobre órdenes reales -->
+    <record id="action_fsm_order_analysis" model="ir.actions.act_window">
+        <field name="name">Análisis de Desempeño</field>
+        <field name="res_model">sentinela.fsm.order</field>
+        <field name="view_mode">pivot,graph,list</field>
+        <field name="search_view_id" ref="view_fsm_order_search"/>
+        <field name="context">{'search_default_g_tec': 1}</field>
+        <field name="help" type="html">
+          <p class="o_view_nocontent_smiling_face">
+            Aún no hay órdenes para analizar.
           </p>
         </field>
     </record>

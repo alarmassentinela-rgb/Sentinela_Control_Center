@@ -35,7 +35,7 @@
     <menuitem id="menu_fsm_routes" name="Rutas Optimizadas" parent="menu_fsm_operations" action="action_fsm_route_optimization" sequence="20" groups="group_fsm_manager"/>
 
     <menuitem id="menu_fsm_reporting" name="Reportes y Análisis" parent="menu_fsm_root" sequence="50" groups="group_fsm_manager"/>
-    <menuitem id="menu_fsm_performance_dashboard" name="Dashboards de Desempeño" parent="menu_fsm_reporting" action="action_fsm_dashboard" sequence="10" groups="group_fsm_manager"/>
+    <menuitem id="menu_fsm_performance_dashboard" name="Análisis de Desempeño" parent="menu_fsm_reporting" action="action_fsm_order_analysis" sequence="10" groups="group_fsm_manager"/>
 
     <menuitem id="menu_fsm_config" name="Configuración" parent="menu_fsm_root" sequence="100" groups="group_fsm_manager"/>
     <menuitem id="menu_fsm_pause_reasons" name="Causas de Pausa" parent="menu_fsm_config" action="action_fsm_pause_reason" sequence="10"/>
