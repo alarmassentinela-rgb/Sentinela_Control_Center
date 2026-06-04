@@ -29,29 +29,13 @@
 
     <!-- Reglas de registro: noupdate=0 para que un upgrade las actualice -->
     <data noupdate="0">
-        <!-- Cualquier usuario de Gestión de Servicios VE TODAS las órdenes (lectura global).
-             El tablero/calendario muestra el trabajo de todo el equipo. -->
-        <record id="fsm_order_user_read_all_rule" model="ir.rule">
-            <field name="name">FSM Order — Técnico ve todas (lectura)</field>
-            <field name="model_id" ref="model_sentinela_fsm_order"/>
-            <field name="domain_force">[(1, '=', 1)]</field>
-            <field name="groups" eval="[(4, ref('group_fsm_user'))]"/>
-            <field name="perm_read" eval="True"/>
-            <field name="perm_write" eval="False"/>
-            <field name="perm_create" eval="False"/>
-            <field name="perm_unlink" eval="False"/>
-        </record>
-
-        <!-- Pero un Técnico solo EDITA/crea/borra las órdenes donde él es el técnico. -->
+        <!-- TÉCNICO / PATRULLERO: en su app solo ve/gestiona SUS tareas asignadas.
+             (Operación = Recepción/Despacho y Manager ven todas, abajo.) -->
         <record id="fsm_order_user_rule" model="ir.rule">
-            <field name="name">FSM Order — Técnico edita solo las suyas</field>
+            <field name="name">FSM Order — Técnico/Patrullero solo las suyas</field>
             <field name="model_id" ref="model_sentinela_fsm_order"/>
             <field name="domain_force">[('technician_id', '=', user.id)]</field>
             <field name="groups" eval="[(4, ref('group_fsm_user'))]"/>
-            <field name="perm_read" eval="False"/>
-            <field name="perm_write" eval="True"/>
-            <field name="perm_create" eval="True"/>
-            <field name="perm_unlink" eval="True"/>
         </record>
 
         <!-- Recepción/Despacho y Manager: ven y gestionan TODAS. -->
