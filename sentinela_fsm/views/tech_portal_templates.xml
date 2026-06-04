@@ -29,8 +29,13 @@
                 </style>
             </head>
             <body>
-                <div class="status-bar shadow">
-                    <i class="fa fa-shield me-2"/> <b>SENTINELA TECH</b>
+                <div class="status-bar shadow justify-content-between">
+                    <span><i class="fa fa-shield me-2"/> <b>SENTINELA TECH</b></span>
+                    <a href="/web/session/logout?redirect=/web/login" class="text-white text-decoration-none small d-flex align-items-center">
+                        <i class="fa fa-user-circle me-1"/>
+                        <span class="me-2 d-none d-sm-inline" t-esc="request.env.user.name"/>
+                        <i class="fa fa-sign-out me-1"/> Salir
+                    </a>
                 </div>
                 <div class="container py-3">
                     <t t-out="0"/>
