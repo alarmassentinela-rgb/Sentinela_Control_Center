@@ -48,10 +48,83 @@
         <field name="name">sentinela.fsm.order.calendar</field>
         <field name="model">sentinela.fsm.order</field>
         <field name="arch" type="xml">
-            <calendar string="Agenda Técnica" date_start="scheduled_date" color="technician_id" mode="week">
+            <calendar string="Agenda del Equipo" date_start="scheduled_date" color="stage"
+                      mode="month" event_open_popup="1" quick_create="0">
+                <field name="technician_id" filters="1" avatar_field="image_128"/>
+                <field name="service_type" filters="1"/>
+                <field name="stage"/>
                 <field name="partner_id"/>
-                <field name="description"/>
+                <field name="priority"/>
             </calendar>
+        </field>
+    </record>
+
+    <!-- LIST VIEW — colores por estado para leer pendientes de un vistazo -->
+    <record id="view_fsm_order_list" model="ir.ui.view">
+        <field name="name">sentinela.fsm.order.list</field>
+        <field name="model">sentinela.fsm.order</field>
+        <field name="arch" type="xml">
+            <list string="Órdenes de Servicio" multi_edit="1"
+                  decoration-success="stage == 'in_progress'"
+                  decoration-info="stage == 'assigned'"
+                  decoration-warning="stage in ('new','paused')"
+                  decoration-muted="stage in ('done','cancel')">
+                <field name="name"/>
+                <field name="scheduled_date"/>
+                <field name="partner_id"/>
+                <field name="service_type"/>
+                <field name="technician_id" widget="many2one_avatar_user"/>
+                <field name="priority" widget="priority"/>
+                <field name="stage" widget="badge"
+                       decoration-success="stage == 'in_progress'"
+                       decoration-info="stage == 'assigned'"
+                       decoration-warning="stage in ('new','paused')"
+                       decoration-muted="stage in ('done','cancel')"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- SEARCH VIEW — filtros por técnico/patrullero, estado, tipo, agrupar -->
+    <record id="view_fsm_order_search" model="ir.ui.view">
+        <field name="name">sentinela.fsm.order.search</field>
+        <field name="model">sentinela.fsm.order</field>
+        <field name="arch" type="xml">
+            <search string="Órdenes de Servicio">
+                <field name="name" string="Folio / Descripción" filter_domain="['|', ('name','ilike',self), ('description','ilike',self)]"/>
+                <field name="partner_id"/>
+                <field name="technician_id" string="Técnico / Patrullero"/>
+                <separator/>
+                <filter name="f_pendientes" string="Pendientes"
+                        domain="[('stage','in',('new','assigned','in_progress','paused'))]"/>
+                <filter name="f_sin_asignar" string="Sin asignar"
+                        domain="[('stage','=','new')]"/>
+                <filter name="f_vivos" string="En proceso (vivos)"
+                        domain="[('stage','=','in_progress')]"/>
+                <filter name="f_pausados" string="Pausados"
+                        domain="[('stage','=','paused')]"/>
+                <filter name="f_terminados" string="Finalizados"
+                        domain="[('stage','=','done')]"/>
+                <separator/>
+                <filter name="f_hoy" string="Programadas hoy"
+                        domain="[('scheduled_date','&gt;=', datetime.datetime.combine(context_today(), datetime.time(0,0,0))),
+                                 ('scheduled_date','&lt;=', datetime.datetime.combine(context_today(), datetime.time(23,59,59)))]"/>
+                <filter name="f_semana" string="Esta semana"
+                        domain="[('scheduled_date','&gt;=', (context_today() + relativedelta(weeks=-1, days=1, weekday=0)).strftime('%Y-%m-%d')),
+                                 ('scheduled_date','&lt;', (context_today() + relativedelta(weekday=6)).strftime('%Y-%m-%d'))]"/>
+                <separator/>
+                <filter name="f_patrullaje" string="Patrullaje" domain="[('service_type','=','patrol')]"/>
+                <filter name="f_correctivo" string="Reparación / Falla" domain="[('service_type','=','repair')]"/>
+                <filter name="f_preventivo" string="Mantenimiento" domain="[('service_type','=','maintenance')]"/>
+                <separator/>
+                <filter name="f_mias" string="Mis órdenes" domain="[('technician_id','=',uid)]"/>
+                <group expand="0" string="Agrupar por">
+                    <filter name="g_tec" string="Técnico / Patrullero" context="{'group_by':'technician_id'}"/>
+                    <filter name="g_stage" string="Estado" context="{'group_by':'stage'}"/>
+                    <filter name="g_type" string="Tipo de servicio" context="{'group_by':'service_type'}"/>
+                    <filter name="g_dia" string="Día programado" context="{'group_by':'scheduled_date:day'}"/>
+                    <filter name="g_prio" string="Prioridad" context="{'group_by':'priority'}"/>
+                </group>
+            </search>
         </field>
     </record>
 
@@ -235,7 +308,9 @@
     <record id="action_fsm_order" model="ir.actions.act_window">
         <field name="name">Órdenes de Servicio</field>
         <field name="res_model">sentinela.fsm.order</field>
-        <field name="view_mode">kanban,calendar,list,form</field>
+        <field name="view_mode">list,kanban,calendar,form</field>
+        <field name="search_view_id" ref="view_fsm_order_search"/>
+        <field name="context">{'search_default_f_pendientes': 1}</field>
         <field name="help" type="html">
           <p class="o_view_nocontent_smiling_face">
             Crear la primera Orden de Servicio
