@@ -1082,21 +1082,16 @@ class SentinelaSubscription(models.Model):
             'technical_state': 'suspended',
             'technical_state_date': fields.Datetime.now()
         })
-        # Integración floLIVE
-        for sub in self:
-            if sub.sim_iccid and sub.service_type in ['gps', 'alarm']:
-                success = self.env['sentinela.flolive.service'].update_sim_status(sub.sim_iccid, 'SUSPENDED')
-                if success:
-                    sub.message_post(body=f"<b>floLIVE:</b> SIM {sub.sim_iccid} suspendida (CORTE) exitosamente.")
-        
+        self._provision_flolive_disable()
         self.action_provision_mikrotik_disable()
 
     def action_cancel(self):
         self.write({
-            'state': 'cancelled', 
+            'state': 'cancelled',
             'technical_state': 'cut',
             'technical_state_date': fields.Datetime.now()
         })
+        self._provision_flolive_disable()
         self.action_provision_mikrotik_disable()
 
     def action_renew_service(self):
@@ -1130,6 +1125,7 @@ class SentinelaSubscription(models.Model):
             'technical_state_date': fields.Datetime.now(),
             'extension_due_date': False,
         })
+        self._provision_flolive_enable()
         self.action_provision_mikrotik_enable()
         self.message_post(body="🔄 <b>Servicio reconectado.</b>")
 
@@ -1551,6 +1547,30 @@ class SentinelaSubscription(models.Model):
                     pass
                 _logger.error("MikroTik disable error sub %s: %s", sub.name, e)
                 sub.message_post(body=f"<b>MikroTik ERROR al suspender:</b> {e}")
+
+    def _provision_flolive_disable(self):
+        """Suspende (CORTA datos) la SIM floLIVE de las subs GPS/Alarma que tengan ICCID.
+        Lo usan action_suspend y action_cancel (Baja Definitiva) para que el corte sea parejo
+        en todos los servicios: internet=muro de pago, gps/alarma=SIM suspendida."""
+        for sub in self:
+            if sub.sim_iccid and sub.service_type in ('gps', 'alarm'):
+                success = self.env['sentinela.flolive.service'].update_sim_status(sub.sim_iccid, 'SUSPENDED')
+                if success:
+                    sub.message_post(body=f"<b>floLIVE:</b> SIM {sub.sim_iccid} suspendida (CORTE) exitosamente.")
+                else:
+                    sub.message_post(body=f"<b>floLIVE ERROR:</b> no se pudo suspender la SIM {sub.sim_iccid}. Revisar en el portal.")
+
+    def _provision_flolive_enable(self):
+        """Re-activa la SIM floLIVE de las subs GPS/Alarma con ICCID. Lo usa action_reactivate
+        (incluida la reactivación automática al pagar) para que pagar reviva el GPS/alarma, no
+        solo el internet."""
+        for sub in self:
+            if sub.sim_iccid and sub.service_type in ('gps', 'alarm'):
+                success = self.env['sentinela.flolive.service'].update_sim_status(sub.sim_iccid, 'ACTIVE')
+                if success:
+                    sub.message_post(body=f"<b>floLIVE:</b> SIM {sub.sim_iccid} re-activada exitosamente.")
+                else:
+                    sub.message_post(body=f"<b>floLIVE ERROR:</b> no se pudo re-activar la SIM {sub.sim_iccid}. Revisar en el portal.")
 
     @api.depends('start_date', 'commitment_period', 'is_forced_contract')
     def _compute_commitment_end(self):
