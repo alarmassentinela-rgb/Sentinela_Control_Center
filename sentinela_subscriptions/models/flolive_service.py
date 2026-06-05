@@ -64,8 +64,9 @@ class FloliveService(models.AbstractModel):
         try:
             # Según documentación y Swagger, el cambio de status suele ser PUT
             response = requests.put(url, json=payload, headers=headers, timeout=15)
-            if response.status_code in [200, 204]:
-                _logger.info(f"FLOLIVE: SIM {iccid} cambiada a {new_status} exitosamente.")
+            # floLIVE responde 202 (Accepted) con requestId cuando el cambio es asíncrono.
+            if response.status_code in [200, 202, 204]:
+                _logger.info(f"FLOLIVE: SIM {iccid} cambiada a {new_status} (HTTP {response.status_code}).")
                 return True
             _logger.error(f"FLOLIVE STATUS FAIL: {response.status_code} - {response.text}")
         except Exception as e:
