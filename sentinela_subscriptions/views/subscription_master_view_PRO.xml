@@ -137,12 +137,13 @@
                             </group>
                             <separator string="📨 Comandos SMS al GPS (vía Connecta)"/>
                             <div class="alert alert-info" role="status">
-                                Envío de SMS al rastreador. <b>Pendiente de habilitación por Connecta</b>
-                                (las SIMs son de datos; falta activar el servicio SMS y el endpoint).
-                                La bitácora deja registro de cada intento.
+                                Envía un comando SMS al rastreador (mismo mecanismo que el portal floLIVE).
+                                Usa <b>GSM-7</b> para texto normal o <b>UCS2</b> si lleva acentos. El comando
+                                depende del modelo del equipo. Cada envío queda en la bitácora.
                             </div>
                             <group>
                                 <field name="gps_sms_command" placeholder="Ej.: STATUS#  /  WHERE#  (según el modelo del rastreador)"/>
+                                <field name="gps_sms_encoding"/>
                                 <button name="action_send_gps_sms" string="📨 Enviar Comando SMS"
                                     type="object" class="btn-warning"/>
                             </group>

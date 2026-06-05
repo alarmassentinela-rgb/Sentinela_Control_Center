@@ -271,6 +271,10 @@ class SentinelaSubscription(models.Model):
     gps_sim_checked = fields.Datetime(string='Diagnóstico actualizado', readonly=True)
     # --- Comandos SMS al GPS (vía Connecta) ---
     gps_sms_command = fields.Char(string='Comando SMS a enviar')
+    gps_sms_encoding = fields.Selection([
+        ('GSM-7', 'GSM-7 (texto normal)'),
+        ('UCS2', 'UCS2 (acentos / unicode)'),
+    ], string='Codificación', default='GSM-7')
     gps_sms_log = fields.Text(string='Bitácora de comandos SMS', readonly=True)
 
     @api.depends('gps_sim_lat', 'gps_sim_lon')
@@ -1626,10 +1630,11 @@ class SentinelaSubscription(models.Model):
             raise UserError(_("La suscripción no tiene ICCID de SIM capturado."))
         if not self.gps_sms_command:
             raise UserError(_("Escribe el comando SMS a enviar."))
-        res = self.env['sentinela.flolive.service'].send_sms_command(self.sim_iccid, self.gps_sms_command)
+        res = self.env['sentinela.flolive.service'].send_sms_command(
+            self.sim_iccid, self.gps_sms_command, encoding=self.gps_sms_encoding or 'GSM-7')
         ts = fields.Datetime.now()
         mark = '✅' if res.get('ok') else '⚠️'
-        line = f"[{ts}] {mark} ENVIAR «{self.gps_sms_command}» → {res.get('detail')}"
+        line = f"[{ts}] {mark} ENVIAR «{self.gps_sms_command}» ({self.gps_sms_encoding or 'GSM-7'}) → {res.get('detail')}"
         self.gps_sms_log = (line + "\n" + (self.gps_sms_log or "")).strip()
         self.message_post(body=_("📨 <b>Comando SMS</b> «%s»: %s") % (self.gps_sms_command, res.get('detail')))
         if not res.get('ok'):

@@ -141,39 +141,62 @@ class FloliveService(models.AbstractModel):
         return []
 
     @api.model
-    def send_sms_command(self, iccid, message):
-        """Envía un SMS (comando) a la SIM vía Connecta/floLIVE. ANDAMIAJE LISTO pero el envío
-        depende de que Connecta habilite el servicio SMS y nos dé el endpoint real (hoy la API
-        del portal NO expone envío MT para nuestra cuenta; el plan es solo datos).
+    def _extract_msisdn(self, content):
+        """Saca el MSISDN activo de la SIM desde subscriberIdentifiers.imsiMsisdnPairs."""
+        si = (content or {}).get('subscriberIdentifiers') or {}
+        pairs = si.get('imsiMsisdnPairs') or []
+        for p in pairs:
+            if p.get('isLastActive'):
+                return p.get('msisdn')
+        return pairs[0].get('msisdn') if pairs else None
 
-        Configurable por parámetros del sistema (sin tocar código) para activarlo cuando
-        Connecta confirme:
-          - sentinela.flolive_sms_enabled  (bool, default False)
-          - sentinela.flolive_sms_endpoint (plantilla con {iccid})
-          - sentinela.flolive_sms_method   ('POST' por defecto)
-          - sentinela.flolive_sms_msg_key  (clave del cuerpo, 'message' por defecto)
-
-        Devuelve {ok, detail}. Mientras esté deshabilitado, ok=False con detalle explicativo."""
-        cfg = self.env['ir.config_parameter'].sudo()
-        if cfg.get_param('sentinela.flolive_sms_enabled', 'False') not in ('True', '1', 'true'):
-            return {'ok': False, 'detail': 'SMS no habilitado. Falta que Connecta active el servicio SMS '
-                                           'en las SIMs y configurar el endpoint (parámetros sentinela.flolive_sms_*).'}
+    @api.model
+    def send_sms_command(self, iccid, message, encoding='GSM-7'):
+        """Envía un SMS (comando) a la SIM vía floLIVE/Connecta usando la mutation GraphQL
+        `sendSmsToSim` (el mismo mecanismo que el portal web). Requiere {encoding, message,
+        iccid, accountId, msisdn, accountName}; los 3 últimos se obtienen del detalle de la SIM.
+        encoding: 'GSM-7' (default, texto normal) o 'UCS2' (acentos/unicode).
+        Devuelve {ok, detail, process_id}. Kill-switch: param sentinela.flolive_sms_enabled."""
         if not iccid or not message:
             return {'ok': False, 'detail': 'Falta ICCID o mensaje.'}
+        cfg = self.env['ir.config_parameter'].sudo()
+        if cfg.get_param('sentinela.flolive_sms_enabled', 'True') in ('False', '0', 'false'):
+            return {'ok': False, 'detail': 'Envío de SMS deshabilitado (param sentinela.flolive_sms_enabled).'}
         token = self._get_auth_token()
         if not token:
             return {'ok': False, 'detail': 'No se pudo autenticar con floLIVE.'}
-        tmpl = cfg.get_param('sentinela.flolive_sms_endpoint', '/api/v2/subscriber/iccid/{iccid}/sms')
-        method = (cfg.get_param('sentinela.flolive_sms_method', 'POST') or 'POST').upper()
-        msg_key = cfg.get_param('sentinela.flolive_sms_msg_key', 'message') or 'message'
-        url = "https://floportal.flolive.net" + tmpl.format(iccid=iccid)
-        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        raw = self.get_sim_details(iccid)
+        c = raw.get('content') if raw else None
+        if isinstance(c, list) and c:
+            c = c[0]
+        if not isinstance(c, dict):
+            return {'ok': False, 'detail': 'No se pudo obtener el detalle de la SIM en floLIVE.'}
+        msisdn = self._extract_msisdn(c)
+        account_id = c.get('customerId')
+        account_name = c.get('customerName')
+        if not (msisdn and account_id and account_name):
+            return {'ok': False, 'detail': 'La SIM no tiene MSISDN/cuenta completos en floLIVE.'}
+        mutation = ('mutation($sendSmsInfo: SendSmsInfoInput!){ '
+                    'processId: sendSmsToSim(sendSmsInfo: $sendSmsInfo) }')
+        variables = {'sendSmsInfo': {
+            'encoding': encoding or 'GSM-7',
+            'message': message,
+            'iccid': iccid,
+            'accountId': account_id,
+            'msisdn': msisdn,
+            'accountName': account_name,
+        }}
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json", "Accept": "application/json"}
         try:
-            r = requests.request(method, url, headers=headers, json={msg_key: message}, timeout=20)
-            if r.status_code in (200, 201, 202, 204):
-                _logger.info(f"FLOLIVE SMS enviado a {iccid}: {message}")
-                return {'ok': True, 'detail': f'SMS enviado (HTTP {r.status_code}).'}
-            return {'ok': False, 'detail': f'floLIVE respondió HTTP {r.status_code}: {r.text[:200]}'}
+            r = requests.post("https://floportal.flolive.net/graphql", headers=headers,
+                              json={'query': mutation, 'variables': variables}, timeout=30)
+            j = r.json() if r.content else {}
+            pid = (j.get('data') or {}).get('processId')
+            if r.status_code == 200 and pid:
+                _logger.info(f"FLOLIVE SMS enviado a {iccid} ({encoding}): {message} [processId {pid}]")
+                return {'ok': True, 'detail': f'SMS enviado ({encoding}). processId {pid}', 'process_id': pid}
+            err = (j.get('errors') or [{}])[0].get('message') if isinstance(j, dict) else None
+            return {'ok': False, 'detail': f'floLIVE: {err or ("HTTP %s: %s" % (r.status_code, r.text[:200]))}'}
         except Exception as e:
             _logger.error(f"FLOLIVE SMS SEND EXCEPTION: {str(e)}")
             return {'ok': False, 'detail': f'Excepción: {e}'}
