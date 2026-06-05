@@ -1,6 +1,6 @@
 {
   "name": "Sentinela Tech",
-  "short_name": "Sentinela",
+  "short_name": "Sentinela Tech",
   "description": "Plataforma de Gestión Técnica Sentinela",
   "start_url": "/tech/dashboard",
   "display": "standalone",
@@ -8,7 +8,13 @@
   "theme_color": "#1a237e",
   "icons": [
     {
-      "src": "/sentinela_fsm/static/description/icon.png",
+      "src": "/sentinela_fsm/static/description/icon_tech_192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/sentinela_fsm/static/description/icon_tech_512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

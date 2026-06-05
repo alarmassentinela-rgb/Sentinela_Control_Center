@@ -10,7 +10,8 @@
                 <meta name="apple-mobile-web-app-capable" content="yes"/>
                 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
                 <link rel="manifest" href="/sentinela_fsm/static/src/manifest_tech.json"/>
-                <link rel="apple-touch-icon" href="/sentinela_fsm/static/description/icon.png"/>
+                <link rel="apple-touch-icon" href="/sentinela_fsm/static/description/icon_tech_180.png"/>
+                <link rel="icon" type="image/png" href="/sentinela_fsm/static/description/icon_tech_192.png"/>
                 <title>Sentinela Tech</title>
                 <t t-call-assets="web.assets_frontend" t-js="false"/>
                 <style>
