@@ -3,6 +3,13 @@ from odoo import models, fields, api
 class ResPartner(models.Model):
     _inherit = 'res.partner'
 
+    # --- SentiCar / Traccar (usuario del cliente en la plataforma propia) ---
+    senticar_user_id = fields.Integer(string='ID Usuario SentiCar', copy=False,
+        help="Identificador del usuario de este cliente en SentiCar/Traccar. Se crea al dar de alta su primer GPS.")
+    senticar_user_email = fields.Char(string='Usuario SentiCar (email)', copy=False)
+    senticar_user_password = fields.Char(string='Contraseña SentiCar', copy=False,
+        help="Contraseña generada para que el cliente acceda a SentiCar a ver sus equipos.")
+
     invoice_grouping_method = fields.Selection([
         ('individual', 'Una factura por servicio detallado'),
         ('by_branch', 'Agrupar por sucursal'),

@@ -120,6 +120,11 @@
                             <div class="o_row mt-2">
                                 <button name="action_refresh_gps_diag" string="🔄 Actualizar Diagnóstico"
                                     type="object" class="btn-primary me-2"/>
+                                <button name="action_provision_senticar" string="📲 Registrar en SentiCar"
+                                    type="object" class="btn-secondary me-2"
+                                    invisible="gps_platform != 'senticar'"
+                                    help="Registra el equipo en SentiCar y lo vincula a la cuenta del cliente."/>
+                                <field name="senticar_device_id" invisible="1"/>
                             </div>
                             <group>
                                 <group string="📶 Estado de la SIM (floLIVE / Connecta)">

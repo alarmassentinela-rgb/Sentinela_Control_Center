@@ -269,6 +269,10 @@ class SentinelaSubscription(models.Model):
     gps_sim_network = fields.Char(string='Red conectada', readonly=True)
     gps_sim_last_session = fields.Char(string='Última sesión de datos', readonly=True)
     gps_sim_checked = fields.Datetime(string='Diagnóstico actualizado', readonly=True)
+    # --- Enlace con SentiCar (device de esta suscripción en la plataforma propia) ---
+    senticar_device_id = fields.Integer(string='ID Equipo en SentiCar', copy=False, readonly=True,
+        help="Identificador del equipo de esta suscripción en SentiCar/Traccar. Se crea al registrarlo.")
+
     # --- Comandos SMS al GPS (vía Connecta) ---
     gps_sms_command = fields.Char(string='Comando SMS a enviar')
     gps_sms_encoding = fields.Selection([
@@ -1097,7 +1101,8 @@ class SentinelaSubscription(models.Model):
                 success = self.env['sentinela.flolive.service'].update_sim_status(sub.sim_iccid, 'ACTIVE')
                 if success:
                     sub.message_post(body=f"<b>floLIVE:</b> SIM {sub.sim_iccid} activada exitosamente.")
-        
+
+        self._provision_senticar_enable()
         self.action_provision_mikrotik_enable()
 
     def action_suspend(self):
@@ -1107,6 +1112,7 @@ class SentinelaSubscription(models.Model):
             'technical_state_date': fields.Datetime.now()
         })
         self._provision_flolive_disable()
+        self._provision_senticar_disable()
         self.action_provision_mikrotik_disable()
 
     def action_cancel(self):
@@ -1116,6 +1122,7 @@ class SentinelaSubscription(models.Model):
             'technical_state_date': fields.Datetime.now()
         })
         self._provision_flolive_disable()
+        self._provision_senticar_disable()
         self.action_provision_mikrotik_disable()
 
     def action_renew_service(self):
@@ -1150,6 +1157,7 @@ class SentinelaSubscription(models.Model):
             'extension_due_date': False,
         })
         self._provision_flolive_enable()
+        self._provision_senticar_enable()
         self.action_provision_mikrotik_enable()
         self.message_post(body="🔄 <b>Servicio reconectado.</b>")
 
@@ -1571,6 +1579,53 @@ class SentinelaSubscription(models.Model):
                     pass
                 _logger.error("MikroTik disable error sub %s: %s", sub.name, e)
                 sub.message_post(body=f"<b>MikroTik ERROR al suspender:</b> {e}")
+
+    def _provision_senticar_enable(self):
+        """Registra/activa el equipo en SentiCar (plataforma propia) y lo vincula a la cuenta
+        del cliente. Solo para gps_platform='senticar' con IMEI. Idempotente (reusa device/usuario
+        existentes). Para Tracksolid/Smake (cerradas) NO aplica: esas se gestionan en su portal."""
+        svc = self.env['sentinela.senticar.service']
+        for sub in self:
+            if sub.service_type != 'gps' or sub.gps_platform != 'senticar' or not sub.gps_imei:
+                continue
+            try:
+                uid, pw = svc.ensure_client_user(sub.partner_id)
+                name = f"{sub.partner_id.name} - {sub.vehicle_plate or sub.gps_imei}"
+                did = svc.ensure_device(name, sub.gps_imei, user_id=uid)
+                if did:
+                    sub.senticar_device_id = did
+                    svc.set_device_disabled(did, False)
+                    msg = f"<b>SentiCar:</b> equipo <b>{sub.gps_imei}</b> registrado y activo (device #{did}) en la cuenta de {sub.partner_id.name}."
+                    if pw:
+                        msg += f"<br/>👤 Usuario cliente creado: <b>{sub.partner_id.senticar_user_email}</b> / <b>{pw}</b>"
+                    sub.message_post(body=msg)
+                else:
+                    sub.message_post(body=f"<b>SentiCar ERROR:</b> no se pudo registrar el equipo {sub.gps_imei}. Revisar conexión/parámetros API.")
+            except Exception as e:
+                _logger.error("SENTICAR enable sub %s: %s", sub.name, e)
+                sub.message_post(body=f"<b>SentiCar ERROR:</b> {e}")
+
+    def _provision_senticar_disable(self):
+        """Deshabilita el equipo en SentiCar (suspensión por mora / baja). El cliente deja de
+        verlo en vivo. Solo gps_platform='senticar' con device ya registrado."""
+        svc = self.env['sentinela.senticar.service']
+        for sub in self:
+            if sub.service_type != 'gps' or sub.gps_platform != 'senticar' or not sub.senticar_device_id:
+                continue
+            ok = svc.set_device_disabled(sub.senticar_device_id, True)
+            sub.message_post(body=("<b>SentiCar:</b> equipo deshabilitado (servicio suspendido)."
+                                   if ok else "<b>SentiCar ERROR:</b> no se pudo deshabilitar el equipo."))
+
+    def action_provision_senticar(self):
+        """Botón: registra/activa manualmente el equipo GPS en SentiCar (alta)."""
+        self.ensure_one()
+        if self.service_type != 'gps':
+            raise UserError(_("Esta acción es solo para servicios GPS."))
+        if self.gps_platform != 'senticar':
+            raise UserError(_("La suscripción no está en la plataforma SentiCar (es %s). El alta automática solo aplica a SentiCar.") % (self.gps_platform or 'sin plataforma'))
+        if not self.gps_imei:
+            raise UserError(_("Captura el IMEI del equipo antes de registrarlo en SentiCar."))
+        self._provision_senticar_enable()
 
     def _provision_flolive_disable(self):
         """Suspende (CORTA datos) la SIM floLIVE de las subs GPS/Alarma que tengan ICCID.
