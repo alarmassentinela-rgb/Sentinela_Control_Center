@@ -957,7 +957,22 @@ export default function PlayRoundPage() {
   const submitScore = async () => {
     setSubmitting(true)
     try {
-      const dirtyEntries = Object.entries(rowInputs).filter(([, v]) => v.dirty)
+      // Guardar también el valor por DEFAULT (par) de los hoyos sin score.
+      // Antes solo se enviaban las filas tocadas (dirty), así que un hoyo dejado
+      // en el par sin tocar +/− NUNCA se guardaba (se perdía). Ahora, al guardar
+      // el hoyo, se persiste el valor mostrado de cualquier jugador que aún no
+      // tenga score. Para filas de compañeros solo aplica si soy el capturista
+      // designado o el creador; en modo sin capturista cada quien guarda el suyo.
+      // (Un valor ya guardado NO se reenvía, y el backend no marca conflicto si
+      //  el valor es idéntico.)
+      const _hasScorer = scorerUserId !== null
+      const _isScorer = _hasScorer && scorerUserId === myUserId
+      const authoritative = _hasScorer ? (_isScorer || amCreator) : amCreator
+      const dirtyEntries = Object.entries(rowInputs).filter(([uid, v]) => {
+        if (v.dirty) return true                         // editado → siempre guardar
+        if (allScores[uid]?.[currentHole]) return false  // ya guardado → no reenviar
+        return uid === myUserId || authoritative         // default sin tocar → guardar
+      })
       if (dirtyEntries.length === 0) {
         // Nada que enviar — solo avanzar
         if (currentHole < holesTotal) setCurrentHole(currentHole + 1)
@@ -2121,6 +2136,12 @@ export default function PlayRoundPage() {
               const isScorer = hasScorer && scorerUserId === myUserId
               const isObserver = hasScorer && !isScorer && !amCreator
               const canCapture = !hasScorer || isScorer || amCreator
+              // ¿Hay algo por guardar? Incluye filas tocadas (dirty) Y defaults (par)
+              // de jugadores sin score que ESTE usuario va a persistir al guardar.
+              const authoritative = hasScorer ? (isScorer || amCreator) : amCreator
+              const anyToSave = anyDirty || roster.some(p =>
+                !allScores[p.user_id]?.[currentHole] && (p.isMe || authoritative)
+              )
               return (
                 <>
                   {/* Banner de rol — capturista o observador */}
@@ -2311,12 +2332,12 @@ export default function PlayRoundPage() {
                   {canCapture ? (
                     <button onClick={submitScore} disabled={submitting}
                       className={`w-full flex items-center justify-center gap-2 disabled:opacity-60 text-white font-semibold py-4 rounded-2xl transition-colors text-base active:scale-95 ${
-                        anyDirty
+                        anyToSave
                           ? 'bg-emerald-500 hover:bg-emerald-400'
                           : 'bg-zinc-700 hover:bg-zinc-600'
                       }`}>
                       {submitting ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
-                      {anyDirty
+                      {anyToSave
                         ? lbl('Guardar hoyo', 'Save hole')
                         : lbl('Siguiente hoyo', 'Next hole')}
                     </button>

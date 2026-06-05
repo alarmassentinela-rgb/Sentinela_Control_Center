@@ -7,6 +7,17 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.24.1] - 2026-06-05
+
+### Fixed — El score por defecto (par) no se guardaba si no se tocaba
+
+En la captura de score, el contador de cada jugador arranca en el **par del hoyo** con `dirty=false`. `submitScore` solo enviaba las filas tocadas con +/− (dirty), así que un hoyo dejado en el par **sin tocar nunca se guardaba** — el botón incluso se etiquetaba "Siguiente hoyo" y avanzaba dejando un hueco. Afectaba a **todas las modalidades** (la pantalla de captura y su guardado son comunes a stroke/match/florida/gran premio/skins; los formatos solo cambian las vistas de resultados).
+
+- `frontend/src/app/[locale]/rounds/[id]/play/page.tsx` → `submitScore`: ahora, al guardar el hoyo, también persiste el valor mostrado (default = par) de cualquier jugador que aún no tenga score. Para filas de compañeros solo aplica si soy el capturista designado o el creador (en modo sin capturista cada quien guarda el suyo). No reenvía valores ya guardados, y el backend no marca conflicto al reenviar un valor idéntico.
+- Botón: ahora muestra "Guardar hoyo" (verde) cuando hay algo por guardar — incluyendo defaults sin guardar — y "Siguiente hoyo" solo cuando todo el grupo ya tiene score.
+
+---
+
 ## [1.24.0] - 2026-06-04
 
 ### Added — Modo Sol (alto contraste para leer en el campo)
