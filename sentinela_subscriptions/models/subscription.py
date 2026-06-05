@@ -296,6 +296,22 @@ class SentinelaSubscription(models.Model):
     antenna_link_rate = fields.Char(string='Enlace TX/RX', readonly=True)
     antenna_distance = fields.Char(string='Distancia', readonly=True)
     antenna_signal_updated = fields.Datetime(string='Señal actualizada', readonly=True)
+    # Estado de conexión en vivo (lo refresca el cron _cron_refresh_antenna_signal)
+    conn_online = fields.Boolean(string='En línea', readonly=True)
+    conn_live_ip = fields.Char(string='IP en vivo', readonly=True)
+    conn_checked = fields.Datetime(string='Conexión revisada', readonly=True)
+    conn_status_display = fields.Char(string='Estado', compute='_compute_conn_status_display')
+    ping_result = fields.Text(string='Resultado del Ping', readonly=True)
+
+    @api.depends('conn_online', 'conn_checked')
+    def _compute_conn_status_display(self):
+        for s in self:
+            if not s.conn_checked:
+                s.conn_status_display = '⚪ Sin revisar'
+            elif s.conn_online:
+                s.conn_status_display = '🟢 CONECTADA'
+            else:
+                s.conn_status_display = '🔴 DESCONECTADA'
 
     # --- Internet WISP (PPPoE & Router) ---
     router_id = fields.Many2one('sentinela.router', string='Mikrotik Router')
@@ -304,6 +320,13 @@ class SentinelaSubscription(models.Model):
         ('static', 'IP Estática'),
         ('dhcp', 'DHCP'),
     ], string='Modo de Conexión', default='pppoe')
+    connection_equipment = fields.Selection([
+        ('antenna_airos', 'Antena airOS (Ubiquiti)'),
+        ('modem_direct', 'Módem directo'),
+        ('other', 'Otro / N/A'),
+    ], string='Equipo de Conexión', default='antenna_airos',
+       help="Antena airOS: permite leer la señal por SSH (botón 'Señal Antena'). "
+            "Módem directo / Otro: no hay antena airOS — la lectura de señal no aplica y el botón se oculta.")
     pppoe_user = fields.Char(string='PPPoE User')
     pppoe_password = fields.Char(string='PPPoE Password')
     pppoe_pass = fields.Char(string='PPPoE Password (Legacy)')
@@ -540,6 +563,16 @@ class SentinelaSubscription(models.Model):
         is_mgr = self.env.user.has_group('sentinela_subscriptions.group_subscription_manager')
         for rec in self:
             rec.can_edit_billing_mode = is_mgr
+
+    can_edit_router = fields.Boolean(
+        compute='_compute_can_edit_router',
+        help="True si el usuario es Gestor de Suscripciones (puede cambiar el Router MikroTik).")
+
+    @api.depends_context('uid')
+    def _compute_can_edit_router(self):
+        is_mgr = self.env.user.has_group('sentinela_subscriptions.group_subscription_manager')
+        for rec in self:
+            rec.can_edit_router = is_mgr
     days_to_suspend = fields.Integer(
         string='Días para Auto-Suspensión',
         default=5,
@@ -1200,6 +1233,8 @@ class SentinelaSubscription(models.Model):
             tipo = 'warning'
         self.message_post(body=_('📡 <b>Ping a %s:</b> %s/%s recibidos, pérdida %s%%, latencia avg %s / max %s.') % (
             target_ip, recv, sent, loss, avg, max_rtt))
+        self.write({'ping_result': _('Ping a %s\n%s/%s recibidos · pérdida %s%%\nlatencia avg %s · max %s\n(%s)') % (
+            target_ip, recv, sent, loss, avg, max_rtt, fields.Datetime.now())})
         return {'type': 'ir.actions.client', 'tag': 'display_notification',
                 'params': {'title': _('Ping a %s') % target_ip,
                            'message': _('%s/%s recibidos · pérdida %s%% · latencia %s (max %s)') % (recv, sent, loss, avg, max_rtt),
@@ -1247,6 +1282,16 @@ class SentinelaSubscription(models.Model):
         self.ensure_one()
         if self.service_type != 'internet':
             raise UserError(_('Esta acción es solo para suscripciones de Internet.'))
+        if self.connection_equipment != 'antenna_airos':
+            label = dict(self._fields['connection_equipment'].selection).get(self.connection_equipment, 'este equipo')
+            return {
+                'type': 'ir.actions.client', 'tag': 'display_notification',
+                'params': {
+                    'title': _('Sin antena airOS'),
+                    'message': _('Este servicio usa "%s": no tiene antena airOS para leer señal.') % label,
+                    'type': 'warning', 'sticky': False,
+                }
+            }
         # IP del CPE: de la sesión PPPoE activa (la real)
         ip = self.ip_address
         if self.router_id and self.internet_mgmt_mode == 'pppoe' and self.pppoe_user:
@@ -1266,6 +1311,18 @@ class SentinelaSubscription(models.Model):
         if not ip:
             raise UserError(_('No hay IP del cliente. Usa "Verificar Conexión" primero (debe estar en línea).'))
         # SSH a la antena airOS
+        ok, sig, quality = self._apply_antenna_signal(ip, timeout=12, post=True)
+        if not ok:
+            raise UserError(_('No se pudo leer la antena %s: %s') % (ip, quality))
+        return {'type': 'ir.actions.client', 'tag': 'display_notification',
+                'params': {'title': _('Señal: %s') % quality,
+                           'message': _('%s dBm · %s') % (sig, quality),
+                           'type': 'success' if (sig and sig >= -75) else 'warning', 'sticky': False}}
+
+    def _apply_antenna_signal(self, ip, timeout=12, post=True):
+        """SSH a la antena airOS en `ip`, lee mca-status y guarda los campos de señal.
+        NO lanza: devuelve (ok, sig, quality_o_error). Reusado por el botón y el cron."""
+        self.ensure_one()
         import paramiko, re
         airos_user = self.env['ir.config_parameter'].sudo().get_param('sentinela.airos_user', 'sentinela')
         airos_pwd = self.env['ir.config_parameter'].sudo().get_param('sentinela.airos_password', 'SentinelaW1sp')
@@ -1273,7 +1330,7 @@ class SentinelaSubscription(models.Model):
         cli.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         try:
             cli.connect(ip, port=22, username=airos_user, password=airos_pwd, look_for_keys=False,
-                        allow_agent=False, timeout=12,
+                        allow_agent=False, timeout=timeout,
                         disabled_algorithms={'pubkeys': ['rsa-sha2-256', 'rsa-sha2-512']})
             _in, out, _err = cli.exec_command('mca-status')
             data = out.read().decode('utf-8', 'ignore')
@@ -1281,27 +1338,18 @@ class SentinelaSubscription(models.Model):
         except Exception as ex:
             try: cli.close()
             except Exception: pass
-            raise UserError(_('No se pudo leer la antena %s: %s') % (ip, str(ex)[:120]))
+            return (False, 0, str(ex)[:120])
         d = {k: v.strip() for k, v in re.findall(r'(\w+)=([^,\r\n]+)', data)}
-        try:
-            sig = int(d.get('signal', 0) or 0)
-        except Exception:
-            sig = 0
-        try:
-            noise = int(d.get('noise', 0) or 0)
-        except Exception:
-            noise = 0
+        try: sig = int(d.get('signal', 0) or 0)
+        except Exception: sig = 0
+        try: noise = int(d.get('noise', 0) or 0)
+        except Exception: noise = 0
         snr = (sig - noise) if (sig and noise) else 0
-        if sig == 0:
-            quality = '❓ Sin datos'
-        elif sig >= -65:
-            quality = '🟢 Excelente'
-        elif sig >= -75:
-            quality = '🟢 Buena'
-        elif sig >= -82:
-            quality = '🟡 Regular'
-        else:
-            quality = '🔴 Mala (revisar antena)'
+        if sig == 0: quality = '❓ Sin datos'
+        elif sig >= -65: quality = '🟢 Excelente'
+        elif sig >= -75: quality = '🟢 Buena'
+        elif sig >= -82: quality = '🟡 Regular'
+        else: quality = '🔴 Mala (revisar antena)'
         self.write({
             'antenna_signal_dbm': '%s dBm' % sig,
             'antenna_snr': '%s dB' % snr,
@@ -1310,14 +1358,51 @@ class SentinelaSubscription(models.Model):
             'antenna_distance': '%s m' % d.get('distance', '?'),
             'antenna_signal_updated': fields.Datetime.now(),
         })
-        plat = d.get('platform', 'CPE')
-        self.message_post(body=_('📡 <b>Señal de antena (%s):</b> %s dBm · SNR %s dB · %s · enlace %s/%s Mbps · %sm') % (
-            plat, sig, snr, quality, d.get('wlanTxRate', '?'), d.get('wlanRxRate', '?'), d.get('distance', '?')))
-        return {'type': 'ir.actions.client', 'tag': 'display_notification',
-                'params': {'title': _('Señal: %s') % quality,
-                           'message': _('%s dBm · SNR %s dB · enlace %s/%s Mbps · %s') % (
-                               sig, snr, d.get('wlanTxRate', '?'), d.get('wlanRxRate', '?'), plat),
-                           'type': 'success' if sig >= -75 and sig != 0 else 'warning', 'sticky': False}}
+        if post:
+            plat = d.get('platform', 'CPE')
+            self.message_post(body=_('📡 <b>Señal de antena (%s):</b> %s dBm · SNR %s dB · %s · enlace %s/%s Mbps · %sm') % (
+                plat, sig, snr, quality, d.get('wlanTxRate', '?'), d.get('wlanRxRate', '?'), d.get('distance', '?')))
+        return (True, sig, quality)
+
+    @api.model
+    def _cron_refresh_antenna_signal(self):
+        """Opción C: en segundo plano refresca el estado de conexión (online/IP) de los
+        clientes de internet y la señal de antena airOS de los que estén en línea.
+        Conexión = barato (1 consulta /ppp/active por router). Señal = SSH, en lotes
+        (los más desactualizados primero) para no saturar."""
+        import routeros_api
+        BATCH_SSH = 25
+        subs = self.search([('service_type', '=', 'internet'), ('state', '=', 'active'),
+                            ('pppoe_user', '!=', False), ('router_id', '!=', False)])
+        if not subs:
+            return True
+        live = {}
+        for router in subs.mapped('router_id'):
+            try:
+                conn = routeros_api.RouterOsApiPool(
+                    router.ip_address, username=router.api_user, password=router.api_password or '',
+                    port=int(router.api_port or 8728), plaintext_login=True)
+                api = conn.get_api()
+                for a in api.get_resource('/ppp/active').get():
+                    live[(router.id, a.get('name'))] = a.get('address')
+                conn.disconnect()
+            except Exception as e:
+                _logger.warning("cron señal: no pude leer /ppp/active de %s: %s", router.ip_address, e)
+        now = fields.Datetime.now()
+        for s in subs:
+            ip = live.get((s.router_id.id, s.pppoe_user))
+            s.write({'conn_online': bool(ip), 'conn_live_ip': ip or False, 'conn_checked': now})
+        self.env.cr.commit()  # transacción corta: persiste el estado de conexión antes del SSH lento
+        ant = subs.filtered(lambda x: x.conn_online and x.connection_equipment == 'antenna_airos')
+        ant = ant.sorted(lambda x: x.antenna_signal_updated or fields.Datetime.to_datetime('2000-01-01'))[:BATCH_SSH]
+        done = 0
+        for s in ant:
+            ip = live.get((s.router_id.id, s.pppoe_user))
+            if ip and s._apply_antenna_signal(ip, timeout=7, post=False)[0]:
+                done += 1
+                self.env.cr.commit()  # persiste cada lectura (no perder todo por un conflicto tardío)
+        _logger.info("cron señal: %s subs conexión actualizada, %s señales leídas.", len(subs), done)
+        return True
 
     def get_live_traffic(self):
         """Devuelve el tráfico actual (dict) para la gráfica animada OWL. Solo lectura."""
@@ -1427,7 +1512,12 @@ class SentinelaSubscription(models.Model):
                 sub.message_post(body=f"<b>MikroTik ERROR al activar:</b> {e}")
 
     def action_provision_mikrotik_disable(self):
-        """Deshabilita el secret PPPoE y agrega al cliente a la lista de suspendidos."""
+        """Suspende SIN cortar la conexión: deja el secret PPPoE HABILITADO pero le cambia
+        el perfil a 'argusblack_servicio_suspendido' (walled-garden). Así el CPE se conecta
+        pero NO navega (el firewall lo bloquea y el NAT lo manda a la página de pago) y DEJA
+        de golpear auth en bucle. Reactivar con action_provision_mikrotik_enable (vuelve al
+        perfil del plan). Para borrar/cortar de raíz el equipo, hacerlo aparte."""
+        SUSPENDED_PROFILE = 'argusblack_servicio_suspendido'
         for sub in self:
             if sub.service_type != 'internet' or sub.internet_mgmt_mode != 'pppoe':
                 continue
@@ -1439,30 +1529,21 @@ class SentinelaSubscription(models.Model):
             try:
                 api = conn.get_api()
 
-                # Deshabilitar secret PPPoE
+                # HABILITADO + perfil suspendido (walled-garden). NO se deshabilita: el CPE
+                # conecta y deja de reintentar; el perfil suspendido etiqueta su IP en el
+                # address-list 'argusblack_servicio_suspendido' que el firewall bloquea.
                 secrets = api.get_resource('/ppp/secret')
                 existing = secrets.get(name=sub.pppoe_user)
                 if existing:
-                    secrets.set(id=existing[0]['id'], disabled='true')
+                    secrets.set(id=existing[0]['id'], disabled='false', profile=SUSPENDED_PROFILE)
 
-                # Desconectar sesión activa si existe
+                # Cortar la sesión activa para que reconecte ya con el perfil suspendido
                 active = api.get_resource('/ppp/active')
-                sessions = active.get(name=sub.pppoe_user)
-                for session in sessions:
+                for session in active.get(name=sub.pppoe_user):
                     active.remove(id=session['id'])
 
-                # Agregar a address-list de suspendidos (si no está ya)
-                addr_list = api.get_resource('/ip/firewall/address-list')
-                existing_entry = addr_list.get(**{'list': 'argusblack_servicio_suspendido', 'comment': sub.pppoe_user})
-                if not existing_entry and sub.ip_address:
-                    addr_list.add(**{
-                        'list': 'argusblack_servicio_suspendido',
-                        'address': sub.ip_address,
-                        'comment': sub.pppoe_user
-                    })
-
                 conn.disconnect()
-                sub.message_post(body=f"<b>MikroTik:</b> Secret PPPoE <b>{sub.pppoe_user}</b> deshabilitado y agregado a lista de suspendidos.")
+                sub.message_post(body=f"<b>MikroTik:</b> Secret PPPoE <b>{sub.pppoe_user}</b> suspendido (perfil <b>{SUSPENDED_PROFILE}</b>): conecta pero no navega.")
             except Exception as e:
                 try:
                     conn.disconnect()
@@ -1495,8 +1576,9 @@ class SentinelaSubscription(models.Model):
         for sub in self:
             if not sub.product_id:
                 continue
-            if not sub.price_unit:
-                sub.price_unit = sub.product_id.list_price
+            # Al cambiar de Plan, la Tarifa Mensual se actualiza SIEMPRE al precio del nuevo plan.
+            # (El usuario puede ajustarla manualmente después; si vuelve a cambiar de plan, se retoma la del plan.)
+            sub.price_unit = sub.product_id.list_price
             if sub.product_id.default_recurring_interval and not sub.recurring_interval:
                 sub.recurring_interval = sub.product_id.default_recurring_interval
             if sub.product_id.service_type and not sub.service_type:
@@ -1760,3 +1842,26 @@ class AccountMove(models.Model):
     def button_cancel(self):
         self._advance_on_unpost()
         return super().button_cancel()
+
+    def _compute_payment_state(self):
+        """ Reactivación automática al pagar: cuando una factura de cliente ligada a una
+        suscripción suspendida queda PAGADA (o en proceso de pago), reconecta el servicio
+        solo (action_reactivate → perfil del plan en el router + sale de walled-garden).
+        Idempotente: solo toca subs en technical_state='suspended', así que una vez
+        reactivada las siguientes corridas del cómputo la ignoran. Cubre factura individual
+        (subscription_id) y agrupada (subscription_ids). """
+        res = super()._compute_payment_state()
+        for move in self:
+            if move.move_type != 'out_invoice' or move.payment_state not in ('paid', 'in_payment'):
+                continue
+            subs = (move.subscription_id | move.subscription_ids).filtered(
+                lambda s: s.technical_state == 'suspended'
+            )
+            if subs:
+                subs.action_reactivate()
+                state_label = dict(move._fields['payment_state'].selection).get(move.payment_state)
+                for sub in subs:
+                    sub.message_post(body=_(
+                        "💸 <b>Pago aplicado:</b> factura <b>%s</b> (%s) → servicio reconectado automáticamente."
+                    ) % (move.name or 'borrador', state_label))
+        return res
