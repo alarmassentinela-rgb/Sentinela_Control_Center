@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Marca Sentinela en la pantalla de inicio de sesión de Odoo -->
+    <template id="login_sentinela_brand" inherit_id="web.login" name="Sentinela — Marca en Login">
+        <xpath expr="//form[@t-attf-action='/web/login']" position="before">
+            <div class="text-center mb-4">
+                <img src="/sentinela_fsm/static/description/icon.png" alt="Sentinela"
+                     style="height:72px; width:auto;"/>
+                <h3 class="mt-2 mb-0" style="color:#1a237e; font-weight:800; letter-spacing:2px;">SENTINELA</h3>
+                <p class="text-muted small mb-0">Centro de Operación · Gestión de Servicios</p>
+            </div>
+        </xpath>
+    </template>
+</odoo>

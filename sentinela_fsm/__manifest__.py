@@ -1,6 +1,6 @@
 {
     'name': 'Gestion de Servicios',
-    'version': '18.0.1.4.5',
+    'version': '18.0.1.5.0',
     'category': 'Services/Field Service',
     'summary': 'Gestión de órdenes de servicio en campo (Instalaciones, Reparaciones).',
     'description': """
@@ -54,6 +54,7 @@
         'views/sale_order_views.xml',
         'views/fsm_pause_reason_views.xml',
         'views/fsm_menus.xml',
+        'views/login_templates.xml',
         'views/fsm_portal_templates.xml',
         'views/tech_portal_templates.xml',
         'report/fsm_order_report.xml',
