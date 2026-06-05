@@ -115,6 +115,41 @@
                             </group>
                         </page>
 
+                        <!-- ═══ DIAGNÓSTICO GPS ═══ -->
+                        <page string="🔧 Diagnóstico GPS" name="diagnostico_gps" invisible="service_type != 'gps'">
+                            <div class="o_row mt-2">
+                                <button name="action_refresh_gps_diag" string="🔄 Actualizar Diagnóstico"
+                                    type="object" class="btn-primary me-2"/>
+                            </div>
+                            <group>
+                                <group string="📶 Estado de la SIM (floLIVE / Connecta)">
+                                    <field name="gps_sim_status"/>
+                                    <field name="gps_sim_online" string="En sesión de datos"/>
+                                    <field name="gps_sim_network"/>
+                                    <field name="gps_sim_last_session"/>
+                                    <field name="gps_sim_checked"/>
+                                </group>
+                                <group string="📍 Última Ubicación Conocida">
+                                    <field name="gps_sim_lat"/>
+                                    <field name="gps_sim_lon"/>
+                                    <field name="gps_sim_map_url" widget="url" text="Ver en Google Maps"/>
+                                </group>
+                            </group>
+                            <separator string="📨 Comandos SMS al GPS (vía Connecta)"/>
+                            <div class="alert alert-info" role="status">
+                                Envío de SMS al rastreador. <b>Pendiente de habilitación por Connecta</b>
+                                (las SIMs son de datos; falta activar el servicio SMS y el endpoint).
+                                La bitácora deja registro de cada intento.
+                            </div>
+                            <group>
+                                <field name="gps_sms_command" placeholder="Ej.: STATUS#  /  WHERE#  (según el modelo del rastreador)"/>
+                                <button name="action_send_gps_sms" string="📨 Enviar Comando SMS"
+                                    type="object" class="btn-warning"/>
+                            </group>
+                            <field name="gps_sms_log" nolabel="1" readonly="1"
+                                placeholder="Aquí se registra cada comando SMS enviado y su resultado."/>
+                        </page>
+
                         <!-- ═══ FACTURACIÓN ═══ -->
                         <page string="📅 Facturación" name="billing">
                             <group>
@@ -161,13 +196,17 @@
                                 </group>
                                 <!-- CONECTIVIDAD INTERNET -->
                                 <group string="Conectividad" invisible="service_type != 'internet'">
-                                    <field name="router_id" options="{'no_create': True}" required="service_type == 'internet'"/>
+                                    <field name="can_edit_router" invisible="1"/>
+                                    <field name="router_id" options="{'no_create': True}" required="service_type == 'internet'"
+                                        readonly="id and not can_edit_router"
+                                        help="Solo un Gestor de Suscripciones puede cambiar el router después de creada la suscripción (evita reasignaciones accidentales)."/>
                                     <field name="product_mikrotik_profile_id" invisible="1"/>
                                     <field name="mikrotik_profile_id" options="{'no_create': True}"
                                         required="service_type == 'internet' and internet_mgmt_mode == 'pppoe'"
                                         readonly="product_mikrotik_profile_id"
                                         help="Si el plan contratado tiene perfil MikroTik asignado, se hereda automáticamente y no se puede modificar. Si el plan no tiene perfil, selecciona uno manualmente."/>
                                     <field name="internet_mgmt_mode"/>
+                                    <field name="connection_equipment" invisible="service_type != 'internet'"/>
                                     <field name="ip_address" string="IP Asignada"/>
                                     <field name="gateway_address" invisible="internet_mgmt_mode != 'static'"/>
                                     <field name="subnet_mask" invisible="internet_mgmt_mode != 'static'"/>
@@ -219,32 +258,44 @@
                                 <button name="action_request_pppoe_credentials" string="Solicitar Credenciales PPPoE"
                                     type="object" class="btn-secondary me-2"
                                     invisible="internet_mgmt_mode != 'pppoe' or state not in ['draft','pending_signature','confirmed']"/>
-                                <button name="action_open_ping_wizard" string="Ping / Diagnóstico"
+                            </div>
+                        </page>
+
+                        <!-- ═══ DIAGNÓSTICO ═══ -->
+                        <page string="🔧 Diagnóstico" name="diagnostico" invisible="service_type != 'internet'">
+                            <div class="o_row mt-2">
+                                <button name="action_open_ping_wizard" string="📶 Ping"
                                     type="object" class="btn-secondary me-2" invisible="state != 'active'"/>
-                                <button name="action_view_traffic" string="Ver Tráfico"
-                                    type="object" class="btn-info me-2" invisible="state != 'active'"/>
                                 <button name="action_check_connection" string="Verificar Conexión"
                                     type="object" class="btn-secondary me-2" invisible="state != 'active'"/>
-                                <button name="action_signal_antenna" string="📡 Señal Antena"
-                                    type="object" class="btn-warning" invisible="state != 'active'"/>
+                                <button name="action_signal_antenna" string="📡 Actualizar Señal"
+                                    type="object" class="btn-warning" invisible="state != 'active' or connection_equipment != 'antenna_airos'"/>
                             </div>
-                            <!-- PANEL SEÑAL DE ANTENA -->
-                            <group string="📡 Señal de la Antena CPE" invisible="not antenna_signal_updated">
-                                <group>
+                            <!-- ESTADO DE CONEXIÓN (automático, lo refresca el cron cada 15 min) -->
+                            <group string="🔌 Estado de Conexión (automático)">
+                                <field name="conn_online" invisible="1"/>
+                                <field name="conn_live_ip"/>
+                                <field name="conn_checked"/>
+                                <field name="conn_status_display" string="Estado"/>
+                            </group>
+                            <!-- SEÑAL + PING (izquierda) · GRÁFICA DE TRÁFICO (derecha), lado a lado -->
+                            <group>
+                                <group string="📡 Señal de la Antena CPE">
                                     <field name="antenna_signal_quality"/>
                                     <field name="antenna_signal_dbm"/>
                                     <field name="antenna_snr"/>
-                                </group>
-                                <group>
                                     <field name="antenna_link_rate"/>
                                     <field name="antenna_distance"/>
                                     <field name="antenna_signal_updated"/>
+                                    <separator string="📶 Resultado del Ping"/>
+                                    <field name="ping_result" nolabel="1" readonly="1"
+                                        placeholder="Presiona '📶 Ping' para ver latencia y pérdida aquí."/>
+                                </group>
+                                <group string="📊 Tráfico en Vivo">
+                                    <field name="live_traffic_graph" widget="traffic_graph" nolabel="1"
+                                        invisible="state != 'active'"/>
                                 </group>
                             </group>
-                            <!-- GRÁFICA DE TRÁFICO EN VIVO (animada, móvil-friendly) -->
-                            <separator string="📊 Tráfico en Vivo" invisible="state != 'active' or service_type != 'internet'"/>
-                            <field name="live_traffic_graph" widget="traffic_graph" nolabel="1"
-                                invisible="state != 'active' or service_type != 'internet'"/>
                         </page>
 
                         <!-- ═══ INSTALACIÓN ═══ -->

@@ -260,6 +260,26 @@ class SentinelaSubscription(models.Model):
     ], string='Plataforma de Rastreo')
     gps_platform_device_id = fields.Char(string='ID / Usuario en Plataforma',
         help="Identificador del equipo en la plataforma de rastreo (Tracksolid Pro / Smake / SentiCar).")
+    # --- Diagnóstico GPS (datos de la SIM en floLIVE/Connecta, solo lectura) ---
+    gps_sim_status = fields.Char(string='Estado SIM', readonly=True)
+    gps_sim_online = fields.Boolean(string='En sesión de datos', readonly=True)
+    gps_sim_lat = fields.Char(string='Latitud', readonly=True)
+    gps_sim_lon = fields.Char(string='Longitud', readonly=True)
+    gps_sim_map_url = fields.Char(string='Mapa', compute='_compute_gps_sim_map_url')
+    gps_sim_network = fields.Char(string='Red conectada', readonly=True)
+    gps_sim_last_session = fields.Char(string='Última sesión de datos', readonly=True)
+    gps_sim_checked = fields.Datetime(string='Diagnóstico actualizado', readonly=True)
+    # --- Comandos SMS al GPS (vía Connecta) ---
+    gps_sms_command = fields.Char(string='Comando SMS a enviar')
+    gps_sms_log = fields.Text(string='Bitácora de comandos SMS', readonly=True)
+
+    @api.depends('gps_sim_lat', 'gps_sim_lon')
+    def _compute_gps_sim_map_url(self):
+        for s in self:
+            if s.gps_sim_lat and s.gps_sim_lon:
+                s.gps_sim_map_url = f"https://www.google.com/maps?q={s.gps_sim_lat},{s.gps_sim_lon}"
+            else:
+                s.gps_sim_map_url = False
     equipment_brand = fields.Char(string='Marca')
     equipment_model = fields.Char(string='Modelo')
     equipment_serial = fields.Char(string='Número de Serie (Manual)')
@@ -1571,6 +1591,51 @@ class SentinelaSubscription(models.Model):
                     sub.message_post(body=f"<b>floLIVE:</b> SIM {sub.sim_iccid} re-activada exitosamente.")
                 else:
                     sub.message_post(body=f"<b>floLIVE ERROR:</b> no se pudo re-activar la SIM {sub.sim_iccid}. Revisar en el portal.")
+
+    def action_refresh_gps_diag(self):
+        """Refresca el diagnóstico de la SIM del GPS desde floLIVE (solo lectura):
+        estado, sesión de datos, última ubicación, red. Botón de la pestaña Diagnóstico GPS."""
+        self.ensure_one()
+        if self.service_type != 'gps':
+            raise UserError(_("Esta acción es solo para servicios GPS."))
+        if not self.sim_iccid:
+            raise UserError(_("La suscripción no tiene ICCID de SIM capturado."))
+        diag = self.env['sentinela.flolive.service'].get_sim_diagnostics(self.sim_iccid)
+        if not diag.get('ok'):
+            raise UserError(_("No se pudo obtener el diagnóstico de floLIVE. Revisa el ICCID y las credenciales API de Connecta."))
+        self.write({
+            'gps_sim_status': diag.get('status'),
+            'gps_sim_online': diag.get('online'),
+            'gps_sim_lat': str(diag['lat']) if diag.get('lat') is not None else False,
+            'gps_sim_lon': str(diag['lon']) if diag.get('lon') is not None else False,
+            'gps_sim_network': diag.get('network'),
+            'gps_sim_last_session': diag.get('last_session'),
+            'gps_sim_checked': fields.Datetime.now(),
+        })
+        self.message_post(body=_("📡 <b>Diagnóstico GPS actualizado:</b> SIM %s · %s · última ubicación %s, %s") % (
+            diag.get('status'), 'en línea' if diag.get('online') else 'sin sesión',
+            diag.get('lat'), diag.get('lon')))
+
+    def action_send_gps_sms(self):
+        """Envía el comando SMS capturado a la SIM del GPS vía Connecta/floLIVE.
+        Andamiaje listo: si Connecta aún no habilita SMS, avisa claramente sin romper."""
+        self.ensure_one()
+        if self.service_type != 'gps':
+            raise UserError(_("Esta acción es solo para servicios GPS."))
+        if not self.sim_iccid:
+            raise UserError(_("La suscripción no tiene ICCID de SIM capturado."))
+        if not self.gps_sms_command:
+            raise UserError(_("Escribe el comando SMS a enviar."))
+        res = self.env['sentinela.flolive.service'].send_sms_command(self.sim_iccid, self.gps_sms_command)
+        ts = fields.Datetime.now()
+        mark = '✅' if res.get('ok') else '⚠️'
+        line = f"[{ts}] {mark} ENVIAR «{self.gps_sms_command}» → {res.get('detail')}"
+        self.gps_sms_log = (line + "\n" + (self.gps_sms_log or "")).strip()
+        self.message_post(body=_("📨 <b>Comando SMS</b> «%s»: %s") % (self.gps_sms_command, res.get('detail')))
+        if not res.get('ok'):
+            # No truena: deja el aviso en bitácora/chatter (típico mientras Connecta no habilita SMS).
+            return
+        self.gps_sms_command = False
 
     @api.depends('start_date', 'commitment_period', 'is_forced_contract')
     def _compute_commitment_end(self):
