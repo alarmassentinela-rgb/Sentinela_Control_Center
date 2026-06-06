@@ -266,6 +266,23 @@ class SentinelaSubscription(models.Model):
         help="Lo define el plan: 'GPS Vehículo' (SIM nuestra, se corta al suspender) o 'Rastreo Móvil' (SIM del cliente, nunca se corta).")
     gps_device_ids = fields.One2many('sentinela.subscription.gps.device', 'subscription_id', string='Equipos GPS')
     gps_device_count = fields.Integer(string='Nº de Equipos', compute='_compute_gps_device_count', store=True)
+    senticar_portal_url = fields.Char(string='Portal del Transportista', compute='_compute_senticar_portal_url',
+        help="Link personal del cliente para generar links de rastreo de sus unidades. Genéralo con el botón.")
+
+    @api.depends('partner_id.senticar_portal_token')
+    def _compute_senticar_portal_url(self):
+        # El portal vive en Odoo (mismo backend que senticar.com). Dominio configurable.
+        web = (self.env['ir.config_parameter'].sudo().get_param('sentinela.senticar_portal_base')
+               or 'https://senticar.com').rstrip('/')
+        for s in self:
+            tok = s.partner_id.senticar_portal_token
+            s.senticar_portal_url = (web + '/senticar/t/' + tok) if tok else False
+
+    def action_make_portal_link(self):
+        """Genera (si falta) el token del portal del transportista y muestra su link."""
+        self.ensure_one()
+        self.partner_id.ensure_senticar_portal_token()
+        self.message_post(body=_("🔗 <b>Portal del transportista</b> (mándaselo al cliente): %s") % self.senticar_portal_url)
 
     @api.depends('gps_device_ids')
     def _compute_gps_device_count(self):

@@ -1,6 +1,6 @@
 {
     'name': 'Sentinela Subscriptions',
-    'version': '18.0.1.3.79',
+    'version': '18.0.1.3.80',
     'category': 'Sales/Subscriptions',
     'depends': ['base', 'mail', 'product', 'account', 'sale', 'sentinela_digital_sign', 'sentinela_cfdi_prodigia', 'om_account_followup'],
     'data': [
@@ -12,6 +12,7 @@
         'data/mail_template_collection_data.xml',
         'views/subscription_master_view.xml',
         'views/subscription_master_view_PRO.xml',
+        'views/senticar_transportista_templates.xml',
         'views/product_views.xml',
         'views/router_views.xml',
         'views/mikrotik_profile_views.xml',

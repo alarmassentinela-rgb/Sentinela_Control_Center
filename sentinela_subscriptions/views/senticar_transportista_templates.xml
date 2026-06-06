@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="senticar_transportista_invalid" name="SentiCar Transportista - Inválido">
+        &lt;!DOCTYPE html&gt;
+        <html lang="es">
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                <title>SentiCar</title>
+            </head>
+            <body style="font-family:Arial,sans-serif;background:#0B2A4A;color:#fff;text-align:center;padding:60px 20px;">
+                <img src="https://radar.senticar.com/logo_senticar.png" style="max-width:180px;"/>
+                <h2>Acceso no válido</h2>
+                <p>El link no es correcto o expiró. Solicita a Sentinela tu link de acceso.</p>
+            </body>
+        </html>
+    </template>
+
+    <template id="senticar_transportista_portal" name="SentiCar Transportista - Portal">
+        &lt;!DOCTYPE html&gt;
+        <html lang="es">
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                <title>SentiCar · Mis unidades</title>
+                <style>
+                    body{font-family:Arial,Helvetica,sans-serif;margin:0;background:#eef3f8;color:#1a1a2e;}
+                    .top{background:#0B2A4A;color:#fff;padding:14px 18px;display:flex;align-items:center;gap:12px;}
+                    .top img{height:42px;}
+                    .wrap{max-width:680px;margin:0 auto;padding:16px;}
+                    .card{background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(11,42,74,.12);padding:16px;margin-bottom:14px;}
+                    .uname{font-size:17px;font-weight:bold;color:#0B2A4A;}
+                    .meta{color:#667;font-size:13px;margin:4px 0 12px;}
+                    select,button{font-size:15px;padding:9px 12px;border-radius:8px;border:1px solid #ccd6e0;}
+                    button{background:#1565C0;color:#fff;border:none;cursor:pointer;}
+                    .linkbox{margin-top:12px;background:#eef7ee;border:1px solid #bfe3bf;border-radius:8px;padding:10px;}
+                    .linkbox input{width:100%;font-size:12px;padding:8px;border:1px solid #cdd;border-radius:6px;}
+                    .copy{background:#1B7A3D;margin-top:8px;}
+                    .err{color:#b00020;margin-top:10px;}
+                    .hint{color:#667;font-size:12px;}
+                </style>
+            </head>
+            <body>
+                <div class="top">
+                    <img src="https://radar.senticar.com/logo_senticar.png"/>
+                    <div>
+                        <div style="font-size:18px;font-weight:bold;">SentiCar</div>
+                        <div style="font-size:12px;opacity:.85;">Hola, <t t-esc="partner.name"/></div>
+                    </div>
+                </div>
+                <div class="wrap">
+                    <p class="hint">Elige una unidad y por cuántas horas quieres compartir su rastreo. Te genera un link que puedes mandar por WhatsApp; quien lo abra verá <b>solo esa unidad</b> y el acceso <b>expira solo</b>.</p>
+                    <t t-if="not devices">
+                        <div class="card">No tienes unidades GPS registradas todavía.</div>
+                    </t>
+                    <t t-foreach="devices" t-as="d">
+                        <div class="card">
+                            <div class="uname"><t t-esc="d.name or d.gps_imei"/></div>
+                            <div class="meta">
+                                <t t-if="d.vehicle_plate">Placa: <t t-esc="d.vehicle_plate"/> · </t>
+                                ID: <t t-esc="d.gps_imei"/>
+                            </div>
+                            <form method="post" t-attf-action="/senticar/t/{{token}}">
+                                <input type="hidden" name="device_id" t-att-value="d.id"/>
+                                <label>Compartir por: </label>
+                                <select name="hours">
+                                    <option value="4">4 horas</option>
+                                    <option value="8">8 horas</option>
+                                    <option value="12">12 horas</option>
+                                    <option value="24" selected="selected">1 día</option>
+                                    <option value="48">2 días</option>
+                                    <option value="168">1 semana</option>
+                                </select>
+                                <button type="submit">📍 Generar link</button>
+                            </form>
+                            <t t-if="generated.get(d.id)">
+                                <t t-set="lk" t-value="generated.get(d.id)"/>
+                                <t t-if="lk.startswith('ERROR')">
+                                    <div class="err"><t t-esc="lk"/></div>
+                                </t>
+                                <t t-else="">
+                                    <div class="linkbox">
+                                        <div style="font-weight:bold;color:#1B7A3D;margin-bottom:6px;">✅ Link listo (compártelo):</div>
+                                        <input t-att-id="'lk%s' % d.id" t-att-value="lk" readonly="readonly"/>
+                                        <button type="button" class="copy" t-attf-onclick="navigator.clipboard.writeText(document.getElementById('lk{{d.id}}').value); this.innerText='✅ Copiado';">📋 Copiar link</button>
+                                    </div>
+                                </t>
+                            </t>
+                        </div>
+                    </t>
+                    <p class="hint" style="text-align:center;margin-top:20px;">Powered by SentiCar · Rastreo Inteligente GPS</p>
+                </div>
+            </body>
+        </html>
+    </template>
+</odoo>

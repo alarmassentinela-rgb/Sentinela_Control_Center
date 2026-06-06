@@ -9,6 +9,15 @@ class ResPartner(models.Model):
     senticar_user_email = fields.Char(string='Usuario SentiCar (email)', copy=False)
     senticar_user_password = fields.Char(string='Contraseña SentiCar', copy=False,
         help="Contraseña generada para que el cliente acceda a SentiCar a ver sus equipos.")
+    senticar_portal_token = fields.Char(string='Token Portal Transportista', copy=False, index=True,
+        help="Token del link personal del transportista para generar links de rastreo de sus unidades.")
+
+    def ensure_senticar_portal_token(self):
+        import secrets
+        for p in self:
+            if not p.senticar_portal_token:
+                p.senticar_portal_token = secrets.token_urlsafe(16)
+        return self.senticar_portal_token
 
     invoice_grouping_method = fields.Selection([
         ('individual', 'Una factura por servicio detallado'),

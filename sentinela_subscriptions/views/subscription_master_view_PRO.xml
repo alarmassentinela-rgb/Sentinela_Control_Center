@@ -109,6 +109,14 @@
                                         invisible="gps_platform != 'senticar'"/>
                                 </group>
                             </group>
+                            <group string="🔗 Portal del Transportista (autoservicio)">
+                                <div class="o_row">
+                                    <button name="action_make_portal_link" string="🔗 Generar / ver portal del transportista"
+                                        type="object" class="btn-secondary"/>
+                                </div>
+                                <field name="senticar_portal_url" widget="CopyClipboardChar" readonly="1"
+                                    placeholder="Genera el link y mándaselo al transportista: él entra, ve sus unidades y crea sus propios links de rastreo."/>
+                            </group>
                             <field name="gps_device_ids">
                                 <list>
                                     <field name="gps_mode" column_invisible="1"/>
