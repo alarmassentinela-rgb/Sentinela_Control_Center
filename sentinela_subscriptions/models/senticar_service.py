@@ -1,6 +1,7 @@
 import requests
 import logging
 import secrets
+from datetime import datetime, timedelta, timezone
 from odoo import models, api
 
 _logger = logging.getLogger(__name__)
@@ -115,3 +116,45 @@ class SenticarService(models.AbstractModel):
         dev['disabled'] = bool(disabled)
         r2 = self._req('PUT', f'/api/devices/{device_id}', json=dev)
         return r2 is not None and r2.status_code == 200
+
+    @api.model
+    def create_share_link(self, device_id, hours=24, label='Rastreo temporal'):
+        """Genera un link PÚBLICO y TEMPORAL para rastrear UNA sola unidad, sin cuenta, que
+        EXPIRA en `hours` horas. Crea un usuario temporal (readonly, deviceLimit=1) ligado al
+        equipo, genera su token y arma el link con la URL pública de SentiCar.
+        Devuelve {ok, link, expira} o {ok:False, detail}."""
+        if not device_id:
+            return {'ok': False, 'detail': 'El equipo no está registrado en SentiCar (sin ID).'}
+        conn = self._conn()
+        if not conn:
+            return {'ok': False, 'detail': 'Faltan parámetros de API de SentiCar.'}
+        base, auth = conn
+        try:
+            hours = int(hours) or 24
+        except (ValueError, TypeError):
+            hours = 24
+        exp = (datetime.now(timezone.utc) + timedelta(hours=hours)).strftime('%Y-%m-%dT%H:%M:%S.000Z')
+        pw = 'Sh' + secrets.token_hex(8)
+        email = f'share-{secrets.token_hex(6)}@senticar.com'
+        try:
+            r = requests.post(base + '/api/users', auth=auth, timeout=20, json={
+                'name': f'{label} ({hours}h)', 'email': email, 'password': pw,
+                'expirationTime': exp, 'deviceLimit': 1, 'temporary': True, 'readonly': True})
+            if r.status_code not in (200, 201):
+                return {'ok': False, 'detail': f'No se pudo crear el acceso temporal: HTTP {r.status_code} {r.text[:150]}'}
+            uid = r.json()['id']
+            requests.post(base + '/api/permissions', auth=auth, timeout=20,
+                          json={'userId': uid, 'deviceId': device_id})
+            # login como el usuario temporal y generar su token
+            s = requests.Session()
+            s.post(base + '/api/session', data={'email': email, 'password': pw}, timeout=20)
+            tr = s.post(base + '/api/session/token', data={'expiration': exp}, timeout=20)
+            if tr.status_code != 200 or 'Exception' in tr.text:
+                return {'ok': False, 'detail': 'No se pudo generar el token de rastreo.'}
+            token = tr.text.strip().strip('"')
+        except Exception as e:
+            _logger.error("SENTICAR share error: %s", e)
+            return {'ok': False, 'detail': f'Excepción: {e}'}
+        public = (self.env['ir.config_parameter'].sudo().get_param('sentinela.senticar_public_url')
+                  or 'https://radar.senticar.com').rstrip('/')
+        return {'ok': True, 'link': f'{public}/?token={token}', 'expira': exp}

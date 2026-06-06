@@ -42,6 +42,12 @@ class SubscriptionGpsDevice(models.Model):
     gps_sim_lon = fields.Char(string='Longitud', readonly=True)
     gps_sim_checked = fields.Datetime(string='Diag. actualizado', readonly=True)
 
+    # Link de rastreo temporal (compartir con el dueño de la carga, etc.)
+    gps_share_hours = fields.Integer(string='Horas del link', default=24,
+        help="Cuántas horas será válido el link de rastreo compartido.")
+    gps_share_link = fields.Char(string='Link de rastreo', readonly=True, copy=False,
+        help="Link público temporal para rastrear SOLO esta unidad (sin cuenta). Cópialo y compártelo (WhatsApp).")
+
     # Comandos SMS (solo vehículo / SIM nuestra)
     gps_sms_command = fields.Char(string='Comando SMS')
     gps_sms_encoding = fields.Selection([('GSM-7', 'GSM-7'), ('UCS2', 'UCS2')], default='GSM-7', string='Codif.')
@@ -51,6 +57,21 @@ class SubscriptionGpsDevice(models.Model):
     def action_register_senticar(self):
         for dev in self:
             dev.subscription_id._senticar_register_device(dev)
+
+    def action_generate_share_link(self):
+        """Genera el link público temporal para rastrear SOLO esta unidad (X horas)."""
+        self.ensure_one()
+        if not self.senticar_device_id:
+            raise UserError(_("Primero registra el equipo en SentiCar (botón 📲 Registrar)."))
+        res = self.env['sentinela.senticar.service'].create_share_link(
+            self.senticar_device_id, hours=self.gps_share_hours or 24,
+            label=self.name or 'Rastreo')
+        if not res.get('ok'):
+            raise UserError(_("No se pudo generar el link: %s") % res.get('detail'))
+        self.gps_share_link = res['link']
+        self.subscription_id.message_post(body=_(
+            "📍 <b>Link de rastreo</b> generado para <b>%s</b> (válido %sh): %s"
+        ) % (self.name, self.gps_share_hours or 24, res['link']))
 
     def action_refresh_diag(self):
         self.ensure_one()

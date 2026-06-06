@@ -133,6 +133,8 @@
                                             type="object" invisible="not sim_iccid"/>
                                         <button name="action_send_sms" string="📨 Enviar SMS"
                                             type="object" class="btn-warning" invisible="gps_mode == 'movil'"/>
+                                        <button name="action_generate_share_link" string="📍 Generar link de rastreo"
+                                            type="object" class="btn-info" invisible="not senticar_device_id"/>
                                     </header>
                                     <group>
                                         <group string="Equipo">
@@ -149,6 +151,11 @@
                                             <field name="vehicle_model"/>
                                             <field name="senticar_device_id" readonly="1"/>
                                         </group>
+                                    </group>
+                                    <group string="📍 Compartir rastreo (link temporal sin cuenta)">
+                                        <field name="gps_share_hours"/>
+                                        <field name="gps_share_link" widget="CopyClipboardChar" readonly="1"
+                                            placeholder="Presiona '📍 Generar link de rastreo' y aquí aparece el link para copiar/enviar."/>
                                     </group>
                                     <group string="📶 Diagnóstico SIM (floLIVE)" invisible="not sim_iccid">
                                         <field name="gps_sim_status" readonly="1"/>
