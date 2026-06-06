@@ -92,68 +92,79 @@
 
                         <!-- ═══ GPS / RASTREO ═══ -->
                         <page string="🚗 GPS" name="gps" invisible="service_type != 'gps'">
-                            <group>
-                                <group string="Plataforma de Rastreo">
-                                    <field name="gps_platform"/>
-                                    <field name="gps_platform_device_id"/>
-                                </group>
-                                <group string="Dispositivo GPS">
-                                    <field name="gps_imei"/>
-                                    <field name="sim_iccid"/>
-                                    <field name="equipment_brand" string="Marca Rastreador"/>
-                                    <field name="equipment_model" string="Modelo Rastreador"/>
-                                    <field name="equipment_serial" string="Número de Serie"/>
-                                </group>
-                                <group string="Vehículo">
-                                    <field name="vehicle_brand" string="Marca"/>
-                                    <field name="vehicle_model" string="Modelo"/>
-                                    <field name="vehicle_year" string="Año"/>
-                                    <field name="vehicle_color" string="Color"/>
-                                    <field name="vehicle_plate" string="Placa"/>
-                                    <field name="vehicle_vin" string="VIN / NIV"/>
-                                </group>
-                            </group>
-                        </page>
-
-                        <!-- ═══ DIAGNÓSTICO GPS ═══ -->
-                        <page string="🔧 Diagnóstico GPS" name="diagnostico_gps" invisible="service_type != 'gps'">
-                            <div class="o_row mt-2">
-                                <button name="action_refresh_gps_diag" string="🔄 Actualizar Diagnóstico"
-                                    type="object" class="btn-primary me-2"/>
-                                <button name="action_provision_senticar" string="📲 Registrar en SentiCar"
-                                    type="object" class="btn-secondary me-2"
-                                    invisible="gps_platform != 'senticar'"
-                                    help="Registra el equipo en SentiCar y lo vincula a la cuenta del cliente."/>
-                                <field name="senticar_device_id" invisible="1"/>
-                            </div>
-                            <group>
-                                <group string="📶 Estado de la SIM (floLIVE / Connecta)">
-                                    <field name="gps_sim_status"/>
-                                    <field name="gps_sim_online" string="En sesión de datos"/>
-                                    <field name="gps_sim_network"/>
-                                    <field name="gps_sim_last_session"/>
-                                    <field name="gps_sim_checked"/>
-                                </group>
-                                <group string="📍 Última Ubicación Conocida">
-                                    <field name="gps_sim_lat"/>
-                                    <field name="gps_sim_lon"/>
-                                    <field name="gps_sim_map_url" widget="url" text="Ver en Google Maps"/>
-                                </group>
-                            </group>
-                            <separator string="📨 Comandos SMS al GPS (vía Connecta)"/>
                             <div class="alert alert-info" role="status">
-                                Envía un comando SMS al rastreador (mismo mecanismo que el portal floLIVE).
-                                Usa <b>GSM-7</b> para texto normal o <b>UCS2</b> si lleva acentos. El comando
-                                depende del modelo del equipo. Cada envío queda en la bitácora.
+                                Una suscripción GPS = <b>N equipos</b>. El <b>plan</b> define el modo:
+                                <b>Vehículo</b> (SIM nuestra, se corta al suspender) o <b>Móvil</b>
+                                (SIM del cliente, nunca se corta). Agrega/quita equipos por renglón.
                             </div>
                             <group>
-                                <field name="gps_sms_command" placeholder="Ej.: STATUS#  /  WHERE#  (según el modelo del rastreador)"/>
-                                <field name="gps_sms_encoding"/>
-                                <button name="action_send_gps_sms" string="📨 Enviar Comando SMS"
-                                    type="object" class="btn-warning"/>
+                                <group>
+                                    <field name="gps_platform"/>
+                                    <field name="gps_mode" readonly="1"/>
+                                </group>
+                                <group>
+                                    <field name="gps_device_count"/>
+                                    <button name="action_provision_senticar" string="📲 Registrar todos en SentiCar"
+                                        type="object" class="btn-secondary"
+                                        invisible="gps_platform != 'senticar'"/>
+                                </group>
                             </group>
-                            <field name="gps_sms_log" nolabel="1" readonly="1"
-                                placeholder="Aquí se registra cada comando SMS enviado y su resultado."/>
+                            <field name="gps_device_ids">
+                                <list>
+                                    <field name="gps_mode" column_invisible="1"/>
+                                    <field name="gps_platform" column_invisible="1"/>
+                                    <field name="name"/>
+                                    <field name="gps_imei"/>
+                                    <field name="sim_iccid" column_invisible="parent.gps_mode == 'movil'"/>
+                                    <field name="vehicle_plate"/>
+                                    <field name="equipment_model"/>
+                                    <field name="gps_sim_online" optional="show"/>
+                                    <field name="senticar_device_id" readonly="1" optional="show"/>
+                                    <button name="action_register_senticar" string="SentiCar" type="object"
+                                        icon="fa-cloud-upload" invisible="parent.gps_platform != 'senticar'"/>
+                                </list>
+                                <form>
+                                    <field name="gps_mode" invisible="1"/>
+                                    <field name="gps_platform" invisible="1"/>
+                                    <header>
+                                        <button name="action_register_senticar" string="📲 Registrar en SentiCar"
+                                            type="object" class="btn-primary" invisible="gps_platform != 'senticar'"/>
+                                        <button name="action_refresh_diag" string="🔄 Diagnóstico"
+                                            type="object" invisible="not sim_iccid"/>
+                                        <button name="action_send_sms" string="📨 Enviar SMS"
+                                            type="object" class="btn-warning" invisible="gps_mode == 'movil'"/>
+                                    </header>
+                                    <group>
+                                        <group string="Equipo">
+                                            <field name="name"/>
+                                            <field name="gps_imei"/>
+                                            <field name="sim_iccid" invisible="gps_mode == 'movil'"/>
+                                            <field name="equipment_brand"/>
+                                            <field name="equipment_model"/>
+                                            <field name="equipment_serial"/>
+                                        </group>
+                                        <group string="Vehículo / SentiCar">
+                                            <field name="vehicle_plate"/>
+                                            <field name="vehicle_brand"/>
+                                            <field name="vehicle_model"/>
+                                            <field name="senticar_device_id" readonly="1"/>
+                                        </group>
+                                    </group>
+                                    <group string="📶 Diagnóstico SIM (floLIVE)" invisible="not sim_iccid">
+                                        <field name="gps_sim_status" readonly="1"/>
+                                        <field name="gps_sim_online" readonly="1"/>
+                                        <field name="gps_sim_lat" readonly="1"/>
+                                        <field name="gps_sim_lon" readonly="1"/>
+                                        <field name="gps_sim_checked" readonly="1"/>
+                                    </group>
+                                    <group string="📨 Comando SMS" invisible="gps_mode == 'movil'">
+                                        <field name="gps_sms_command" placeholder="Ej.: STATUS#  /  SERVER,0,187.251.199.98,5023,0#"/>
+                                        <field name="gps_sms_encoding"/>
+                                    </group>
+                                    <field name="gps_sms_log" readonly="1" invisible="gps_mode == 'movil'"
+                                        placeholder="Bitácora de comandos SMS enviados a este equipo."/>
+                                </form>
+                            </field>
                         </page>
 
                         <!-- ═══ FACTURACIÓN ═══ -->
