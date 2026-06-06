@@ -83,6 +83,16 @@ class SenticarService(models.AbstractModel):
         did = dev['id']
         if user_id:
             self._req('POST', '/api/permissions', json={'userId': user_id, 'deviceId': did})
+        # Vincular también a la cuenta de monitoreo/admin (Enrique/central) para que vean TODA
+        # la flota, no solo la cuenta del cliente. Configurable: sentinela.senticar_admin_user_id.
+        admin_uid = self.env['ir.config_parameter'].sudo().get_param('sentinela.senticar_admin_user_id')
+        if admin_uid:
+            try:
+                au = int(admin_uid)
+                if au != (user_id or 0):
+                    self._req('POST', '/api/permissions', json={'userId': au, 'deviceId': did})
+            except (ValueError, TypeError):
+                pass
         return did
 
     @api.model
