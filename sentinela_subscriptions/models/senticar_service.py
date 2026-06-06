@@ -83,16 +83,22 @@ class SenticarService(models.AbstractModel):
         did = dev['id']
         if user_id:
             self._req('POST', '/api/permissions', json={'userId': user_id, 'deviceId': did})
-        # Vincular también a la cuenta de monitoreo/admin (Enrique/central) para que vean TODA
-        # la flota, no solo la cuenta del cliente. Configurable: sentinela.senticar_admin_user_id.
-        admin_uid = self.env['ir.config_parameter'].sudo().get_param('sentinela.senticar_admin_user_id')
-        if admin_uid:
+        # Vincular el equipo a TODOS los administradores (Enrique, su hijo, etc.) para que la
+        # central vea toda la flota sin ligar manualmente. Si no se puede leer la lista de
+        # usuarios, cae al param sentinela.senticar_admin_user_id (acepta lista "1,5").
+        admin_ids = []
+        ru = self._req('GET', '/api/users')
+        if ru is not None and ru.status_code == 200:
             try:
-                au = int(admin_uid)
-                if au != (user_id or 0):
-                    self._req('POST', '/api/permissions', json={'userId': au, 'deviceId': did})
-            except (ValueError, TypeError):
-                pass
+                admin_ids = [u['id'] for u in ru.json() if u.get('administrator')]
+            except Exception:
+                admin_ids = []
+        if not admin_ids:
+            p = self.env['ir.config_parameter'].sudo().get_param('sentinela.senticar_admin_user_id') or ''
+            admin_ids = [int(x) for x in str(p).split(',') if x.strip().isdigit()]
+        for au in admin_ids:
+            if au != (user_id or 0):
+                self._req('POST', '/api/permissions', json={'userId': au, 'deviceId': did})
         return did
 
     @api.model
