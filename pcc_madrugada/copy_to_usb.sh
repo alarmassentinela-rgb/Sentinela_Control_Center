@@ -56,6 +56,18 @@ else
 fi
 echo
 
+# --- 3b. Transcript de la conversación actual (para claude --resume) -------
+echo ">> Transcript de la conversación (resume):"
+PROJ="/home/egarza/.claude/projects/-mnt-c-Users-dell-DellCli"
+LATEST=$(ls -t "$PROJ"/*.jsonl 2>/dev/null | head -1)
+if [[ -n "$LATEST" ]]; then
+  mkdir -p "$DEST/transcripts"
+  cp "$LATEST" "$DEST/transcripts/" && echo "   ✔ $(basename "$LATEST") ($(du -h "$LATEST" | cut -f1)) — sesión actual"
+else
+  echo "   (no encontré transcripts)"
+fi
+echo
+
 # --- 4. Scripts PCC + rollbacks + handoff ----------------------------------
 echo ">> Scripts y rollbacks del PCC:"
 cp -r "$SRC_REPO/pcc_madrugada" "$DEST/repo_pcc/" 2>/dev/null && echo "   ✔ pcc_madrugada/ (scripts + handoff)"
@@ -88,6 +100,8 @@ echo ">> Instalando memoria de Claude..."
 mkdir -p ~/.claude/projects/-mnt-c-Users-dell-DellCli/
 rm -rf ~/.claude/projects/-mnt-c-Users-dell-DellCli/memory
 cp -r "$HERE"/memoria/memory ~/.claude/projects/-mnt-c-Users-dell-DellCli/ 2>/dev/null && echo "   ✔ memoria instalada"
+echo ">> Instalando transcript (para 'claude --resume')..."
+cp "$HERE"/transcripts/*.jsonl ~/.claude/projects/-mnt-c-Users-dell-DellCli/ 2>/dev/null && echo "   ✔ transcript instalado — usa: claude --resume (elige esta conversación)"
 echo
 echo ">> FALTA (hazlo a mano una vez):"
 echo "   1) Node + Claude Code:  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt install -y nodejs && npm install -g @anthropic-ai/claude-code"
