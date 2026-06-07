@@ -853,6 +853,27 @@ class SentinelaSubscription(models.Model):
         y One2many.invoice_ids existentes). Para modo by_branch, fija `partner_shipping_id`
         a la dirección de servicio para que la factura muestre la sucursal correspondiente. """
         Move = self.env['account.move']
+        # 🔒 CANDADO ANTI-DUPLICADO: no re-facturar una suscripción cuyo periodo actual
+        # (next_billing_date) ya tenga una factura NO cancelada. Evita facturas dobles del
+        # mismo periodo aunque el cron corra de más, se traslape, o se llame este método dos veces.
+        billables = self.env['sentinela.subscription']
+        omitidas = []
+        for sub in subs_list:
+            dup = Move.search_count([
+                ('move_type', '=', 'out_invoice'),
+                ('state', '!=', 'cancel'),
+                '|', ('subscription_ids', 'in', sub.id), ('subscription_id', '=', sub.id),
+                ('invoice_line_ids.name', 'ilike', 'Periodo: %s' % sub.next_billing_date),
+            ])
+            if dup:
+                omitidas.append(sub.name)
+            else:
+                billables |= sub
+        if omitidas:
+            _logger.warning("BILLING anti-duplicado: omitidas (ya facturadas este periodo): %s", omitidas)
+        if not billables:
+            return
+        subs_list = billables
         partner = subs_list[0].partner_id
         first_sub = subs_list[0]
         method = partner.invoice_grouping_method or 'individual'
