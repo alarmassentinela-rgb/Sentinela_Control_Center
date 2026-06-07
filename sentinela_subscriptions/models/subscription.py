@@ -346,6 +346,9 @@ class SentinelaSubscription(models.Model):
     live_traffic_tx = fields.Char(string='⬆ Subida (TX)', readonly=True)
     live_traffic_updated = fields.Datetime(string='Última lectura', readonly=True)
     live_traffic_graph = fields.Char(string='Gráfica', readonly=True)  # dummy para el widget OWL
+    # Diagnóstico REAL de navegación (no solo "conectado al router")
+    nav_status = fields.Char(string='Diagnóstico de Navegación', readonly=True)
+    nav_status_date = fields.Datetime(string='Validado el', readonly=True)
     # Señal de la antena CPE (airOS, vía SSH mca-status)
     antenna_signal_dbm = fields.Char(string='Señal', readonly=True)
     antenna_snr = fields.Char(string='SNR', readonly=True)
@@ -1296,6 +1299,82 @@ class SentinelaSubscription(models.Model):
                 'params': {'title': _('Ping a %s') % target_ip,
                            'message': _('%s/%s recibidos · pérdida %s%% · latencia %s (max %s)') % (recv, sent, loss, avg, max_rtt),
                            'type': tipo, 'sticky': False}}
+
+    def _nav_notif(self, msg, tipo):
+        return {'type': 'ir.actions.client', 'tag': 'display_notification',
+                'params': {'title': _('Diagnóstico de Navegación'), 'message': msg, 'type': tipo, 'sticky': True}}
+
+    def action_validar_navegacion(self):
+        """Diagnóstico REAL: ¿el cliente NAVEGA o solo está conectado al router?
+        'Conectada' (sesión PPPoE) NO garantiza internet: un suspendido sigue conectado
+        pero en walled-garden. Esto distingue de verdad leyendo el perfil del secret +
+        el conntrack (conexiones a Internet CON datos de vuelta)."""
+        self.ensure_one()
+        SUSPENDED_PROFILE = 'argusblack_servicio_suspendido'
+        if not self.router_id or not self.pppoe_user:
+            raise UserError(_('Se requiere router y usuario PPPoE.'))
+        import routeros_api
+        conn = routeros_api.RouterOsApiPool(
+            self.router_id.ip_address, username=self.router_id.api_user or 'gemini_api',
+            password=self.router_id.api_password or '', port=int(self.router_id.api_port or 8728),
+            plaintext_login=True)
+        try:
+            api = conn.get_api()
+            # 1. ¿hay sesión PPPoE? (conectado al router)
+            sess = api.get_resource('/ppp/active').get(name=self.pppoe_user)
+            if not sess:
+                verdict, tipo = '⚫ DESCONECTADO — sin sesión PPPoE en el router.', 'danger'
+                conn.disconnect()
+                self.write({'nav_status': verdict, 'nav_status_date': fields.Datetime.now()})
+                self.message_post(body=_('🔎 <b>Validación de navegación:</b> %s') % verdict)
+                return self._nav_notif(verdict, tipo)
+            client_ip = sess[0].get('address', self.ip_address)
+            # 2. ¿el secret está en perfil suspendido? (walled-garden = conecta pero NO navega)
+            sec = api.get_resource('/ppp/secret').get(name=self.pppoe_user)
+            profile = sec[0].get('profile') if sec else ''
+            if profile == SUSPENDED_PROFILE:
+                verdict = _('🔴 SUSPENDIDO — conectado al router pero en walled-garden (SIN internet). IP %s') % client_ip
+                conn.disconnect()
+                self.write({'nav_status': verdict, 'nav_status_date': fields.Datetime.now()})
+                self.message_post(body=_('🔎 <b>Validación de navegación:</b> %s') % verdict)
+                return self._nav_notif(verdict, 'warning')
+            # 3. conntrack: ¿tiene conexiones a Internet CON respuesta?
+            def es_publica(ip):
+                ip = (ip or '').split(':')[0]
+                if not ip:
+                    return False
+                return not (ip.startswith('10.') or ip.startswith('192.168.') or ip.startswith('127.')
+                            or any(ip.startswith('172.%d.' % n) for n in range(16, 32)))
+            inet = con_datos = 0
+            cip = str(client_ip)
+            for c in api.get_resource('/ip/firewall/connection').get():
+                src = c.get('src-address', '') or ''
+                if src == cip or src.startswith(cip + ':'):
+                    if es_publica(c.get('dst-address', '')):
+                        inet += 1
+                        if int(c.get('repl-bytes', 0) or 0) > 200:
+                            con_datos += 1
+            conn.disconnect()
+            if con_datos > 0:
+                verdict = _('🟢 NAVEGANDO — %d conexiones a Internet con datos de vuelta. IP %s') % (con_datos, client_ip)
+                tipo = 'success'
+            elif inet > 0:
+                verdict = _('🟠 SOSPECHOSO — %d conexiones a Internet pero SIN respuesta (¿enlace caído / bloqueo?). IP %s') % (inet, client_ip)
+                tipo = 'warning'
+            else:
+                verdict = _('🟡 CONECTADO, sin tráfico ahora — activo y NO bloqueado, pero no usa internet en este momento. IP %s') % client_ip
+                tipo = 'info'
+            self.write({'nav_status': verdict, 'nav_status_date': fields.Datetime.now()})
+            self.message_post(body=_('🔎 <b>Validación de navegación:</b> %s') % verdict)
+            return self._nav_notif(verdict, tipo)
+        except UserError:
+            try: conn.disconnect()
+            except Exception: pass
+            raise
+        except Exception as e:
+            try: conn.disconnect()
+            except Exception: pass
+            raise UserError(_('Error al validar navegación: %s') % e)
 
     def action_view_traffic(self):
         """Actualiza el panel de tráfico en vivo EMBEBIDO en el formulario (sin popup)."""

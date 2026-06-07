@@ -296,12 +296,19 @@
                         <!-- ═══ DIAGNÓSTICO ═══ -->
                         <page string="🔧 Diagnóstico" name="diagnostico" invisible="service_type != 'internet'">
                             <div class="o_row mt-2">
+                                <button name="action_validar_navegacion" string="🔎 Validar Navegación"
+                                    type="object" class="btn-primary me-2"
+                                    help="Diagnóstico REAL: distingue Navegando / Suspendido (sin internet) / Idle / Desconectado, no solo si está conectado al router."/>
                                 <button name="action_open_ping_wizard" string="📶 Ping"
                                     type="object" class="btn-secondary me-2" invisible="state != 'active'"/>
                                 <button name="action_check_connection" string="Verificar Conexión"
                                     type="object" class="btn-secondary me-2" invisible="state != 'active'"/>
                                 <button name="action_signal_antenna" string="📡 Actualizar Señal"
                                     type="object" class="btn-warning" invisible="state != 'active' or connection_equipment != 'antenna_airos'"/>
+                            </div>
+                            <div class="alert alert-info mt-2 mb-0" role="status" invisible="not nav_status">
+                                <field name="nav_status" nolabel="1" readonly="1"/>
+                                <field name="nav_status_date" nolabel="1" readonly="1" class="text-muted"/>
                             </div>
                             <!-- ESTADO DE CONEXIÓN (automático, lo refresca el cron cada 15 min) -->
                             <group string="🔌 Estado de Conexión (automático)">
