@@ -65,6 +65,16 @@ cp "$SRC_REPO"/failoverConfig_ORIGINAL*.rsc "$DEST/repo_pcc/" 2>/dev/null && ech
 cp "$SRC_REPO/pcc_madrugada/HANDOFF_PCC_MADRUGADA.md" "$DEST/docs/" 2>/dev/null && echo "   ✔ HANDOFF en docs/"
 echo
 
+# --- 4b. VPN (sensible, gitignored) ----------------------------------------
+echo ">> VPN (acceso remoto):"
+if [[ -d "$SRC_REPO/vpn_laptop" ]]; then
+  mkdir -p "$DEST/vpn"
+  cp "$SRC_REPO"/vpn_laptop/* "$DEST/vpn/" 2>/dev/null && echo "   ✔ VPN_LAPTOP.md + setup_vpn_b64.txt"
+else
+  echo "   (no encontrada carpeta vpn_laptop)"
+fi
+echo
+
 # --- 5. Generar setup_laptop.sh (se corre EN LA LAPTOP) --------------------
 cat > "$DEST/setup_laptop.sh" <<'LAPTOP'
 #!/usr/bin/env bash

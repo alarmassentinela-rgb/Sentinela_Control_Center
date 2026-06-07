@@ -3,3 +3,5 @@ __pycache__/
 *.log
 *.tar.gz
 .ssh/
+.vpn_*_credentials.json
+vpn_laptop/
