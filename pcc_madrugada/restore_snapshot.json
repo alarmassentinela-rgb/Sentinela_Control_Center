@@ -1,0 +1,131 @@
+{
+ "routes": [
+  {
+   "id": "*2A",
+   "mark": "to_ISP2",
+   "gw": "208.67.220.220",
+   "dist": "1",
+   "disabled": "false",
+   "tipo": "recursiva"
+  },
+  {
+   "id": "*2B",
+   "mark": "to_ISP2",
+   "gw": "208.67.222.222",
+   "dist": "2",
+   "disabled": "false",
+   "tipo": "recursiva"
+  },
+  {
+   "id": "*2C",
+   "mark": "to_ISP2",
+   "gw": "9.9.9.9",
+   "dist": "2",
+   "disabled": "false",
+   "tipo": "recursiva"
+  },
+  {
+   "id": "*2",
+   "mark": "to_ISP2",
+   "gw": "192.168.2.254%ether2_WAN",
+   "dist": "1",
+   "disabled": "true",
+   "tipo": "directa"
+  },
+  {
+   "id": "*27",
+   "mark": "to_ISP1",
+   "gw": "208.67.222.222",
+   "dist": "1",
+   "disabled": "false",
+   "tipo": "recursiva"
+  },
+  {
+   "id": "*28",
+   "mark": "to_ISP1",
+   "gw": "9.9.9.9",
+   "dist": "2",
+   "disabled": "false",
+   "tipo": "recursiva"
+  },
+  {
+   "id": "*29",
+   "mark": "to_ISP1",
+   "gw": "208.67.220.220",
+   "dist": "2",
+   "disabled": "false",
+   "tipo": "recursiva"
+  },
+  {
+   "id": "*1",
+   "mark": "to_ISP1",
+   "gw": "192.168.1.254%ether1_WAN",
+   "dist": "1",
+   "disabled": "true",
+   "tipo": "directa"
+  },
+  {
+   "id": "*14",
+   "mark": "to_ISP1",
+   "gw": "192.168.0.254%ether3_WAN",
+   "dist": "2",
+   "disabled": "true",
+   "tipo": "directa"
+  },
+  {
+   "id": "*15",
+   "mark": "to_ISP1",
+   "gw": "192.168.2.254%ether2_WAN",
+   "dist": "3",
+   "disabled": "true",
+   "tipo": "directa"
+  },
+  {
+   "id": "*2D",
+   "mark": "to_ISP3",
+   "gw": "9.9.9.9",
+   "dist": "1",
+   "disabled": "false",
+   "tipo": "recursiva"
+  },
+  {
+   "id": "*2E",
+   "mark": "to_ISP3",
+   "gw": "208.67.222.222",
+   "dist": "2",
+   "disabled": "false",
+   "tipo": "recursiva"
+  },
+  {
+   "id": "*2F",
+   "mark": "to_ISP3",
+   "gw": "208.67.220.220",
+   "dist": "2",
+   "disabled": "false",
+   "tipo": "recursiva"
+  },
+  {
+   "id": "*3",
+   "mark": "to_ISP3",
+   "gw": "192.168.0.254%ether3_WAN",
+   "dist": "1",
+   "disabled": "true",
+   "tipo": "directa"
+  }
+ ],
+ "ether2": {
+  "id": "*3",
+  "disabled": "true"
+ },
+ "nat_iface": [
+  {
+   "id": "*45",
+   "out": "ether2_WAN"
+  },
+  {
+   "id": "*46",
+   "out": "ether3_WAN"
+  }
+ ],
+ "foisps": ":global foIsps {{1;1} };"
+}
