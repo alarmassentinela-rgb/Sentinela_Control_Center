@@ -43,7 +43,7 @@
                             </span>
                         </div>
                         <!-- Datos de la empresa (más grandes) -->
-                        <div style="display:table-cell; width:38%; vertical-align:middle; padding-left:14px; font-size:12px; line-height:1.7; color:#333;">
+                        <div style="display:table-cell; width:34%; vertical-align:middle; padding-left:14px; font-size:12px; line-height:1.7; color:#333;">
                             <div style="font-weight:bold; font-size:19px; color:#1a3a5c; margin-bottom:3px;"><t t-esc="o.company_id.name"/></div>
                             <div><t t-esc="o.company_id.street or ''"/><t t-if="o.company_id.street2">, <t t-esc="o.company_id.street2"/></t></div>
                             <div><t t-esc="o.company_id.city or ''"/><t t-if="o.company_id.state_id">, <t t-esc="o.company_id.state_id.name"/></t> <t t-esc="o.company_id.zip or ''"/></div>
@@ -53,20 +53,20 @@
                             <div t-if="o.company_id.email"><strong>Email:</strong> <t t-esc="o.company_id.email"/></div>
                         </div>
                         <!-- Caja del documento -->
-                        <div style="display:table-cell; width:32%; vertical-align:middle; text-align:right;">
-                            <div style="border:2px solid #1a3a5c; border-radius:5px; overflow:hidden; display:inline-block; width:218px; text-align:left;">
+                        <div style="display:table-cell; width:36%; vertical-align:middle; text-align:right;">
+                            <div style="border:2px solid #1a3a5c; border-radius:5px; overflow:hidden; display:inline-block; width:250px; text-align:left;">
                                 <div style="background:#1a3a5c; color:white; padding:7px 12px; font-size:17px; font-weight:bold; text-align:center; letter-spacing:1.5px;">
                                     <t t-esc="doc_label"/>
                                 </div>
-                                <div style="padding:8px 13px; font-size:12px; line-height:1.95;">
-                                    <div><strong>Folio:</strong> <t t-esc="o.name"/></div>
-                                    <div><strong>Fecha:</strong> <span t-field="o.invoice_date"/></div>
-                                    <div><strong>Moneda:</strong> <t t-esc="o.currency_id.name"/></div>
-                                    <!-- Datos puramente fiscales: solo en factura timbrada -->
+                                <div style="padding:8px 13px; font-size:12px; line-height:1.85;">
+                                    <div><strong>Referencia Interna:</strong> <t t-esc="o.name"/></div>
+                                    <div><strong>Fecha de Emisión:</strong> <span t-field="o.invoice_date"/></div>
+                                    <!-- Datos del timbre: solo en factura timbrada -->
                                     <t t-if="o.cfdi_uuid">
-                                        <div><strong>Forma Pago:</strong> <t t-esc="o.l10n_mx_edi_payment_method_id_code or '99'"/></div>
-                                        <div><strong>Método Pago:</strong> PUE</div>
-                                        <div><strong>Lugar Exp.:</strong> <t t-esc="o.company_id.zip or ''"/></div>
+                                        <div style="margin-top:4px;"><strong>Folio Fiscal:</strong><br/><span style="font-family:monospace; font-size:9.5px; white-space:nowrap;"><t t-esc="o.cfdi_uuid"/></span></div>
+                                        <div style="margin-top:3px; font-size:10px;"><strong>Fecha de Certificación:</strong> <t t-esc="o._get_fecha_certificacion()"/></div>
+                                        <div style="font-size:10px;"><strong>Serie Cert. SAT:</strong> <span style="font-family:monospace;"><t t-esc="o._get_certificado_sat()"/></span></div>
+                                        <div style="font-size:10px;"><strong>Serie Cert. Contribuyente:</strong> <span style="font-family:monospace;"><t t-esc="o._get_certificado_contribuyente()"/></span></div>
                                     </t>
                                 </div>
                             </div>
@@ -146,8 +146,9 @@
                                         <span t-field="o.narration"/>
                                     </div>
                                 </t>
-                                <div style="margin-top:5px;">
-                                    <strong>Condiciones de Pago:</strong> <span t-field="o.invoice_payment_term_id.name"/>
+                                <div style="margin-top:6px; font-size:11px; color:#333;">
+                                    <strong>Importe con letra:</strong> <t t-esc="o.currency_id.amount_to_text(o.amount_total)"/> <t t-esc="'%02d/100 M.N.' % int(round((o.amount_total % 1) * 100))"/>
+                                    <br/><strong>Moneda:</strong> <t t-esc="o.currency_id.name"/> Pesos Mexicanos
                                 </div>
                             </td>
                             <td style="width:45%; vertical-align:top;">
@@ -171,6 +172,30 @@
                         </tr>
                     </table>
 
+                    <!-- CONDICIONES DE LA VENTA -->
+                    <div style="border:1px solid #1a3a5c; border-radius:3px; margin-bottom:8px; overflow:hidden;">
+                        <div style="background:#1a3a5c; color:white; padding:4px 10px; font-size:11px; font-weight:bold;">CONDICIONES DE LA VENTA</div>
+                        <div style="padding:6px 10px; font-size:11px; line-height:1.7; background:#f7fafd;">
+                            <table style="width:100%;">
+                                <tr>
+                                    <td style="width:34%; vertical-align:top;"><strong>Condiciones de Pago:</strong> <t t-esc="o.invoice_payment_term_id.name or 'Contado'"/></td>
+                                    <td style="width:33%; vertical-align:top;"><strong>Método de Pago:</strong> PUE</td>
+                                    <td style="width:33%; vertical-align:top;"><strong>Forma de Pago:</strong> <span t-field="o.l10n_mx_edi_payment_method_id_code"/></td>
+                                </tr>
+                                <tr>
+                                    <td style="vertical-align:top;"><strong>Lugar de Expedición:</strong> <t t-esc="o.company_id.zip or ''"/></td>
+                                    <td style="vertical-align:top;"><strong>Uso de CFDI:</strong> <t t-esc="o.partner_id.l10n_mx_edi_usage or 'G03'"/></td>
+                                    <td style="vertical-align:top;"><strong>Tipo de Comprobante:</strong> <t t-esc="'E - Egreso' if o.move_type == 'out_refund' else 'I - Ingreso'"/></td>
+                                </tr>
+                                <tr>
+                                    <td style="vertical-align:top;"><strong>Exportación:</strong> 01 - No aplica</td>
+                                    <td style="vertical-align:top;"></td>
+                                    <td style="vertical-align:top;"></td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+
                     <!-- SECCION CFDI -->
                     <t t-if="o.cfdi_uuid">
                         <t t-set="qr_b64" t-value="o._get_cfdi_qr_b64()"/>
@@ -186,22 +211,6 @@
                                             <table style="width:100%; border-collapse:collapse; font-size:10px; line-height:1.7; table-layout:fixed;">
                                                 <col style="width:25%;"/>
                                                 <col style="width:75%;"/>
-                                                <tr>
-                                                    <td style="color:#1a3a5c; font-weight:bold; vertical-align:top;">UUID:</td>
-                                                    <td style="font-family:monospace; word-break:break-all; overflow-wrap:break-word;"><t t-esc="o.cfdi_uuid"/></td>
-                                                </tr>
-                                                <tr>
-                                                    <td style="color:#1a3a5c; font-weight:bold; vertical-align:top;">Fecha Timbrado:</td>
-                                                    <td><t t-esc="o._get_fecha_certificacion()"/></td>
-                                                </tr>
-                                                <tr>
-                                                    <td style="color:#1a3a5c; font-weight:bold; vertical-align:top;">No. Cert. SAT:</td>
-                                                    <td style="font-family:monospace; word-break:break-all; overflow-wrap:break-word;"><t t-esc="o._get_certificado_sat()"/></td>
-                                                </tr>
-                                                <tr>
-                                                    <td style="color:#1a3a5c; font-weight:bold; vertical-align:top;">No. Cert. Emisor:</td>
-                                                    <td style="font-family:monospace; word-break:break-all; overflow-wrap:break-word;"><t t-esc="o._get_certificado_contribuyente()"/></td>
-                                                </tr>
                                                 <tr>
                                                     <td style="color:#1a3a5c; font-weight:bold; vertical-align:top;">Sello CFDI:</td>
                                                     <td style="font-family:monospace; font-size:7px; word-break:break-all; overflow-wrap:break-word; background:#eaf2fb; padding:2px;"><t t-esc="o._get_sello_cfd()"/></td>
