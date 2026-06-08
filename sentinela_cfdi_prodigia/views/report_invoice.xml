@@ -89,7 +89,6 @@
                                 <td style="width:50%; font-size:11px; line-height:1.6; vertical-align:top;">
                                     <div><strong>RFC:</strong> <t t-esc="o.partner_id.vat or 'XAXX010101000'"/></div>
                                     <div><strong>Regimen Fiscal:</strong> <t t-esc="o.partner_id.l10n_mx_edi_fiscal_regime or ''"/></div>
-                                    <div><strong>Uso CFDI:</strong> <t t-esc="o.partner_id.l10n_mx_edi_usage or 'G03'"/></div>
                                     <div t-if="o.partner_id.phone"><strong>Tel:</strong> <t t-esc="o.partner_id.phone"/></div>
                                 </td>
                             </tr>
@@ -205,37 +204,32 @@
                             <div style="background:#1a3a5c; color:white; padding:4px 10px; font-size:11px; font-weight:bold;">
                                 TIMBRE FISCAL DIGITAL - CFDI 4.0
                             </div>
-                            <div style="border:1px solid #c8d8e8; border-top:none; padding:7px 10px; background:#f7fafd;">
-                                <table style="width:100%; border-collapse:collapse;">
-                                    <tr>
-                                        <!-- Datos fiscales -->
-                                        <td style="vertical-align:top; padding-right:10px;">
-                                            <table style="width:100%; border-collapse:collapse; font-size:10px; line-height:1.7; table-layout:fixed;">
-                                                <col style="width:25%;"/>
-                                                <col style="width:75%;"/>
-                                                <tr>
-                                                    <td style="color:#1a3a5c; font-weight:bold; vertical-align:top;">Sello CFDI:</td>
-                                                    <td style="font-family:monospace; font-size:7px; word-break:break-all; overflow-wrap:break-word; background:#eaf2fb; padding:2px;"><t t-esc="o._get_sello_cfd()"/></td>
-                                                </tr>
-                                                <tr>
-                                                    <td style="color:#1a3a5c; font-weight:bold; vertical-align:top;">Sello SAT:</td>
-                                                    <td style="font-family:monospace; font-size:7px; word-break:break-all; overflow-wrap:break-word; background:#eaf2fb; padding:2px;"><t t-esc="o._get_sello_sat()"/></td>
-                                                </tr>
-                                            </table>
-                                            <div style="margin-top:4px; font-size:7px; font-family:monospace; word-break:break-all; overflow-wrap:break-word; background:#eaf2fb; padding:3px 5px; border-radius:2px;">
-                                                <strong style="color:#1a3a5c;">Cadena Original SAT:</strong> <t t-esc="o._get_cadena_original_sat()"/>
-                                            </div>
-                                        </td>
-                                        <!-- Codigo QR -->
-                                        <td style="vertical-align:top; text-align:center; width:130px;">
-                                            <t t-if="qr_b64">
-                                                <img t-att-src="'data:image/png;base64,' + qr_b64"
-                                                     style="width:120px; height:120px; display:block; margin:0 auto;"/>
-                                                <div style="font-size:7px; color:#555; margin-top:2px; text-align:center;">Verificar en sat.gob.mx</div>
-                                            </t>
-                                        </td>
-                                    </tr>
-                                </table>
+                            <div style="border:1px solid #c8d8e8; border-top:none; padding:8px 10px; background:#f7fafd;">
+                                <div style="display:table; width:100%;">
+                                    <!-- Datos fiscales (sin tablas/recuadros para verse limpio) -->
+                                    <div style="display:table-cell; vertical-align:top; padding-right:12px; font-size:7px; line-height:1.5;">
+                                        <div style="margin-bottom:5px;">
+                                            <span style="color:#1a3a5c; font-weight:bold; font-size:9px;">Sello Digital del CFDI:</span><br/>
+                                            <span style="font-family:monospace; word-break:break-all; overflow-wrap:break-word;"><t t-esc="o._get_sello_cfd()"/></span>
+                                        </div>
+                                        <div style="margin-bottom:5px;">
+                                            <span style="color:#1a3a5c; font-weight:bold; font-size:9px;">Sello Digital del SAT:</span><br/>
+                                            <span style="font-family:monospace; word-break:break-all; overflow-wrap:break-word;"><t t-esc="o._get_sello_sat()"/></span>
+                                        </div>
+                                        <div>
+                                            <span style="color:#1a3a5c; font-weight:bold; font-size:9px;">Cadena Original del Complemento de Certificación:</span><br/>
+                                            <span style="font-family:monospace; word-break:break-all; overflow-wrap:break-word;"><t t-esc="o._get_cadena_original_sat()"/></span>
+                                        </div>
+                                    </div>
+                                    <!-- Codigo QR -->
+                                    <div style="display:table-cell; vertical-align:top; text-align:center; width:130px;">
+                                        <t t-if="qr_b64">
+                                            <img t-att-src="'data:image/png;base64,' + qr_b64"
+                                                 style="width:120px; height:120px; display:block; margin:0 auto;"/>
+                                            <div style="font-size:7px; color:#555; margin-top:2px; text-align:center;">Verificar en sat.gob.mx</div>
+                                        </t>
+                                    </div>
+                                </div>
                             </div>
                             <div style="background:#1a3a5c; color:#aac4e0; font-size:9px; text-align:center; padding:3px 10px;">
                                 Representacion impresa de un CFDI.
