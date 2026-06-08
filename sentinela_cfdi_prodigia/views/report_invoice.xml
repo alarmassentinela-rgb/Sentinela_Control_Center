@@ -29,6 +29,8 @@
                 <!-- Tasa de IVA REAL de la factura (8% frontera u 16%), no hardcodear -->
                 <t t-set="_taxed_lines" t-value="o.invoice_line_ids.filtered(lambda l: l.display_type == 'product' and l.tax_ids)"/>
                 <t t-set="iva_rate" t-value="int(round(_taxed_lines[0].tax_ids[0].amount)) if _taxed_lines else 16"/>
+                <!-- Emisor: razón social fiscal (persona física = nombre legal). La marca "Sentinela" queda en el logo. -->
+                <t t-set="emisor_name" t-value="o.company_id.l10n_mx_edi_fiscal_name or o.company_id.name"/>
                 <div class="page" style="font-family: Arial, sans-serif; font-size: 12px; color: #222;">
 
                     <!-- ENCABEZADO (divs display:table para evitar bordes por defecto del <table>) -->
@@ -39,12 +41,12 @@
                                  t-att-src="'data:image/png;base64,' + logo_b64"
                                  style="max-height:68px; max-width:205px; height:auto; margin:0 auto; display:inline-block;"/>
                             <span t-else="" style="font-size:18px; font-weight:bold; color:#1a3a5c;">
-                                <t t-esc="o.company_id.name"/>
+                                <t t-esc="emisor_name"/>
                             </span>
                         </div>
                         <!-- Datos de la empresa (más grandes) -->
                         <div style="display:table-cell; width:34%; vertical-align:middle; padding-left:14px; font-size:12px; line-height:1.7; color:#333;">
-                            <div style="font-weight:bold; font-size:19px; color:#1a3a5c; margin-bottom:3px;"><t t-esc="o.company_id.name"/></div>
+                            <div style="font-weight:bold; font-size:19px; color:#1a3a5c; margin-bottom:3px;"><t t-esc="emisor_name"/></div>
                             <div><t t-esc="o.company_id.street or ''"/><t t-if="o.company_id.street2">, <t t-esc="o.company_id.street2"/></t></div>
                             <div><t t-esc="o.company_id.city or ''"/><t t-if="o.company_id.state_id">, <t t-esc="o.company_id.state_id.name"/></t> <t t-esc="o.company_id.zip or ''"/></div>
                             <div><strong>RFC:</strong> <t t-esc="o.company_id.vat or ''"/></div>
