@@ -89,7 +89,8 @@
                                 <td style="width:50%; font-size:11px; line-height:1.6; vertical-align:top;">
                                     <div><strong>RFC:</strong> <t t-esc="o.partner_id.vat or 'XAXX010101000'"/></div>
                                     <div><strong>Regimen Fiscal:</strong> <t t-esc="o.partner_id.l10n_mx_edi_fiscal_regime or ''"/></div>
-                                    <div t-if="o.partner_id.phone"><strong>Tel:</strong> <t t-esc="o.partner_id.phone"/></div>
+                                    <div t-if="o.partner_id.phone or o.partner_id.mobile"><strong>Tel:</strong> <t t-esc="o.partner_id.phone or o.partner_id.mobile"/></div>
+                                    <div t-if="o.partner_id.email"><strong>Email:</strong> <t t-esc="o.partner_id.email"/></div>
                                 </td>
                             </tr>
                         </table>
