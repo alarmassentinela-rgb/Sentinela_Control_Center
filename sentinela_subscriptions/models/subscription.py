@@ -1331,9 +1331,15 @@ class SentinelaSubscription(models.Model):
         pero en walled-garden. Esto distingue de verdad leyendo el perfil del secret +
         el conntrack (conexiones a Internet CON datos de vuelta)."""
         self.ensure_one()
+        if not self.router_id:
+            raise UserError(_('Se requiere un router asignado.'))
+        # Dedicada/empresarial (IP fija sobre el Balanceador, SIN PPPoE): se diagnostica
+        # por IP fija leyendo el conntrack del router (solo lectura, no toca el enlace).
+        if self.internet_mgmt_mode == 'static':
+            return self._validar_navegacion_static()
         SUSPENDED_PROFILE = 'argusblack_servicio_suspendido'
-        if not self.router_id or not self.pppoe_user:
-            raise UserError(_('Se requiere router y usuario PPPoE.'))
+        if not self.pppoe_user:
+            raise UserError(_('Se requiere usuario PPPoE.'))
         import routeros_api
         conn = routeros_api.RouterOsApiPool(
             self.router_id.ip_address, username=self.router_id.api_user or 'gemini_api',
@@ -1396,6 +1402,75 @@ class SentinelaSubscription(models.Model):
             try: conn.disconnect()
             except Exception: pass
             raise UserError(_('Error al validar navegación: %s') % e)
+
+    def _validar_navegacion_static(self):
+        """Diagnóstico para conexión DEDICADA/estática (IP fija sobre el Balanceador,
+        sin PPPoE). No hay sesión PPPoE ni walled-garden: se lee la SIMPLE QUEUE de la
+        IP fija (tabla chica, con tasa en vivo) para saber si el servicio está habilitado
+        y si hay tráfico ahora. 100% lectura — no modifica NAT, queue ni nada del enlace.
+        Además refresca el panel de tráfico en vivo con la tasa real de la queue."""
+        self.ensure_one()
+        if not self.ip_address:
+            raise UserError(_('La suscripción dedicada no tiene IP fija asignada.'))
+        import routeros_api
+        conn = routeros_api.RouterOsApiPool(
+            self.router_id.ip_address, username=self.router_id.api_user or 'gemini_api',
+            password=self.router_id.api_password or '', port=int(self.router_id.api_port or 8728),
+            plaintext_login=True)
+        cip = str(self.ip_address)
+
+        def mbps(v):
+            try:
+                return round(int(v) / 1000000.0, 2)
+            except Exception:
+                return 0.0
+        try:
+            api = conn.get_api()
+            q = None
+            for item in api.get_resource('/queue/simple').get():
+                tgt = item.get('target', '') or ''
+                if cip == tgt.split('/')[0] or cip in tgt:
+                    q = item
+                    break
+            conn.disconnect()
+            if not q:
+                verdict = _('⚪ Sin queue dedicada para la IP %s en el Balanceador — no se puede diagnosticar por tasa.') % cip
+                self.write({'nav_status': verdict, 'nav_status_date': fields.Datetime.now()})
+                self.message_post(body=_('🔎 <b>Validación de navegación (dedicada):</b> %s') % verdict)
+                return self._nav_notif(verdict, 'warning')
+            # tasa en vivo de la queue: "subida/bajada" en bps
+            rate = q.get('rate', '0/0') or '0/0'
+            parts = (rate.split('/') + ['0', '0'])[:2]
+            up, down = mbps(parts[0]), mbps(parts[1])
+            qname = q.get('name', '') or '?'
+            if (q.get('disabled') or 'false') == 'true':
+                verdict = _('🔴 SUSPENDIDO — la queue dedicada «%s» está DESHABILITADA en el Balanceador (sin servicio). IP %s') % (qname, cip)
+                tipo = 'warning'
+                status_live = '🔴 Suspendido'
+            elif down > 0 or up > 0:
+                verdict = _('🟢 NAVEGANDO — tráfico en vivo ⬇ %s Mbps / ⬆ %s Mbps (queue «%s»). IP dedicada %s') % (down, up, qname, cip)
+                tipo = 'success'
+                status_live = '🟢 En línea'
+            else:
+                verdict = _('🟡 ENLACE ACTIVO, sin tráfico ahora — queue «%s» habilitada pero 0 Mbps en este instante. IP %s') % (qname, cip)
+                tipo = 'info'
+                status_live = '🟡 Sin tráfico'
+            self.write({
+                'nav_status': verdict, 'nav_status_date': fields.Datetime.now(),
+                'live_traffic_status': status_live, 'live_traffic_ip': cip,
+                'live_traffic_rx': '%s Mbps' % down, 'live_traffic_tx': '%s Mbps' % up,
+                'live_traffic_updated': fields.Datetime.now(),
+            })
+            self.message_post(body=_('🔎 <b>Validación de navegación (dedicada):</b> %s') % verdict)
+            return self._nav_notif(verdict, tipo)
+        except UserError:
+            try: conn.disconnect()
+            except Exception: pass
+            raise
+        except Exception as e:
+            try: conn.disconnect()
+            except Exception: pass
+            raise UserError(_('Error al validar navegación (dedicada): %s') % e)
 
     def action_view_traffic(self):
         """Actualiza el panel de tráfico en vivo EMBEBIDO en el formulario (sin popup)."""
