@@ -1,6 +1,6 @@
 {
     'name': 'Sentinela CFDI Prodigia',
-    'version': '18.0.1.1.3',
+    'version': '18.0.1.1.7',
     'category': 'Accounting/Localizations',
     'summary': 'Emisión de CFDI 4.0 a través de Prodigia para Odoo 18 Community.',
     'depends': ['account', 'base'],
