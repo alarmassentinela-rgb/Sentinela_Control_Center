@@ -1945,17 +1945,25 @@ class SentinelaSubscription(models.Model):
                 sub.recurring_interval = sub.product_id.default_recurring_interval
             if sub.product_id.service_type and not sub.service_type:
                 sub.service_type = sub.product_id.service_type
-            # Prellenar Servicios Incluidos desde la matriz del plan (si no hay nada cargado)
-            if not sub.service_inclusion_ids:
-                matrix = self.env['sentinela.product.service.inclusion'].sudo().search([
-                    ('product_id', '=', sub.product_id.id),
-                ])
-                if matrix:
-                    sub.service_inclusion_ids = [(0, 0, {
+            # Prellenar Servicios Incluidos desde la matriz del plan.
+            # Agrega SOLO los servicios faltantes (no sobreescribe), de modo que
+            # al cambiar de plan en una sub existente aparezcan los nuevos servicios
+            # del plan sin borrar los que ya tenía. Evita que el constraint
+            # _check_service_inclusions_complete bloquee el guardado.
+            matrix = self.env['sentinela.product.service.inclusion'].sudo().search([
+                ('product_id', '=', sub.product_id.id),
+            ])
+            if matrix:
+                existing_ids = set(sub.service_inclusion_ids.mapped('service_id.id'))
+                SubInc = self.env['sentinela.subscription.service.inclusion']
+                for row in matrix:
+                    if row.service_id.id in existing_ids:
+                        continue
+                    sub.service_inclusion_ids += SubInc.new({
                         'service_id': row.service_id.id,
                         'is_included': row.is_included,
                         'extra_price': row.extra_price,
-                    }) for row in matrix]
+                    })
 
     @api.onchange('antenna_product_id')
     def _onchange_antenna_product_id(self):
@@ -1988,7 +1996,12 @@ class SentinelaSubscription(models.Model):
     def write(self, vals):
         if 'billing_mode' in vals and any(rec.billing_mode != vals['billing_mode'] for rec in self):
             self._assert_billing_mode_manager()
-        return super().write(vals)
+        res = super().write(vals)
+        # Al cambiar de plan, deriva los servicios faltantes del nuevo plan antes de
+        # que el constraint valide (idempotente: solo agrega los que no existan).
+        if 'product_id' in vals:
+            self._derive_service_inclusions()
+        return res
 
     @api.model_create_multi
     def create(self, vals_list):
