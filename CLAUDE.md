@@ -18,8 +18,8 @@ El server `192.168.3.2` **NO es un git working tree**. Editar local no cambia na
 | `sentinela_monitoring` | 18.0.1.7.0 | ✅ | [CLAUDE.md](sentinela_monitoring/CLAUDE.md) | Central de monitoreo de alarmas. Reemplaza Securithor. |
 | `sentinela_fsm` | 18.0.1.5.1 | ✅ | [CLAUDE.md](sentinela_fsm/CLAUDE.md) | Gestión de Servicios (órdenes de campo: install/repair/maint/patrol). |
 | `sentinela_syscom` | 18.0.1.3.0 | ✅ | [CLAUDE.md](sentinela_syscom/CLAUDE.md) | Integración catálogo/proveedor Syscom. |
-| `sentinela_cfdi_prodigia` | 18.0.1.1.14 | dep | — | Timbrado CFDI 4.0 vía Prodigia. Dependencia de subscriptions. |
-| `sentinela_digital_sign` | 18.0.1.0.0 | dep | — | Firma de PDF desde el portal del cliente. Dependencia de subscriptions. |
+| `sentinela_cfdi_prodigia` | 18.0.1.1.14 | dep | [CLAUDE.md](sentinela_cfdi_prodigia/CLAUDE.md) | Timbrado CFDI 4.0 vía Prodigia + diseño factura/remisión. Dependencia de subscriptions. |
+| `sentinela_digital_sign` | 18.0.1.0.0 | dep | [CLAUDE.md](sentinela_digital_sign/CLAUDE.md) | Firma de PDF desde el portal del cliente. Dependencia de subscriptions. |
 | `sentinela_contract_builder` | ⚠️ sin `__manifest__.py` | — | — | Tiene `models/security/views` pero **no es instalable** (falta manifest). Verificar si es legacy antes de tocar. |
 
 ## Apps standalone (NO son módulos Odoo)
