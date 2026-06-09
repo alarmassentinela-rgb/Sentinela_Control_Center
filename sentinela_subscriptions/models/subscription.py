@@ -1996,12 +1996,29 @@ class SentinelaSubscription(models.Model):
     def write(self, vals):
         if 'billing_mode' in vals and any(rec.billing_mode != vals['billing_mode'] for rec in self):
             self._assert_billing_mode_manager()
-        res = super().write(vals)
-        # Al cambiar de plan, deriva los servicios faltantes del nuevo plan antes de
-        # que el constraint valide (idempotente: solo agrega los que no existan).
-        if 'product_id' in vals:
-            self._derive_service_inclusions()
-        return res
+        # Al cambiar de plan, deriva los servicios faltantes del NUEVO plan ANTES de
+        # super().write(): el constraint _check_service_inclusions_complete se valida
+        # dentro del write, así que agregarlos después llega tarde y bloquea el guardado.
+        # Solo aplica si el caller no trae ya su propia lista de servicios.
+        new_plan = vals.get('product_id')
+        if new_plan and 'service_inclusion_ids' not in vals:
+            rows = self.env['sentinela.product.service.inclusion'].sudo().search([
+                ('product_id', '=', new_plan),
+            ])
+            if rows:
+                SubInc = self.env['sentinela.subscription.service.inclusion'].sudo()
+                for rec in self:
+                    existing_ids = set(rec.service_inclusion_ids.mapped('service_id.id'))
+                    for row in rows:
+                        if row.service_id.id in existing_ids:
+                            continue
+                        SubInc.create({
+                            'subscription_id': rec.id,
+                            'service_id': row.service_id.id,
+                            'is_included': row.is_included,
+                            'extra_price': row.extra_price,
+                        })
+        return super().write(vals)
 
     @api.model_create_multi
     def create(self, vals_list):
