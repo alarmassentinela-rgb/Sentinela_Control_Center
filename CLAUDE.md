@@ -14,7 +14,7 @@ El server `192.168.3.2` **NO es un git working tree**. Editar local no cambia na
 ## Módulos Odoo (`sentinela_*` con `__manifest__.py`)
 | Módulo | Versión | App | Doc | Rol |
 |---|---|---|---|---|
-| `sentinela_subscriptions` | 18.0.1.3.84 | ✅ | [CLAUDE.md](sentinela_subscriptions/CLAUDE.md) | **Corazón.** Facturación recurrente + provisioning (internet/alarma/GPS). Reemplaza MASadmin/Argus. |
+| `sentinela_subscriptions` | 18.0.1.3.86 | ✅ | [CLAUDE.md](sentinela_subscriptions/CLAUDE.md) | **Corazón.** Facturación recurrente + provisioning (internet/alarma/GPS). Reemplaza MASadmin/Argus. |
 | `sentinela_monitoring` | 18.0.1.7.0 | ✅ | [CLAUDE.md](sentinela_monitoring/CLAUDE.md) | Central de monitoreo de alarmas. Reemplaza Securithor. |
 | `sentinela_fsm` | 18.0.1.5.1 | ✅ | [CLAUDE.md](sentinela_fsm/CLAUDE.md) | Gestión de Servicios (órdenes de campo: install/repair/maint/patrol). |
 | `sentinela_syscom` | 18.0.1.3.0 | ✅ | [CLAUDE.md](sentinela_syscom/CLAUDE.md) | Integración catálogo/proveedor Syscom. |

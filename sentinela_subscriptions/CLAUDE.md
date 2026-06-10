@@ -4,7 +4,7 @@ Módulo **corazón** de Sentinela. Reemplaza a MASadmin/Argus como sistema de fa
 
 > Este archivo se auto-carga al trabajar en el módulo. Documenta el **cómo es el código** (arquitectura, trampas). El **estado/decisiones** del proyecto vive en la memoria (`MEMORY.md`), no aquí. Si cambias algo estructural, actualiza este archivo.
 
-- **Versión actual:** ver `__manifest__.py` (`version`). Hoy `18.0.1.3.84`.
+- **Versión actual:** ver `__manifest__.py` (`version`). Hoy `18.0.1.3.86`.
 - **Odoo:** 18 Community. **DB prod:** V18 · **DB lab:** Sentinela_STAGING (`odoo-lab` :8075).
 - **Deploy:** el server NO es git working tree. Usar skill `release-modulo` (bump+commit+tag+push) y luego `deploy-modulo` (rsync→`-u` STAGING→`-u` V18→verificar). Saltar rsync = el `-u` corre código viejo.
 
