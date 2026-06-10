@@ -1,4 +1,4 @@
-from odoo import models, fields, api
+from odoo import models, fields, api, _
 from dateutil.relativedelta import relativedelta
 
 class SentinelaSubscription(models.Model):
@@ -43,6 +43,40 @@ class SentinelaSubscription(models.Model):
             'view_mode': 'list,form',
             'domain': [('subscription_id', '=', self.id)],
             'context': {'default_subscription_id': self.id, 'default_partner_id': self.partner_id.id}
+        }
+
+    def action_reactivate_with_visit(self):
+        """Reconecta el servicio (remoto) Y genera una orden de visita técnica
+        para verificar señal/estado físico del CPE/equipo en sitio.
+
+        Para los casos en que el reprovisioning remoto no basta y hay que mandar
+        a alguien. La reconexión normal (action_reactivate) sigue siendo remota
+        y NO genera orden — este botón es la vía explícita cuando se requiere visita.
+        """
+        self.ensure_one()
+        # 1. Reconexión remota estándar (router/floLIVE/SentiCar + estado).
+        self.action_reactivate()
+        # 2. Orden de visita técnica.
+        order = self.env['sentinela.fsm.order'].create({
+            'partner_id': self.partner_id.id,
+            'service_address_id': self.service_address_id.id or self.partner_id.id,
+            'subscription_id': self.id,
+            'service_type': 'repair',
+            'priority': '2',  # Urgente
+            'description': _(
+                "RECONEXIÓN CON VISITA TÉCNICA: el servicio se reconectó. "
+                "Acudir a verificar señal y estado físico del CPE/equipo en sitio."),
+        })
+        self.message_post(body=_(
+            "🔧 <b>Reconexión con visita técnica:</b> se generó la orden de servicio "
+            "<b>%s</b> para revisión en sitio.") % order.name)
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Orden de Servicio'),
+            'res_model': 'sentinela.fsm.order',
+            'res_id': order.id,
+            'view_mode': 'form',
+            'target': 'current',
         }
 
     @api.model
