@@ -1184,20 +1184,74 @@ def _build_teams(rows: list, teams_published: bool) -> dict:
     }
 
 
-def _snake_team(idx: int, num_teams: int) -> int:
-    """Equipo (1-based) para el rank `idx` (0-based) en orden de HCP, con snake draft.
+def _hcp_value(rp) -> float:
+    """Handicap de juego para balancear: course_handicap; si no, handicap_index; si no, 99."""
+    if rp.course_handicap is not None:
+        return float(rp.course_handicap)
+    return float(rp.handicap_index) if rp.handicap_index else 99.0
 
-    Reparto serpentina: el tier 0 (mejores HCP) va 1,2,…,N; el tier 1 va N,…,2,1;
-    el tier 2 otra vez 1,…,N; y así. Equilibra la fuerza: el equipo 1 ya no se
-    queda con el mejor de CADA tier, sino que alterna mejor/peor entre tiers.
 
-    Dentro de cada tier la asignación sigue siendo una permutación de 1..N, por lo
-    que en el auto-armado cada grupo de salida (= un tier) conserva exactamente un
-    jugador por equipo (no junta compañeros).
+def _balanced_assignment(rps: list, num_teams: int) -> tuple:
+    """Calcula equipos y grupos de salida balanceados para `rps` (jugadores activos).
+
+    Devuelve (team_by_idx, group_by_idx, rank_by_idx, group_sizes) — todo 0-based,
+    alineado al orden de `rps`. team/group/rank se traducen a 1-based al escribir.
+
+    Garantías (cupos divisibles o no, robustas para cualquier N y M>=N):
+      - Tamaños de GRUPO de salida difieren a lo más en 1 (ceil(M/N) grupos, grandes primero).
+      - Tamaños de EQUIPO difieren a lo más en 1.
+      - Un jugador por equipo en cada grupo (no junta compañeros).
+      - HCP repartido por snake entre grupos; dentro de cada grupo, los equipos los toman
+        los menos cargados (balancea tallas) y se emparejan jugador↔equipo por HCP
+        acumulado (el peor HCP al equipo más liviano) → promedio de HCP parejo.
     """
-    tier = idx // num_teams
-    pos = idx % num_teams
-    return (pos + 1) if tier % 2 == 0 else (num_teams - pos)
+    M = len(rps)
+    N = num_teams
+    order = sorted(range(M), key=lambda i: _hcp_value(rps[i]))  # asc por HCP
+    G = -(-M // N)  # ceil(M/N)
+    base, rem_g = divmod(M, G)
+    sizes = [base + (1 if g < rem_g else 0) for g in range(G)]  # grandes primero, ej. 10/4 → [4,3,3]
+
+    # PASS 1 — repartir a grupos con snake (HCP balanceado), respetando tamaños
+    members: dict = {g: [] for g in range(G)}
+    active = list(range(G))
+    idx = 0
+    rnd = 0
+    while idx < M:
+        seq = active if rnd % 2 == 0 else active[::-1]
+        for g in seq:
+            if idx >= M:
+                break
+            if len(members[g]) < sizes[g]:
+                members[g].append(order[idx])
+                idx += 1
+        active = [g for g in active if len(members[g]) < sizes[g]]
+        rnd += 1
+
+    # PASS 2 — equipos: greedy balanceado (tallas <=1 + promedio HCP parejo)
+    team_by = [0] * M
+    group_by = [0] * M
+    rank_by = [0] * M
+    team_count = [0] * N
+    team_total = [0.0] * N
+    for g in sorted(range(G), key=lambda g: -len(members[g])):  # grupos más grandes primero
+        ms = members[g]
+        s = len(ms)
+        # equipos presentes en el grupo = los s con menor conteo (desempate menor total, índice)
+        present = sorted(range(N), key=lambda t: (team_count[t], team_total[t], t))[:s]
+        players_asc = sorted(ms, key=lambda i: _hcp_value(rps[i]))  # mejor HCP = rank 0
+        for r, i in enumerate(players_asc):
+            rank_by[i] = r
+            group_by[i] = g
+        # emparejar: equipo con menor total ← peor HCP (sube los livianos)
+        present_by_total = sorted(present, key=lambda t: team_total[t])
+        players_desc = players_asc[::-1]
+        for k, t in enumerate(present_by_total):
+            i = players_desc[k]
+            team_by[i] = t
+            team_count[t] += 1
+            team_total[t] += _hcp_value(rps[i])
+    return team_by, group_by, rank_by, sizes
 
 
 # ─── Teams endpoints ──────────────────────────────────────────────────────────
@@ -1228,7 +1282,7 @@ async def get_teams(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
 
 @router.post("/{round_id}/teams/generate")
 async def generate_teams(round_id: uuid.UUID, num_teams: int = 2, current_user: CurrentUser = ..., db: DB = ...):
-    """Generates teams sorted by handicap (interleaved), saved as private draft."""
+    """Arma equipos balanceados por handicap (tallas <=1 + promedio parejo), borrador privado."""
     round_result = await db.execute(
         select(Round).where(Round.id == round_id, Round.created_by == current_user.id)
     )
@@ -1247,24 +1301,17 @@ async def generate_teams(round_id: uuid.UUID, num_teams: int = 2, current_user: 
     if len(rows) < num_teams:
         raise HTTPException(status_code=400, detail=f"Se necesitan al menos {num_teams} jugadores")
 
-    # Sort by course_handicap ascending (closest HCP will face each other)
-    def hcp_key(row):
-        rp, _ = row
-        if rp.course_handicap is not None:
-            return rp.course_handicap
-        return float(rp.handicap_index) if rp.handicap_index else 99
-
-    sorted_rows = sorted(rows, key=hcp_key)
-
-    # Snake draft sobre el orden de HCP: tier 0 → 1..N, tier 1 → N..1, etc.
-    # Equilibra la fuerza de los equipos mejor que el interleave simple (idx % N).
-    for idx, (rp, _) in enumerate(sorted_rows):
-        rp.team_number = _snake_team(idx, num_teams)
+    # Balanceo por HCP: tallas de equipo <=1 y promedio parejo (mismo motor que el
+    # auto-armado, pero aquí solo escribimos el equipo; los grupos de salida no se tocan).
+    rps = [rp for rp, _ in rows]
+    team_by, _g, _r, _sizes = _balanced_assignment(rps, num_teams)
+    for i, rp in enumerate(rps):
+        rp.team_number = team_by[i] + 1
 
     round_.teams_published = False
     await db.flush()
 
-    return _build_teams(sorted_rows, False)
+    return _build_teams(rows, False)
 
 
 @router.post("/{round_id}/auto-setup")
@@ -1277,9 +1324,10 @@ async def auto_setup_format(
     publish: bool = True,
 ):
     """Auto-arma el formato Medal Play por equipos en un solo paso:
-    - Equipos balanceados por handicap (snake draft sobre el orden de HCP).
+    - Equipos balanceados por handicap (talla <=1 y promedio HCP parejo).
     - Grupos de salida con UN jugador de cada equipo por grupo (sin compañeros juntos).
-    - num_teams = jugadores por grupo. Sobrantes caen en el último grupo (más chico).
+    - num_teams = N. Se forman ceil(M/N) grupos de tamaño parejo (difieren <=1);
+      en cupos no divisibles NO queda un grupo final chico (10/4 → 4,3,3, no 4,4,2).
     - shotgun: cada grupo arranca en su propio hoyo; si no, todos en el hoyo 1.
     Excluye retirados/observadores (les limpia equipo y grupo). Creador only.
     """
@@ -1304,24 +1352,18 @@ async def auto_setup_format(
     if len(playing) < num_teams:
         raise HTTPException(status_code=400, detail=f"Se necesitan al menos {num_teams} jugadores activos")
 
-    def hcp_key(item):
-        rp, _ = item
-        if rp.course_handicap is not None:
-            return rp.course_handicap
-        return float(rp.handicap_index) if rp.handicap_index else 99
-
-    playing.sort(key=hcp_key)
     holes = round_.holes_to_play or 18
 
-    # group = idx // N + 1  → cada grupo de salida es un tier de N jugadores consecutivos por HCP
-    # team  = snake draft   → permutación de 1..N dentro del tier (un jugador por equipo en el grupo),
-    #                          alternando el orden entre tiers para equilibrar la fuerza de los equipos
-    for idx, (rp, _) in enumerate(playing):
-        group = (idx // num_teams) + 1
-        rp.team_number = _snake_team(idx, num_teams)
-        rp.tee_group = group
-        rp.starting_hole = (((group - 1) % holes) + 1) if shotgun else 1
-        rp.tee_order = idx
+    # Equipos + grupos de salida balanceados (tallas <=1, grupos parejos, un jugador por
+    # equipo por grupo, promedio HCP parejo). Ver _balanced_assignment.
+    playing_rps = [rp for rp, _ in playing]
+    team_by, group_by, rank_by, sizes = _balanced_assignment(playing_rps, num_teams)
+    for i, rp in enumerate(playing_rps):
+        g = group_by[i]
+        rp.team_number = team_by[i] + 1
+        rp.tee_group = g + 1
+        rp.starting_hole = ((g % holes) + 1) if shotgun else 1
+        rp.tee_order = rank_by[i]
 
     # Limpiar a quienes no juegan
     for rp, _ in rows:
@@ -1338,14 +1380,13 @@ async def auto_setup_format(
         .where(RoundPlayer.round_id == round_id)
     )
     rrows = refreshed.all()
-    n_groups = (len(playing) + num_teams - 1) // num_teams
-    leftover = len(playing) % num_teams
     return {
         **_build_teams(rrows, round_.teams_published),
         "num_teams": num_teams,
-        "num_groups": n_groups,
-        "players_per_group": num_teams,
-        "last_group_size": leftover if leftover else num_teams,
+        "num_groups": len(sizes),
+        "players_per_group": max(sizes),
+        "last_group_size": min(sizes),
+        "group_sizes": sizes,
         "shotgun": shotgun,
     }
 

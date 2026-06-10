@@ -7,6 +7,20 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.25.2] - 2026-06-10
+
+### Changed — Tallas de equipo y grupos parejos en cupos no divisibles
+
+El auto-armado y el armado manual ahora reparten parejo cuando el número de jugadores no es múltiplo del de equipos:
+
+- **Grupos de salida parejos:** se forman `ceil(M/N)` grupos cuyos tamaños difieren a lo más en 1, repartiendo el HCP por snake. Ya no queda un grupo final chico (10 jug / 4 eq → grupos **4·3·3**, antes 4·4·2).
+- **Tallas de equipo ≤1 + promedio de HCP parejo:** dentro de cada grupo, los equipos los toman los menos cargados (balancea tamaños) y se emparejan jugador↔equipo por HCP acumulado (el peor HCP al equipo más liviano), de modo que el **promedio** de handicap queda parejo entre equipos aunque difieran en 1 jugador.
+- Se conserva la regla de **un jugador por equipo en cada grupo** (no junta compañeros). Reemplaza el snake-por-tier de 1.25.1 por `_balanced_assignment` en `app/api/v1/rounds.py`, usado por `POST /teams/generate` y `POST /auto-setup`.
+- Validado con 40 000 cupos aleatorios (N=2..12, M=N..48): las invariantes (distinct por grupo, tallas equipo ≤1, tallas grupo ≤1) se cumplen siempre.
+- Cambio **solo de backend** (rsync `rounds.py` + restart api).
+
+---
+
 ## [1.25.1] - 2026-06-10
 
 ### Changed — Balanceo de equipos con snake draft
