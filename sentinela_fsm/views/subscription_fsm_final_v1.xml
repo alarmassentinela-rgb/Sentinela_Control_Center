@@ -3,7 +3,7 @@
     <record id="view_sentinela_subscription_form_fsm" model="ir.ui.view">
         <field name="name">sentinela.subscription.form.fsm</field>
         <field name="model">sentinela.subscription</field>
-        <field name="inherit_id" ref="sentinela_subscriptions.view_sentinela_subscription_form"/>
+        <field name="inherit_id" ref="sentinela_subscriptions.view_sentinela_subscription_form_pro"/>
         <field name="arch" type="xml">
             <data>
                 <xpath expr="//button[@name='action_reactivate']" position="after">
