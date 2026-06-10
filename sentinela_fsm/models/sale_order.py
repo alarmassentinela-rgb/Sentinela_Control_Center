@@ -64,7 +64,7 @@ class SaleOrder(models.Model):
                 existing_active_sub = Subscription.search([
                     ('partner_id', '=', order.partner_id.id),
                     ('product_id', '=', line.product_id.id),
-                    ('state', 'in', ['active', 'closed', 'suspended'])
+                    ('state', 'in', ['active', 'closed', 'suspension'])
                 ], limit=1)
 
                 if existing_active_sub:

@@ -352,9 +352,9 @@ class FsmOrder(models.Model):
                         'longitude': final_lon
                     })
 
-            # Datos Vehículo (GPS)
-            if self.vehicle_brand or self.vehicle_model:
-                sub_vals['vehicle_brand_model'] = f"{self.vehicle_brand or ''} {self.vehicle_model or ''}".strip()
+            # Datos Vehículo (GPS) — la suscripción tiene marca y modelo en campos separados
+            if self.vehicle_brand: sub_vals['vehicle_brand'] = self.vehicle_brand
+            if self.vehicle_model: sub_vals['vehicle_model'] = self.vehicle_model
             if self.vehicle_plate: sub_vals['vehicle_plate'] = self.vehicle_plate
             if self.vehicle_color: sub_vals['vehicle_color'] = self.vehicle_color
             if self.sim_iccid: sub_vals['sim_iccid'] = self.sim_iccid
