@@ -1184,6 +1184,22 @@ def _build_teams(rows: list, teams_published: bool) -> dict:
     }
 
 
+def _snake_team(idx: int, num_teams: int) -> int:
+    """Equipo (1-based) para el rank `idx` (0-based) en orden de HCP, con snake draft.
+
+    Reparto serpentina: el tier 0 (mejores HCP) va 1,2,…,N; el tier 1 va N,…,2,1;
+    el tier 2 otra vez 1,…,N; y así. Equilibra la fuerza: el equipo 1 ya no se
+    queda con el mejor de CADA tier, sino que alterna mejor/peor entre tiers.
+
+    Dentro de cada tier la asignación sigue siendo una permutación de 1..N, por lo
+    que en el auto-armado cada grupo de salida (= un tier) conserva exactamente un
+    jugador por equipo (no junta compañeros).
+    """
+    tier = idx // num_teams
+    pos = idx % num_teams
+    return (pos + 1) if tier % 2 == 0 else (num_teams - pos)
+
+
 # ─── Teams endpoints ──────────────────────────────────────────────────────────
 
 @router.get("/{round_id}/teams")
@@ -1240,9 +1256,10 @@ async def generate_teams(round_id: uuid.UUID, num_teams: int = 2, current_user: 
 
     sorted_rows = sorted(rows, key=hcp_key)
 
-    # Interleave: pos 0→T1, 1→T2, 2→T3 … then cycle. Result: T1[0]↔T2[0] are closest HCPs.
+    # Snake draft sobre el orden de HCP: tier 0 → 1..N, tier 1 → N..1, etc.
+    # Equilibra la fuerza de los equipos mejor que el interleave simple (idx % N).
     for idx, (rp, _) in enumerate(sorted_rows):
-        rp.team_number = (idx % num_teams) + 1
+        rp.team_number = _snake_team(idx, num_teams)
 
     round_.teams_published = False
     await db.flush()
@@ -1260,7 +1277,7 @@ async def auto_setup_format(
     publish: bool = True,
 ):
     """Auto-arma el formato Medal Play por equipos en un solo paso:
-    - Equipos balanceados por handicap (round-robin sobre el orden de HCP).
+    - Equipos balanceados por handicap (snake draft sobre el orden de HCP).
     - Grupos de salida con UN jugador de cada equipo por grupo (sin compañeros juntos).
     - num_teams = jugadores por grupo. Sobrantes caen en el último grupo (más chico).
     - shotgun: cada grupo arranca en su propio hoyo; si no, todos en el hoyo 1.
@@ -1296,11 +1313,12 @@ async def auto_setup_format(
     playing.sort(key=hcp_key)
     holes = round_.holes_to_play or 18
 
-    # team = (rank-1) % N + 1  → equipos balanceados
-    # group = (rank-1) // N + 1 → cada grupo toma uno de cada equipo (consecutivos = equipos distintos)
+    # group = idx // N + 1  → cada grupo de salida es un tier de N jugadores consecutivos por HCP
+    # team  = snake draft   → permutación de 1..N dentro del tier (un jugador por equipo en el grupo),
+    #                          alternando el orden entre tiers para equilibrar la fuerza de los equipos
     for idx, (rp, _) in enumerate(playing):
         group = (idx // num_teams) + 1
-        rp.team_number = (idx % num_teams) + 1
+        rp.team_number = _snake_team(idx, num_teams)
         rp.tee_group = group
         rp.starting_hole = (((group - 1) % holes) + 1) if shotgun else 1
         rp.tee_order = idx

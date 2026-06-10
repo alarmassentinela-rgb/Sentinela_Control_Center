@@ -7,6 +7,18 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.25.1] - 2026-06-10
+
+### Changed — Balanceo de equipos con snake draft
+
+El armado de equipos por handicap ahora usa **snake draft (serpentina)** en vez del interleave por módulo (`idx % N`). El reparto alterna el orden de los equipos entre cada "tier" de handicap (tier 0 → 1..N, tier 1 → N..1, …), de modo que el equipo 1 ya no se queda con el mejor jugador de cada tier. Equilibra mucho mejor la fuerza de los equipos: en cupos divisibles (16/4, 12/3, 8/2) la suma de HCP por equipo queda **idéntica** (spread 0 vs 12/8/4 antes); en 20/4 baja de spread 15 a 3.
+
+- Helper `_snake_team(idx, num_teams)` en `app/api/v1/rounds.py`. Aplicado en `POST /teams/generate` (manual) y `POST /auto-setup` (Gran Premio).
+- En el auto-armado se **conserva la propiedad** de que cada grupo de salida (= un tier) tiene exactamente un jugador por equipo: dentro del tier la asignación sigue siendo una permutación de 1..N, solo cambia el orden. Verificado para 16/4, 20/4, 12/3, 8/2, 10/4.
+- Cambio **solo de backend** (deploy: rsync `rounds.py` + restart api). El footer de la UI reflejará 1.25.1 hasta el próximo rebuild del frontend.
+
+---
+
 ## [1.25.0] - 2026-06-10
 
 ### Added — Descarga de las guías en PDF desde /ayuda
