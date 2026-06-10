@@ -1,10 +1,22 @@
 'use client'
 import { useState } from 'react'
 import Link from 'next/link'
-import { Flag, ArrowLeft, ChevronDown, ChevronUp, HelpCircle, User, Trophy } from 'lucide-react'
+import { Flag, ArrowLeft, ChevronDown, ChevronUp, HelpCircle, User, Trophy, Download } from 'lucide-react'
 import { useLocale } from '@/components/DictionaryProvider'
 
 interface Section { id: string; titleEs: string; titleEn: string; es: string[]; en: string[] }
+
+// PDF descargable según pestaña + idioma. Archivos en /public/guides/.
+const GUIDE_PDF: Record<'jugador' | 'organizador', Record<'es' | 'en', string>> = {
+  jugador: {
+    es: '/guides/GolfBookVIP-Guia-del-Jugador-ES.pdf',
+    en: '/guides/GolfBookVIP-Player-Guide-EN.pdf',
+  },
+  organizador: {
+    es: '/guides/GolfBookVIP-Guia-del-Organizador-ES.pdf',
+    en: '/guides/GolfBookVIP-Organizer-Guide-EN.pdf',
+  },
+}
 
 const PLAYER: Section[] = [
   { id: 'cuenta', titleEs: 'Crear tu cuenta', titleEn: 'Create your account', es: [
@@ -244,6 +256,22 @@ export default function AyudaPage() {
             <Trophy size={15} /> {lbl('Organizar torneos', 'Run tournaments')}
           </button>
         </div>
+
+        {/* Descargar guía en PDF (según pestaña + idioma) */}
+        <a href={locale === 'es' ? GUIDE_PDF[tab].es : GUIDE_PDF[tab].en} target="_blank" rel="noopener noreferrer"
+          className="flex items-center gap-3 mb-4 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20 transition-colors">
+          <Download size={18} />
+          <div className="flex-1">
+            <p className="text-sm font-semibold">
+              {lbl('Descargar guía en PDF', 'Download guide as PDF')}
+            </p>
+            <p className="text-xs text-emerald-400/70">
+              {tab === 'jugador'
+                ? lbl('Guía del Jugador', 'Player Guide')
+                : lbl('Guía del Organizador', 'Organizer Guide')}
+            </p>
+          </div>
+        </a>
 
         <Accordion sections={tab === 'jugador' ? PLAYER : ORGANIZER} locale={locale} />
 

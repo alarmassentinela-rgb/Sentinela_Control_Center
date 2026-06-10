@@ -7,6 +7,22 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.25.0] - 2026-06-10
+
+### Added — Descarga de las guías en PDF desde /ayuda
+
+Las guías de usuario (Jugador y Organizador, ES + EN) ahora se pueden **descargar en PDF** desde la página de Ayuda, además del acordeón existente.
+
+- `docs/manual/build_pdf.py` (NUEVO) — genera los 4 PDFs desde los `.md` de `docs/manual/` con PyMuPDF (sin pandoc/weasyprint). Portada de marca, encabezado/pie por página, tablas/notas/listas estilizadas en verde GolfBookVIP. Regenerar: `python3 docs/manual/build_pdf.py`.
+- `frontend/public/guides/*.pdf` (NUEVO) — los 4 PDFs servidos estáticamente: `GolfBookVIP-Guia-del-Jugador-ES.pdf`, `GolfBookVIP-Player-Guide-EN.pdf`, `GolfBookVIP-Guia-del-Organizador-ES.pdf`, `GolfBookVIP-Organizer-Guide-EN.pdf`.
+- `frontend/src/app/[locale]/ayuda/page.tsx` → botón "Descargar guía en PDF" que abre el PDF correcto según la pestaña (Jugador/Organizador) y el idioma activo.
+
+### Changed
+
+- `version.ts` / `package.json` actualizados a 1.25.0 (venían rezagados en 1.23.0; el footer de la UI mostraba esa versión).
+
+---
+
 ## [1.24.1] - 2026-06-05
 
 ### Fixed — El score por defecto (par) no se guardaba si no se tocaba
