@@ -88,6 +88,7 @@ def _extract(payload: dict) -> dict:
         "status": conv.get("status"),
         "phone": phone,
         "name": sender.get("name") or meta_sender.get("name") or "",
+        "has_attachment": bool(payload.get("attachments")),
     }
 
 
@@ -176,7 +177,13 @@ def _process(payload: dict):
 
     content = d["content"]
     if not content:
-        return
+        # Mensaje sin texto: si trae adjunto (foto del módem, nota de voz, etc.) el bot
+        # NO debe quedarse mudo — deja que el LLM pida una descripción por escrito.
+        # (Pendiente futuro: visión para fotos / STT para audios, como en OpenClaw.)
+        if d["has_attachment"]:
+            content = "(El cliente envió un archivo adjunto —foto/audio/etc.— sin texto.)"
+        else:
+            return
 
     # Guardar el turno del cliente en el historial.
     state.add_message(conv_id, "user", content)
