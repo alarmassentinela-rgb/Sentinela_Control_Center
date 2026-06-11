@@ -151,13 +151,38 @@ def _llm_decide(conv_id: int, name: str, ficha: str, order_folio: str | None = N
     return {"action": "reply", "message": MSG_LLM_FALLBACK}
 
 
-def _create_order(d: dict, partner, summary: str) -> dict | None:
-    desc_src = summary or d["content"]
-    if partner:
+def _create_order(d: dict, partner, decision: dict) -> dict | None:
+    """Crea la orden con todo lo que juntó el bot: problema + servicio/domicilio
+    reportado, horario de contacto y teléfono alterno; liga la sub y su domicilio."""
+    summary = decision.get("summary") or d["content"]
+    sub_name = (decision.get("subscription") or "").strip()
+    contact_time = (decision.get("contact_time") or "").strip()
+    alt_phone = (decision.get("alt_phone") or "").strip()
+
+    extras = []
+    if sub_name:
+        extras.append(f"Servicio/domicilio reportado: {sub_name}")
+    if contact_time:
+        extras.append(f"Horario de contacto preferido: {contact_time}")
+    if alt_phone:
+        extras.append(f"Teléfono alterno: {alt_phone}")
+    body = ("\n".join(extras) + "\n---\n" + summary) if extras else summary
+
+    if not partner:
+        return odoo.create_reconcile_fsm_order(d["phone"], body, d["name"])
+
+    sub_id = None
+    addr_id = None
+    if sub_name:
+        found = odoo.find_subscription(partner["id"], sub_name)
+        if found:
+            sub_id = found["id"]
+            sa = found.get("service_address_id")
+            addr_id = sa[0] if sa else None
+    if not sub_id:
         sub_id = odoo.get_single_active_subscription_id(partner["id"])
-        desc = f"Reporte por WhatsApp (tel: {d['phone']}).\n---\n{desc_src}"
-        return odoo.create_fsm_order(partner["id"], desc, "repair", sub_id)
-    return odoo.create_reconcile_fsm_order(d["phone"], desc_src, d["name"])
+    desc = f"Reporte por WhatsApp (tel: {d['phone']}).\n---\n{body}"
+    return odoo.create_fsm_order(partner["id"], desc, "repair", sub_id, addr_id)
 
 
 def _do_handoff(conv_id: int, message: str | None):
@@ -223,7 +248,7 @@ def _process(payload: dict):
             chatwoot.send_message(conv_id, reply)
             state.add_message(conv_id, "assistant", reply)
             return
-        res = _create_order(d, partner, decision.get("summary") or "")
+        res = _create_order(d, partner, decision)
         if not res or not res.get("ok"):
             logger.error("conv %s: fallo al crear orden FSM", conv_id)
             chatwoot.send_message(conv_id, MSG_ERROR)

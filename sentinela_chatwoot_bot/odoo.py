@@ -119,10 +119,23 @@ def get_subscriptions(partner_id: int) -> list[dict]:
                     "price_unit", "next_billing_date", "technical_state",
                     "pppoe_user", "ip_address", "extension_due_date",
                     "conn_online", "antenna_signal_dbm", "antenna_signal_quality",
-                    "connection_equipment", "live_traffic_status", "nav_status"],
+                    "connection_equipment", "live_traffic_status", "nav_status",
+                    "address_street", "address_street2", "address_city", "service_address_id"],
          "order": "state asc"}
     )
     return results or []
+
+
+def find_subscription(partner_id: int, name: str) -> dict | None:
+    """Busca una suscripción del cliente por su número (ej. 'SUB-0301') para ligar
+    la orden al servicio/domicilio correcto. Devuelve {id, service_address_id}."""
+    if not name:
+        return None
+    key = name.strip().upper()
+    res = _call("sentinela.subscription", "search_read",
+        [[("partner_id", "=", partner_id), ("name", "ilike", key)]],
+        {"fields": ["id", "name", "service_address_id"], "limit": 1})
+    return res[0] if res else None
 
 
 # ── Facturas pendientes ───────────────────────────────────────────
@@ -158,7 +171,8 @@ def get_single_active_subscription_id(partner_id: int) -> int | None:
 
 def create_fsm_order(partner_id: int, description: str,
                      service_type: str = "repair",
-                     subscription_id: int | None = None) -> dict | None:
+                     subscription_id: int | None = None,
+                     service_address_id: int | None = None) -> dict | None:
     """Crea una Orden de Servicio real (sentinela.fsm.order) en etapa 'Nuevo'.
 
     El coordinador la verá en el tablero y agendará técnico + fecha.
@@ -172,6 +186,8 @@ def create_fsm_order(partner_id: int, description: str,
     }
     if subscription_id:
         vals["subscription_id"] = subscription_id
+    if service_address_id:
+        vals["service_address_id"] = service_address_id
 
     new_id = _call("sentinela.fsm.order", "create", [vals])
     if not new_id:
@@ -350,6 +366,11 @@ def get_client_summary(phone: str) -> str:
                 sub_line += f" | Próximo cobro: {prox_cobro}"
             if s.get("extension_due_date"):
                 sub_line += f" | Prórroga hasta: {s['extension_due_date']}"
+            # Domicilio del servicio (clave cuando el cliente tiene varios)
+            dir_parts = [s.get("address_street"), s.get("address_street2"), s.get("address_city")]
+            domicilio = ", ".join(p for p in dir_parts if p)
+            if domicilio:
+                sub_line += f" | Domicilio: {domicilio}"
             lines.append(sub_line)
 
             # Señal/conexión en vivo (para internet, lo llena el monitoreo)
