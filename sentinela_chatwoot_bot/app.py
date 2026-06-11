@@ -126,9 +126,18 @@ def _parse_llm(raw: str) -> dict:
     return {}
 
 
-def _llm_decide(conv_id: int, name: str, ficha: str) -> dict:
+def _llm_decide(conv_id: int, name: str, ficha: str, order_folio: str | None = None) -> dict:
     """Arma el contexto (system + historial) y pide la decisión al LLM."""
     system = config.SYSTEM_PROMPT.format(name=name or "(desconocido)", ficha=ficha)
+    if order_folio:
+        # Ya hay reporte: el bot atiende follow-ups, NO crea otra orden.
+        system += (
+            f"\n\nIMPORTANTE: Ya se levantó el reporte de este cliente con folio {order_folio}. "
+            "NO uses create_ticket otra vez. Responde sus dudas o follow-ups de forma breve y "
+            "útil (p.ej. que un técnico revisará el reporte y lo contactará para coordinar la "
+            "visita; NO des tiempos exactos de llegada). Si pide hablar con una persona, o "
+            "necesita algo que tú no puedes resolver, usa handoff."
+        )
     messages = [{"role": "system", "content": system}]
     messages += state.get_history(conv_id, config.HISTORY_LIMIT)
     raw = llm.chat_completion(messages, json_mode=True)
@@ -193,13 +202,15 @@ def _process(payload: dict):
         _do_handoff(conv_id, MSG_HANDOFF)
         return
 
-    # Contexto del cliente (Odoo) + decisión del LLM.
+    # Contexto del cliente (Odoo) + decisión del LLM. Si ya hay folio, el bot sigue
+    # activo para follow-ups (no creó handoff al crear el ticket).
+    existing_folio = state.get_order(conv_id)
     partner, ficha, name = _resolve_client(d["phone"])
-    decision = _llm_decide(conv_id, name, ficha)
+    decision = _llm_decide(conv_id, name, ficha, existing_folio)
     action = (decision.get("action") or "reply").lower()
     message = decision.get("message") or ""
 
-    # ── HANDOFF ──
+    # ── HANDOFF (sí suelta a humano: cliente lo pide o el bot no puede resolver) ──
     if action == "handoff":
         _do_handoff(conv_id, message or MSG_HANDOFF)
         logger.info("conv %s: handoff (IA)", conv_id)
@@ -207,8 +218,10 @@ def _process(payload: dict):
 
     # ── CREATE_TICKET ──
     if action == "create_ticket":
-        if state.get_order(conv_id):  # ya se creó antes; no duplicar
-            chatwoot.send_message(conv_id, message or "Tu reporte ya quedó registrado. 🙌")
+        if existing_folio:  # ya se creó antes; no duplicar, solo responde
+            reply = message or f"Tu reporte ya quedó registrado con folio *{existing_folio}*. 🙌"
+            chatwoot.send_message(conv_id, reply)
+            state.add_message(conv_id, "assistant", reply)
             return
         res = _create_order(d, partner, decision.get("summary") or "")
         if not res or not res.get("ok"):
@@ -218,17 +231,16 @@ def _process(payload: dict):
             return
         folio = res["name"]
         state.set_order(conv_id, folio)
-        _handled.add(conv_id)
         greet = f" {name}" if name else ""
         tmpl = MSG_FOLIO_OFFICE if _office_hours_now() else MSG_FOLIO_AFTERHOURS
         folio_msg = tmpl.format(name=greet, folio=folio)
         chatwoot.send_message(conv_id, folio_msg)
         state.add_message(conv_id, "assistant", folio_msg)
         _post_client_note(conv_id, d["phone"])
-        # Handoff a soporte para seguimiento humano.
+        # Asigna a soporte para ruteo, pero NO suelta a humano todavía: la conversación
+        # queda en 'pending' y el bot sigue atendiendo los follow-ups del cliente.
         chatwoot.assign_team(conv_id, config.HANDOFF_TEAM_ID)
-        chatwoot.toggle_status(conv_id, "open")
-        logger.info("conv %s: orden %s creada (match=%s)", conv_id, folio, bool(partner))
+        logger.info("conv %s: orden %s creada (match=%s); bot sigue activo", conv_id, folio, bool(partner))
         return
 
     # ── REPLY (default) ──

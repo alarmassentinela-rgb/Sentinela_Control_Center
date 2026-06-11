@@ -50,9 +50,12 @@ WhatsApp 8688225875
    - `reply` → responde (saluda, pregunta, junta detalle). NO crea nada.
    - `create_ticket` (solo tras confirmación) → crea la orden FSM con `summary` (match → ligada
      a la sub si hay UNA activa; sin match → **POR CONCILIAR** con partner placeholder), responde
-     el **folio** (plantilla, NO el LLM), nota interna con la ficha, handoff a soporte. Guarda el
-     folio en `state` (anti-duplicado).
-   - `handoff` → pasa a humano (asigna soporte + abre), sin crear orden.
+     el **folio** (plantilla, NO el LLM), nota interna con la ficha, **asigna soporte pero NO suelta
+     a humano** (queda en `pending`): el bot sigue activo para los follow-ups del cliente. Guarda
+     el folio en `state` (anti-duplicado; en turnos siguientes el prompt le dice al LLM que NO cree
+     otra orden y conteste dudas).
+   - `handoff` → AHÍ sí pasa a humano (asigna soporte + abre la conversación). Lo dispara el cliente
+     (palabra clave) o el LLM cuando no puede resolver. Tras esto la conversación queda `open` → bot calla.
    - LLM falla/parsea mal → fallback seguro: pide el detalle (no crea nada).
 7. **Horario** (`OFFICE_*`): solo cambia el texto del folio; en ambos casos queda en cola de soporte.
 
