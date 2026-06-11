@@ -117,7 +117,9 @@ def get_subscriptions(partner_id: int) -> list[dict]:
         [[("partner_id", "=", partner_id), ("state", "in", ["active", "suspension", "confirmed"])]],
         {"fields": ["name", "state", "service_type", "product_id",
                     "price_unit", "next_billing_date", "technical_state",
-                    "pppoe_user", "ip_address", "extension_due_date"],
+                    "pppoe_user", "ip_address", "extension_due_date",
+                    "conn_online", "antenna_signal_dbm", "antenna_signal_quality",
+                    "connection_equipment", "live_traffic_status", "nav_status"],
          "order": "state asc"}
     )
     return results or []
@@ -349,6 +351,21 @@ def get_client_summary(phone: str) -> str:
             if s.get("extension_due_date"):
                 sub_line += f" | Prórroga hasta: {s['extension_due_date']}"
             lines.append(sub_line)
+
+            # Señal/conexión en vivo (para internet, lo llena el monitoreo)
+            if s.get("service_type") == "internet":
+                online = s.get("conn_online")
+                conn_txt = "EN LÍNEA ✅" if online else ("FUERA DE LÍNEA ❌" if online is False else "sin dato")
+                detail = f"    Conexión que ve el sistema: {conn_txt}"
+                if s.get("antenna_signal_dbm"):
+                    detail += f" | Señal: {s['antenna_signal_dbm']}"
+                    if s.get("antenna_signal_quality"):
+                        detail += f" ({s['antenna_signal_quality']})"
+                if s.get("live_traffic_status"):
+                    detail += f" | Tráfico: {s['live_traffic_status']}"
+                if s.get("connection_equipment"):
+                    detail += f" | Equipo: {s['connection_equipment']}"
+                lines.append(detail)
     else:
         lines.append("- Sin suscripciones activas en el sistema")
 

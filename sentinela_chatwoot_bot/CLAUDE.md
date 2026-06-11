@@ -59,11 +59,19 @@ WhatsApp 8688225875
    - LLM falla/parsea mal → fallback seguro: pide el detalle (no crea nada).
 7. **Horario** (`OFFICE_*`): solo cambia el texto del folio; en ambos casos queda en cola de soporte.
 
-## El cerebro: SYSTEM_PROMPT (config.py)
-Saluda cálido y breve (español MX), una pregunta a la vez, junta QUÉ falla y DESDE CUÁNDO,
-**no inventa folios/datos/tiempos**, ignora relleno ("hola/sí/ok"), RESUME y pide confirmación
-antes de `create_ticket`, y hace `handoff` si piden humano o el tema no es reporte (ventas/cobranza).
-Ajustable por env `SYSTEM_PROMPT`.
+## El cerebro: SYSTEM_PROMPT (config.py) — soporte de primera línea
+El bot DIAGNOSTICA antes de mandar técnico (ajustable por env `SYSTEM_PROMPT`):
+1. **Revisa estado de cuenta** (de la ficha): si SUSPENDIDO o con ADEUDO, esa es la causa probable
+   → se lo dice ("suspendido por adeudo de $X, al pagar se reactiva"), NO levanta orden, ofrece cobranza.
+2. **Mira señal/conexión** que ve Odoo (`conn_online`, `antenna_signal_dbm/quality`): en línea+buena
+   señal → falla local (guía módem/cables); fuera de línea → enlace caído.
+3. **Diagnóstico guiado** (internet): pide modelo del módem, guía reiniciar/revisar cables/luces, un paso a la vez.
+4. Solo si NO se resuelve → RESUME (problema + pasos intentados + modelo) → confirma → `create_ticket`.
+Más: ignora relleno, pide describir adjuntos por escrito, `handoff` solo si piden persona/queja/cobranza
+(no por curiosidad), responde follow-ups tras crear el folio.
+
+La ficha (`odoo.py:get_client_summary`) incluye suscripciones con estado, ADEUDO + facturas, y para
+internet la **conexión/señal en vivo** (`get_subscriptions` lee `conn_online`, `antenna_signal_*`, etc.).
 
 ## Configuración / dependencias externas (estado vivo → memoria, no aquí)
 - **Odoo:** `api_user` debe estar en el grupo `sentinela_fsm.group_fsm_dispatcher`
