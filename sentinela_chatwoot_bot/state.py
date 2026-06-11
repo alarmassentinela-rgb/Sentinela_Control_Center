@@ -23,6 +23,8 @@ def _db() -> sqlite3.Connection:
             conv_id INTEGER, role TEXT, content TEXT, ts REAL)""")
         _conn.execute("""CREATE TABLE IF NOT EXISTS conv_state (
             conv_id INTEGER PRIMARY KEY, order_folio TEXT, ts REAL)""")
+        _conn.execute("""CREATE TABLE IF NOT EXISTS pending_photos (
+            conv_id INTEGER, url TEXT, ts REAL)""")
         _conn.commit()
     return _conn
 
@@ -57,4 +59,28 @@ def set_order(conv_id: int, folio: str):
         db = _db()
         db.execute("INSERT OR REPLACE INTO conv_state(conv_id,order_folio,ts) VALUES (?,?,?)",
                    (conv_id, folio, time.time()))
+        db.commit()
+
+
+# ── Fotos pendientes de adjuntar a la orden ──
+
+def add_photo(conv_id: int, url: str):
+    with _lock:
+        db = _db()
+        db.execute("INSERT INTO pending_photos(conv_id,url,ts) VALUES (?,?,?)",
+                   (conv_id, url, time.time()))
+        db.commit()
+
+
+def get_photos(conv_id: int) -> list[str]:
+    with _lock:
+        rows = _db().execute("SELECT url FROM pending_photos WHERE conv_id=?",
+                            (conv_id,)).fetchall()
+    return [r[0] for r in rows]
+
+
+def clear_photos(conv_id: int):
+    with _lock:
+        db = _db()
+        db.execute("DELETE FROM pending_photos WHERE conv_id=?", (conv_id,))
         db.commit()

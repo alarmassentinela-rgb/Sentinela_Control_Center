@@ -13,11 +13,13 @@ El LLM responde un JSON {action, message, summary}:
 Seguridad: el contenedor NO publica puerto; solo el rails de Chatwoot lo alcanza.
 """
 
+import base64
 import json
 import logging
 import re
 from datetime import datetime
 
+import httpx
 from fastapi import FastAPI, Request
 
 import config
@@ -89,6 +91,8 @@ def _extract(payload: dict) -> dict:
         "phone": phone,
         "name": sender.get("name") or meta_sender.get("name") or "",
         "has_attachment": bool(payload.get("attachments")),
+        "image_urls": [a.get("data_url") for a in (payload.get("attachments") or [])
+                       if a.get("data_url") and (a.get("file_type") in ("image", 0))],
     }
 
 
@@ -185,6 +189,27 @@ def _create_order(d: dict, partner, decision: dict) -> dict | None:
     return odoo.create_fsm_order(partner["id"], desc, "repair", sub_id, addr_id)
 
 
+def _attach_pending_photos(conv_id: int, order_id: int):
+    """Descarga las fotos que mandó el cliente (de Chatwoot, por el host interno) y
+    las adjunta a la orden FSM. Tolerante a fallos: nunca rompe la creación de la orden."""
+    urls = state.get_photos(conv_id)
+    for i, url in enumerate(urls, 1):
+        try:
+            internal = url.replace(config.CHATWOOT_PUBLIC_URL, config.CHATWOOT_BASE_URL)
+            r = httpx.get(internal, timeout=25.0, follow_redirects=True)
+            if r.status_code >= 300 or not r.content:
+                logger.error("foto conv %s HTTP %s", conv_id, r.status_code)
+                continue
+            mime = (r.headers.get("content-type") or "image/jpeg").split(";")[0]
+            ext = "png" if "png" in mime else ("pdf" if "pdf" in mime else "jpg")
+            b64 = base64.b64encode(r.content).decode()
+            if odoo.attach_image_to_order(order_id, b64, f"reporte_{order_id}_{i}.{ext}", mime):
+                logger.info("conv %s: foto %s adjuntada a la orden %s", conv_id, i, order_id)
+        except Exception as e:
+            logger.error("conv %s: adjuntar foto error: %s", conv_id, e)
+    state.clear_photos(conv_id)
+
+
 def _do_handoff(conv_id: int, message: str | None):
     chatwoot.send_message(conv_id, message or MSG_HANDOFF)
     chatwoot.assign_team(conv_id, config.HANDOFF_TEAM_ID)
@@ -221,6 +246,10 @@ def _process(payload: dict):
 
     # Guardar el turno del cliente en el historial.
     state.add_message(conv_id, "user", content)
+
+    # Si mandó fotos, guárdalas para adjuntarlas a la orden cuando se cree.
+    for url in d["image_urls"]:
+        state.add_photo(conv_id, url)
 
     # Atajo duro: el cliente SIEMPRE puede escapar a un humano, pase lo que pase el LLM.
     if _wants_human(content):
@@ -261,6 +290,7 @@ def _process(payload: dict):
         folio_msg = tmpl.format(name=greet, folio=folio)
         chatwoot.send_message(conv_id, folio_msg)
         state.add_message(conv_id, "assistant", folio_msg)
+        _attach_pending_photos(conv_id, res["id"])
         _post_client_note(conv_id, d["phone"])
         # Asigna a soporte para ruteo, pero NO suelta a humano todavía: la conversación
         # queda en 'pending' y el bot sigue atendiendo los follow-ups del cliente.

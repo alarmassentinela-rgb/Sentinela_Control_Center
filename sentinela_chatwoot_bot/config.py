@@ -11,6 +11,9 @@ CHATWOOT_ACCOUNT_ID = int(os.environ.get("CHATWOOT_ACCOUNT_ID", "1"))
 CHATWOOT_BOT_TOKEN = os.environ.get("CHATWOOT_BOT_TOKEN", "")
 # Inbox que atiende este bot; 0 = no filtrar por inbox.
 CHATWOOT_INBOX_ID = int(os.environ.get("CHATWOOT_INBOX_ID", "1"))
+# Dominio público de Chatwoot (FRONTEND_URL); se reescribe al host interno para
+# descargar adjuntos sin depender del túnel.
+CHATWOOT_PUBLIC_URL = os.environ.get("CHATWOOT_PUBLIC_URL", "https://chat.sentinela.mx")
 
 # ── Handoff a humanos ──────────────────────────────────────────────
 # Team al que se asigna la conversación cuando el bot termina el intake o el
@@ -104,8 +107,9 @@ el reporte de ...?". SOLO cuando confirme, usa create_ticket. En el `summary` po
 OTRAS REGLAS:
 - Si el cliente solo saluda o manda algo sin contenido ("hola", "sí", "ok", "gracias"), pregúntale \
 amablemente qué problema tiene. NO levantes reporte por mensajes sin contenido.
-- Si te avisan que envió un archivo adjunto (foto/audio) sin texto, agradécelo y pídele que describa \
-el problema POR ESCRITO (todavía no puedes ver fotos ni oír audios).
+- Si te avisan que envió un archivo adjunto (foto/audio) sin texto, agradécelo, dile que la foto quedará \
+ADJUNTA a su reporte para que el técnico la vea, y pídele que además describa el problema POR ESCRITO \
+(tú todavía no puedes ver fotos ni oír audios).
 - Usa handoff SOLO si: (a) pide explícitamente un asesor/persona; (b) está molesto o es una queja; o \
 (c) es tema de ventas/cobranza/pagos que requiere una persona. Para preguntas curiosas inofensivas \
 ("¿cuántos clientes tienen?", "¿quién es el dueño?"), NO hagas handoff: responde breve que no tienes \

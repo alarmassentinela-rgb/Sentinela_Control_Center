@@ -126,6 +126,20 @@ def get_subscriptions(partner_id: int) -> list[dict]:
     return results or []
 
 
+def attach_image_to_order(order_id: int, b64_data: str, filename: str,
+                          mimetype: str = "image/jpeg") -> bool:
+    """Adjunta una imagen (base64) a la orden FSM como ir.attachment."""
+    att_id = _call("ir.attachment", "create", [{
+        "name": filename,
+        "type": "binary",
+        "datas": b64_data,
+        "res_model": "sentinela.fsm.order",
+        "res_id": order_id,
+        "mimetype": mimetype,
+    }])
+    return bool(att_id)
+
+
 def find_subscription(partner_id: int, name: str) -> dict | None:
     """Busca una suscripción del cliente por su número (ej. 'SUB-0301') para ligar
     la orden al servicio/domicilio correcto. Devuelve {id, service_address_id}."""
