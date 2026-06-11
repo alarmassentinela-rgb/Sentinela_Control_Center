@@ -7,6 +7,18 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.27.0] - 2026-06-11
+
+### Added — Tabla de posiciones del grupo (leaderboard)
+
+Ranking competitivo de los miembros de un grupo sobre las rondas finalizadas del grupo:
+
+- **Backend:** `GET /groups/{id}/leaderboard` (en `app/api/v1/groups.py`, respeta privacidad). Por cada ronda finalizada del grupo calcula el net total de cada jugador (net por hoyo con fallback a gross) y determina el ganador (menor net) entre quienes completaron la ronda. Devuelve a cada miembro con `rounds_played`, `wins`, `best_net`, ordenados por **victorias → handicap → mejor net** y con `position`.
+- **Frontend:** nueva página `/groups/[id]/leaderboard` con tabla (medallas oro/plata/bronce al top 3, HCP, victorias, mejor net) + explicación; botón "Tabla de posiciones" en `/groups/[id]`.
+- Funciona desde el día 1: sin rondas finalizadas ordena por handicap; con rondas, por victorias. Sin migración.
+
+---
+
 ## [1.26.0] - 2026-06-11
 
 ### Added — Rondas de grupo (le da propósito a los grupos privados)

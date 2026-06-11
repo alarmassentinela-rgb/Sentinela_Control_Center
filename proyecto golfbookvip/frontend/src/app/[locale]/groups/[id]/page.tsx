@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Copy, Check, Users, Lock, Globe, Crown, Shield, UserMinus, Trash2, LogOut, Loader2, Flag, Plus, ChevronRight } from 'lucide-react'
+import { ArrowLeft, Copy, Check, Users, Lock, Globe, Crown, Shield, UserMinus, Trash2, LogOut, Loader2, Flag, Plus, ChevronRight, Trophy } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
@@ -193,6 +193,21 @@ export default function GroupDetailPage() {
               {lbl('Comparte este código para invitar jugadores al grupo.', 'Share this code to invite players to the group.')}
             </p>
           </div>
+        )}
+
+        {/* Leaderboard link */}
+        {isMember && (
+          <Link href={`/${locale}/groups/${groupId}/leaderboard`}
+            className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 hover:border-emerald-500/30 rounded-2xl px-5 py-4 transition-colors">
+            <div className="w-9 h-9 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
+              <Trophy size={16} className="text-emerald-400" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-white">{lbl('Tabla de posiciones', 'Leaderboard')}</p>
+              <p className="text-xs text-zinc-500">{lbl('Ranking de miembros por victorias y handicap', 'Members ranked by wins and handicap')}</p>
+            </div>
+            <ChevronRight size={16} className="text-zinc-600" />
+          </Link>
         )}
 
         {/* Group rounds */}

@@ -12,6 +12,7 @@ from app.models.group import Group, GroupMember
 from app.models.user import User
 from app.models.round import Round, RoundPlayer
 from app.models.course import Course
+from app.models.score import Score
 
 router = APIRouter()
 
@@ -241,6 +242,100 @@ async def list_group_rounds(group_id: uuid.UUID, current_user: CurrentUser, db: 
             "player_count": pc or 0,
         })
     return out
+
+
+@router.get("/{group_id}/leaderboard")
+async def group_leaderboard(group_id: uuid.UUID, current_user: CurrentUser, db: DB):
+    """Tabla de posiciones del grupo sobre sus rondas FINALIZADAS.
+
+    Por cada ronda finalizada del grupo se calcula el net total de cada jugador
+    (net por hoyo, con fallback a gross si no hay net) y se determina el ganador
+    (menor net) entre quienes completaron la ronda. Devuelve a los miembros con:
+    rondas jugadas, victorias y mejor net, ordenados por victorias → handicap → mejor net.
+    """
+    group = await db.scalar(
+        select(Group).where(Group.id == group_id, Group.is_active == True)
+    )
+    if not group:
+        raise HTTPException(404, "Grupo no encontrado")
+    my_member = await db.scalar(
+        select(GroupMember).where(
+            GroupMember.group_id == group_id,
+            GroupMember.user_id == current_user.id,
+            GroupMember.status == 'active'
+        )
+    )
+    if not my_member and group.is_private:
+        raise HTTPException(403, "Grupo privado")
+
+    # Miembros activos
+    mres = await db.execute(
+        select(GroupMember, User)
+        .join(User, GroupMember.user_id == User.id)
+        .where(GroupMember.group_id == group_id, GroupMember.status == 'active')
+    )
+    members = mres.all()
+    stats = {
+        str(u.id): {
+            "user_id": str(u.id),
+            "username": u.username,
+            "first_name": u.first_name,
+            "last_name": u.last_name,
+            "handicap_index": float(u.handicap_index) if u.handicap_index is not None else None,
+            "rounds_played": 0,
+            "wins": 0,
+            "best_net": None,
+        }
+        for _, u in members
+    }
+
+    # Rondas finalizadas del grupo
+    rres = await db.execute(
+        select(Round).where(Round.group_id == group_id, Round.status == "finished")
+    )
+    rounds = rres.scalars().all()
+    finished_count = len(rounds)
+
+    for rd in rounds:
+        holes_target = rd.holes_to_play or 18
+        sres = await db.execute(select(Score).where(Score.round_id == rd.id))
+        scores = sres.scalars().all()
+        # Agregar net/holes por jugador
+        agg: dict = {}
+        for s in scores:
+            uid = str(s.user_id)
+            d = agg.setdefault(uid, {"net": 0, "holes": 0})
+            if s.gross_score is not None:
+                d["net"] += s.net_score if s.net_score is not None else s.gross_score
+                d["holes"] += 1
+        # Solo cuentan jugadores del grupo que completaron la ronda
+        completed = {
+            uid: d for uid, d in agg.items()
+            if uid in stats and d["holes"] >= holes_target
+        }
+        for uid, d in completed.items():
+            stats[uid]["rounds_played"] += 1
+            bn = stats[uid]["best_net"]
+            if bn is None or d["net"] < bn:
+                stats[uid]["best_net"] = d["net"]
+        if completed:
+            best = min(d["net"] for d in completed.values())
+            for uid, d in completed.items():
+                if d["net"] == best:
+                    stats[uid]["wins"] += 1
+
+    def sort_key(s):
+        hcp = s["handicap_index"]
+        return (
+            -s["wins"],
+            hcp if hcp is not None else 999,
+            s["best_net"] if s["best_net"] is not None else 10**9,
+        )
+
+    rows = sorted(stats.values(), key=sort_key)
+    for i, r in enumerate(rows):
+        r["position"] = i + 1
+    return {"finished_rounds": finished_count, "leaderboard": rows}
 
 
 @router.delete("/{group_id}/members/{user_id}", status_code=204)
