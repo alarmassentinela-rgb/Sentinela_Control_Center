@@ -7,6 +7,18 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.28.0] - 2026-06-11
+
+### Added — Muro de posts del grupo
+
+Activa el modelo `Post`/`PostComment`/`Reaction` (que ya existía en la DB pero no estaba cableado) como muro social del grupo:
+
+- **Backend (`app/api/v1/groups.py`):** endpoints bajo `/groups/{id}/posts` — listar (anclados primero, con `liked_by_me`/contadores/`can_delete`), publicar (solo miembros, máx 2000), borrar (autor o owner/admin, soft), `POST …/react` (toggle like, mantiene `reactions_count`), `GET/POST …/{post_id}/comments` (máx 1000, mantiene `comments_count`). Helper `_group_and_membership` con la regla de privacidad. Reacciones vía tabla `reactions` (`target_type='post'`, unique por usuario).
+- **Frontend:** nueva página `/groups/[id]/wall` (composer, lista de posts con like optimista, hilo de comentarios expandible, borrar propio) + accesos "Muro"/"Posiciones" en `/groups/[id]`.
+- Sin migración (tablas `posts`/`post_comments`/`reactions` ya existían con índices). MVP: solo texto + like; multimedia y multi-reacción quedan para después.
+
+---
+
 ## [1.27.0] - 2026-06-11
 
 ### Added — Tabla de posiciones del grupo (leaderboard)
