@@ -81,4 +81,59 @@
             </div>
         </t>
     </template>
+
+    <!-- Página pública de reporte (sin sesión): el cliente inicia por WhatsApp.
+         Layout autocontenido con web.assets_frontend (Bootstrap+FA) para NO depender de 'website'. -->
+    <template id="portal_report_public" name="Reportar una falla">
+        &lt;!DOCTYPE html&gt;
+        <html lang="es">
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+                <link rel="icon" type="image/png" href="/sentinela_fsm/static/description/icon_tech_192.png"/>
+                <title>Reportar una falla — Sentinela</title>
+                <t t-call-assets="web.assets_frontend" t-js="false"/>
+                <style>
+                    body { background: #f0f2f5; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica; }
+                    .report-header { background: #1a237e; color: white; padding: 16px; text-align: center; }
+                    .report-card { background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+                </style>
+            </head>
+            <body>
+                <div class="report-header shadow-sm">
+                    <span><i class="fa fa-shield me-2"/> <b>SENTINELA</b></span>
+                </div>
+                <div class="container my-4" style="max-width: 560px;">
+                    <div class="text-center mb-4">
+                        <h3 class="fw-bold">Reportar una falla</h3>
+                        <p class="text-muted">Cuéntanos qué está pasando con tu servicio y levantamos tu reporte.</p>
+                    </div>
+
+                    <!-- Opción 1: WhatsApp (rápido, sin cuenta) -->
+                    <div class="report-card mb-4">
+                        <div class="p-4 text-center">
+                            <i class="fa fa-whatsapp text-success" style="font-size: 3rem;"/>
+                            <h5 class="fw-bold mt-2">Reportar por WhatsApp</h5>
+                            <p class="text-muted">La forma más rápida. Un asesor te responde en horario de oficina.</p>
+                            <a t-att-href="wa_url" target="_blank" rel="noopener" class="btn btn-success btn-lg">
+                                <i class="fa fa-whatsapp me-2"/> Abrir WhatsApp
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Opción 2: Portal (clientes con cuenta) -->
+                    <div class="report-card">
+                        <div class="p-4 text-center">
+                            <i class="fa fa-user-circle text-primary" style="font-size: 3rem;"/>
+                            <h5 class="fw-bold mt-2">¿Ya tienes cuenta del portal?</h5>
+                            <p class="text-muted">Inicia sesión para levantar tu ticket y darle seguimiento.</p>
+                            <a href="/my/services/new" class="btn btn-outline-primary btn-lg">
+                                Entrar a mi portal
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </body>
+        </html>
+    </template>
 </odoo>

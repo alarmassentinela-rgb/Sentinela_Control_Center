@@ -1,6 +1,12 @@
+from urllib.parse import quote
+
 from odoo import http, _
 from odoo.http import request
 from odoo.addons.portal.controllers.portal import CustomerPortal, pager as portal_pager
+
+# Número dedicado de reportes (WhatsApp Business, 8688225875 con lada 52).
+# Configurable por ir.config_parameter para no quemarlo en código.
+DEFAULT_REPORT_WHATSAPP = '528688225875'
 
 class CustomerPortalFSM(CustomerPortal):
 
@@ -39,6 +45,25 @@ class CustomerPortalFSM(CustomerPortal):
             'order': False, # KILLER FIX: Prevent portal_breadcrumbs from finding a fake 'order'
         })
         return request.render("sentinela_fsm.portal_my_services", values)
+
+    @http.route(['/reportar'], type='http', auth="public", website=True, sitemap=True)
+    def portal_report_public(self, **kw):
+        # Cliente con sesión → directo al alta autenticada (elige contrato, queda ligado).
+        if not request.env.user._is_public():
+            return request.redirect('/my/services/new')
+
+        # Sin sesión → el CLIENTE inicia el chat de WhatsApp (riesgo de baneo casi nulo).
+        wa_number = request.env['ir.config_parameter'].sudo().get_param(
+            'sentinela_fsm.report_whatsapp_number', DEFAULT_REPORT_WHATSAPP)
+        wa_text = quote(
+            "REPORTE: Quiero reportar una falla en mi servicio.\n\n"
+            "Nombre:\n"
+            "Dirección o número de cuenta:\n"
+            "¿Qué problema tienes?:"
+        )
+        return request.render("sentinela_fsm.portal_report_public", {
+            'wa_url': "https://wa.me/%s?text=%s" % (wa_number, wa_text),
+        })
 
     @http.route(['/my/services/new'], type='http', auth="user", website=True)
     def portal_new_service(self, **kw):
