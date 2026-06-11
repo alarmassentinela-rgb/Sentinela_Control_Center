@@ -27,6 +27,7 @@ El server `192.168.3.2` **NO es un git working tree**. Editar local no cambia na
 |---|---|---|---|
 | `sentinela_netwatch` | Flask + gunicorn + Docker + TimescaleDB | "Vigilante WISP": ping a antenas, dashboard NOC `:8090`, Telegram. Deploy = rsync + `docker compose restart`. | [CLAUDE.md](sentinela_netwatch/CLAUDE.md) |
 | `sentinela_receiver` | Python + systemd | Receptor TCP de señales de alarma (alimenta `sentinela_monitoring`). Reemplaza la familia `receiver_v*.py` legacy. | `sentinela_receiver/README.md` |
+| `sentinela_chatwoot_bot` | FastAPI + Docker | AgentBot de Chatwoot (inbox "Reportes Sentinela"): convierte WhatsApp entrante en orden FSM (Odoo XML-RPC) + handoff a soporte. Server `/opt/sentinela_chatwoot_bot`, red `chatwoot_default`. Deploy = rsync + `docker compose up -d --build`. | [CLAUDE.md](sentinela_chatwoot_bot/CLAUDE.md) |
 | `proyecto golfbookvip` | FastAPI + PostgreSQL + Redis | **golfbookvip.com** — reservas/torneos de golf. En server `/opt/golfbookvip`. ⚠️ deploy frontend: `.next` bind-mount → `docker cp` tras build. | `proyecto golfbookvip/README.md` |
 | `proyecto aleasystem` | Next.js 15 | Sitio corporativo AleaSystem.io. Deploy Docker puerto 8300. | — |
 | **SentiCar** (no hay carpeta de fuente en el repo) | Traccar branded | **radar.senticar.com** (GPS, Traccar en `192.168.3.2:8082` LAN, expuesto vía Cloudflare Tunnel). Fuente de la app Android en `~/senticar-app`; los scripts `*_senticar_*.py` de la raíz administran el sitio/portal. | — |

@@ -1,0 +1,18 @@
+# Bot de reportes (AgentBot de Chatwoot). Se une a la red de Chatwoot para que
+# el rails alcance el webhook; NO publica puerto al host (aislado).
+services:
+  chatwoot-fsm-bot:
+    build: .
+    image: sentinela-chatwoot-bot
+    container_name: sentinela-chatwoot-bot
+    restart: unless-stopped
+    env_file: .env
+    networks:
+      - chatwoot
+    # outgoing_url del AgentBot en Chatwoot:
+    #   http://sentinela-chatwoot-bot:8090/chatwoot/agentbot
+
+networks:
+  chatwoot:
+    external: true
+    name: chatwoot_default
