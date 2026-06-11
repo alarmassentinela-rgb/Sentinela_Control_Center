@@ -10,18 +10,23 @@ logger = logging.getLogger("chatwoot_bot.llm")
 
 
 def chat_completion(messages: list[dict], max_tokens: int = 600,
-                    temperature: float = 0.4) -> str:
-    """Llama a OpenRouter chat/completions. Devuelve el texto o '' si falla."""
+                    temperature: float = 0.4, json_mode: bool = False) -> str:
+    """Llama a OpenRouter chat/completions. Devuelve el texto o '' si falla.
+    json_mode=True fuerza salida JSON (response_format), clave para que el modelo
+    no pierda el formato a lo largo de la conversación."""
     if not config.OPENROUTER_API_KEY:
         logger.error("OPENROUTER_API_KEY no configurada")
         return ""
+    body = {"model": config.OPENROUTER_MODEL, "messages": messages,
+            "max_tokens": max_tokens, "temperature": temperature}
+    if json_mode:
+        body["response_format"] = {"type": "json_object"}
     try:
         r = httpx.post(
             f"{config.OPENROUTER_BASE_URL}/chat/completions",
             headers={"Authorization": f"Bearer {config.OPENROUTER_API_KEY}",
                      "Content-Type": "application/json"},
-            json={"model": config.OPENROUTER_MODEL, "messages": messages,
-                  "max_tokens": max_tokens, "temperature": temperature},
+            json=body,
             timeout=45.0,
         )
         if r.status_code != 200:

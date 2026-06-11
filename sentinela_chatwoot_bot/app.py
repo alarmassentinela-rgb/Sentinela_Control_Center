@@ -130,12 +130,15 @@ def _llm_decide(conv_id: int, name: str, ficha: str) -> dict:
     system = config.SYSTEM_PROMPT.format(name=name or "(desconocido)", ficha=ficha)
     messages = [{"role": "system", "content": system}]
     messages += state.get_history(conv_id, config.HISTORY_LIMIT)
-    raw = llm.chat_completion(messages)
+    raw = llm.chat_completion(messages, json_mode=True)
     data = _parse_llm(raw)
-    if not data:
-        # Fallback seguro: si el LLM falla, pide el detalle (no crea nada).
-        return {"action": "reply", "message": MSG_LLM_FALLBACK}
-    return data
+    if data and data.get("action"):
+        return data
+    # No parseó como JSON: si el modelo dijo algo, relévalo como respuesta (evita el
+    # bucle del mensaje robótico); si vino vacío, usa el fallback.
+    if raw:
+        return {"action": "reply", "message": raw}
+    return {"action": "reply", "message": MSG_LLM_FALLBACK}
 
 
 def _create_order(d: dict, partner, summary: str) -> dict | None:
