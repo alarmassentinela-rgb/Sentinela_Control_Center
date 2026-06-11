@@ -28,30 +28,39 @@ WhatsApp 8688225875
 ## Archivos
 | Archivo | Rol |
 |---|---|
-| `app.py` | Webhook `POST /chatwoot/agentbot` + `GET /status`. Toda la lógica de decisión (filtro de evento/inbox, idempotencia, handoff, intake, ficha, horario). |
-| `chatwoot.py` | Cliente de la API de Chatwoot: `send_message` (público/nota privada), `add_labels`, `assign_team`, `toggle_status`, `get_conversation`. |
+| `app.py` | Webhook `POST /chatwoot/agentbot` + `GET /status`. Orquesta: guards/idempotencia → historial → **decisión del LLM** → ejecuta (reply / create_ticket / handoff). |
+| `llm.py` | Cliente síncrono de OpenRouter (`chat_completion`). Mismo proveedor/modelo que OpenClaw (gemini-2.5-flash default). |
+| `state.py` | SQLite (`/data/state.db`, volumen): historial conversacional por `conv_id` + flag de orden creada. El AgentBot NO puede guardar estado en Chatwoot, por eso lo lleva el bot. |
+| `chatwoot.py` | Cliente de la API de Chatwoot: `send_message` (público/nota privada), `assign_team`, `toggle_status`. (El AgentBot NO puede `labels` ni `GET conversation`.) |
 | `odoo.py` | Capa XML-RPC **reusada verbatim del bot OpenClaw** + `create_reconcile_fsm_order` (orden POR CONCILIAR). Lee `ODOO_*` de env. |
-| `config.py` | Configuración por env (Chatwoot, Odoo, handoff, horario, etiqueta). |
-| `docker-compose.yml` | Servicio `chatwoot-fsm-bot` (container `sentinela-chatwoot-bot`) en red externa `chatwoot_default`. |
-| `.env.example` | Plantilla de variables. El `.env` real (con secretos) NO se versiona. |
+| `config.py` | Config por env (Chatwoot, Odoo, LLM, handoff, horario) + el **SYSTEM_PROMPT** del asistente. |
+| `docker-compose.yml` | Servicio `sentinela-chatwoot-bot` en red externa `chatwoot_default` + volumen `bot_state:/data`. |
+| `.env.example` | Plantilla. El `.env` real (Odoo, token AgentBot, OpenRouter) NO se versiona. |
 
-## Lógica de decisión (app.py `_process`)
-1. Ignora todo lo que no sea `message_created` + `message_type=incoming` del inbox configurado.
-2. **Idempotencia por STATUS:** si la conversación ya está `open`/`resolved`, el bot
-   calla (el reporte ya se levantó y se hizo handoff, o un humano la tomó). Tras el
-   intake el bot SIEMPRE pasa la conversación a `open` → los mensajes siguientes ya
-   no re-disparan. El status viene en el payload y es lo único de idempotencia que el
-   AgentBot puede leer Y escribir (no puede GET la conversación ni poner etiquetas).
-   Un set en memoria cubre reintentos del mismo proceso antes de que propague.
-4. **Handoff por palabra clave** (`asesor`, `humano`, …): mensaje + asigna soporte + abre. No crea orden.
-5. **Saludo escueto** ("hola" sin detalle): pide que describan el problema. No crea orden.
-6. **Intake:** `find_partner_by_phone` → con match crea orden ligada (si hay UNA sub
-   activa la liga); sin match crea **orden POR CONCILIAR** (partner placeholder
-   `⚠ POR CONCILIAR (Reportes Web)`, con tel+texto en la descripción). Responde folio.
-7. Nota interna con la **ficha Odoo** (`get_client_summary`) para recepción.
-8. **Horario** (`OFFICE_*`, América/MX, L-V 9-18 por default): en horario abre+asigna
-   para seguimiento inmediato; fuera de horario deja mensaje honesto y la conversación
-   en el inbox para el día hábil siguiente.
+## Lógica de decisión (app.py `_process`) — conversacional con IA
+1. Ignora lo que no sea `message_created` + `message_type=incoming` del inbox configurado.
+2. **Idempotencia por status:** si la conversación ya está `open`/`resolved` (handoff hecho
+   o humano la tomó), el bot calla. `_handled` cubre reintentos del mismo proceso. (El status
+   es lo único de idempotencia que el AgentBot puede leer Y escribir.)
+3. Guarda el turno del cliente en `state` (historial).
+4. **Atajo duro de handoff:** si el texto trae `asesor`/`humano`/… → handoff inmediato
+   (escape a humano garantizado aunque el LLM falle).
+5. Resuelve la **ficha Odoo** (`find_partner_by_phone` + `get_client_summary`) → al system prompt.
+6. **El LLM decide** (system prompt + historial) y responde JSON `{action, message, summary}`:
+   - `reply` → responde (saluda, pregunta, junta detalle). NO crea nada.
+   - `create_ticket` (solo tras confirmación) → crea la orden FSM con `summary` (match → ligada
+     a la sub si hay UNA activa; sin match → **POR CONCILIAR** con partner placeholder), responde
+     el **folio** (plantilla, NO el LLM), nota interna con la ficha, handoff a soporte. Guarda el
+     folio en `state` (anti-duplicado).
+   - `handoff` → pasa a humano (asigna soporte + abre), sin crear orden.
+   - LLM falla/parsea mal → fallback seguro: pide el detalle (no crea nada).
+7. **Horario** (`OFFICE_*`): solo cambia el texto del folio; en ambos casos queda en cola de soporte.
+
+## El cerebro: SYSTEM_PROMPT (config.py)
+Saluda cálido y breve (español MX), una pregunta a la vez, junta QUÉ falla y DESDE CUÁNDO,
+**no inventa folios/datos/tiempos**, ignora relleno ("hola/sí/ok"), RESUME y pide confirmación
+antes de `create_ticket`, y hace `handoff` si piden humano o el tema no es reporte (ventas/cobranza).
+Ajustable por env `SYSTEM_PROMPT`.
 
 ## Configuración / dependencias externas (estado vivo → memoria, no aquí)
 - **Odoo:** `api_user` debe estar en el grupo `sentinela_fsm.group_fsm_dispatcher`

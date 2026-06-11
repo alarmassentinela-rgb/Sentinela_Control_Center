@@ -1,18 +1,21 @@
-"""Bot de reportes Sentinela — AgentBot de Chatwoot.
+"""Bot de reportes Sentinela — AgentBot de Chatwoot, con IA conversacional.
 
-Flujo: WhatsApp (8688225875) → EvoApi → inbox "Reportes Sentinela" en Chatwoot →
-Chatwoot reenvía cada mensaje entrante a este webhook. El bot:
-  1. Identifica al cliente por teléfono (Odoo XML-RPC).
-  2. Crea la orden FSM (repair/Nuevo) y confirma el folio. Sin match → orden POR CONCILIAR.
-  3. Deja una nota interna con la ficha del cliente para recepción.
-  4. Handoff: en horario de oficina asigna a soporte y abre la conversación; el
-     cliente puede pedir "asesor" en cualquier momento para hablar con un humano.
+Flujo: WhatsApp (8688225875) → EvoApi → inbox "Reportes Sentinela" → Chatwoot
+reenvía cada mensaje entrante a este webhook. El bot mantiene la conversación con
+un LLM (OpenRouter): saluda, pregunta, junta el detalle de la falla, confirma y
+SOLO entonces levanta la orden FSM en Odoo. Luego hace handoff a soporte.
 
-Seguridad: el contenedor NO publica puerto; solo el rails de Chatwoot (misma red
-docker) puede alcanzar el webhook.
+El LLM responde un JSON {action, message, summary}:
+  - reply         → solo le responde al cliente.
+  - create_ticket → crea la orden con `summary`, confirma el folio, handoff a soporte.
+  - handoff       → pasa la conversación a un humano (sin crear orden).
+
+Seguridad: el contenedor NO publica puerto; solo el rails de Chatwoot lo alcanza.
 """
 
+import json
 import logging
+import re
 from datetime import datetime
 
 from fastapi import FastAPI, Request
@@ -20,6 +23,8 @@ from fastapi import FastAPI, Request
 import config
 import chatwoot
 import odoo
+import llm
+import state
 
 logging.basicConfig(
     level=logging.INFO,
@@ -30,46 +35,36 @@ logger = logging.getLogger("chatwoot_bot.app")
 
 app = FastAPI(title="Sentinela Chatwoot FSM Bot")
 
-# Dedup en memoria para reintentos rápidos del webhook (la verdad persistente entre
-# reinicios es el status 'open' de la conversación tras el handoff).
+# Dedup en memoria para reintentos rápidos (la verdad persistente entre reinicios es
+# el status 'open' de la conversación tras el handoff + el folio guardado en state).
 _handled: set[int] = set()
 
-# ── Mensajes ───────────────────────────────────────────────────────
-MSG_ASK_DETAIL = (
-    "¡Hola! 👋 Soy el asistente de *Sentinela*. "
-    "Cuéntame por favor qué problema tienes con tu servicio (con el mayor detalle "
-    "posible) y levanto tu reporte. Si prefieres hablar con un asesor, escribe *ASESOR*."
-)
+# ── Mensajes de plantilla (folio/handoff/error los controla el bot, no el LLM) ──
 MSG_HANDOFF = (
     "Con gusto. 🧑‍💼 Te comunico con un asesor; en breve te atiende una persona del equipo."
 )
 MSG_FOLIO_OFFICE = (
     "✅ Listo{name}, levantamos tu reporte con folio *{folio}*.\n"
-    "Un asesor te dará seguimiento en breve (horario de oficina). "
-    "Si necesitas algo más, aquí estoy."
+    "Un asesor le dará seguimiento en breve. Si necesitas algo más, aquí estoy."
 )
 MSG_FOLIO_AFTERHOURS = (
     "✅ Listo{name}, registramos tu reporte con folio *{folio}*.\n"
-    "En este momento estamos fuera de horario de oficina; un asesor te contacta al "
-    "iniciar el siguiente día hábil. Gracias por tu paciencia. 🙏"
+    "Estamos fuera de horario de oficina; un asesor te contacta el siguiente día hábil. "
+    "Gracias por tu paciencia. 🙏"
 )
 MSG_ERROR = (
-    "Recibimos tu mensaje pero tuvimos un problema al registrar el reporte en el "
-    "sistema. No te preocupes: ya avisamos a un asesor para que lo levante a mano."
+    "Recibí tu mensaje pero tuve un problema al registrar el reporte en el sistema. "
+    "No te preocupes: ya avisé a un asesor para que lo levante a mano."
 )
-
-_GREETINGS = {"hola", "buenas", "buenos dias", "buenos días", "buenas tardes",
-              "buenas noches", "hey", "hi", "ola", "que tal", "qué tal", "saludos"}
+MSG_LLM_FALLBACK = (
+    "¡Hola! 👋 Soy el asistente de *Sentinela*. Cuéntame por favor qué problema tienes "
+    "con tu servicio y con gusto levanto tu reporte."
+)
 
 
 def _office_hours_now() -> bool:
     now = datetime.now(config.TZ)
     return now.weekday() in config.OFFICE_DAYS and config.OFFICE_START <= now.hour < config.OFFICE_END
-
-
-def _is_greeting(content: str) -> bool:
-    c = content.strip().lower().rstrip("!.¡¿? ")
-    return len(c) < 14 and (c in _GREETINGS or any(c.startswith(g) for g in _GREETINGS))
 
 
 def _wants_human(content: str) -> bool:
@@ -96,15 +91,67 @@ def _extract(payload: dict) -> dict:
     }
 
 
-def _post_client_note(conv_id: int, phone: str):
-    """Nota interna con la ficha Odoo del cliente para que recepción tenga contexto."""
+def _resolve_client(phone: str):
+    """Devuelve (partner|None, ficha_texto, primer_nombre) para el system prompt."""
+    partner = odoo.find_partner_by_phone(phone) if phone else None
+    if not partner:
+        return None, "Cliente no identificado por su número (sin cuenta ligada).", ""
     try:
-        summary = odoo.get_client_summary(phone)
+        ficha = odoo.get_client_summary(phone) or ""
     except Exception as e:
         logger.error("ficha Odoo error: %s", e)
-        summary = None
-    if summary:
-        chatwoot.send_message(conv_id, f"🗂️ *Ficha del cliente (Odoo)*\n{summary}", private=True)
+        ficha = ""
+    first = (partner.get("name") or "").split()
+    name = first[0] if first else ""
+    return partner, (ficha or f"Cliente: {partner.get('name','')}"), name
+
+
+def _parse_llm(raw: str) -> dict:
+    """Extrae el JSON de la respuesta del LLM de forma tolerante."""
+    if not raw:
+        return {}
+    txt = raw.strip()
+    # quitar fences ```json ... ```
+    txt = re.sub(r"^```(?:json)?\s*|\s*```$", "", txt, flags=re.IGNORECASE).strip()
+    try:
+        return json.loads(txt)
+    except Exception:
+        m = re.search(r"\{.*\}", txt, flags=re.DOTALL)
+        if m:
+            try:
+                return json.loads(m.group(0))
+            except Exception:
+                pass
+    return {}
+
+
+def _llm_decide(conv_id: int, name: str, ficha: str) -> dict:
+    """Arma el contexto (system + historial) y pide la decisión al LLM."""
+    system = config.SYSTEM_PROMPT.format(name=name or "(desconocido)", ficha=ficha)
+    messages = [{"role": "system", "content": system}]
+    messages += state.get_history(conv_id, config.HISTORY_LIMIT)
+    raw = llm.chat_completion(messages)
+    data = _parse_llm(raw)
+    if not data:
+        # Fallback seguro: si el LLM falla, pide el detalle (no crea nada).
+        return {"action": "reply", "message": MSG_LLM_FALLBACK}
+    return data
+
+
+def _create_order(d: dict, partner, summary: str) -> dict | None:
+    desc_src = summary or d["content"]
+    if partner:
+        sub_id = odoo.get_single_active_subscription_id(partner["id"])
+        desc = f"Reporte por WhatsApp (tel: {d['phone']}).\n---\n{desc_src}"
+        return odoo.create_fsm_order(partner["id"], desc, "repair", sub_id)
+    return odoo.create_reconcile_fsm_order(d["phone"], desc_src, d["name"])
+
+
+def _do_handoff(conv_id: int, message: str | None):
+    chatwoot.send_message(conv_id, message or MSG_HANDOFF)
+    chatwoot.assign_team(conv_id, config.HANDOFF_TEAM_ID)
+    chatwoot.toggle_status(conv_id, "open")
+    _handled.add(conv_id)
 
 
 def _process(payload: dict):
@@ -116,70 +163,79 @@ def _process(payload: dict):
     conv_id = d["conv_id"]
     if not conv_id:
         return
-    # Filtrar al inbox que atendemos.
     if config.CHATWOOT_INBOX_ID and d["inbox_id"] and d["inbox_id"] != config.CHATWOOT_INBOX_ID:
         return
 
-    content = d["content"]
-
-    # Guarda de idempotencia: si la conversación ya está open/resolved, el reporte ya
-    # se levantó (handoff) o un humano la tomó → el bot calla. El status viene en el
-    # payload y es lo único de idempotencia que el AgentBot puede leer Y escribir
-    # (no puede GET la conversación ni poner etiquetas). `_handled` cubre reintentos
-    # del mismo proceso antes de que el status open propague.
+    # Idempotencia: tras el handoff la conversación queda 'open'/'resolved' → bot calla.
     if conv_id in _handled or d["status"] in ("open", "resolved"):
         logger.info("conv %s status=%s ya atendida; bot en silencio", conv_id, d["status"])
         return
 
-    # Cliente pide hablar con una persona → handoff inmediato, sin crear orden.
+    content = d["content"]
+    if not content:
+        return
+
+    # Guardar el turno del cliente en el historial.
+    state.add_message(conv_id, "user", content)
+
+    # Atajo duro: el cliente SIEMPRE puede escapar a un humano, pase lo que pase el LLM.
     if _wants_human(content):
-        chatwoot.send_message(conv_id, MSG_HANDOFF)
-        chatwoot.assign_team(conv_id, config.HANDOFF_TEAM_ID)
-        chatwoot.toggle_status(conv_id, "open")
+        _do_handoff(conv_id, MSG_HANDOFF)
+        return
+
+    # Contexto del cliente (Odoo) + decisión del LLM.
+    partner, ficha, name = _resolve_client(d["phone"])
+    decision = _llm_decide(conv_id, name, ficha)
+    action = (decision.get("action") or "reply").lower()
+    message = decision.get("message") or ""
+
+    # ── HANDOFF ──
+    if action == "handoff":
+        _do_handoff(conv_id, message or MSG_HANDOFF)
+        logger.info("conv %s: handoff (IA)", conv_id)
+        return
+
+    # ── CREATE_TICKET ──
+    if action == "create_ticket":
+        if state.get_order(conv_id):  # ya se creó antes; no duplicar
+            chatwoot.send_message(conv_id, message or "Tu reporte ya quedó registrado. 🙌")
+            return
+        res = _create_order(d, partner, decision.get("summary") or "")
+        if not res or not res.get("ok"):
+            logger.error("conv %s: fallo al crear orden FSM", conv_id)
+            chatwoot.send_message(conv_id, MSG_ERROR)
+            _do_handoff(conv_id, None)
+            return
+        folio = res["name"]
+        state.set_order(conv_id, folio)
         _handled.add(conv_id)
-        return
-
-    # Saludo escueto sin detalle → pedir que describa, sin generar orden basura.
-    if _is_greeting(content):
-        chatwoot.send_message(conv_id, MSG_ASK_DETAIL)
-        return
-
-    # ── Intake: crear la orden FSM ──
-    partner = odoo.find_partner_by_phone(d["phone"]) if d["phone"] else None
-    if partner:
-        sub_id = odoo.get_single_active_subscription_id(partner["id"])
-        desc = f"Reporte por WhatsApp (tel: {d['phone']}).\n---\n{content}"
-        res = odoo.create_fsm_order(partner["id"], desc, "repair", sub_id)
-        first = (partner.get("name") or "").split()
-        greeting = f" {first[0]}" if first else ""
-    else:
-        res = odoo.create_reconcile_fsm_order(d["phone"], content, d["name"])
-        greeting = ""
-
-    if not res or not res.get("ok"):
-        logger.error("conv %s: fallo al crear orden FSM", conv_id)
-        chatwoot.send_message(conv_id, MSG_ERROR)
+        greet = f" {name}" if name else ""
+        tmpl = MSG_FOLIO_OFFICE if _office_hours_now() else MSG_FOLIO_AFTERHOURS
+        folio_msg = tmpl.format(name=greet, folio=folio)
+        chatwoot.send_message(conv_id, folio_msg)
+        state.add_message(conv_id, "assistant", folio_msg)
+        _post_client_note(conv_id, d["phone"])
+        # Handoff a soporte para seguimiento humano.
         chatwoot.assign_team(conv_id, config.HANDOFF_TEAM_ID)
         chatwoot.toggle_status(conv_id, "open")
+        logger.info("conv %s: orden %s creada (match=%s)", conv_id, folio, bool(partner))
         return
 
-    folio = res["name"]
-    _handled.add(conv_id)
+    # ── REPLY (default) ──
+    reply = message or MSG_LLM_FALLBACK
+    chatwoot.send_message(conv_id, reply)
+    state.add_message(conv_id, "assistant", reply)
 
-    # Confirmación al cliente (honesta según horario).
-    tmpl = MSG_FOLIO_OFFICE if _office_hours_now() else MSG_FOLIO_AFTERHOURS
-    chatwoot.send_message(conv_id, tmpl.format(name=greeting, folio=folio))
 
-    # Ficha del cliente para recepción (nota interna).
-    _post_client_note(conv_id, d["phone"])
-
-    # Handoff a soporte: asignar el team y ABRIR la conversación SIEMPRE. El status
-    # 'open' es la guarda de idempotencia (los siguientes mensajes ya no re-disparan
-    # el intake) y deja la conversación en la cola del equipo. Fuera de horario nadie
-    # la atiende hasta el día hábil, pero ya está encolada y el cliente fue avisado.
-    chatwoot.assign_team(conv_id, config.HANDOFF_TEAM_ID)
-    chatwoot.toggle_status(conv_id, "open")
-    logger.info("conv %s: orden %s creada (match=%s)", conv_id, folio, bool(partner))
+def _post_client_note(conv_id: int, phone: str):
+    """Nota interna con la ficha Odoo del cliente para recepción."""
+    try:
+        summary = odoo.get_client_summary(phone)
+    except Exception as e:
+        logger.error("ficha Odoo error: %s", e)
+        summary = None
+    if summary:
+        chatwoot.send_message(conv_id, f"🗂️ *Ficha del cliente (Odoo)*\n{summary}", private=True)
 
 
 @app.post("/chatwoot/agentbot")
@@ -205,6 +261,7 @@ async def status():
     return {
         "service": "sentinela-chatwoot-bot",
         "odoo": "ok" if uid else "error",
+        "llm": "ok" if config.OPENROUTER_API_KEY else "no-key",
         "inbox_id": config.CHATWOOT_INBOX_ID,
         "office_hours_now": _office_hours_now(),
         "bot_token_set": bool(config.CHATWOOT_BOT_TOKEN),

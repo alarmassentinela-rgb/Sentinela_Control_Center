@@ -7,10 +7,15 @@ services:
     container_name: sentinela-chatwoot-bot
     restart: unless-stopped
     env_file: .env
+    volumes:
+      - bot_state:/data          # SQLite del historial conversacional (persistente)
     networks:
       - chatwoot
     # outgoing_url del AgentBot en Chatwoot:
     #   http://sentinela-chatwoot-bot:8090/chatwoot/agentbot
+
+volumes:
+  bot_state:
 
 networks:
   chatwoot:
