@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Copy, Check, Users, Lock, Globe, Crown, Shield, UserMinus, Trash2, LogOut, Loader2 } from 'lucide-react'
+import { ArrowLeft, Copy, Check, Users, Lock, Globe, Crown, Shield, UserMinus, Trash2, LogOut, Loader2, Flag, Plus, ChevronRight } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
@@ -29,6 +29,23 @@ interface GroupDetail {
   members: Member[]
 }
 
+interface GroupRound {
+  id: string
+  name: string | null
+  course_name: string | null
+  game_format: string
+  status: string
+  holes_to_play: number
+  scheduled_at: string | null
+  player_count: number
+}
+
+const STATUS_BADGE: Record<string, { es: string; en: string; cls: string }> = {
+  scheduled: { es: 'Programada', en: 'Scheduled', cls: 'bg-blue-500/15 text-blue-300 border-blue-500/30' },
+  active: { es: 'En juego', en: 'In play', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
+  finished: { es: 'Finalizada', en: 'Finished', cls: 'bg-zinc-700/40 text-zinc-400 border-zinc-700' },
+}
+
 const ROLE_ICON: Record<string, React.ReactNode> = {
   owner: <Crown size={12} className="text-yellow-400" />,
   admin: <Shield size={12} className="text-blue-400" />,
@@ -42,6 +59,7 @@ export default function GroupDetailPage() {
   const lbl = (es: string, en: string) => locale === 'es' ? es : en
 
   const [group, setGroup] = useState<GroupDetail | null>(null)
+  const [rounds, setRounds] = useState<GroupRound[]>([])
   const [loading, setLoading] = useState(true)
   const [myUserId, setMyUserId] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -55,10 +73,12 @@ export default function GroupDetailPage() {
     Promise.all([
       api.get(`/groups/${groupId}`),
       api.get('/users/me'),
+      api.get(`/groups/${groupId}/rounds`).catch(() => ({ data: [] })),
     ])
-      .then(([gRes, meRes]) => {
+      .then(([gRes, meRes, rRes]) => {
         setGroup(gRes.data)
         setMyUserId(meRes.data.id)
+        setRounds(rRes.data || [])
       })
       .catch(() => router.push(`/${locale}/groups`))
       .finally(() => setLoading(false))
@@ -172,6 +192,59 @@ export default function GroupDetailPage() {
             <p className="text-xs text-zinc-600 mt-2">
               {lbl('Comparte este código para invitar jugadores al grupo.', 'Share this code to invite players to the group.')}
             </p>
+          </div>
+        )}
+
+        {/* Group rounds */}
+        {isMember && (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800">
+              <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">
+                {lbl('Rondas del grupo', 'Group rounds')}
+              </p>
+              <Link
+                href={`/${locale}/rounds/new?group_id=${groupId}&group_name=${encodeURIComponent(group.name)}`}
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25 rounded-lg text-xs font-semibold transition-colors">
+                <Plus size={13} /> {lbl('Nueva ronda', 'New round')}
+              </Link>
+            </div>
+            {rounds.length === 0 ? (
+              <div className="px-5 py-8 text-center">
+                <Flag size={22} className="text-zinc-700 mx-auto mb-2" />
+                <p className="text-sm text-zinc-500">
+                  {lbl('Aún no hay rondas en este grupo.', 'No rounds in this group yet.')}
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-zinc-800">
+                {rounds.map(r => {
+                  const badge = STATUS_BADGE[r.status] ?? STATUS_BADGE.scheduled
+                  const when = r.scheduled_at
+                    ? new Date(r.scheduled_at).toLocaleDateString(locale === 'es' ? 'es-MX' : 'en-US', { day: 'numeric', month: 'short' })
+                    : ''
+                  return (
+                    <Link key={r.id} href={`/${locale}/rounds/${r.id}`}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/40 transition-colors">
+                      <div className="w-9 h-9 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                        <Flag size={15} className="text-emerald-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-white truncate">
+                          {r.name || r.course_name || lbl('Ronda', 'Round')}
+                        </p>
+                        <p className="text-xs text-zinc-500 truncate">
+                          {when}{r.course_name && r.name ? ` · ${r.course_name}` : ''} · {r.player_count} {lbl('jugadores', 'players')}
+                        </p>
+                      </div>
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badge.cls}`}>
+                        {locale === 'es' ? badge.es : badge.en}
+                      </span>
+                      <ChevronRight size={15} className="text-zinc-600 flex-shrink-0" />
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
           </div>
         )}
 

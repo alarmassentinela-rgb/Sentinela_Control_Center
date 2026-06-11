@@ -7,6 +7,19 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.26.0] - 2026-06-11
+
+### Added — Rondas de grupo (le da propósito a los grupos privados)
+
+Los grupos privados ahora pueden tener rondas asociadas, conectando el `Round.group_id` que ya existía en el modelo pero no estaba cableado:
+
+- **Backend:** `create_round` valida que el creador sea miembro activo del grupo cuando se manda `group_id` (403 si no). Nuevo endpoint `GET /groups/{id}/rounds` que lista las rondas del grupo (requiere membresía si es privado) con cancha, formato, estado, fecha y nº de jugadores.
+- **Frontend `/groups/[id]`:** nueva sección "Rondas del grupo" con botón "Nueva ronda" → abre `/rounds/new?group_id=…&group_name=…`, lista de rondas con badge de estado (Programada/En juego/Finalizada) y enlace a cada una; empty state cuando no hay.
+- **Frontend `/rounds/new`:** lee `?group_id=`/`?group_name=`, los manda al crear y muestra un banner "Ronda del grupo · <nombre>".
+- Reutiliza el modelo y constraint existentes (`group_id` FK SET NULL). No requiere migración.
+
+---
+
 ## [1.25.2] - 2026-06-10
 
 ### Changed — Tallas de equipo y grupos parejos en cupos no divisibles

@@ -10,6 +10,7 @@ from app.models.course import Course, CourseHole
 from app.models.score import Score, RoundPlayerBalance
 from app.models.handicap import ScoreDifferential
 from app.models.user import User
+from app.models.group import GroupMember
 from app.schemas.round import RoundCreate, RoundOut, BetConfigCreate, RoundUpdate
 from app.schemas.score import ScoreSubmit, ScoreOut
 from app.services import scoring as scoring_svc
@@ -264,6 +265,18 @@ async def create_round(data: RoundCreate, current_user: CurrentUser, db: DB):
     course = course_res.scalar_one_or_none()
     if not course:
         raise HTTPException(status_code=404, detail="Campo no encontrado")
+
+    # Si la ronda es de un grupo, el creador debe ser miembro activo
+    if data.group_id is not None:
+        member = await db.scalar(
+            select(GroupMember).where(
+                GroupMember.group_id == data.group_id,
+                GroupMember.user_id == current_user.id,
+                GroupMember.status == "active",
+            )
+        )
+        if not member:
+            raise HTTPException(status_code=403, detail="No eres miembro de ese grupo")
 
     alphabet = string.ascii_uppercase + string.digits
     invite_code = ''.join(secrets.choice(alphabet) for _ in range(8))

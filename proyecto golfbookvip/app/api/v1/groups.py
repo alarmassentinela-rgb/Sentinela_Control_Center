@@ -10,6 +10,8 @@ from pydantic import BaseModel
 from app.core.deps import CurrentUser, DB
 from app.models.group import Group, GroupMember
 from app.models.user import User
+from app.models.round import Round, RoundPlayer
+from app.models.course import Course
 
 router = APIRouter()
 
@@ -195,6 +197,50 @@ async def get_group(group_id: uuid.UUID, current_user: CurrentUser, db: DB):
             for gm, u in members
         ],
     }
+
+
+@router.get("/{group_id}/rounds")
+async def list_group_rounds(group_id: uuid.UUID, current_user: CurrentUser, db: DB):
+    """Rondas asociadas a un grupo. Requiere membresía si el grupo es privado."""
+    group = await db.scalar(
+        select(Group).where(Group.id == group_id, Group.is_active == True)
+    )
+    if not group:
+        raise HTTPException(404, "Grupo no encontrado")
+    my_member = await db.scalar(
+        select(GroupMember).where(
+            GroupMember.group_id == group_id,
+            GroupMember.user_id == current_user.id,
+            GroupMember.status == 'active'
+        )
+    )
+    if not my_member and group.is_private:
+        raise HTTPException(403, "Grupo privado")
+
+    result = await db.execute(
+        select(Round, Course)
+        .outerjoin(Course, Course.id == Round.course_id)
+        .where(Round.group_id == group_id)
+        .order_by(Round.scheduled_at.desc())
+        .limit(50)
+    )
+    rows = result.all()
+    out = []
+    for r, course in rows:
+        pc = await db.scalar(
+            select(func.count()).select_from(RoundPlayer).where(RoundPlayer.round_id == r.id)
+        )
+        out.append({
+            "id": str(r.id),
+            "name": r.name,
+            "course_name": course.name if course else None,
+            "game_format": r.game_format,
+            "status": r.status,
+            "holes_to_play": r.holes_to_play,
+            "scheduled_at": r.scheduled_at.isoformat() if r.scheduled_at else None,
+            "player_count": pc or 0,
+        })
+    return out
 
 
 @router.delete("/{group_id}/members/{user_id}", status_code=204)

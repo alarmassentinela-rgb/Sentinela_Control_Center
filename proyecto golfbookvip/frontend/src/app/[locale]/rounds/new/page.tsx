@@ -2,7 +2,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Flag, ArrowLeft, Loader2, Calendar, Info, X } from 'lucide-react'
+import { Flag, ArrowLeft, Loader2, Calendar, Info, X, Users } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
@@ -154,6 +154,9 @@ function NewRoundForm() {
   const searchParams = useSearchParams()
   const lbl = (es: string, en: string) => locale === 'es' ? es : en
 
+  const groupId = searchParams.get('group_id')
+  const groupName = searchParams.get('group_name')
+
   const [courses, setCourses] = useState<Course[]>([])
   const [form, setForm] = useState({
     course_id: searchParams.get('course_id') ?? '',
@@ -189,6 +192,7 @@ function NewRoundForm() {
         max_handicap: form.max_handicap > 0 ? form.max_handicap : null,
         scheduled_at: new Date(form.scheduled_at).toISOString(),
         scoring_type: 'gross',
+        group_id: groupId || null,
       })
       await api.patch(`/rounds/${res.data.id}/my-tee?tee_color=${teeColor}`)
       router.push(`/${locale}/rounds/${res.data.id}`)
@@ -225,6 +229,16 @@ function NewRoundForm() {
             </div>
             <h1 className="text-xl font-bold text-white">{lbl('Nueva ronda', 'New round')}</h1>
           </div>
+
+          {groupId && (
+            <div className="flex items-center gap-2 mb-5 px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-sm">
+              <Users size={15} />
+              <span>
+                {lbl('Ronda del grupo', 'Group round')}
+                {groupName ? <strong className="ml-1">{groupName}</strong> : null}
+              </span>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Cancha */}
