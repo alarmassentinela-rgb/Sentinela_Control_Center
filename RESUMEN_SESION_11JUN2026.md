@@ -51,3 +51,63 @@ Auditados Balanceador (CCR1009-7G-1C, ROS 6.49.17) y CCRsentinela (CCR1016-12G, 
 ## Notas
 - Nada se desplegó a producción: el CCR2004 solo recibió aseguramiento base (sin config WAN). Los demás routers solo se auditaron (lectura). Sin riesgo abierto.
 - Backup de fábrica del CCR2004 guardado (`factory_pre_claude`).
+
+---
+---
+
+# Parte 2 (sesión paralela) — Reporte de fallas por WhatsApp: `/reportar` + bot Chatwoot/IA
+
+Tema único: la página pública `/reportar` (Fase A) y el **bot de atención con Chatwoot + IA
+(Fase C completa)**, que quedó **en vivo**. Memoria detallada en `project_reportes_whatsapp_chatwoot.md`.
+
+## A. `sentinela_fsm` — página pública `/reportar` (v18.0.1.7.0)
+Commit `c100771`, tag `v18.0.1.7.0-sentinela_fsm`, desplegado STAGING + V18 (HTTP 200).
+- Controller `portal_report_public` (`auth="public"`): con sesión → `/my/services/new`; sin sesión →
+  botón **"Reportar por WhatsApp"** (`wa.me/528688225875`, el cliente inicia → baneo nulo) + acceso portal.
+- Número por `ir.config_parameter` `sentinela_fsm.report_whatsapp_number`. Plantilla autocontenida
+  (`web.assets_frontend`, sin depender de `website`).
+
+## B. Bot de reportes — `sentinela_chatwoot_bot` (servicio NUEVO en el repo)
+Microservicio FastAPI = **AgentBot de Chatwoot** del inbox "Reportes Sentinela" (8688225875), en
+`/opt/sentinela_chatwoot_bot`, red `chatwoot_default`, sin puerto público. Reusa `odoo.py` de OpenClaw.
+Commits `d8405c1` → `d7fd865`.
+
+**Capacidades (validado en simulación + algunas pruebas reales):**
+- **IA conversacional** (OpenRouter/gemini-2.5-flash): saluda, pregunta, junta detalle, RESUME, pide
+  confirmación, y solo tras el "sí" levanta la orden FSM.
+- **Soporte de primera línea:** revisa la ficha Odoo → si **suspendido/adeudo** se lo dice y NO manda
+  técnico; usa **señal/conexión en vivo** (`conn_online`, `antenna_signal_*`) para saber si la falla es
+  del enlace o local; **diagnóstico guiado** (pide modelo del módem, guía reiniciar/cables/luces).
+- **Orden bien armada:** multi-servicio → pregunta domicilio e identifica `SUB-XXXX` (liga sub +
+  `service_address_id`); pide **horario de contacto** y **teléfono alterno**; **adjunta a la orden las
+  fotos** del cliente (`ir.attachment`).
+- **Handoff** solo si piden persona/queja/cobranza; **follow-ups** tras crear el folio; idempotencia por
+  status; historial en **SQLite** (el AgentBot no puede guardar estado en Chatwoot).
+
+**Bugs corregidos en vivo:** `7375e52` bucle JSON (→ `response_format`), `39edb55` mudo ante adjuntos,
+`77abb21` callarse tras el folio, `ccce318` handoff ansioso.
+
+**Infra EvoApi↔Chatwoot resuelta:** los salientes salían `failed`/no llegaban. (1) cosmético: sync de
+`source_id` por UPDATE directo a la BD de Chatwoot, roto (`EAI_AGAIN`, luego SSL) → se acepta como
+límite (entrega y read-receipts van por webhook). (2) real: con EvoApi en 2 redes se rompió el ruteo a
+la IP del host → **fix: hablarse por nombre interno** (`url=rails:3000`, `webhook_url=evoapi:8080`).
+**Rótulo "Sentinela Reportes Bot:" quitado** (`signMsg=false` + re-fijar webhook + reinicio EvoApi).
+EvoApi reinició varias veces; SentinelaReportes reconectó `open` sin re-pair.
+
+**Estado:** AgentBot **ACTIVO / EN VIVO**. Las órdenes del bot caen sin técnico → se ven en
+*Gestión de Servicios → Operaciones → "Todas las Órdenes"* (no en "Mis Órdenes").
+
+### ⚠️ Incidente (lección)
+Las primeras pruebas se corrieron contra **conversaciones de clientes REALES** (Rmz, Juan Antonio) y los
+mensajes de prueba **sí les llegaron** (verificado en evoapi-db). Se borraron de Chatwoot pero no del
+teléfono. **Lección: NUNCA probar contra clientes reales; usar contacto/conversación de prueba dedicado.**
+
+### Pendientes (Parte 2)
+1. **Probar foto end-to-end:** la subida a Odoo quedó validada; falta confirmar la *descarga* de la
+   imagen desde Chatwoot con una foto REAL (lógica + try/except, **sin validar en vivo**).
+2. **Briefear a recepción** cómo llega cada reporte (orden + ficha en "Todas las Órdenes", soporte).
+3. **Enlazar `/reportar` desde sentinela.mx**.
+4. **Conectar el 8681254500** (cobranza) igual que reportes.
+5. **Futuro:** visión (leer foto del módem) + STT (notas de voz), portables de OpenClaw.
+6. **Límite conocido:** `source_id` de EvoApi no sincroniza por SSL (cosmético); fix real = SSL en
+   chatwoot-postgres (invasivo, no hecho).
