@@ -44,7 +44,8 @@ class SentinelaSubscription(models.Model):
         ('internet', 'Internet WISP'),
         ('alarm', 'Monitoreo de Alarmas'),
         ('gps', 'GPS / Rastreo'),
-        ('maintenance', 'Mantenimiento / Póliza')
+        ('maintenance', 'Mantenimiento / Póliza'),
+        ('domain', 'Nombre de Dominio')
     ], string='Tipo de Servicio', required=True)
 
     ip_address = fields.Char(string='Dirección IP')
@@ -887,11 +888,12 @@ class SentinelaSubscription(models.Model):
             months = int(sub.recurring_interval)
             period_end = sub.next_billing_date + relativedelta(months=months) - timedelta(days=1)
             # Cantidad facturada = nº de meses del ciclo.
-            # EXCEPCIÓN alarmas: usan productos por periodo (MBASICO-3/-6/-12) cuyo price_unit
-            # YA es el precio del periodo completo, así que van con cantidad=1 (no multiplicar).
+            # EXCEPCIÓN alarmas y dominios: usan productos por periodo (alarma MBASICO-3/-6/-12;
+            # dominio DOMINIO con precio ANUAL) cuyo price_unit YA es el precio del periodo
+            # completo, así que van con cantidad=1 (no multiplicar).
             # Internet/GPS/Mantenimiento guardan TARIFA MENSUAL → se multiplica por los meses
             # del ciclo para que "pagar 6 meses por adelantado" cobre 6× la mensualidad.
-            qty = 1 if sub.service_type == 'alarm' else months
+            qty = 1 if sub.service_type in ('alarm', 'domain') else months
             # GPS: 1 sub = N equipos → multiplica por la cantidad de equipos (mín. 1).
             dev_suffix = ""
             if sub.service_type == 'gps':

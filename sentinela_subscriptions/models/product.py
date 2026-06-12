@@ -20,8 +20,9 @@ class ProductTemplate(models.Model):
         ('internet', 'Internet WISP'),
         ('alarm', 'Monitoring Alarm'),
         ('gps', 'Senticar (GPS)'),
-        ('maintenance', 'Maintenance Poliza')
-    ], ondelete={'internet': 'cascade', 'alarm': 'cascade', 'gps': 'cascade', 'maintenance': 'cascade'})
+        ('maintenance', 'Maintenance Poliza'),
+        ('domain', 'Nombre de Dominio')
+    ], ondelete={'internet': 'cascade', 'alarm': 'cascade', 'gps': 'cascade', 'maintenance': 'cascade', 'domain': 'cascade'})
 
     service_inclusion_ids = fields.One2many('sentinela.product.service.inclusion', 'product_id', string='Matriz de Servicios Incluidos')
 
