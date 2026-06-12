@@ -604,7 +604,12 @@ class SentinelaSubscription(models.Model):
 
     currency_id = fields.Many2one('res.currency', default=lambda self: self.env.company.currency_id)
     payment_term_id = fields.Many2one('account.payment.term', string='Plazos de Pago')
-    auto_invoice = fields.Boolean(string='Generar Factura (No Remisión)', default=False)
+    auto_invoice = fields.Boolean(
+        string='Generar Factura (No Remisión)',
+        related='partner_id.requiere_factura', store=True, readonly=True,
+        help="Se DERIVA del cliente ('Requiere Factura CFDI'). Si está activo, la factura del "
+             "ciclo nace como 'Pendiente de Timbrado'; si no, queda como remisión. "
+             "Para cambiarlo, edita 'Requiere Factura CFDI' en el cliente.")
     auto_send_mail = fields.Boolean(string='Enviar automáticamente por Correo', default=False)
     billing_mode = fields.Selection([
         ('normal', 'Normal'),
@@ -910,6 +915,13 @@ class SentinelaSubscription(models.Model):
             'subscription_id': first_sub.id if len(subs_list) == 1 else False,
             'subscription_ids': [(6, 0, subs_list.ids)],
             'invoice_line_ids': line_cmds,
+            # Gating timbrado vs remisión (según preferencia fiscal del CLIENTE):
+            # - requiere_factura=True  -> 'pending' (Pendiente de Timbrado): queda en la
+            #   lista de trabajo de facturas por timbrar. El timbrado NO es automático:
+            #   sigue siendo el botón manual action_cfdi_stamp_prodigia (a Prodigia).
+            # - requiere_factura=False -> 'draft': remisión definitiva, nunca se timbra.
+            # Mientras no tenga cfdi_uuid, el reporte la imprime como REMISIÓN en ambos casos.
+            'cfdi_status': 'pending' if partner.requiere_factura else 'draft',
         }
         if method == 'by_branch' and first_sub.service_address_id:
             move_vals['partner_shipping_id'] = first_sub.service_address_id.id
@@ -924,8 +936,8 @@ class SentinelaSubscription(models.Model):
         for sub in subs_list:
             sub.next_billing_date = sub.next_billing_date + relativedelta(months=int(sub.recurring_interval))
 
-        stamp_note = " (marcada para timbrar CFDI)" if any(s.auto_invoice for s in subs_list) else ""
-        _logger.info(f"BILLING: Factura {move.name} publicada para {len(subs_list)} suscripción(es){stamp_note}")
+        stamp_note = " (REQUIERE TIMBRADO → cfdi_status=pending)" if partner.requiere_factura else " (REMISIÓN, sin timbrar)"
+        _logger.info(f"BILLING: Documento {move.name} publicado para {len(subs_list)} suscripción(es){stamp_note}")
         return move
 
     # --- Extensions & Suspensions ---

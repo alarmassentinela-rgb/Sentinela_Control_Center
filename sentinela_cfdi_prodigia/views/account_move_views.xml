@@ -28,4 +28,36 @@
             </xpath>
         </field>
     </record>
+
+    <!-- Filtros: lista de trabajo de timbrado -->
+    <record id="view_account_invoice_filter_prodigia" model="ir.ui.view">
+        <field name="name">account.move.search.prodigia</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_account_invoice_filter"/>
+        <field name="arch" type="xml">
+            <xpath expr="//search" position="inside">
+                <separator/>
+                <filter name="cfdi_pending" string="Pendientes de Timbrar"
+                        domain="[('cfdi_status', '=', 'pending'), ('cfdi_uuid', '=', False)]"/>
+                <filter name="cfdi_valid" string="Timbradas (CFDI válido)"
+                        domain="[('cfdi_status', '=', 'valid')]"/>
+                <filter name="cfdi_remision" string="Remisión (sin timbrar)"
+                        domain="[('cfdi_status', '=', 'draft'), ('move_type', '=', 'out_invoice')]"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Acción por lote: timbrar las facturas seleccionadas (aparece en el menú Acción de la lista).
+         Solo toca out_invoice/out_refund publicadas y aún no timbradas; el resto las ignora.
+         Respeta test_mode (sandbox mientras test_mode=True). -->
+    <record id="action_cfdi_stamp_bulk" model="ir.actions.server">
+        <field name="name">Timbrar con Prodigia (lote)</field>
+        <field name="model_id" ref="account.model_account_move"/>
+        <field name="binding_model_id" ref="account.model_account_move"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">timbrables = records.filtered(lambda m: m.move_type in ('out_invoice', 'out_refund') and m.state == 'posted' and m.cfdi_status != 'valid')
+if timbrables:
+    timbrables.action_cfdi_stamp_prodigia()</field>
+    </record>
 </odoo>
