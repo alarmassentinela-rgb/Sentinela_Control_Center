@@ -1,7 +1,9 @@
 import json
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.api.v1.router import api_router
@@ -35,6 +37,10 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix="/api/v1")
+
+# Archivos subidos (imágenes de posts, etc.) servidos en /media → MEDIA_ROOT
+os.makedirs(settings.MEDIA_ROOT, exist_ok=True)
+app.mount("/media", StaticFiles(directory=settings.MEDIA_ROOT), name="media")
 
 
 @app.get("/health", tags=["system"])

@@ -13,7 +13,8 @@ from app.models.user import User
 from app.models.round import Round, RoundPlayer
 from app.models.course import Course
 from app.models.score import Score
-from app.models.social import Post, PostComment, Reaction
+from app.models.social import Post, PostComment, PostMedia, Reaction
+from app.core.config import settings
 
 router = APIRouter()
 
@@ -25,8 +26,14 @@ class GroupCreate(BaseModel):
     max_members: Optional[int] = None
 
 
+class PostMediaIn(BaseModel):
+    url: str
+    thumbnail_url: Optional[str] = None
+
+
 class PostCreate(BaseModel):
-    content: str
+    content: Optional[str] = None
+    media: Optional[list[PostMediaIn]] = None
 
 
 class CommentCreate(BaseModel):
@@ -385,6 +392,7 @@ async def list_group_posts(group_id: uuid.UUID, current_user: CurrentUser, db: D
 
     # Likes del usuario actual sobre estos posts (una sola query)
     my_likes: set = set()
+    media_by_post: dict = {}
     if post_ids:
         lres = await db.execute(
             select(Reaction.target_id).where(
@@ -394,6 +402,15 @@ async def list_group_posts(group_id: uuid.UUID, current_user: CurrentUser, db: D
             )
         )
         my_likes = {tid for (tid,) in lres.all()}
+        # Media de todos los posts en una sola query
+        mres = await db.execute(
+            select(PostMedia).where(PostMedia.post_id.in_(post_ids))
+            .order_by(PostMedia.order_index)
+        )
+        for m in mres.scalars().all():
+            media_by_post.setdefault(m.post_id, []).append(
+                {"url": m.url, "thumbnail_url": m.thumbnail_url}
+            )
 
     can_moderate = my_member is not None and my_member.role in ("owner", "admin")
     return [
@@ -410,6 +427,7 @@ async def list_group_posts(group_id: uuid.UUID, current_user: CurrentUser, db: D
             "reactions_count": p.reactions_count or 0,
             "comments_count": p.comments_count or 0,
             "liked_by_me": p.id in my_likes,
+            "media": media_by_post.get(p.id, []),
             "created_at": p.created_at.isoformat() if p.created_at else None,
             "can_delete": str(u.id) == str(current_user.id) or can_moderate,
         }
@@ -424,20 +442,36 @@ async def create_group_post(group_id: uuid.UUID, data: PostCreate, current_user:
     if not my_member:
         raise HTTPException(403, "Debes ser miembro del grupo para publicar")
     content = (data.content or "").strip()
-    if not content:
+    media_in = data.media or []
+    if not content and not media_in:
         raise HTTPException(400, "El mensaje no puede estar vacío")
     if len(content) > 2000:
         raise HTTPException(400, "El mensaje es demasiado largo (máx. 2000)")
+    if len(media_in) > 4:
+        raise HTTPException(400, "Máximo 4 imágenes por publicación")
+    # Solo aceptar imágenes subidas a nuestro propio almacenamiento
+    for m in media_in:
+        if not m.url.startswith(settings.MEDIA_URL):
+            raise HTTPException(400, "URL de imagen no permitida")
 
     post = Post(
         author_id=current_user.id,
         group_id=group_id,
-        content=content,
-        post_type="regular",
+        content=content or None,
+        post_type="photo" if media_in else "regular",
         visibility="group",
     )
     db.add(post)
     await db.flush()
+
+    media_out = []
+    for i, m in enumerate(media_in):
+        db.add(PostMedia(
+            post_id=post.id, media_type="image",
+            url=m.url, thumbnail_url=m.thumbnail_url, order_index=i,
+        ))
+        media_out.append({"url": m.url, "thumbnail_url": m.thumbnail_url})
+
     return {
         "id": str(post.id),
         "content": post.content,
@@ -451,6 +485,7 @@ async def create_group_post(group_id: uuid.UUID, data: PostCreate, current_user:
         "reactions_count": 0,
         "comments_count": 0,
         "liked_by_me": False,
+        "media": media_out,
         "created_at": post.created_at.isoformat() if post.created_at else None,
         "can_delete": True,
     }

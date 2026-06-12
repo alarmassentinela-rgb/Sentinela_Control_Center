@@ -1,20 +1,22 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Heart, MessageCircle, Trash2, Send, Loader2, MessagesSquare } from 'lucide-react'
+import { ArrowLeft, Heart, MessageCircle, Trash2, Send, Loader2, MessagesSquare, ImagePlus, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 interface Author { user_id: string; username: string; first_name: string; last_name: string }
+interface Media { url: string; thumbnail_url: string | null }
 interface Post {
   id: string
-  content: string
+  content: string | null
   author: Author
   is_pinned: boolean
   reactions_count: number
   comments_count: number
   liked_by_me: boolean
+  media: Media[]
   created_at: string | null
   can_delete: boolean
 }
@@ -56,6 +58,9 @@ export default function GroupWallPage() {
   const [draft, setDraft] = useState('')
   const [posting, setPosting] = useState(false)
   const [openComments, setOpenComments] = useState<string | null>(null)
+  const [pendingMedia, setPendingMedia] = useState<Media[]>([])
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(() => {
     return Promise.all([
@@ -73,14 +78,37 @@ export default function GroupWallPage() {
     load().catch(() => router.push(`/${locale}/groups/${groupId}`)).finally(() => setLoading(false))
   }, [groupId, locale, router, load])
 
+  const onPickFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? [])
+    if (e.target) e.target.value = ''  // permite re-elegir el mismo archivo
+    if (!files.length) return
+    const room = 4 - pendingMedia.length
+    if (room <= 0) { alert(lbl('Máximo 4 imágenes', 'Max 4 images')); return }
+    setUploading(true)
+    try {
+      for (const f of files.slice(0, room)) {
+        const fd = new FormData()
+        fd.append('file', f)
+        const res = await api.post('/uploads/image', fd)
+        setPendingMedia(prev => [...prev, { url: res.data.url, thumbnail_url: res.data.thumbnail_url }])
+      }
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      alert(detail ?? lbl('Error al subir la imagen', 'Error uploading image'))
+    } finally {
+      setUploading(false)
+    }
+  }
+
   const submitPost = async () => {
     const content = draft.trim()
-    if (!content) return
+    if (!content && pendingMedia.length === 0) return
     setPosting(true)
     try {
-      const res = await api.post(`/groups/${groupId}/posts`, { content })
+      const res = await api.post(`/groups/${groupId}/posts`, { content, media: pendingMedia })
       setPosts(prev => [res.data, ...prev])
       setDraft('')
+      setPendingMedia([])
     } catch (e: unknown) {
       const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       alert(detail ?? lbl('Error al publicar', 'Error posting'))
@@ -147,9 +175,32 @@ export default function GroupWallPage() {
             placeholder={lbl('Escribe algo para el grupo…', 'Write something for the group…')}
             className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500/50 resize-none"
           />
+          {/* Previews de imágenes pendientes */}
+          {pendingMedia.length > 0 && (
+            <div className="flex gap-2 mt-2 flex-wrap">
+              {pendingMedia.map((m, i) => (
+                <div key={i} className="relative w-16 h-16">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={m.thumbnail_url ?? m.url} alt="" className="w-16 h-16 object-cover rounded-lg border border-zinc-700" />
+                  <button onClick={() => setPendingMedia(prev => prev.filter((_, j) => j !== i))}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-zinc-950 border border-zinc-700 rounded-full flex items-center justify-center text-zinc-400 hover:text-red-400">
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="flex items-center justify-between mt-2">
-            <span className="text-xs text-zinc-600">{draft.length}/2000</span>
-            <button onClick={submitPost} disabled={posting || !draft.trim()}
+            <div className="flex items-center gap-3">
+              <button onClick={() => fileInputRef.current?.click()} disabled={uploading || pendingMedia.length >= 4}
+                className="flex items-center gap-1.5 text-zinc-400 hover:text-emerald-400 disabled:opacity-40 disabled:hover:text-zinc-400 transition-colors text-sm">
+                {uploading ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />}
+                {lbl('Foto', 'Photo')}
+              </button>
+              <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={onPickFiles} className="hidden" />
+              <span className="text-xs text-zinc-600">{draft.length}/2000</span>
+            </div>
+            <button onClick={submitPost} disabled={posting || uploading || (!draft.trim() && pendingMedia.length === 0)}
               className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold transition-colors">
               {posting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
               {lbl('Publicar', 'Post')}
@@ -179,7 +230,18 @@ export default function GroupWallPage() {
                 </button>
               )}
             </div>
-            <p className="text-sm text-zinc-200 whitespace-pre-wrap break-words mb-3">{post.content}</p>
+            {post.content && <p className="text-sm text-zinc-200 whitespace-pre-wrap break-words mb-3">{post.content}</p>}
+            {post.media && post.media.length > 0 && (
+              <div className={`grid gap-1.5 mb-3 ${post.media.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                {post.media.map((m, i) => (
+                  <a key={i} href={m.url} target="_blank" rel="noopener noreferrer" className="block">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={m.thumbnail_url ?? m.url} alt=""
+                      className={`w-full object-cover rounded-xl border border-zinc-800 ${post.media.length === 1 ? 'max-h-96' : 'h-40'}`} />
+                  </a>
+                ))}
+              </div>
+            )}
             <div className="flex items-center gap-4 text-sm">
               <button onClick={() => toggleLike(post)}
                 className={`flex items-center gap-1.5 transition-colors ${post.liked_by_me ? 'text-red-400' : 'text-zinc-500 hover:text-red-400'}`}>

@@ -7,6 +7,19 @@ Cada release está respaldada por un tag git (`git checkout v1.0.0-golfbookvip` 
 
 ---
 
+## [1.29.0] - 2026-06-11
+
+### Added — Fotos en los posts del grupo
+
+El muro del grupo ahora soporta imágenes (hasta 4 por post):
+
+- **Infra de subida (nueva):** `POST /api/v1/uploads/image` (`app/api/v1/uploads.py`) acepta una imagen, la reorienta por EXIF, la convierte a RGB, la comprime (lado mayor ≤1600px, JPEG q85) y genera thumbnail (≤400px), guardando en `MEDIA_ROOT/posts/` y devolviendo `{url, thumbnail_url}`. Límite 10 MB; valida que sea imagen con Pillow. `main.py` monta `StaticFiles` en `/media` → `MEDIA_ROOT` (volumen `media_data`). Usa la config que ya existía (`MEDIA_ROOT`, `MEDIA_URL`).
+- **Posts con media:** `PostCreate` acepta `media: [{url, thumbnail_url}]` (máx 4, solo URLs de nuestro `MEDIA_URL`); crea filas `PostMedia`. El listado del muro devuelve `media` por post. Un post puede ser solo-foto (sin texto).
+- **Frontend `/groups/[id]/wall`:** botón "Foto" en el composer (subida múltiple con previews y quitar), y render de imágenes en cada post (grid 1/2 columnas, thumbnail → abre el original). 
+- ⚠️ Las imágenes viven en el volumen `media_data` del api (persisten en restart/rebuild) pero **no están en la estrategia de respaldo** (solo DB+addons). Pendiente: respaldar `media_data` o moverlo a object storage. `PostMedia` ya existía; sin migración.
+
+---
+
 ## [1.28.0] - 2026-06-11
 
 ### Added — Muro de posts del grupo
