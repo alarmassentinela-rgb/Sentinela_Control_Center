@@ -130,9 +130,13 @@ def _parse_llm(raw: str) -> dict:
     return {}
 
 
-def _llm_decide(conv_id: int, name: str, ficha: str, order_folio: str | None = None) -> dict:
-    """Arma el contexto (system + historial) y pide la decisión al LLM."""
-    system = config.SYSTEM_PROMPT.format(name=name or "(desconocido)", ficha=ficha)
+def _llm_decide(conv_id: int, name: str, ficha: str, order_folio: str | None = None,
+                verified: bool = True) -> dict:
+    """Arma el contexto (system + historial) y pide la decisión al LLM.
+    verified=False (número no encontrado en Odoo) → prompt restringido: NO da info de
+    cuenta, solo recaba datos para un reporte interno (VERIFICAR IDENTIDAD)."""
+    base = config.SYSTEM_PROMPT if verified else config.SYSTEM_PROMPT_UNVERIFIED
+    system = base.format(name=name or "(desconocido)", ficha=ficha)
     if order_folio:
         # Ya hay reporte: el bot atiende follow-ups, NO crea otra orden.
         system += (
@@ -159,10 +163,29 @@ def _create_order(d: dict, partner, decision: dict) -> dict | None:
     """Crea la orden con todo lo que juntó el bot: problema + servicio/domicilio
     reportado, horario de contacto y teléfono alterno; liga la sub y su domicilio."""
     summary = decision.get("summary") or d["content"]
-    sub_name = (decision.get("subscription") or "").strip()
     contact_time = (decision.get("contact_time") or "").strip()
-    alt_phone = (decision.get("alt_phone") or "").strip()
 
+    # ── NO verificado (número no encontrado en Odoo): reporte interno VERIFICAR IDENTIDAD ──
+    # Datos DECLARADOS por el cliente, sin verificar. NO se liga a ninguna cuenta.
+    if not partner:
+        holder = (decision.get("account_holder") or "").strip()
+        svc_addr = (decision.get("service_address") or "").strip()
+        contact = (decision.get("alt_phone") or "").strip()
+        lines = ["⚠ VERIFICAR IDENTIDAD — número NO registrado; datos DECLARADOS por el cliente, SIN verificar."]
+        if holder:
+            lines.append(f"Titular declarado: {holder}")
+        if svc_addr:
+            lines.append(f"Dirección de servicio declarada: {svc_addr}")
+        if contact:
+            lines.append(f"Contacto declarado: {contact}")
+        if contact_time:
+            lines.append(f"Horario de contacto: {contact_time}")
+        lines += ["---", summary]
+        return odoo.create_reconcile_fsm_order(d["phone"], "\n".join(lines), d["name"])
+
+    # ── Verificado: liga la suscripción y su domicilio ──
+    sub_name = (decision.get("subscription") or "").strip()
+    alt_phone = (decision.get("alt_phone") or "").strip()
     extras = []
     if sub_name:
         extras.append(f"Servicio/domicilio reportado: {sub_name}")
@@ -171,9 +194,6 @@ def _create_order(d: dict, partner, decision: dict) -> dict | None:
     if alt_phone:
         extras.append(f"Teléfono alterno: {alt_phone}")
     body = ("\n".join(extras) + "\n---\n" + summary) if extras else summary
-
-    if not partner:
-        return odoo.create_reconcile_fsm_order(d["phone"], body, d["name"])
 
     sub_id = None
     addr_id = None
@@ -260,7 +280,7 @@ def _process(payload: dict):
     # activo para follow-ups (no creó handoff al crear el ticket).
     existing_folio = state.get_order(conv_id)
     partner, ficha, name = _resolve_client(d["phone"])
-    decision = _llm_decide(conv_id, name, ficha, existing_folio)
+    decision = _llm_decide(conv_id, name, ficha, existing_folio, verified=bool(partner))
     action = (decision.get("action") or "reply").lower()
     message = decision.get("message") or ""
 
