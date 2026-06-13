@@ -895,9 +895,11 @@ class SentinelaSubscription(models.Model):
             # del ciclo para que "pagar 6 meses por adelantado" cobre 6× la mensualidad.
             qty = 1 if sub.service_type in ('alarm', 'domain') else months
             # GPS: 1 sub = N equipos → multiplica por la cantidad de equipos (mín. 1).
+            # Los equipos SUSPENDIDOS (pausa temporal del cliente) NO se facturan: solo cuentan
+            # los activos.
             dev_suffix = ""
             if sub.service_type == 'gps':
-                n_dev = max(1, len(sub.gps_device_ids))
+                n_dev = max(1, len(sub.gps_device_ids.filtered(lambda d: d.device_state != 'suspended')))
                 qty = months * n_dev
                 dev_suffix = f" - {n_dev} equipo(s)"
             desc = f"Servicio: {sub.product_id.name} - Contrato: {sub.name}{dev_suffix} - Periodo: {sub.next_billing_date} al {period_end}"

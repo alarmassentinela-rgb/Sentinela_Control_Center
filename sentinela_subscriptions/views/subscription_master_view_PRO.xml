@@ -118,7 +118,7 @@
                                     placeholder="Genera el link y mándaselo al transportista: él entra, ve sus unidades y crea sus propios links de rastreo."/>
                             </group>
                             <field name="gps_device_ids">
-                                <list>
+                                <list decoration-muted="device_state == 'suspended'">
                                     <field name="gps_mode" column_invisible="1"/>
                                     <field name="gps_platform" column_invisible="1"/>
                                     <field name="name"/>
@@ -126,8 +126,17 @@
                                     <field name="sim_iccid" column_invisible="parent.gps_mode == 'movil'"/>
                                     <field name="vehicle_plate"/>
                                     <field name="equipment_model"/>
+                                    <field name="device_state" widget="badge"
+                                        decoration-success="device_state == 'active'"
+                                        decoration-warning="device_state == 'suspended'"/>
                                     <field name="gps_sim_online" optional="show"/>
                                     <field name="senticar_device_id" readonly="1" optional="show"/>
+                                    <button name="action_suspend_device" string="Suspender"
+                                        title="Suspender temporal (deja de rastrear y no se factura)"
+                                        type="object" icon="fa-pause" invisible="device_state == 'suspended'"/>
+                                    <button name="action_reactivate_device" string="Reactivar"
+                                        title="Reactivar equipo" type="object" icon="fa-play"
+                                        invisible="device_state != 'suspended'"/>
                                     <button name="action_register_senticar" string="SentiCar" type="object"
                                         icon="fa-cloud-upload" invisible="parent.gps_platform != 'senticar'"/>
                                 </list>
@@ -135,6 +144,11 @@
                                     <field name="gps_mode" invisible="1"/>
                                     <field name="gps_platform" invisible="1"/>
                                     <header>
+                                        <button name="action_suspend_device" string="⏸ Suspender"
+                                            type="object" class="btn-secondary" invisible="device_state == 'suspended'"
+                                            confirm="¿Suspender temporalmente este equipo? Deja de rastrear (SIM cortada) y no se factura mientras esté suspendido."/>
+                                        <button name="action_reactivate_device" string="▶ Reactivar"
+                                            type="object" class="btn-success" invisible="device_state != 'suspended'"/>
                                         <button name="action_register_senticar" string="📲 Registrar en SentiCar"
                                             type="object" class="btn-primary" invisible="gps_platform != 'senticar'"/>
                                         <button name="action_refresh_diag" string="🔄 Diagnóstico"
@@ -143,6 +157,7 @@
                                             type="object" class="btn-warning" invisible="gps_mode == 'movil'"/>
                                         <button name="action_generate_share_link" string="📍 Generar link de rastreo"
                                             type="object" class="btn-info" invisible="not senticar_device_id"/>
+                                        <field name="device_state" widget="statusbar"/>
                                     </header>
                                     <group>
                                         <group string="Equipo">

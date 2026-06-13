@@ -24,6 +24,15 @@ class SubscriptionGpsDevice(models.Model):
     gps_mode = fields.Selection(related='subscription_id.gps_mode', store=True, string='Modo')
     gps_platform = fields.Selection(related='subscription_id.gps_platform', store=True, string='Plataforma')
 
+    # Suspensión TEMPORAL por equipo (a petición del cliente). Distinto de eliminar:
+    # es reversible, conserva el registro, deja de rastrear (SIM cortada) y NO se factura.
+    device_state = fields.Selection([
+        ('active', 'Activo'),
+        ('suspended', 'Suspendido'),
+    ], string='Estado', default='active', required=True, copy=False,
+       help="Suspendido = pausa temporal: corta la SIM (deja de rastrear) y NO se factura "
+            "mientras esté suspendido. Reactivar lo restaura. Para baja definitiva, elimínalo.")
+
     # Vehículo / equipo
     vehicle_plate = fields.Char(string='Placa')
     vehicle_brand = fields.Char(string='Marca Vehículo')
@@ -103,6 +112,64 @@ class SubscriptionGpsDevice(models.Model):
         self.gps_sms_log = (f"[{ts}] {mark} «{self.gps_sms_command}» → {res.get('detail')}\n" + (self.gps_sms_log or "")).strip()
         if res.get('ok'):
             self.gps_sms_command = False
+
+    # ---- Suspensión temporal por equipo ----
+    def action_suspend_device(self):
+        """Suspensión TEMPORAL del equipo (a petición del cliente): corta su SIM floLIVE
+        (modo vehículo), lo deshabilita en SentiCar si aplica, y lo marca Suspendido para que
+        NO se facture. Reversible con action_reactivate_device. NO borra el registro."""
+        flo = self.env['sentinela.flolive.service']
+        svc = self.env['sentinela.senticar.service']
+        for dev in self:
+            if dev.device_state == 'suspended':
+                continue
+            if dev.gps_mode == 'vehiculo' and dev.sim_iccid:
+                try:
+                    if flo.update_sim_status(dev.sim_iccid, 'SUSPENDED'):
+                        dev.gps_sim_status = 'SUSPENDED'
+                    else:
+                        dev.subscription_id.message_post(body=_(
+                            "⚠️ floLIVE: no se pudo cortar la SIM %s de «%s»; revisar manualmente.")
+                            % (dev.sim_iccid, dev.name))
+                except Exception as e:
+                    _logger.error("floLIVE suspend %s: %s", dev.sim_iccid, e)
+            if dev.senticar_device_id:
+                try:
+                    svc.set_device_disabled(dev.senticar_device_id, True)
+                except Exception as e:
+                    _logger.error("SENTICAR suspend device %s: %s", dev.senticar_device_id, e)
+            dev.device_state = 'suspended'
+            dev.subscription_id.message_post(body=_(
+                "⏸️ Equipo <b>%s</b> (IMEI %s) SUSPENDIDO temporalmente: deja de rastrear y "
+                "NO se factura mientras esté suspendido.") % (dev.name, dev.gps_imei or '—'))
+
+    def action_reactivate_device(self):
+        """Reactiva un equipo suspendido: restaura su SIM floLIVE, lo re-habilita en SentiCar
+        si aplica, y vuelve a contar para la facturación."""
+        flo = self.env['sentinela.flolive.service']
+        svc = self.env['sentinela.senticar.service']
+        for dev in self:
+            if dev.device_state != 'suspended':
+                continue
+            if dev.gps_mode == 'vehiculo' and dev.sim_iccid:
+                try:
+                    if flo.update_sim_status(dev.sim_iccid, 'ACTIVE'):
+                        dev.gps_sim_status = 'ACTIVE'
+                    else:
+                        dev.subscription_id.message_post(body=_(
+                            "⚠️ floLIVE: no se pudo reactivar la SIM %s de «%s»; revisar manualmente.")
+                            % (dev.sim_iccid, dev.name))
+                except Exception as e:
+                    _logger.error("floLIVE reactivate %s: %s", dev.sim_iccid, e)
+            if dev.senticar_device_id:
+                try:
+                    svc.set_device_disabled(dev.senticar_device_id, False)
+                except Exception as e:
+                    _logger.error("SENTICAR reactivate device %s: %s", dev.senticar_device_id, e)
+            dev.device_state = 'active'
+            dev.subscription_id.message_post(body=_(
+                "▶️ Equipo <b>%s</b> (IMEI %s) REACTIVADO: vuelve a rastrear y a facturarse.")
+                % (dev.name, dev.gps_imei or '—'))
 
     def unlink(self):
         # Al quitar el equipo de la suscripción, deshabilitarlo en SentiCar (no borrar histórico).
