@@ -82,9 +82,32 @@
 /ip firewall filter add chain=forward in-interface=ether3 action=accept comment="FFW"
 /ip firewall filter add chain=forward action=drop comment="drop resto forward"
 
+# --- DHCP server del segmento de oficina 192.168.3.0/24 (ether2) ---
+# Replica del serverLAN que vivia en el Balanceador (ether7). Se aplico el 13-jun.
+# ⚠️ El SERVER queda disabled=yes en frio: con el Balanceador todavia sirviendo DHCP en
+#    el mismo dominio L2, dos servidores DHCP = conflicto. Habilitar EN LA VENTANA
+#    (cuando el CCR2004 ya sea el gateway y se deshabilite el serverLAN del Balanceador).
+/ip pool add name=poolLAN ranges=192.168.3.50-192.168.3.200
+/ip dhcp-server network add address=192.168.3.0/24 gateway=192.168.3.254 dns-server=8.8.8.8,8.8.4.4
+/ip dhcp-server add name=serverLAN interface=ether2 address-pool=poolLAN lease-time=1d disabled=yes
+# Reservas estaticas (MAC -> IP fija):
+/ip dhcp-server lease add server=serverLAN address=192.168.3.92 mac-address=F4:30:B9:75:3F:28 comment="Impresora Laser HP"
+/ip dhcp-server lease add server=serverLAN address=192.168.3.97 mac-address=00:30:4F:AB:40:C3 comment="AP wifi Oficina"
+/ip dhcp-server lease add server=serverLAN address=192.168.3.91 mac-address=74:D4:35:4B:A5:43 comment="Servidor Securithor"
+/ip dhcp-server lease add server=serverLAN address=192.168.3.80 mac-address=50:ED:3C:24:40:61 comment="Laptop Personal David"
+/ip dhcp-server lease add server=serverLAN address=192.168.3.69 mac-address=60:6B:FF:F3:F3:AA comment="Nintendo Switch"
+/ip dhcp-server lease add server=serverLAN address=192.168.3.63 mac-address=90:B9:31:CF:E7:D1 comment="Ipad Diego"
+/ip dhcp-server lease add server=serverLAN address=192.168.3.66 mac-address=B2:6A:FF:5A:64:48
+/ip dhcp-server lease add server=serverLAN address=192.168.3.81 mac-address=10:41:7F:29:27:6D comment="Iphone David"
+/ip dhcp-server lease add server=serverLAN address=192.168.3.94 mac-address=5C:93:A2:04:C5:0F comment="PlayStation David"
+/ip dhcp-server lease add server=serverLAN address=192.168.3.76 mac-address=5C:BA:EF:80:9A:73 comment="Laptop Personal Diego"
+/ip dhcp-server lease add server=serverLAN address=192.168.3.64 mac-address=D0:3C:1F:82:AC:12 comment="Laptop Diego IDEA"
+
 # =============================================================================
 #  PENDIENTE DE LA VENTANA (NO va en frío):
 #    /ip address set [find interface=ether2] address=192.168.3.254/24   (de .249 a .254)
-#    + habilitar ether1, recablear handoff/FFW/trunk/switch, deshabilitar lo del balanceador.
+#    /ip dhcp-server enable serverLAN                                    (DHCP oficina)
+#    + habilitar ether1, recablear handoff/FFW/trunk/switch, deshabilitar lo del balanceador
+#      (incluye el serverLAN DHCP del balanceador para que no haya doble DHCP).
 #  Ver §5 (checklist), §6 (verificacion), §7 (rollback) del doc.
 # =============================================================================
