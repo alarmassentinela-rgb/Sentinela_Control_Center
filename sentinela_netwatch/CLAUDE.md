@@ -55,6 +55,7 @@ No existe `data/*.xml` ni `ir.cron`. La cadencia vive en bucles Python:
 |---|---|---|---|
 | `vigilante.loop()` | `ronda(primera=False)` | `INTERVAL_S` = 20 s | Ping paralelo (30 workers) a todo el inventario, debounce, alertas, `publicar()` |
 | `vigilante.loop()` | `leer_wans()` | cada 3 ciclos (~1 min) | Lee `/tool/netwatch` del Balanceador (`192.168.10.254`) |
+| `vigilante.loop()` | `leer_waves_ffw()` | cada `WAVE_CHECK_EVERY`=15 ciclos (~5 min) | Login API a las 2 Wave del enlace FFW (`10.99.99.3/.4`, `sentinela/SentinelaW1sp#`) → lee `/api/v1.0/statistics`: linkState, señal, capacidad y el **puerto ethernet** (cuello de botella conocido). Alerta a Telegram **por cambio** (enlace caído, eth &lt;1000M, señal &lt; -75 dBm con histéresis). Primer paso = resumen informativo. Estado en `WAVES`, publicado en `status.json` (`waves`). NO es ping (API HTTP). |
 | `collector_traffic.loop()` | `collect_once()` | `INTERVAL_S` = 600 s (10 min) | Lee `<pppoe-ctaXXXX>` del CCRsentinela (`192.168.10.50`), delta → tabla `traffic` |
 | `collector_traffic.loop()` | `refresh_clients()` | cada 6 ciclos (~1 h) | Espeja `cta → partner/plan` desde Odoo (`sentinela.subscription`, XML-RPC) a tabla `clients` |
 

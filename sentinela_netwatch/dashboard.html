@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sentinela — Monitoreo de Red</title>
+<style>
+  :root{
+    --bg:#0b0f17; --panel:#131a26; --panel2:#0f1622; --line:#1f2a3a;
+    --txt:#e6edf6; --muted:#8b9bb3; --green:#1fbf6b; --red:#ff4d57;
+    --gray:#465468; --amber:#f5a623;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+       font-family:'Segoe UI',system-ui,Roboto,Arial,sans-serif}
+  header{display:flex;align-items:center;justify-content:space-between;
+         padding:14px 22px;border-bottom:1px solid var(--line);background:var(--panel2)}
+  header .brand{font-size:22px;font-weight:700;letter-spacing:.5px}
+  header .brand span{color:var(--green)}
+  header .meta{text-align:right;font-size:13px;color:var(--muted)}
+  header .meta .clock{font-size:26px;color:var(--txt);font-weight:600}
+  .bigstate{font-size:15px;font-weight:700;padding:6px 14px;border-radius:20px}
+  .ok{background:rgba(31,191,107,.15);color:var(--green)}
+  .bad{background:rgba(255,77,87,.15);color:var(--red)}
+  .wrap{padding:18px 22px}
+  .wans{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+  .wan{flex:1;min-width:180px;background:var(--panel);border:1px solid var(--line);
+       border-radius:12px;padding:14px 18px;display:flex;align-items:center;gap:12px}
+  .wan .dot{width:16px;height:16px;border-radius:50%}
+  .wan .l{font-size:13px;color:var(--muted)}
+  .wan .n{font-size:18px;font-weight:700}
+  .ffw{background:var(--panel);border:1px solid var(--line);border-radius:14px;margin-bottom:18px;overflow:hidden}
+  .ffw h2{margin:0;padding:12px 16px;font-size:16px;background:var(--panel2);
+          border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+  .ffw h2 .cap{font-size:13px;color:var(--muted);font-weight:500}
+  .ffw .ends{display:flex;gap:14px;flex-wrap:wrap;padding:14px}
+  .ffw .end{flex:1;min-width:240px;background:var(--panel2);border:1px solid var(--line);
+            border-radius:12px;padding:12px 16px}
+  .ffw .end .top{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .ffw .end .nm{font-size:15px;font-weight:700}
+  .ffw .metrics{display:flex;gap:20px;flex-wrap:wrap}
+  .ffw .metrics .k{color:var(--muted);font-size:11px;margin-bottom:3px}
+  .ffw .metrics .v{font-weight:600;font-size:15px}
+  .pill{font-size:11px;padding:2px 8px;border-radius:8px;font-weight:600;display:inline-block}
+  .pill.good{background:rgba(31,191,107,.15);color:var(--green)}
+  .pill.warn{background:rgba(245,166,35,.18);color:var(--amber)}
+  .pill.bad{background:rgba(255,77,87,.15);color:var(--red)}
+  .zonas{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:16px}
+  .zona{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .zona h2{margin:0;padding:12px 16px;font-size:16px;background:var(--panel2);
+           border-bottom:1px solid var(--line);display:flex;justify-content:space-between}
+  .zona h2 .cnt{font-size:13px;color:var(--muted);font-weight:500}
+  .tiles{display:flex;flex-wrap:wrap;gap:10px;padding:14px}
+  .tile{flex:1 1 90px;min-width:90px;border-radius:10px;padding:10px 8px;text-align:center;
+        border:1px solid var(--line);position:relative}
+  .tile .dot{width:12px;height:12px;border-radius:50%;display:inline-block;margin-bottom:6px}
+  .tile .nm{font-size:13px;font-weight:600;word-break:break-word}
+  .tile .sub{font-size:11px;color:var(--muted);margin-top:2px}
+  .t-up{background:rgba(31,191,107,.08);border-color:rgba(31,191,107,.35)}
+  .t-down{background:rgba(255,77,87,.13);border-color:var(--red);
+          animation:blink 1.1s ease-in-out infinite}
+  .t-inactivo{background:var(--panel2);opacity:.45}
+  .badge{position:absolute;top:5px;right:6px;font-size:9px;padding:1px 5px;border-radius:6px;
+         background:var(--line);color:var(--muted)}
+  .badge.bh{background:rgba(245,166,35,.2);color:var(--amber)}
+  @keyframes blink{0%,100%{box-shadow:0 0 0 0 rgba(255,77,87,.0)}50%{box-shadow:0 0 0 4px rgba(255,77,87,.25)}}
+  .dot.up{background:var(--green)} .dot.down{background:var(--red)}
+  .dot.inactivo{background:var(--gray)} .dot.\?{background:var(--amber)}
+  .foot{margin-top:18px;color:var(--muted);font-size:12px;text-align:center}
+  #down-banner{display:none;background:var(--red);color:#fff;font-weight:700;
+               padding:8px;text-align:center;font-size:15px}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">SENTINELA <span>NETWATCH</span> · Central de Monitoreo</div>
+  <div style="display:flex;align-items:center;gap:18px">
+    <div id="state" class="bigstate ok">CARGANDO…</div>
+    <div class="meta"><div class="clock" id="clock">--:--:--</div><div id="upd">—</div></div>
+  </div>
+</header>
+<div id="down-banner"></div>
+<div class="wrap">
+  <div class="wans" id="wans"></div>
+  <div class="ffw" id="ffw" style="display:none"></div>
+  <div class="zonas" id="zonas"></div>
+  <div class="foot">Actualización automática cada 5 s · Vigilante fuera del router (solo ping + lectura)</div>
+</div>
+
+<script>
+const ORDER = ["Central","Parker","Quinta Real","Brisas","Saucito","Las Rusias","Cd. Industrial","Monclova"];
+function dotCls(s){return s||"?";}
+function fmtTipo(t,bh){if(bh)return"enlace";return t;}
+const WAVE_NAMES={"10.99.99.3":"FFW · lado Oficina","10.99.99.4":"FFW · lado Maquiladora"};
+function sigQual(s){ if(s==null)return["—","warn"]; if(s>=-65)return[s+" dBm","good"]; if(s>=-75)return[s+" dBm","warn"]; return[s+" dBm","bad"]; }
+
+async function tick(){
+  try{
+    const r = await fetch("/api/status",{cache:"no-store"});
+    const d = await r.json();
+    render(d);
+  }catch(e){
+    document.getElementById("state").className="bigstate bad";
+    document.getElementById("state").textContent="SIN CONEXIÓN AL VIGILANTE";
+  }
+}
+function render(d){
+  // WANs
+  const w=document.getElementById("wans"); w.innerHTML="";
+  const wanKeys=Object.keys(d.wans||{}).filter(k=>k!=="_error").sort();
+  if(d.wans && d.wans._error){
+    w.innerHTML=`<div class="wan"><span class="dot \\?"></span><div><div class="l">WANs</div><div class="n">lectura no disponible</div></div></div>`;
+  }
+  wanKeys.forEach(k=>{
+    const x=d.wans[k]; const s=x.status==="up"?"up":(x.status==="down"?"down":"?");
+    w.innerHTML+=`<div class="wan"><span class="dot ${s}"></span>
+      <div><div class="l">${x.label}</div><div class="n">${x.status.toUpperCase()}</div></div></div>`;
+  });
+
+  // Zonas
+  const cont=document.getElementById("zonas"); cont.innerHTML="";
+  const zonas=d.zonas||{};
+  const keys=Object.keys(zonas).sort((a,b)=>{
+    let ia=ORDER.indexOf(a), ib=ORDER.indexOf(b);
+    if(ia<0)ia=99; if(ib<0)ib=99; return ia-ib || a.localeCompare(b);
+  });
+  let downList=[];
+  keys.forEach(z=>{
+    const devs=zonas[z].slice().sort((a,b)=>{
+      // enlaces primero, luego caidos, luego por nombre
+      if(a.is_backhaul!==b.is_backhaul)return a.is_backhaul?-1:1;
+      const rank=s=>s==="down"?0:(s==="up"?1:2);
+      return rank(a.estado)-rank(b.estado) || a.name.localeCompare(b.name);
+    });
+    const up=devs.filter(x=>x.estado==="up").length;
+    let tiles="";
+    devs.forEach(x=>{
+      if(x.estado==="down") downList.push(`${x.name} (${z})`);
+      const cls=x.estado==="up"?"t-up":(x.estado==="down"?"t-down":"t-inactivo");
+      const badge=x.is_backhaul?`<span class="badge bh">ENLACE</span>`
+                 :(x.tipo==="switch"?`<span class="badge">SW</span>`:"");
+      const sub=x.clientes?`${x.clientes} cli`:(x.tipo==="desconocido"?"sin id":"");
+      tiles+=`<div class="tile ${cls}">${badge}
+        <span class="dot ${dotCls(x.estado)}"></span>
+        <div class="nm">${x.name}</div><div class="sub">${sub}</div></div>`;
+    });
+    cont.innerHTML+=`<div class="zona"><h2>${z}<span class="cnt">${up}/${devs.length} OK</span></h2>
+      <div class="tiles">${tiles}</div></div>`;
+  });
+
+  // Enlace FFW (Wave 60GHz)
+  const ffw=document.getElementById("ffw");
+  const waves=d.waves||{};
+  const wkeys=Object.keys(waves).sort();
+  if(wkeys.length){
+    ffw.style.display="block";
+    let cap="—";
+    for(const k of wkeys){ if(waves[k].reachable && waves[k].capacity){ cap=Math.round(waves[k].capacity/1000)+" Mbps"; break; } }
+    let ends="";
+    wkeys.forEach(k=>{
+      const m=waves[k]; const nm=WAVE_NAMES[k]||k;
+      if(!m.reachable){
+        downList.push(`FFW ${nm.split('· ').pop()} (sin acceso)`);
+        ends+=`<div class="end"><div class="top"><span class="dot down"></span>
+          <span class="nm">${nm}</span><span class="pill bad">SIN ACCESO</span></div>
+          <div class="metrics"><div><div class="k">${k}</div></div></div></div>`;
+        return;
+      }
+      const linkUp=m.linkState==="active";
+      if(!linkUp) downList.push(`Enlace FFW ${nm.split('· ').pop()}`);
+      const sq=sigQual(m.signal);
+      const ethBad=(m.eth_min!=null && m.eth_min<1000);
+      const ethPill=ethBad?`<span class="pill warn">${m.eth_min}M · cuello de botella</span>`
+                          :`<span class="pill good">${m.eth_min!=null?m.eth_min+"M":"—"}</span>`;
+      const drops=m.eth_drops?` <span style="color:var(--muted);font-size:11px">${m.eth_drops} drops</span>`:"";
+      ends+=`<div class="end">
+        <div class="top"><span class="dot ${linkUp?'up':'down'}"></span><span class="nm">${nm}</span>
+          <span class="pill ${linkUp?'good':'bad'}">${linkUp?'ACTIVO':(m.linkState||'?').toUpperCase()}</span></div>
+        <div class="metrics">
+          <div><div class="k">Señal</div><div class="v"><span class="pill ${sq[1]}">${sq[0]}</span></div></div>
+          <div><div class="k">Capacidad radio</div><div class="v">${m.capacity?Math.round(m.capacity/1000)+"M":"—"}</div></div>
+          <div><div class="k">Ethernet</div><div class="v">${ethPill}${drops}</div></div>
+          <div><div class="k">MCS</div><div class="v">${m.mcs??"—"}</div></div>
+        </div></div>`;
+    });
+    ffw.innerHTML=`<h2>Enlace FFW · 60 GHz <span class="cap">capacidad del radio: ${cap}</span></h2>
+      <div class="ends">${ends}</div>`;
+  }else{ ffw.style.display="none"; }
+
+  // estado global
+  const st=document.getElementById("state");
+  const banner=document.getElementById("down-banner");
+  if(downList.length){
+    st.className="bigstate bad"; st.textContent=`⚠ ${downList.length} CAÍDA(S)`;
+    banner.style.display="block";
+    banner.textContent="🔴 CAÍDO: "+downList.join("   ·   ");
+  }else{
+    st.className="bigstate ok"; st.textContent="✔ TODO OPERANDO";
+    banner.style.display="none";
+  }
+  document.getElementById("upd").textContent="datos: "+(d.actualizado||"—");
+}
+function clock(){
+  const n=new Date();
+  document.getElementById("clock").textContent=n.toLocaleTimeString("es-MX");
+}
+setInterval(clock,1000); clock();
+setInterval(tick,5000); tick();
+</script>
+</body>
+</html>
