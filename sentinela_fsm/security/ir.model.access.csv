@@ -25,3 +25,9 @@ access_fsm_create_route_wizard_manager,fsm.create.route.wizard.manager,model_sen
 access_fsm_order_pause_wizard_user,fsm.order.pause.wizard.user,model_sentinela_fsm_order_pause_wizard,group_fsm_user,1,1,1,1
 access_fsm_generate_order_wizard_user,fsm.generate.order.wizard.user,model_sentinela_fsm_generate_order_wizard,group_fsm_user,1,1,1,1
 access_fsm_generate_order_wizard_mgr,fsm.generate.order.wizard.mgr,model_sentinela_fsm_generate_order_wizard,group_fsm_manager,1,1,1,1
+access_fsm_order_subuser,fsm.order.subuser.read,model_sentinela_fsm_order,sentinela_subscriptions.group_subscription_user,1,0,0,0
+access_fsm_evidence_subuser,fsm.evidence.subuser.read,model_sentinela_fsm_evidence,sentinela_subscriptions.group_subscription_user,1,0,0,0
+access_fsm_order_line_subuser,fsm.order.line.subuser.read,model_sentinela_fsm_order_line,sentinela_subscriptions.group_subscription_user,1,0,0,0
+access_fsm_equipment_subuser,fsm.equipment.subuser.read,model_sentinela_fsm_equipment,sentinela_subscriptions.group_subscription_user,1,0,0,0
+access_fsm_work_log_subuser,fsm.work.log.subuser.read,model_sentinela_fsm_work_log,sentinela_subscriptions.group_subscription_user,1,0,0,0
+access_fsm_chat_message_subuser,fsm.chat.message.subuser.read,model_sentinela_fsm_chat_message,sentinela_subscriptions.group_subscription_user,1,0,0,0
