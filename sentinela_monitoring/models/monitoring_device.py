@@ -8,7 +8,20 @@ class MonitoringDevice(models.Model):
     _rec_name = 'device_id'
 
     device_id = fields.Char(string='ID Interno', required=True, default='New')
-    account_number = fields.Char(string='Número de Cuenta (Panel)', required=True, help="El código HEX de 4-6 dígitos que envía el panel (Ej. 1234, B52F)")
+    account_number = fields.Char(
+        string='Número de Cuenta (Panel)', required=True,
+        default=lambda self: self._default_account_number(),
+        help="Cuenta de 4 dígitos que envía el panel. Por defecto se sugiere el "
+             "siguiente consecutivo libre; ajústalo si el panel ya tiene cuenta fija.")
+
+    @api.model
+    def _default_account_number(self):
+        """Primer consecutivo de 4 dígitos no usado (0001, 0002, ...)."""
+        used = set(self.search([]).mapped('account_number'))
+        n = 1
+        while n < 10000 and str(n).zfill(4) in used:
+            n += 1
+        return str(n).zfill(4)
 
     name = fields.Char(string='Nombre del Dispositivo', compute='_compute_name', store=True)
 
