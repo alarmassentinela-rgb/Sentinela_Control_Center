@@ -14,7 +14,6 @@ from . import monitoring_settings
 from . import monitoring_zone
 from . import receiver_status
 from . import res_partner_extension
-from . import res_partner_telephony
 from . import res_users
 from . import response_team
 from . import service_authorization_token

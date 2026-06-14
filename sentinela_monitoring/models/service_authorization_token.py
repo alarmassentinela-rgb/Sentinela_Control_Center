@@ -6,11 +6,15 @@ timestamp + IP + User-Agent → evidencia legal.
 """
 import logging
 import secrets
+from datetime import timedelta
 
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
+
+# Horas de validez del magic link antes de expirar (evita autorizar cobros viejos).
+TOKEN_TTL_HOURS = 48
 
 
 class ServiceAuthorizationToken(models.Model):
@@ -38,6 +42,11 @@ class ServiceAuthorizationToken(models.Model):
         ('rejected', 'Rechazado'),
         ('cancelled', 'Cancelado'),
     ], default='pending', required=True, string='Estado')
+
+    expiration_date = fields.Datetime(
+        string='Expira el', readonly=True,
+        default=lambda self: fields.Datetime.now() + timedelta(hours=TOKEN_TTL_HOURS),
+        help='Después de esta fecha el magic link deja de ser válido para autorizar/rechazar.')
 
     amount = fields.Float(string='Monto ($)', help='Costo del servicio sin IVA.')
     currency_id = fields.Many2one('res.currency', default=lambda self: self.env.company.currency_id)
@@ -118,11 +127,29 @@ class ServiceAuthorizationToken(models.Model):
             'response_user_agent': (user_agent or '')[:255],
         })
 
+    def is_expired(self):
+        """True si el token superó su expiration_date (magic link vencido)."""
+        self.ensure_one()
+        return bool(self.expiration_date) and fields.Datetime.now() > self.expiration_date
+
+    def _lock_and_guard(self):
+        """Bloquea la fila (FOR UPDATE) y valida estado+expiración. Serializa
+        autorización/rechazo concurrentes: el 2º request espera al 1º y ve el
+        estado ya commiteado → evita doble autorización (doble cobro)."""
+        self.ensure_one()
+        self.env.cr.execute(
+            "SELECT id FROM sentinela_service_authorization_token WHERE id = %s FOR UPDATE",
+            (self.id,))
+        self.invalidate_recordset(['state'])
+        if self.state != 'pending':
+            raise UserError(_("Este token ya fue %s, no se puede modificar de nuevo.") % self.state)
+        if self.is_expired():
+            raise UserError(_("Este enlace de autorización expiró el %s. Solicita uno nuevo.") % self.expiration_date)
+
     def authorize(self, ip=None, user_agent=None):
         """Marca como autorizado y dispara el flujo de cobranza del evento."""
         self.ensure_one()
-        if self.state != 'pending':
-            raise UserError(_("Este token ya fue %s, no se puede autorizar de nuevo.") % self.state)
+        self._lock_and_guard()
         self._record_response(ip, user_agent)
         self.state = 'authorized'
         # Dispara action_authorize_service del evento (que crea sale.order F2.6)
@@ -137,8 +164,7 @@ class ServiceAuthorizationToken(models.Model):
         operador decide qué hacer (típicamente cerrar con
         close_reason='cliente_rechazo_servicio')."""
         self.ensure_one()
-        if self.state != 'pending':
-            raise UserError(_("Este token ya fue %s, no se puede rechazar de nuevo.") % self.state)
+        self._lock_and_guard()
         self._record_response(ip, user_agent)
         self.state = 'rejected'
         self.alarm_event_id.message_post(body=_(

@@ -37,7 +37,7 @@ Central de monitoreo de alarmas integrada en Odoo: recibe señales de receptores
 | `sentinela.service.authorization.token` | `service_authorization_token.py` | Token de autorización de servicio extra (patrulla) por enlace público. |
 | `sentinela.fsm.order` (inherit) | `fsm_order_extension.py` | Extiende órdenes FSM para patrullaje. |
 | `sentinela.subscription` (inherit) | `subscription_extension.py` | Campos de monitoreo en la suscripción. |
-| `res.partner` (inherit ×2) | `res_partner_extension.py`, `res_partner_telephony.py` | Datos de monitoreo y telefonía del contacto. |
+| `res.partner` (inherit) | `res_partner_extension.py` | Datos de monitoreo y telefonía del contacto (Telegram/WhatsApp/EvoApi, click-to-call AMI, GPS). |
 | `res.users` (inherit) | `res_users.py` | Campos de operador/técnico. |
 | `res.config.settings` (inherit) | `monitoring_settings.py` | Ajustes del módulo. |
 
@@ -65,7 +65,7 @@ Definidos como `ir.actions.server` (state=`code`) + `ir.cron`, dentro de `<data 
 
 ## Flujos importantes
 - **Ingesta (Fórmula 1):** `process_signal_from_receptor(vals)` hace todo en una llamada — busca el device por `account_number`; si no existe crea una **señal en cuarentena** (no crea device ni event); si existe actualiza `last_communication`, auto-resuelve un trouble `[AUTO_OFFLINE]` abierto, resuelve código→prioridad (default `35`), crea evento solo si el código `requires_attention`, crea la señal siempre, notifica al `bus.bus` (canal `sentinela_monitoring`) y refresca `receiver.status.last_heartbeat`.
-- **Entradas HTTP:** `POST /api/monitoring/signal` (`controllers/main.py`, `auth='none'`), `POST /api/alarm/signals` (`controllers/alarm_signal_controller.py`, `auth='public'`, valida token).
+- **Entrada de señales:** el receptor vivo (`sentinela_receiver`, `receiver_v6.py`) entra por **XML-RPC** llamando `sentinela.alarm.event.process_signal_from_receptor`. NO hay endpoint HTTP de ingesta (los antiguos `/api/monitoring/signal` y `/api/alarm/signals` se eliminaron en 14-jun-2026: estaban rotos —API vieja, sin auth real— y solo los usaban receivers en `_legacy/`).
 - **Claim / mutex de operador:** `action_claim_event` / `_try_claim` / `action_release_event` / `action_force_release`; `_ensure_claim_held` protege escrituras. `_compute_lock_state` deriva `is_locked_by_other` / `can_release`.
 - **Atención del evento:** `action_acknowledge`, `action_escalate`, `action_assign_technician`, `action_resolve`, `action_close`.
 - **Servicio extra (patrulla) con cobro:** `action_request_service_authorization` → token público (`/sentinela/autorizar/<token>`) → `action_authorize_service` → `_create_service_sale_order` → `create_fsm_order` (orden FSM de patrullaje).
@@ -78,14 +78,15 @@ Definidos como `ir.actions.server` (state=`code`) + `ir.cron`, dentro de `<data 
 - **Política de suspendidos (Opción C, 16-may-2026):** clientes suspendidos por mora **NO se auto-archivan**; el evento se crea igual y se muestra al operador con bandera (`subscription_state`). No reintroducir auto-archivado.
 - **Cuarentena:** señales de cuentas no registradas NO crean device ni evento; quedan como `alarm.signal` con `is_quarantine=True` y requieren `action_promote_to_device` manual. No asumir que toda señal genera evento.
 - **`sla_status` es computado no almacenado** (`store=False`): no usarlo en dominios de búsqueda; filtrar por `sla_deadline`.
+- **Token de autorización expira a las `TOKEN_TTL_HOURS=48`** (`service_authorization_token.py`): `authorize`/`reject` hacen `SELECT … FOR UPDATE` (`_lock_and_guard`) para serializar respuestas concurrentes (anti doble-cobro) + validan expiración. Tokens creados ANTES de esta migración tienen `expiration_date` NULL → `is_expired()` es False (no expiran); es esperado.
 - **Lock por inactividad:** `LOCK_TIMEOUT_MINUTES = 15` (constante en `alarm_event.py`); el cron de 2 min es quien lo libera. Cambiar la constante sin tocar el cron desincroniza la UX.
 - **Reporte PDF / nombres:** `_clean_translated_name` y varios `replace('/', '_')` saneando nombres de archivo y de código — el render maneja cuentas sin registrar con literal `⚠️ CUENTA NO REGISTRADA`.
+- **Secretos en `ir.config_parameter` (NO en el repo, desde 14-jun-2026):** las credenciales de telefonía/notificación se leen de Parámetros del sistema y deben estar **sembradas en prod y staging** o esas funciones se desactivan (fallan-seguro con warning, no rompen). Claves: `sentinela_monitoring.ami_password` (click-to-call AMI; host/port/user tienen default `192.168.3.5`/`7777`/`admin_ami`), `sentinela_monitoring.ucm_password` (sync grabaciones + dial contacto; host/user default `192.168.3.5:8089`/`odoo_api`), `sentinela_monitoring.evoapi_key` (WhatsApp), `sentinela_syscom.telegram_token` (Telegram). El helper `res.partner._get_ami_config()` centraliza el AMI (lo reusa `alarm.event.action_click_to_call`).
 
 ## Wizards / Controllers / Tests
 - **Wizards** (`wizard/`):
   - `sentinela.alarm.handle.wizard` (+ `.contact.attempt`) — asistente multi-paso de atención: bitácora de intentos de contacto, atajos (`action_shortcut_false_alarm`, `action_shortcut_customer_ok`), solicitar/autorizar/despachar patrulla, crear ticket técnico, pausar/cerrar/finalizar evento (`_consolidate_bitacora`).
-  - `sentinela.patrol.selection.wizard` (+ `.line`) — selección de patrullas y `action_send_requests`.
   - `sentinela.patrol.dispatch.wizard` — `action_dispatch` de la patrulla.
-- **Controllers** (`controllers/`): `main.py` (API señal), `alarm_signal_controller.py` (API alarma con token), `portal_events.py` (portal cliente), `service_authorization.py` (`/sentinela/autorizar/<token>`), `senticar_portal.py` (`/web/senticar/radar`, GPS SentiCar).
+- **Controllers** (`controllers/`): `portal_events.py` (portal cliente), `service_authorization.py` (`/sentinela/autorizar/<token>`), `senticar_portal.py` (`/web/senticar/radar`, GPS SentiCar).
 - **Tests:** no hay carpeta `tests/` en el módulo. (La memoria menciona pytest a nivel proyecto/sesiones; este addon no incluye su propia suite.)
 - **Assets JS** (`static/src/js/`): `monitoring_dashboard.js` + `alarm_service.js` (dashboard de operador en tiempo real vía canal `bus.bus` `sentinela_monitoring`).

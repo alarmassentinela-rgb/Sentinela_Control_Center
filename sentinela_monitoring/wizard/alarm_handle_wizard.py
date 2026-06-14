@@ -1,6 +1,5 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
-from datetime import datetime
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -184,6 +183,7 @@ class AlarmHandleWizard(models.TransientModel):
         al cliente. NO crea venta hasta que el cliente autorice via web."""
         self.ensure_one()
         event = self.alarm_event_id
+        event._ensure_claim_held()
         # Reusar token pending existente si lo hay (idempotente)
         existing = self.env['sentinela.service.authorization.token'].sudo().search([
             ('alarm_event_id', '=', event.id),
@@ -213,6 +213,7 @@ class AlarmHandleWizard(models.TransientModel):
     def action_authorize_patrol_from_wizard(self):
         """Marca autorizado + crea sale.order si el producto está configurado."""
         self.ensure_one()
+        self.alarm_event_id._ensure_claim_held()
         self.alarm_event_id.action_authorize_service()
         return True
 
@@ -220,6 +221,7 @@ class AlarmHandleWizard(models.TransientModel):
         """F2.7.2 — Despacha la patrulla creando fsm.order real y disparando
         action_start (Telegram cliente con tracking SentiCar)."""
         self.ensure_one()
+        self.alarm_event_id._ensure_claim_held()
         if not self.technician_id:
             raise UserError(_("Selecciona un patrullero antes de despachar."))
 
@@ -299,6 +301,7 @@ class AlarmHandleWizard(models.TransientModel):
 
     def action_pause_event(self):
         self.ensure_one()
+        self.alarm_event_id._ensure_claim_held()
         bitacora = self._consolidate_bitacora()
         vals = {'status': 'paused'}
         if bitacora:

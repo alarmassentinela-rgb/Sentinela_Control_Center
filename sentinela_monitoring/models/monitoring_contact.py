@@ -1,4 +1,8 @@
 from odoo import models, fields, api
+import logging
+
+_logger = logging.getLogger(__name__)
+
 
 class MonitoringContact(models.Model):
     _name = 'sentinela.monitoring.contact'
@@ -48,10 +52,15 @@ class MonitoringContact(models.Model):
                     return False
                 
                 target_number = "".join(filter(str.isdigit, str(self.phone)))
-                ucm_ip = "192.168.3.5:8089"
-                api_user = "sentinela"
-                api_pass = "cdrapi123"
-                
+                # Credenciales UCM/CDR desde ir.config_parameter (sembradas en el server, NO en el repo)
+                icp = self.env['ir.config_parameter'].sudo()
+                ucm_ip = icp.get_param('sentinela_monitoring.ucm_host') or "192.168.3.5:8089"
+                api_user = icp.get_param('sentinela_monitoring.ucm_user') or "odoo_api"
+                api_pass = icp.get_param('sentinela_monitoring.ucm_password')
+                if not api_pass:
+                    _logger.warning("UCM no configurado (sentinela_monitoring.ucm_password vacío); no se marca")
+                    return True
+
                 import requests
                 try:
                     login_url = f"https://{ucm_ip}/cgi?action=login&username={api_user}&password={api_pass}"
@@ -60,5 +69,6 @@ class MonitoringContact(models.Model):
                     if login_res.ok:
                         dial_url = f"https://{ucm_ip}/cgi?action=dial&extension={operator_extension}&number={target_number}"
                         session.get(dial_url, timeout=5, verify=False)
-                except: pass
+                except Exception as e:
+                    _logger.warning("UCM dial falló para %s: %s", self.name, e)
         return True

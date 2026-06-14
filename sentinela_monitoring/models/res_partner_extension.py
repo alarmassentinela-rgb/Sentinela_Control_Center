@@ -29,18 +29,22 @@ class ResPartner(models.Model):
         help='Si está vacío, se usa mobile/phone. Formato libre — el sistema normaliza a E.164.')
 
     def _get_telegram_token(self):
-        params = self.env['ir.config_parameter'].sudo()
-        return params.get_param('sentinela_syscom.telegram_token') or "8373567654:AAGyLpZttCUaHh-LymQwEHRBOqwtVNXYN10"
+        # El token vive en ir.config_parameter (sembrado en el server, NO en el repo).
+        return self.env['ir.config_parameter'].sudo().get_param('sentinela_syscom.telegram_token')
 
     def send_telegram_message(self, message):
         """ Envía un mensaje de Telegram a este contacto """
         self.ensure_one()
         if not self.telegram_chat_id:
             return False
+        token = self._get_telegram_token()
+        if not token:
+            _logger.warning("Telegram no configurado (sentinela_syscom.telegram_token vacío)")
+            return False
 
         import requests
         try:
-            url = f"https://api.telegram.org/bot{self._get_telegram_token()}/sendMessage"
+            url = f"https://api.telegram.org/bot{token}/sendMessage"
             res = requests.post(url, data={'chat_id': self.telegram_chat_id, 'text': message, 'parse_mode': 'Markdown'}, timeout=10)
             return res.ok
         except:
@@ -50,10 +54,27 @@ class ResPartner(models.Model):
 
     def _get_evoapi_config(self):
         params = self.env['ir.config_parameter'].sudo()
+        # url/instance no son secretos → default razonable. key SÍ es secreto → sin default (se siembra en el server).
         return {
             'url': params.get_param('sentinela_monitoring.evoapi_url') or 'http://192.168.3.2:8080',
-            'key': params.get_param('sentinela_monitoring.evoapi_key') or '61EBE23C75A5787BAD62C9D20D7CE5CA',
+            'key': params.get_param('sentinela_monitoring.evoapi_key') or '',
             'instance': params.get_param('sentinela_monitoring.evoapi_instance') or 'SentinelaWA',
+        }
+
+    def _get_ami_config(self):
+        """Config del AMI del conmutador Grandstream UCM. host/port/user con
+        default (no secretos); la password vive en ir.config_parameter, sembrada
+        en el server (NO en el repo). Returns dict o None si falta la password."""
+        params = self.env['ir.config_parameter'].sudo()
+        pw = params.get_param('sentinela_monitoring.ami_password')
+        if not pw:
+            _logger.warning("AMI no configurado (sentinela_monitoring.ami_password vacío)")
+            return None
+        return {
+            'host': params.get_param('sentinela_monitoring.ami_host') or '192.168.3.5',
+            'port': int(params.get_param('sentinela_monitoring.ami_port') or 7777),
+            'user': params.get_param('sentinela_monitoring.ami_user') or 'admin_ami',
+            'password': pw,
         }
 
     def _whatsapp_number(self):
@@ -240,40 +261,47 @@ class ResPartner(models.Model):
         else:
             target_number = raw_number
 
-        # CONFIGURACION AMI
-        host = "192.168.3.5"
-        port = 7777
-        user = "admin_ami"
-        pw = "Sentinela"
+        # CONFIGURACION AMI (desde ir.config_parameter)
+        ami = self._get_ami_config()
+        if not ami:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Telefonía no configurada',
+                    'message': 'Falta la contraseña del AMI (sentinela_monitoring.ami_password) en Parámetros del sistema.',
+                    'type': 'danger',
+                    'sticky': False,
+                }
+            }
 
         import socket
         import time
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.settimeout(3)
-            s.connect((host, port))
+            s.connect((ami['host'], ami['port']))
             s.recv(1024)
-            
-            s.send(("Action: Login\r\nUsername: " + user + "\r\nSecret: " + pw + "\r\n\r\n").encode())
-            time.sleep(1.0) # Aumentado a 1 segundo
+
+            s.send(("Action: Login\r\nUsername: " + ami['user'] + "\r\nSecret: " + ami['password'] + "\r\n\r\n").encode())
+            time.sleep(1.0)
             s.recv(1024)
-            
-            # Comando ultra-simple
+
+            # Primero suena el operador, al descolgar marca afuera
             dial_cmd = "Action: Originate\r\n"
-            dial_cmd += "Channel: Local/" + target_number + "@from-internal\r\n"
-            dial_cmd += "Exten: " + str(operator_extension) + "\r\n"
+            dial_cmd += "Channel: Local/" + str(operator_extension) + "@from-internal\r\n"
+            dial_cmd += "Exten: " + target_number + "\r\n"
             dial_cmd += "Context: from-internal\r\n"
             dial_cmd += "Priority: 1\r\n"
+            dial_cmd += "CallerID: Sentinela <" + str(operator_extension) + ">\r\n"
             dial_cmd += "Async: yes\r\n\r\n"
-            
-            print("Enviando comando AMI: " + dial_cmd)
+
             s.send(dial_cmd.encode())
-            time.sleep(1.0) # Aumentado a 1 segundo
+            time.sleep(1.0)
             s.send(b"Action: Logoff\r\n\r\n")
-            time.sleep(0.5)
             s.close()
 
-            self.message_post(body=f"📞 <b>Llamada:</b> Marcando al {target_number} para conectar con Ext. {operator_extension}")
+            self.message_post(body=f"📞 <b>Llamada:</b> Conectando Ext. {operator_extension} con el número {target_number}")
             return {
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',

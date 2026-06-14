@@ -321,7 +321,7 @@ class AlarmEvent(models.Model):
         alarm_domain = [('status', '=', 'active')]
         pending_domain = [('status', 'in', ['acknowledged', 'in_progress', 'paused', 'escalated'])]
         status_rec = self.env['sentinela.receiver.status'].sudo().search([], order='last_heartbeat desc', limit=1)
-        is_online = status_rec and status_rec.last_heartbeat > (datetime.now() - timedelta(minutes=5))
+        is_online = status_rec and status_rec.last_heartbeat > (fields.Datetime.now() - timedelta(minutes=5))
         
         res = {
             'receiver': {'state': 'online' if is_online else 'offline', 'last_seen': str(status_rec.last_heartbeat)[:19] if status_rec else '---'},
@@ -530,7 +530,7 @@ class AlarmEvent(models.Model):
             if rec.close_reason == 'other' and not (rec.resolution_notes or '').strip():
                 raise UserError(_("El motivo 'Otro' requiere especificar notas de resolución."))
         # resolver suelta el lock
-        self.write({'status': 'resolved', 'end_date': datetime.now(),
+        self.write({'status': 'resolved', 'end_date': fields.Datetime.now(),
                     'current_operator_id': False, 'claimed_at': False})
         # F2.7.3 — auto-envío del reporte consolidado al cliente vía Telegram.
         # Best-effort: try/except envuelve el método (que ya no lanza),
@@ -690,9 +690,14 @@ class AlarmEvent(models.Model):
                 kwargs['ssl_context'] = context
                 return super(DESAdapter, self).init_poolmanager(*args, **kwargs)
 
-        ucm_ip = "192.168.3.5:8089"
-        api_user = "odoo_api"
-        api_pass = "cdrapi123"
+        # Credenciales UCM/CDR desde ir.config_parameter (sembradas en el server, NO en el repo)
+        icp = self.env['ir.config_parameter'].sudo()
+        ucm_ip = icp.get_param('sentinela_monitoring.ucm_host') or "192.168.3.5:8089"
+        api_user = icp.get_param('sentinela_monitoring.ucm_user') or "odoo_api"
+        api_pass = icp.get_param('sentinela_monitoring.ucm_password')
+        if not api_pass:
+            _logger.warning("UCM no configurado (sentinela_monitoring.ucm_password vacío); se omite sync de grabaciones")
+            return False
         session = requests.Session()
         session.mount('https://', DESAdapter())
         
@@ -764,7 +769,7 @@ class AlarmEvent(models.Model):
         for rec in self:
             if not rec.close_reason:
                 raise UserError(_("Selecciona el motivo de cierre antes de cerrar el evento '%s'.") % rec.name)
-        self.write({'status': 'closed', 'end_date': datetime.now()})
+        self.write({'status': 'closed', 'end_date': fields.Datetime.now()})
         return True
     
     def action_click_to_call(self, phone_number):
@@ -781,12 +786,16 @@ class AlarmEvent(models.Model):
         # Prefijo '1' para tomar línea de salida
         if not target_number.startswith('1'):
             target_number = '1' + target_number
-        
-        # CONFIGURACION AMI (Misma que en res.partner)
-        host = "192.168.3.5"
-        port = 7777
-        user = "admin_ami"
-        pw = "Sentinela"
+
+        # CONFIGURACION AMI (desde ir.config_parameter, helper compartido con res.partner)
+        ami = self.env['res.partner']._get_ami_config()
+        if not ami:
+            self.message_post(body="⚠️ <b>Error de Telefonía:</b> Falta la contraseña del AMI (sentinela_monitoring.ami_password) en Parámetros del sistema.")
+            return False
+        host = ami['host']
+        port = ami['port']
+        user = ami['user']
+        pw = ami['password']
 
         import socket
         import time
@@ -795,7 +804,7 @@ class AlarmEvent(models.Model):
             s.settimeout(3)
             s.connect((host, port))
             s.recv(1024) # Banner
-            
+
             # Login
             login = "Action: Login\r\nUsername: " + user + "\r\nSecret: " + pw + "\r\n\r\n"
             s.send(login.encode())
@@ -1035,4 +1044,8 @@ class AlarmEvent(models.Model):
         return order.id
     @api.depends('start_date', 'end_date')
     def _compute_duration(self):
-        for e in self: e.duration = 0.0
+        for e in self:
+            if e.start_date and e.end_date:
+                e.duration = (e.end_date - e.start_date).total_seconds() / 3600.0
+            else:
+                e.duration = 0.0

@@ -26,6 +26,10 @@ class ServiceAuthorizationController(http.Controller):
         if not tk:
             return request.render('sentinela_monitoring.authorization_invalid', {})
 
+        # Magic link vencido (y aún sin responder) → tratarlo como inválido.
+        if tk.state == 'pending' and tk.is_expired():
+            return request.render('sentinela_monitoring.authorization_invalid', {})
+
         ip = request.httprequest.headers.get('X-Forwarded-For',
                                               request.httprequest.remote_addr or '')
         ua = request.httprequest.headers.get('User-Agent', '')
