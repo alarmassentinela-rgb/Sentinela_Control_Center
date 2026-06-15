@@ -67,7 +67,7 @@
                         </div>
                         <group string="Contactos del cliente">
                             <field name="contact_attempt_ids" nolabel="1">
-                                <list editable="bottom">
+                                <list editable="bottom" create="false" delete="false">
                                     <field name="sequence" widget="handle"/>
                                     <field name="contact_name" readonly="1"/>
                                     <field name="contact_phone" widget="phone" readonly="1"/>
