@@ -27,3 +27,4 @@ access_alarm_code_template_line_manager,sentinela.alarm.code.template.line.manag
 access_service_authorization_token_user,sentinela.service.authorization.token.user,model_sentinela_service_authorization_token,base.group_user,1,1,1,1
 access_service_authorization_token_manager,sentinela.service.authorization.token.manager,model_sentinela_service_authorization_token,base.group_system,1,1,1,1
 access_patrol_dispatch_wizard_user,sentinela.patrol.dispatch.wizard.user,model_sentinela_patrol_dispatch_wizard,base.group_user,1,1,1,1
+access_alarm_bulk_close_wizard_user,sentinela.alarm.bulk.close.wizard.user,model_sentinela_alarm_bulk_close_wizard,base.group_user,1,1,1,1

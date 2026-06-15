@@ -41,6 +41,12 @@
                             invisible="not is_locked_by_other"/>
                     <widget name="web_ribbon" title="EN TUS MANOS" bg_color="bg-info"
                             invisible="not can_release"/>
+                    <field name="possible_false_alarm" invisible="1"/>
+                    <field name="false_alarm_hint" invisible="1"/>
+                    <field name="sibling_event_count" invisible="1"/>
+                    <div class="alert alert-warning" role="alert" invisible="not possible_false_alarm">
+                        ⚠️ <field name="false_alarm_hint" class="oe_inline" readonly="1"/>
+                    </div>
                     <div class="oe_title">
                         <h1><field name="name"/></h1>
                     </div>
@@ -115,6 +121,39 @@
                                     <field name="stage"/>
                                     <field name="scheduled_date"/>
                                     <field name="technician_id"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="🔁 Procesamiento Múltiple" name="multi_process">
+                            <div class="alert alert-info" role="alert" invisible="sibling_event_count == 0">
+                                Hay <field name="sibling_event_count" class="oe_inline"/> evento(s) más abiertos de este cliente.
+                                Puedes cerrarlos todos de golpe (solo de este cliente).
+                            </div>
+                            <div class="alert alert-secondary" role="alert" invisible="sibling_event_count != 0">
+                                No hay otros eventos abiertos de este cliente.
+                            </div>
+                            <button name="action_open_bulk_close" type="object" string="CERRAR ESTE + RELACIONADOS EN BLOQUE"
+                                    class="btn-primary" icon="fa-check-double"/>
+                            <field name="sibling_event_ids" readonly="1" nolabel="1">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="start_date"/>
+                                    <field name="full_description"/>
+                                    <field name="priority_id"/>
+                                    <field name="status"/>
+                                    <field name="current_operator_id"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="🕓 Historial (24h)" name="account_history">
+                            <p class="text-muted">Todas las señales del panel en las últimas 24 h (incluye aperturas/cierres que no generan evento) — para ver el panorama completo.</p>
+                            <field name="account_signal_history_ids" readonly="1" nolabel="1">
+                                <list>
+                                    <field name="received_date"/>
+                                    <field name="alarm_code"/>
+                                    <field name="zone"/>
+                                    <field name="description"/>
+                                    <field name="status"/>
                                 </list>
                             </field>
                         </page>

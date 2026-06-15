@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_alarm_bulk_close_wizard_form" model="ir.ui.view">
+        <field name="name">sentinela.alarm.bulk.close.wizard.form</field>
+        <field name="model">sentinela.alarm.bulk.close.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Cerrar eventos en bloque">
+                <div class="alert alert-info" role="alert">
+                    Se cerrarán <field name="event_count" class="oe_inline"/> evento(s)
+                    del cliente <field name="partner_id" class="oe_inline" readonly="1"/>.
+                    Solo eventos de este cliente (candado anti-error).
+                </div>
+                <group>
+                    <field name="close_reason"/>
+                    <field name="resolution_notes" placeholder="Notas (obligatorio si el motivo es 'Otro')"/>
+                </group>
+                <field name="event_ids" readonly="1">
+                    <list>
+                        <field name="name"/>
+                        <field name="account_number"/>
+                        <field name="full_description"/>
+                        <field name="status"/>
+                        <field name="current_operator_id"/>
+                    </list>
+                </field>
+                <field name="partner_id" invisible="1"/>
+                <footer>
+                    <button name="action_close_bulk" type="object" string="CERRAR TODOS" class="btn-primary" icon="fa-check-double"/>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

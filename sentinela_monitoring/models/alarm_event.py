@@ -163,6 +163,88 @@ class AlarmEvent(models.Model):
             try: rec.subscription_state = rec.subscription_id.technical_state or 'none' if rec.subscription_id else 'none'
             except: rec.subscription_state = 'none'
 
+    # --- Procesamiento múltiple e historial de la cuenta ---
+    sibling_event_ids = fields.Many2many(
+        'sentinela.alarm.event', compute='_compute_sibling_events',
+        string='Eventos abiertos de esta cuenta')
+    sibling_event_count = fields.Integer(compute='_compute_sibling_events')
+    account_signal_history_ids = fields.Many2many(
+        'sentinela.alarm.signal', compute='_compute_account_history',
+        string='Historial de señales (24h)')
+    possible_false_alarm = fields.Boolean(
+        string='Posible falsa alarma', compute='_compute_possible_false_alarm')
+    false_alarm_hint = fields.Char(compute='_compute_possible_false_alarm')
+
+    @api.depends('partner_id', 'status')
+    def _compute_sibling_events(self):
+        for rec in self:
+            sibs = self.env['sentinela.alarm.event']
+            if rec.partner_id:
+                eid = rec._origin.id or 0
+                sibs = self.sudo().search([
+                    ('partner_id', '=', rec.partner_id.id),
+                    ('id', '!=', eid),
+                    ('status', 'not in', ('resolved', 'closed')),
+                ])
+            rec.sibling_event_ids = sibs
+            rec.sibling_event_count = len(sibs)
+
+    @api.depends('device_id')
+    def _compute_account_history(self):
+        cutoff = fields.Datetime.now() - timedelta(hours=24)
+        Signal = self.env['sentinela.alarm.signal'].sudo()
+        for rec in self:
+            if rec.device_id:
+                rec.account_signal_history_ids = Signal.search([
+                    ('device_id', '=', rec.device_id.id),
+                    ('received_date', '>=', cutoff),
+                ], order='received_date desc', limit=200)
+            else:
+                rec.account_signal_history_ids = False
+
+    @api.depends('device_id', 'start_date', 'alarm_code_id')
+    def _compute_possible_false_alarm(self):
+        oc_codes = set(self.env['sentinela.alarm.code'].sudo().search(
+            [('event_category', '=', 'open_close')]).mapped('code'))
+        Signal = self.env['sentinela.alarm.signal'].sudo()
+        for rec in self:
+            rec.possible_false_alarm = False
+            rec.false_alarm_hint = ''
+            es_alarma = (rec.alarm_code_id and rec.alarm_code_id.event_category == 'alarm') or \
+                        rec.event_type in ('burglary', 'fire', 'panic', 'duress', 'intrusion', 'perimeter', 'interior')
+            if rec.device_id and rec.start_date and es_alarma and oc_codes:
+                later = Signal.search([
+                    ('device_id', '=', rec.device_id.id),
+                    ('received_date', '>', rec.start_date),
+                ], order='received_date asc')
+                for s in later:
+                    raw = s.alarm_code or ''
+                    num = raw[1:] if raw[:1] in ('E', 'R') else raw
+                    if num in oc_codes:
+                        rec.possible_false_alarm = True
+                        rec.false_alarm_hint = (
+                            "Posible FALSA ALARMA: a las %s llegó actividad de usuario "
+                            "(apertura/cierre) DESPUÉS de la alarma."
+                        ) % str(s.received_date)[11:16]
+                        break
+
+    def action_open_bulk_close(self):
+        """Abre el wizard de cierre en bloque precargado con este evento + los
+        demás abiertos del MISMO cliente (candado natural por partner)."""
+        self.ensure_one()
+        events = self | self.sibling_event_ids
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Cerrar eventos en bloque'),
+            'res_model': 'sentinela.alarm.bulk.close.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_event_ids': [(6, 0, events.ids)],
+                'default_partner_id': self.partner_id.id,
+            },
+        }
+
     def _compute_access_url(self):
         """F3.2 — URL del portal del cliente para este evento."""
         super()._compute_access_url()
