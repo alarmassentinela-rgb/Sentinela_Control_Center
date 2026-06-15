@@ -154,12 +154,6 @@
                                             type="object" class="btn-success" invisible="device_state != 'suspended'"/>
                                         <button name="action_register_senticar" string="📲 Registrar en SentiCar"
                                             type="object" class="btn-primary" invisible="gps_platform != 'senticar'"/>
-                                        <button name="action_refresh_diag" string="🔄 Diagnóstico"
-                                            type="object" invisible="not sim_iccid"/>
-                                        <button name="action_send_sms" string="📨 Enviar SMS"
-                                            type="object" class="btn-warning" invisible="gps_mode == 'movil'"/>
-                                        <button name="action_generate_share_link" string="📍 Generar link de rastreo"
-                                            type="object" class="btn-info" invisible="not senticar_device_id"/>
                                         <field name="device_state" widget="statusbar"/>
                                     </header>
                                     <group>
@@ -182,6 +176,8 @@
                                         <field name="gps_share_hours"/>
                                         <field name="gps_share_link" widget="CopyClipboardChar" readonly="1"
                                             placeholder="Presiona '📍 Generar link de rastreo' y aquí aparece el link para copiar/enviar."/>
+                                        <button name="action_generate_share_link" string="📍 Generar link de rastreo"
+                                            type="object" class="btn-info" invisible="not senticar_device_id"/>
                                     </group>
                                     <group string="📶 Diagnóstico SIM (floLIVE)" invisible="not sim_iccid">
                                         <field name="gps_sim_status" readonly="1"/>
@@ -189,6 +185,8 @@
                                         <field name="gps_sim_lat" readonly="1"/>
                                         <field name="gps_sim_lon" readonly="1"/>
                                         <field name="gps_sim_checked" readonly="1"/>
+                                        <button name="action_refresh_diag" string="🔄 Actualizar diagnóstico"
+                                            type="object" class="btn-secondary" invisible="not sim_iccid"/>
                                     </group>
                                     <group string="📨 Comando SMS" invisible="gps_mode == 'movil'">
                                         <field name="gps_password"/>
@@ -197,6 +195,8 @@
                                         <field name="gps_sms_command"
                                                placeholder="Elige una plantilla arriba o escríbelo. Ej.: STATUS#  /  SERVER,1,gps.senticar.com,5023,0#"/>
                                         <field name="gps_sms_encoding"/>
+                                        <button name="action_send_sms" string="📨 Enviar SMS"
+                                            type="object" class="btn-warning" invisible="gps_mode == 'movil'"/>
                                     </group>
                                     <field name="gps_sms_log" readonly="1" invisible="gps_mode == 'movil'"
                                         placeholder="Bitácora de comandos SMS enviados a este equipo."/>
