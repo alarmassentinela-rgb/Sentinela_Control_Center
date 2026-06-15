@@ -82,6 +82,19 @@ class AlarmHandleWizard(models.TransientModel):
     technician_id = fields.Many2one('res.users', string='Patrullero',
         help='Patrullero del response_team a despachar.')
 
+    # Panorama de la cuenta (traído del evento) — para procesamiento múltiple e historial
+    sibling_event_ids = fields.Many2many(related='alarm_event_id.sibling_event_ids')
+    sibling_event_count = fields.Integer(related='alarm_event_id.sibling_event_count')
+    account_signal_history_ids = fields.Many2many(related='alarm_event_id.account_signal_history_ids')
+    possible_false_alarm = fields.Boolean(related='alarm_event_id.possible_false_alarm')
+    false_alarm_hint = fields.Char(related='alarm_event_id.false_alarm_hint')
+
+    def action_bulk_close(self):
+        """Abre el cierre en bloque (este evento + los demás abiertos del mismo
+        cliente). Reusa la acción del evento."""
+        self.ensure_one()
+        return self.alarm_event_id.action_open_bulk_close()
+
     @api.depends('alarm_event_id', 'alarm_event_id.subscription_id')
     def _compute_patrol_inclusion(self):
         """Lee subscription.service_inclusion_ids del evento y decide estado.
