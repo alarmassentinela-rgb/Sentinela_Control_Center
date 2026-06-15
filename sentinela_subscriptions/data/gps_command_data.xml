@@ -8,6 +8,17 @@
              los pise. APN fijo floLIVE = gigsky-02. SentiCar GT06 ≈ puerto 5023.
              ═══════════════════════════════════════════════════════════════ -->
 
+        <!-- Parámetros base de los placeholders. DOMINIO (no IP) para que un cambio
+             de IP fija solo toque el registro A, sin reconfigurar los GPS. -->
+        <record id="param_gps_apn" model="ir.config_parameter">
+            <field name="key">sentinela.gps_apn</field>
+            <field name="value">gigsky-02</field>
+        </record>
+        <record id="param_gps_server_senticar" model="ir.config_parameter">
+            <field name="key">sentinela.gps_server_senticar</field>
+            <field name="value">gps.senticar.com</field>
+        </record>
+
         <!-- ── Concox / Jimi / GT06 (N01K, etc.) ── -->
         <record id="gps_cmd_gt06_apn" model="sentinela.gps.command.template">
             <field name="name">N01K / GT06 — Configurar APN</field>
@@ -18,13 +29,13 @@
             <field name="note">Algunos N01K autodetectan APN; si no reporta datos, fuérzalo con este.</field>
         </record>
         <record id="gps_cmd_gt06_server" model="sentinela.gps.command.template">
-            <field name="name">N01K / GT06 — Configurar Servidor (IP)</field>
+            <field name="name">N01K / GT06 — Configurar Servidor (dominio)</field>
             <field name="brand">concox_gt06</field>
             <field name="action_type">set_server</field>
-            <field name="command_template">SERVER,0,{server},{port},0#</field>
+            <field name="command_template">SERVER,1,{server},{port},0#</field>
             <field name="default_port">5023</field>
             <field name="sequence">20</field>
-            <field name="note">Modo 0 = IP, último 0 = TCP. Para dominio: SERVER,1,dominio,puerto,0#.</field>
+            <field name="note">Modo 1 = DOMINIO (gps.senticar.com), último 0 = TCP. Si algún día usas IP cruda en {server}, cambia a SERVER,0,IP,puerto,0#.</field>
         </record>
         <record id="gps_cmd_gt06_status" model="sentinela.gps.command.template">
             <field name="name">N01K / GT06 — Estado</field>

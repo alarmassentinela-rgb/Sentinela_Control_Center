@@ -23,8 +23,11 @@ class SentinelaSubscriptionSettings(models.TransientModel):
     gps_server_senticar = fields.Char(
         string='Servidor GPS — SentiCar',
         config_parameter='sentinela.gps_server_senticar',
-        default='187.251.199.98',
-        help="Host/IP al que marcan los rastreadores de SentiCar (rellena {server} en subs SentiCar)."
+        default='gps.senticar.com',
+        help="Host al que marcan los rastreadores de SentiCar (rellena {server}). Usar el DOMINIO "
+             "(gps.senticar.com, DNS-only → IP fija) y NO la IP cruda: si cambia la IP fija solo se "
+             "actualiza el registro A, sin reconfigurar los GPS. ⚠️ Con dominio, el comando GT06 usa "
+             "modo 1 (SERVER,1,...); con IP cruda sería modo 0."
     )
     gps_server_tracksolid = fields.Char(
         string='Servidor GPS — Tracksolid',

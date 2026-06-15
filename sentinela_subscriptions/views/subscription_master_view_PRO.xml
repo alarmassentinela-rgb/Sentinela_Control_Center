@@ -195,7 +195,7 @@
                                         <field name="gps_command_template_id"
                                                options="{'no_create': True, 'no_open': True}"/>
                                         <field name="gps_sms_command"
-                                               placeholder="Elige una plantilla arriba o escríbelo. Ej.: STATUS#  /  SERVER,0,187.251.199.98,5023,0#"/>
+                                               placeholder="Elige una plantilla arriba o escríbelo. Ej.: STATUS#  /  SERVER,1,gps.senticar.com,5023,0#"/>
                                         <field name="gps_sms_encoding"/>
                                     </group>
                                     <field name="gps_sms_log" readonly="1" invisible="gps_mode == 'movil'"
