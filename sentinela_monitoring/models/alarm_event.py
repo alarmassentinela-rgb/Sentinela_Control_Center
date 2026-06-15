@@ -279,23 +279,25 @@ class AlarmEvent(models.Model):
         status = 'active' if requires_attention else 'resolved'
 
         # 4. Crear Evento si es necesario
+        # Texto legible del código (NO el valor crudo del campo traducible jsonb)
+        code_label = self._clean_translated_name(alarm_code.name) if alarm_code else f"Evento {code}"
         event = False
         if status == 'active':
             event = self.sudo().create({
                 'name': f"Alarma {account} - {code}",
-                'device_id': device.id, 
-                'priority_id': priority_id, 
+                'device_id': device.id,
+                'priority_id': priority_id,
                 'zone': str(zone), # GUARDAR ZONA AQUI
                 'alarm_code_id': alarm_code.id if alarm_code else False,
-                'description': f"{alarm_code.name if alarm_code else 'Evento ' + code} (Z:{zone})",
-                'status': 'active', 
+                'description': f"{code_label} (Z:{zone})",
+                'status': 'active',
                 'partner_id': device.partner_id.id
             })
 
         # 5. Crear Señal siempre
         self.env['sentinela.alarm.signal'].sudo().create({
             'signal_type': 'alarm', 'device_id': device.id, 'priority_id': priority_id,
-            'description': f"{alarm_code.name if alarm_code else 'Evento ' + code} (Z:{zone})",
+            'description': f"{code_label} (Z:{zone})",
             'raw_data': raw_data, 'received_date': fields.Datetime.now(),
             'alarm_event_id': event.id if event else False, 
             'alarm_code': f"{qualifier}{code}", 'zone': zone, 
@@ -1007,7 +1009,7 @@ class AlarmEvent(models.Model):
         desc_parts = [
             f"<b>EVENTO DE ALARMA</b>: {self.name}",
             f"<b>Cuenta</b>: {self.account_number or '—'}",
-            f"<b>Código</b>: {(self.alarm_code_id.name or '').upper() if self.alarm_code_id else self.description}",
+            f"<b>Código</b>: {self._clean_translated_name(self.alarm_code_id.name).upper() if self.alarm_code_id else self.description}",
             f"<b>Zona</b>: {self.zone or '—'}",
         ]
         if device.location:
