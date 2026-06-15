@@ -44,6 +44,10 @@ class MonitoringDevice(models.Model):
     ], string='Tipo de Dispositivo', required=True)
 
     partner_id = fields.Many2one('res.partner', string='Cliente', required=True)
+    verification_password = fields.Char(
+        string='Palabra clave de verificación',
+        help="Contraseña verbal para confirmar por teléfono que quien responde es el "
+             "titular autorizado (y no un intruso). La ve el operador al atender.")
 
     lot_id = fields.Many2one('stock.lot', string='Número de Serie / IMEI',
                             help="Seleccione el IMEI desde el inventario físico.")

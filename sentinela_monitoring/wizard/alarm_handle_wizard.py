@@ -25,6 +25,14 @@ class AlarmWizardContactAttempt(models.TransientModel):
     ], default='not_tried', required=True)
     attempt_notes = fields.Char(string='Notas')
 
+    def action_call(self):
+        """Marca directo a este contacto por la central UCM (click-to-call)."""
+        self.ensure_one()
+        phone = self.contact_phone or self.contact_id.phone
+        if not phone:
+            raise UserError(_("Este contacto no tiene teléfono."))
+        return self.wizard_id.alarm_event_id.action_click_to_call(phone)
+
 
 class AlarmHandleWizard(models.TransientModel):
     _name = 'sentinela.alarm.handle.wizard'
@@ -88,6 +96,21 @@ class AlarmHandleWizard(models.TransientModel):
     account_signal_history_ids = fields.Many2many(related='alarm_event_id.account_signal_history_ids')
     possible_false_alarm = fields.Boolean(related='alarm_event_id.possible_false_alarm')
     false_alarm_hint = fields.Char(related='alarm_event_id.false_alarm_hint')
+
+    # Contexto de comando (cabecera) — traído del evento/panel
+    verification_password = fields.Char(related='alarm_event_id.verification_password')
+    full_description = fields.Char(related='alarm_event_id.full_description')
+    event_type = fields.Selection(related='alarm_event_id.event_type')
+    start_date = fields.Datetime(related='alarm_event_id.start_date')
+    sla_deadline = fields.Datetime(related='alarm_event_id.sla_deadline')
+    sla_status = fields.Selection(related='alarm_event_id.sla_status')
+    subscription_state = fields.Selection(related='alarm_event_id.subscription_state')
+    has_video = fields.Boolean(related='alarm_event_id.device_id.has_video')
+
+    def action_capture_snapshot(self):
+        """Videoverificación: solicita captura al DVR del sitio (si tiene cámara)."""
+        self.ensure_one()
+        return self.alarm_event_id.action_capture_snapshot()
 
     def action_bulk_close(self):
         """Abre el cierre en bloque (este evento + los demás abiertos del mismo

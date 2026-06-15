@@ -9,19 +9,57 @@
                     <field name="state" widget="statusbar" statusbar_visible="verify,contact,dispatch,close"/>
                 </header>
                 <sheet>
-                    <div class="oe_title mb-3">
-                        <h1 class="d-flex align-items-center gap-2">
-                            <span class="badge bg-dark text-white"><field name="account_number"/></span>
-                            <field name="partner_id" readonly="1"/>
-                            <field name="priority_id" widget="badge" readonly="1"/>
-                        </h1>
-                        <h3 class="text-danger fw-bold"><field name="alarm_event_id" readonly="1"/></h3>
-                    </div>
-
+                    <!-- campos de contexto cargados para visibilidad -->
                     <field name="possible_false_alarm" invisible="1"/>
                     <field name="false_alarm_hint" invisible="1"/>
                     <field name="sibling_event_count" invisible="1"/>
-                    <div class="alert alert-warning fw-bold" role="alert" invisible="not possible_false_alarm">
+                    <field name="has_video" invisible="1"/>
+                    <field name="event_type" invisible="1"/>
+                    <field name="google_maps_link" invisible="1"/>
+                    <field name="site_phone" invisible="1"/>
+
+                    <!-- ===================== CABECERA DE COMANDO (siempre visible) ===================== -->
+                    <div class="row">
+                        <div class="col-lg-8">
+                            <h1 class="d-flex align-items-center gap-2 mb-1">
+                                <span class="badge bg-dark text-white"><field name="account_number"/></span>
+                                <field name="partner_id" readonly="1"/>
+                            </h1>
+                            <h3 class="text-danger fw-bold mb-2"><field name="full_description" readonly="1"/></h3>
+                            <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                                <field name="priority_id" widget="badge" readonly="1"/>
+                                <field name="subscription_state" widget="badge" readonly="1"
+                                       decoration-success="subscription_state == 'active'"
+                                       decoration-warning="subscription_state == 'suspended'"
+                                       decoration-danger="subscription_state == 'cut'"/>
+                                <field name="sla_status" widget="badge" readonly="1"
+                                       decoration-success="sla_status in ('ok','met')"
+                                       decoration-warning="sla_status == 'warning'"
+                                       decoration-danger="sla_status in ('overdue','breached')"/>
+                                <span class="text-muted small">Inicio <field name="start_date" readonly="1" class="oe_inline"/> · Vence <field name="sla_deadline" readonly="1" class="oe_inline"/></span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="fa fa-map-marker text-danger" title="Ubicación"/>
+                                <field name="address_display" readonly="1" class="oe_inline"/>
+                                <button name="action_open_maps" type="object" string="Ver en mapa"
+                                        class="btn-link btn-sm" invisible="not google_maps_link"/>
+                            </div>
+                        </div>
+                        <div class="col-lg-4">
+                            <div class="alert alert-warning text-center mb-1" role="alert" invisible="not verification_password">
+                                🔑 <strong>PALABRA CLAVE</strong><br/>
+                                <span class="fs-4 fw-bold"><field name="verification_password" readonly="1" class="oe_inline"/></span>
+                            </div>
+                            <div class="alert alert-light text-center text-muted mb-1 py-2" role="alert" invisible="verification_password">
+                                Sin palabra clave registrada en el panel
+                            </div>
+                            <button name="action_capture_snapshot" type="object" string="📷 Videoverificación"
+                                    class="btn-info w-100" invisible="not has_video"/>
+                        </div>
+                    </div>
+
+                    <!-- ===================== ALERTAS ===================== -->
+                    <div class="alert alert-danger fw-bold" role="alert" invisible="not possible_false_alarm">
                         ⚠️ <field name="false_alarm_hint" class="oe_inline" readonly="1"/>
                     </div>
                     <div class="alert alert-info d-flex align-items-center justify-content-between" role="alert" invisible="sibling_event_count == 0">
@@ -32,15 +70,8 @@
                     <!-- ============ PASO 1 — VERIFICAR ============ -->
                     <div invisible="state != 'verify'">
                         <div class="alert alert-info" role="alert">
-                            <strong>Paso 1:</strong> Revisa la ubicación, los contactos y las señales recientes. Si es obviamente falsa alarma o el cliente ya confirmó OK, usa los atajos abajo para saltar al cierre.
+                            <strong>Paso 1 — Verificar:</strong> Revisa el historial y la ubicación. Si es claramente falsa alarma o el cliente confirma OK, usa los atajos para cerrar.
                         </div>
-                        <group string="Datos del Lugar">
-                            <field name="address_display" readonly="1" nolabel="1"/>
-                            <field name="site_phone" readonly="1" widget="phone" string="Teléfono Lugar"/>
-                            <button name="action_open_maps" type="object" string="Ver Ruta en Google Maps"
-                                class="btn-link" invisible="not google_maps_link"/>
-                            <field name="google_maps_link" invisible="1"/>
-                        </group>
                         <group string="🕓 Historial del panel (24h) — incluye aperturas/cierres">
                             <field name="account_signal_history_ids" readonly="1" nolabel="1">
                                 <list limit="50">
@@ -51,42 +82,41 @@
                                 </list>
                             </field>
                         </group>
-                        <group string="Números de Emergencia">
-                            <div class="d-flex flex-wrap gap-2">
-                                <span class="badge bg-danger p-2 fs-6">Bomberos: 911</span>
-                                <span class="badge bg-primary p-2 fs-6">Policía: 911</span>
-                                <span class="badge bg-success p-2 fs-6">Cruz Roja: 065</span>
-                            </div>
-                        </group>
                     </div>
 
                     <!-- ============ PASO 2 — CONTACTAR ============ -->
                     <div invisible="state != 'contact'">
                         <div class="alert alert-warning" role="alert">
-                            <strong>Paso 2:</strong> Intenta contactar a las personas registradas. Marca el resultado de cada llamada.
+                            <strong>Paso 2 — Contactar:</strong> Marca con el botón verde para llamar por la central. Verifica identidad con la palabra clave. Registra el resultado de cada llamada.
                         </div>
-                        <group string="Contactos del cliente">
+                        <group string="Contactos del sitio">
                             <field name="contact_attempt_ids" nolabel="1">
                                 <list editable="bottom" create="false" delete="false">
                                     <field name="contact_id" column_invisible="1"/>
                                     <field name="sequence" widget="handle"/>
                                     <field name="contact_name" readonly="1"/>
                                     <field name="contact_phone" widget="phone" readonly="1"/>
+                                    <button name="action_call" type="object" icon="fa-phone"
+                                            title="Marcar por la central UCM" class="btn-success"/>
                                     <field name="relation" readonly="1"/>
                                     <field name="status"/>
                                     <field name="attempt_notes"/>
                                 </list>
                             </field>
                         </group>
+                        <group string="Emergencias">
+                            <div class="d-flex flex-wrap gap-2">
+                                <span class="badge bg-danger p-2 fs-6">Emergencias: 911</span>
+                                <span class="badge bg-success p-2 fs-6">Cruz Roja: 065</span>
+                            </div>
+                        </group>
                     </div>
 
                     <!-- ============ PASO 3 — DESPACHAR ============ -->
                     <div invisible="state != 'dispatch'">
                         <div class="alert alert-warning" role="alert">
-                            <strong>Paso 3:</strong> Si la alarma es real o no hubo respuesta del cliente, despacha la respuesta correspondiente.
+                            <strong>Paso 3 — Despachar:</strong> Si la alarma es real o no hubo respuesta del cliente, despacha la respuesta correspondiente.
                         </div>
-
-                        <!-- F2.7.2: estado de inclusión por plan -->
                         <group string="Estado de patrullaje según plan del cliente">
                             <field name="patrol_inclusion_status" widget="badge"
                                 decoration-success="patrol_inclusion_status == 'included'"
@@ -109,17 +139,14 @@
                         </group>
 
                         <group string="Botones rápidos">
-                            <!-- Solicitar autorización: solo si NO incluido y NO autorizado -->
                             <button name="action_request_patrol_from_wizard"
                                     string="Solicitar autorización (Telegram)"
                                     type="object" class="btn-warning"
                                     invisible="patrol_inclusion_status != 'not_included' or extra_service_authorized"/>
-                            <!-- Autorización manual: solo si NO incluido y aún no autorizado -->
                             <button name="action_authorize_patrol_from_wizard"
                                     string="Marcar autorizado y generar venta"
                                     type="object" class="btn-info"
                                     invisible="patrol_inclusion_status != 'not_included' or extra_service_authorized"/>
-                            <!-- Despachar: si incluido (siempre) o si no incluido + autorizado -->
                             <button name="action_dispatch_patrol"
                                     string="Enviar patrullero"
                                     type="object" class="btn-danger"
@@ -132,7 +159,7 @@
                     <!-- ============ PASO 4 — CIERRE ============ -->
                     <div invisible="state != 'close'">
                         <div class="alert alert-success" role="alert">
-                            <strong>Paso 4:</strong> Selecciona el motivo de cierre. Las notas se consolidan automáticamente con la bitácora y contactos.
+                            <strong>Paso 4 — Cierre:</strong> Selecciona el motivo. Las notas se consolidan con la bitácora y los contactos.
                         </div>
                         <group string="Motivo y notas finales">
                             <field name="close_reason" required="state == 'close'"/>
@@ -146,21 +173,16 @@
                     </group>
                 </sheet>
                 <footer>
-                    <!-- Navegación -->
                     <button name="action_prev_step" string="Atrás" type="object"
                             class="btn-secondary" invisible="state == 'verify'"/>
                     <button name="action_next_step" string="Siguiente" type="object"
                             class="btn-primary" invisible="state == 'close'"/>
-
-                    <!-- Atajos al cierre -->
                     <button name="action_shortcut_false_alarm" string="Atajo: Falsa alarma"
                             type="object" class="btn-outline-secondary"
                             invisible="state == 'close'"/>
                     <button name="action_shortcut_customer_ok" string="Atajo: Cliente OK"
                             type="object" class="btn-outline-secondary"
                             invisible="state == 'close'"/>
-
-                    <!-- Acciones de paso 4 -->
                     <button name="action_finalize" string="Resolver y cerrar"
                             type="object" class="btn-success" invisible="state != 'close'"/>
                     <button name="action_pause_event" string="Pausar"

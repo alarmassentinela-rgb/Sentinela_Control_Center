@@ -28,6 +28,7 @@ class AlarmEvent(models.Model):
     
     device_id = fields.Many2one('sentinela.monitoring.device', string='Dispositivo', required=True)
     account_number = fields.Char(string='Cuenta', related='device_id.account_number', store=True)
+    verification_password = fields.Char(string='Palabra clave', related='device_id.verification_password')
     partner_id = fields.Many2one('res.partner', string='Cliente', related='device_id.partner_id', store=True)
     subscription_id = fields.Many2one('sentinela.subscription', string='Suscripción', related='device_id.subscription_id', store=True)
     
