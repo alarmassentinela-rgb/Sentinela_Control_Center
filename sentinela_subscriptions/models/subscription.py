@@ -1848,6 +1848,37 @@ class SentinelaSubscription(models.Model):
             if sub.gps_device_ids:
                 sub.message_post(body=f"<b>SentiCar:</b> {n} equipo(s) deshabilitado(s) por suspensión.")
 
+    def action_create_senticar_client_account(self):
+        """Botón: crea SOLO la cuenta (usuario Traccar) del cliente en SentiCar, SIN equipos.
+        Útil cuando los GPS todavía están en otra plataforma: deja la cuenta lista y los
+        dispositivos se registran después (al activar la sub o con el botón de registro).
+        Idempotente: si el cliente ya tiene cuenta (por senticar_user_id o por email), la reusa
+        sin duplicar."""
+        self.ensure_one()
+        if not self.partner_id:
+            raise UserError(_("La suscripción no tiene cliente."))
+        if not self.partner_id.email:
+            raise UserError(_("El cliente no tiene email. El email es el usuario de acceso a "
+                              "SentiCar; captúralo primero en el contacto."))
+        svc = self.env['sentinela.senticar.service']
+        uid, pw = svc.ensure_client_user(self.partner_id)
+        if not uid:
+            raise UserError(_("No se pudo crear la cuenta en SentiCar (revisa la conexión y los "
+                              "parámetros sentinela.traccar_api_url/user/password)."))
+        portal = (self.env['ir.config_parameter'].sudo().get_param('sentinela.senticar_public_url')
+                  or 'https://radar.senticar.com')
+        if pw:
+            self.message_post(body=_(
+                "👤 <b>Cuenta SentiCar creada</b> para %s<br/>"
+                "Usuario: <b>%s</b> · Contraseña: <b>%s</b><br/>Acceso: %s<br/>"
+                "<i>Los equipos se registrarán después (siguen en otra plataforma).</i>"
+            ) % (self.partner_id.name, self.partner_id.senticar_user_email, pw, portal))
+        else:
+            self.message_post(body=_(
+                "👤 <b>Cuenta SentiCar</b>: %s ya tenía cuenta (usuario <b>%s</b>, id %s). Reusada.")
+                % (self.partner_id.name, self.partner_id.senticar_user_email or self.partner_id.email, uid))
+        return True
+
     def action_provision_senticar(self):
         """Botón: registra/activa en SentiCar TODOS los equipos de la suscripción (alta)."""
         self.ensure_one()

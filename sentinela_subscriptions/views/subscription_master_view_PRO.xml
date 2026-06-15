@@ -104,6 +104,9 @@
                                 </group>
                                 <group>
                                     <field name="gps_device_count"/>
+                                    <button name="action_create_senticar_client_account" string="👤 Crear cuenta SentiCar del cliente"
+                                        type="object" class="btn-secondary"
+                                        help="Crea SOLO la cuenta de acceso del cliente en SentiCar (sin equipos). Úsalo cuando los GPS aún están en otra plataforma; los dispositivos se registran después."/>
                                     <button name="action_provision_senticar" string="📲 Registrar todos en SentiCar"
                                         type="object" class="btn-secondary"
                                         invisible="gps_platform != 'senticar'"/>
