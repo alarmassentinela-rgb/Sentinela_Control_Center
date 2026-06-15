@@ -19,3 +19,5 @@ access_subscription_advance_wizard_user,sentinela.subscription.advance.wizard.us
 access_mikrotik_traffic_user,sentinela.mikrotik.traffic.user,model_sentinela_mikrotik_traffic,group_subscription_user,1,1,1,1
 access_subscription_gps_device_user,sentinela.subscription.gps.device.user,model_sentinela_subscription_gps_device,group_subscription_user,1,1,1,1
 access_subscription_gps_device_manager,sentinela.subscription.gps.device.manager,model_sentinela_subscription_gps_device,group_subscription_manager,1,1,1,1
+access_gps_command_template_user,sentinela.gps.command.template.user,model_sentinela_gps_command_template,group_subscription_user,1,0,0,0
+access_gps_command_template_manager,sentinela.gps.command.template.manager,model_sentinela_gps_command_template,group_subscription_manager,1,1,1,1

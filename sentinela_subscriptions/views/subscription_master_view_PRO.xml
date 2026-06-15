@@ -191,7 +191,11 @@
                                         <field name="gps_sim_checked" readonly="1"/>
                                     </group>
                                     <group string="📨 Comando SMS" invisible="gps_mode == 'movil'">
-                                        <field name="gps_sms_command" placeholder="Ej.: STATUS#  /  SERVER,0,187.251.199.98,5023,0#"/>
+                                        <field name="gps_password"/>
+                                        <field name="gps_command_template_id"
+                                               options="{'no_create': True, 'no_open': True}"/>
+                                        <field name="gps_sms_command"
+                                               placeholder="Elige una plantilla arriba o escríbelo. Ej.: STATUS#  /  SERVER,0,187.251.199.98,5023,0#"/>
                                         <field name="gps_sms_encoding"/>
                                     </group>
                                     <field name="gps_sms_log" readonly="1" invisible="gps_mode == 'movil'"

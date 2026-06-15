@@ -1,6 +1,6 @@
 {
     'name': 'Sentinela Subscriptions',
-    'version': '18.0.1.3.90',
+    'version': '18.0.1.3.91',
     'category': 'Sales/Subscriptions',
     'depends': ['base', 'mail', 'product', 'account', 'sale', 'sentinela_digital_sign', 'sentinela_cfdi_prodigia', 'om_account_followup'],
     'data': [
@@ -10,6 +10,7 @@
         'data/ir_cron_data.xml',
         'data/mail_template_extension_data.xml',
         'data/mail_template_collection_data.xml',
+        'data/gps_command_data.xml',
         'views/subscription_master_view.xml',
         'views/subscription_master_view_PRO.xml',
         'views/senticar_transportista_templates.xml',
@@ -22,6 +23,7 @@
         'views/res_partner_followup_es.xml',
         'views/account_move_views.xml',
         'views/menus.xml',
+        'views/gps_command_views.xml',
         'report/contract_report.xml',
         'wizard/subscription_close_wizard_views.xml',
         'wizard/subscription_extension_wizard_views.xml',

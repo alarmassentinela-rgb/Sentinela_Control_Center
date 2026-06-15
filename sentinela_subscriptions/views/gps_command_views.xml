@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_gps_command_template_list" model="ir.ui.view">
+        <field name="name">sentinela.gps.command.template.list</field>
+        <field name="model">sentinela.gps.command.template</field>
+        <field name="arch" type="xml">
+            <list string="Comandos SMS GPS">
+                <field name="brand"/>
+                <field name="action_type"/>
+                <field name="name"/>
+                <field name="command_template"/>
+                <field name="default_port"/>
+                <field name="encoding"/>
+                <field name="sequence"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_gps_command_template_form" model="ir.ui.view">
+        <field name="name">sentinela.gps.command.template.form</field>
+        <field name="model">sentinela.gps.command.template</field>
+        <field name="arch" type="xml">
+            <form string="Comando SMS GPS">
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" placeholder="Ej.: N01K / GT06 — Configurar servidor"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="brand"/>
+                            <field name="action_type"/>
+                            <field name="encoding"/>
+                        </group>
+                        <group>
+                            <field name="default_port"/>
+                            <field name="sequence"/>
+                            <field name="active"/>
+                        </group>
+                    </group>
+                    <group string="Comando">
+                        <field name="command_template" nolabel="1"
+                               placeholder="Placeholders: {apn} {server} {port} {pwd} {imei}"/>
+                    </group>
+                    <div class="text-muted">
+                        Placeholders disponibles: <b>{apn}</b> (gigsky-02) · <b>{server}</b> (host de la plataforma) ·
+                        <b>{port}</b> (puerto del protocolo, arriba) · <b>{pwd}</b> (contraseña del equipo) · <b>{imei}</b>.
+                    </div>
+                    <group string="Nota">
+                        <field name="note" nolabel="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_gps_command_template" model="ir.actions.act_window">
+        <field name="name">Comandos SMS GPS</field>
+        <field name="res_model">sentinela.gps.command.template</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem id="menu_gps_command_template"
+        name="Comandos SMS GPS"
+        parent="menu_sentinela_subscription_config"
+        action="action_gps_command_template"
+        groups="sentinela_subscriptions.group_subscription_manager"
+        sequence="50"/>
+</odoo>

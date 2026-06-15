@@ -5,6 +5,7 @@ from . import res_config_settings
 from . import flolive_service
 from . import senticar_service
 from . import gps_device
+from . import gps_command
 from . import product
 from . import router
 from . import mikrotik_profile

@@ -58,9 +58,24 @@ class SubscriptionGpsDevice(models.Model):
         help="Link público temporal para rastrear SOLO esta unidad (sin cuenta). Cópialo y compártelo (WhatsApp).")
 
     # Comandos SMS (solo vehículo / SIM nuestra)
+    gps_password = fields.Char(string='Contraseña equipo', default='666666',
+        help="Contraseña del rastreador para comandos SMS (rellena {pwd} en las plantillas). "
+             "Default de fábrica típico = 666666 (GT06/Coban).")
+    gps_command_template_id = fields.Many2one('sentinela.gps.command.template',
+        string='Plantilla de comando', copy=False,
+        help="Elige una plantilla y el comando se arma solo abajo (lo revisas antes de enviar).")
     gps_sms_command = fields.Char(string='Comando SMS')
     gps_sms_encoding = fields.Selection([('GSM-7', 'GSM-7'), ('UCS2', 'UCS2')], default='GSM-7', string='Codif.')
     gps_sms_log = fields.Text(string='Bitácora SMS', readonly=True)
+
+    @api.onchange('gps_command_template_id')
+    def _onchange_gps_command_template(self):
+        """Al elegir una plantilla, arma el comando (con placeholders resueltos) en el campo
+        editable para que el operador lo revise antes de enviarlo."""
+        if self.gps_command_template_id:
+            command, encoding = self.gps_command_template_id.render_for_device(self)
+            self.gps_sms_command = command
+            self.gps_sms_encoding = encoding
 
     # ---- Acciones por equipo ----
     def action_register_senticar(self):
@@ -112,6 +127,7 @@ class SubscriptionGpsDevice(models.Model):
         self.gps_sms_log = (f"[{ts}] {mark} «{self.gps_sms_command}» → {res.get('detail')}\n" + (self.gps_sms_log or "")).strip()
         if res.get('ok'):
             self.gps_sms_command = False
+            self.gps_command_template_id = False
 
     # ---- Suspensión temporal por equipo ----
     def action_suspend_device(self):

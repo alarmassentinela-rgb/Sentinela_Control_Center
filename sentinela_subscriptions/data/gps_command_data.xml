@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- ═══════════════════════════════════════════════════════════════
+             Catálogo inicial de comandos SMS de configuración GPS.
+             Placeholders: {apn} {server} {port} {pwd} {imei}
+             noupdate="1" = el usuario puede editar/añadir sin que el upgrade
+             los pise. APN fijo floLIVE = gigsky-02. SentiCar GT06 ≈ puerto 5023.
+             ═══════════════════════════════════════════════════════════════ -->
+
+        <!-- ── Concox / Jimi / GT06 (N01K, etc.) ── -->
+        <record id="gps_cmd_gt06_apn" model="sentinela.gps.command.template">
+            <field name="name">N01K / GT06 — Configurar APN</field>
+            <field name="brand">concox_gt06</field>
+            <field name="action_type">set_apn</field>
+            <field name="command_template">APN,{apn}#</field>
+            <field name="sequence">10</field>
+            <field name="note">Algunos N01K autodetectan APN; si no reporta datos, fuérzalo con este.</field>
+        </record>
+        <record id="gps_cmd_gt06_server" model="sentinela.gps.command.template">
+            <field name="name">N01K / GT06 — Configurar Servidor (IP)</field>
+            <field name="brand">concox_gt06</field>
+            <field name="action_type">set_server</field>
+            <field name="command_template">SERVER,0,{server},{port},0#</field>
+            <field name="default_port">5023</field>
+            <field name="sequence">20</field>
+            <field name="note">Modo 0 = IP, último 0 = TCP. Para dominio: SERVER,1,dominio,puerto,0#.</field>
+        </record>
+        <record id="gps_cmd_gt06_status" model="sentinela.gps.command.template">
+            <field name="name">N01K / GT06 — Estado</field>
+            <field name="brand">concox_gt06</field>
+            <field name="action_type">status</field>
+            <field name="command_template">STATUS#</field>
+            <field name="sequence">30</field>
+        </record>
+        <record id="gps_cmd_gt06_where" model="sentinela.gps.command.template">
+            <field name="name">N01K / GT06 — Ubicar (WHERE)</field>
+            <field name="brand">concox_gt06</field>
+            <field name="action_type">locate</field>
+            <field name="command_template">WHERE#</field>
+            <field name="sequence">40</field>
+            <field name="note">URL# devuelve link de Google Maps con la posición.</field>
+        </record>
+        <record id="gps_cmd_gt06_interval" model="sentinela.gps.command.template">
+            <field name="name">N01K / GT06 — Intervalo de reporte 10s</field>
+            <field name="brand">concox_gt06</field>
+            <field name="action_type">interval</field>
+            <field name="command_template">TIMER,10,10#</field>
+            <field name="sequence">50</field>
+            <field name="note">TIMER,T1,T2# (5–60s). T1 en movimiento, T2 detenido.</field>
+        </record>
+        <record id="gps_cmd_gt06_reset" model="sentinela.gps.command.template">
+            <field name="name">N01K / GT06 — Reiniciar</field>
+            <field name="brand">concox_gt06</field>
+            <field name="action_type">reset</field>
+            <field name="command_template">RESET#</field>
+            <field name="sequence">60</field>
+        </record>
+        <record id="gps_cmd_gt06_relay_on" model="sentinela.gps.command.template">
+            <field name="name">N01K / GT06 — Cortar motor (relay)</field>
+            <field name="brand">concox_gt06</field>
+            <field name="action_type">relay</field>
+            <field name="command_template">RELAY,1#</field>
+            <field name="sequence">70</field>
+            <field name="note">RELAY,1# corta · RELAY,0# restablece. Solo desde el número CENTRAL.</field>
+        </record>
+
+        <!-- ── Coban TK103 / TK303 ── -->
+        <record id="gps_cmd_coban_apn" model="sentinela.gps.command.template">
+            <field name="name">Coban TK103/303 — Configurar APN</field>
+            <field name="brand">coban</field>
+            <field name="action_type">set_apn</field>
+            <field name="command_template">apn{pwd} {apn}</field>
+            <field name="sequence">10</field>
+            <field name="note">{pwd} = contraseña del equipo (default 123456 en Coban).</field>
+        </record>
+        <record id="gps_cmd_coban_server" model="sentinela.gps.command.template">
+            <field name="name">Coban TK103/303 — Configurar Servidor (GPRS)</field>
+            <field name="brand">coban</field>
+            <field name="action_type">set_server</field>
+            <field name="command_template">adminip{pwd} {server} {port}</field>
+            <field name="default_port">5001</field>
+            <field name="sequence">20</field>
+        </record>
+        <record id="gps_cmd_coban_gprs" model="sentinela.gps.command.template">
+            <field name="name">Coban TK103/303 — Activar modo GPRS</field>
+            <field name="brand">coban</field>
+            <field name="action_type">other</field>
+            <field name="command_template">gprs{pwd}</field>
+            <field name="sequence">30</field>
+        </record>
+        <record id="gps_cmd_coban_status" model="sentinela.gps.command.template">
+            <field name="name">Coban TK103/303 — Estado</field>
+            <field name="brand">coban</field>
+            <field name="action_type">status</field>
+            <field name="command_template">check{pwd}</field>
+            <field name="sequence">40</field>
+        </record>
+    </data>
+</odoo>
