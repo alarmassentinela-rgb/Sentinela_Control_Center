@@ -56,20 +56,9 @@
                         </div>
                         <group string="Datos del Lugar">
                             <field name="address_display" readonly="1" nolabel="1"/>
-                            <field name="site_phone" readonly="1" widget="phone" string="Teléfono Lugar"/>
                             <button name="action_open_maps" type="object" string="Ver Ruta en Google Maps"
                                 class="btn-link" invisible="not google_maps_link"/>
                             <field name="google_maps_link" invisible="1"/>
-                        </group>
-                        <group string="🕓 Historial del panel (24h) — incluye aperturas/cierres">
-                            <field name="account_signal_history_ids" readonly="1" nolabel="1">
-                                <list limit="50">
-                                    <field name="received_date" string="Hora"/>
-                                    <field name="alarm_code" string="Código"/>
-                                    <field name="zone" string="Zona"/>
-                                    <field name="description" string="Descripción"/>
-                                </list>
-                            </field>
                         </group>
                         <group string="Números de Emergencia">
                             <div class="d-flex flex-wrap gap-2">
@@ -160,10 +149,23 @@
                         </group>
                     </div>
 
-                    <!-- Bitácora siempre visible -->
-                    <group string="Bitácora del operador (libre)">
-                        <field name="notes" nolabel="1" placeholder="Anota cualquier dato adicional aquí. Se guarda al cerrar."/>
-                    </group>
+                    <!-- Historial y bitácora en pestañas: la vista principal queda solo con el evento -->
+                    <notebook>
+                        <page string="🕓 Historial del panel (24h)" name="historial">
+                            <p class="text-muted">Todas las señales del panel en las últimas 24 h (incluye aperturas/cierres que no generan evento).</p>
+                            <field name="account_signal_history_ids" readonly="1" nolabel="1">
+                                <list limit="50">
+                                    <field name="received_date" string="Hora"/>
+                                    <field name="alarm_code" string="Código"/>
+                                    <field name="zone" string="Zona"/>
+                                    <field name="description" string="Descripción"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="📝 Bitácora del operador" name="bitacora">
+                            <field name="notes" nolabel="1" placeholder="Anota cualquier dato adicional aquí. Se guarda al cerrar."/>
+                        </page>
+                    </notebook>
                 </sheet>
                 <footer>
                     <!-- Navegación -->
