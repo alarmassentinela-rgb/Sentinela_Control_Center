@@ -96,7 +96,7 @@
                             <span class="badge bg-warning text-dark" invisible="patrol_inclusion_status != 'not_included'">Patrullaje NO incluido — requiere autorizar cobro</span>
                             <span class="badge bg-danger" invisible="patrol_inclusion_status != 'no_subscription'">Sin suscripción — no facturable</span>
                             <span class="badge bg-info" invisible="not extra_service_authorized">Cobro autorizado ✔</span>
-                            <span class="text-muted" invisible="patrol_inclusion_status == 'included'">Costo: <field name="patrol_extra_price" widget="monetary" class="oe_inline" readonly="1"/></span>
+                            <span class="text-muted" invisible="patrol_inclusion_status == 'included'">Costo extra del servicio: $<field name="patrol_extra_price" class="oe_inline" readonly="1"/></span>
                         </div>
                         <field name="technician_id"
                             domain="[('share', '=', False)]"
