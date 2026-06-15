@@ -18,6 +18,20 @@
                         <h3 class="text-danger fw-bold"><field name="alarm_event_id" readonly="1"/></h3>
                     </div>
 
+                    <!-- Badges de estado (colores por valor con invisible, NO decoration) -->
+                    <field name="subscription_state" invisible="1"/>
+                    <field name="sla_status" invisible="1"/>
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                        <span class="badge bg-success" invisible="subscription_state != 'active'">✔ Suscripción activa</span>
+                        <span class="badge bg-warning text-dark" invisible="subscription_state != 'suspended'">⚠ Suscripción SUSPENDIDA</span>
+                        <span class="badge bg-danger" invisible="subscription_state != 'cut'">⛔ Suscripción CANCELADA</span>
+                        <span class="badge bg-secondary" invisible="subscription_state != 'none'">Sin suscripción</span>
+                        <span class="badge bg-success" invisible="sla_status not in ('ok','met')">SLA OK</span>
+                        <span class="badge bg-warning text-dark" invisible="sla_status != 'warning'">SLA por vencer</span>
+                        <span class="badge bg-danger" invisible="sla_status not in ('overdue','breached')">SLA VENCIDO</span>
+                        <span class="text-muted small" invisible="not sla_deadline">Vence: <field name="sla_deadline" readonly="1" class="oe_inline"/></span>
+                    </div>
+
                     <field name="possible_false_alarm" invisible="1"/>
                     <field name="false_alarm_hint" invisible="1"/>
                     <field name="sibling_event_count" invisible="1"/>
@@ -66,27 +80,25 @@
                         </group>
                     </div>
 
-                    <!-- ============ PASO 2 — CONTACTAR ============ -->
-                    <div invisible="state != 'contact'">
-                        <div class="alert alert-warning" role="alert">
-                            <strong>Paso 2:</strong> Intenta contactar a las personas registradas. Marca el resultado de cada llamada.
-                        </div>
-                        <group string="Contactos del cliente">
-                            <field name="contact_attempt_ids" nolabel="1">
-                                <list editable="bottom" create="false" delete="false">
-                                    <field name="contact_id" column_invisible="1"/>
-                                    <field name="sequence" widget="handle"/>
-                                    <field name="contact_name" readonly="1"/>
-                                    <field name="contact_phone" widget="phone" readonly="1"/>
-                                    <button name="action_call" type="object" icon="fa-phone"
-                                            title="Marcar por la central UCM" class="btn-success"/>
-                                    <field name="relation" readonly="1"/>
-                                    <field name="status"/>
-                                    <field name="attempt_notes"/>
-                                </list>
-                            </field>
-                        </group>
+                    <!-- ===== CONTACTOS (siempre visibles, para llamar en cualquier momento) ===== -->
+                    <div class="alert alert-warning" role="alert" invisible="state != 'contact'">
+                        <strong>Paso 2 — Contactar:</strong> Pulsa el botón verde 📞 para marcar por la central. Verifica con la palabra clave y registra el resultado de cada llamada.
                     </div>
+                    <group string="Contactos del sitio (pulsa 📞 para llamar)">
+                        <field name="contact_attempt_ids" nolabel="1">
+                            <list editable="bottom" create="false" delete="false">
+                                <field name="contact_id" column_invisible="1"/>
+                                <field name="sequence" widget="handle"/>
+                                <field name="contact_name" readonly="1"/>
+                                <field name="contact_phone" widget="phone" readonly="1"/>
+                                <button name="action_call" type="object" icon="fa-phone"
+                                        title="Marcar por la central UCM" class="btn-success"/>
+                                <field name="relation" readonly="1"/>
+                                <field name="status"/>
+                                <field name="attempt_notes"/>
+                            </list>
+                        </field>
+                    </group>
 
                     <!-- ============ PASO 3 — DESPACHAR ============ -->
                     <div invisible="state != 'dispatch'">
