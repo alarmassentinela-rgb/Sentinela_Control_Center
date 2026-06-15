@@ -18,6 +18,29 @@
                     <field name="google_maps_link" invisible="1"/>
                     <field name="site_phone" invisible="1"/>
 
+                    <!-- ===== CABECERA (estructura original comprobada) ===== -->
+                    <div class="oe_title mb-2">
+                        <h1 class="d-flex align-items-center gap-2 mb-1">
+                            <span class="badge bg-dark text-white"><field name="account_number"/></span>
+                            <field name="partner_id" readonly="1"/>
+                            <field name="priority_id" widget="badge" readonly="1"/>
+                            <field name="subscription_state" widget="badge" readonly="1"
+                                   decoration-success="subscription_state == 'active'"
+                                   decoration-warning="subscription_state == 'suspended'"
+                                   decoration-danger="subscription_state == 'cut'"/>
+                            <field name="sla_status" widget="badge" readonly="1"
+                                   decoration-success="sla_status in ('ok','met')"
+                                   decoration-warning="sla_status == 'warning'"
+                                   decoration-danger="sla_status in ('overdue','breached')"/>
+                        </h1>
+                        <h3 class="text-danger fw-bold mb-1"><field name="full_description" readonly="1"/></h3>
+                        <div class="text-muted">
+                            <i class="fa fa-map-marker"/> <field name="address_display" readonly="1" class="oe_inline"/>
+                            <button name="action_open_maps" type="object" string="Mapa" class="btn-link btn-sm" invisible="not google_maps_link"/>
+                            <button name="action_capture_snapshot" type="object" string="📷 Video" class="btn-link btn-sm" invisible="not has_video"/>
+                        </div>
+                    </div>
+
                     <!-- ===== PALABRA CLAVE (destacada) ===== -->
                     <div class="alert alert-warning text-center mb-2" role="alert" invisible="not verification_password">
                         🔑 <strong>PALABRA CLAVE DE VERIFICACIÓN:</strong>
@@ -32,35 +55,6 @@
                         <span>🔁 Este cliente tiene <field name="sibling_event_count" class="oe_inline"/> evento(s) más abiertos.</span>
                         <button name="action_bulk_close" type="object" string="Cerrar este + relacionados en bloque" class="btn-primary btn-sm" icon="fa-check-double"/>
                     </div>
-
-                    <!-- ===== CABECERA DE COMANDO ===== -->
-                    <div class="oe_title">
-                        <h2 class="text-danger fw-bold"><field name="full_description" readonly="1"/></h2>
-                    </div>
-                    <group>
-                        <group string="Cuenta / Cliente">
-                            <field name="account_number" readonly="1"/>
-                            <field name="partner_id" readonly="1"/>
-                            <field name="priority_id" widget="badge" readonly="1"/>
-                            <field name="subscription_state" widget="badge" readonly="1"
-                                   decoration-success="subscription_state == 'active'"
-                                   decoration-warning="subscription_state == 'suspended'"
-                                   decoration-danger="subscription_state == 'cut'"/>
-                        </group>
-                        <group string="Tiempo y ubicación">
-                            <field name="sla_status" widget="badge" readonly="1"
-                                   decoration-success="sla_status in ('ok','met')"
-                                   decoration-warning="sla_status == 'warning'"
-                                   decoration-danger="sla_status in ('overdue','breached')"/>
-                            <field name="start_date" readonly="1"/>
-                            <field name="sla_deadline" readonly="1" string="Vence (SLA)"/>
-                            <field name="address_display" readonly="1" string="Dirección"/>
-                            <button name="action_open_maps" type="object" string="Ver en mapa"
-                                    class="btn-link" invisible="not google_maps_link"/>
-                            <button name="action_capture_snapshot" type="object" string="📷 Videoverificación"
-                                    class="btn-info" invisible="not has_video"/>
-                        </group>
-                    </group>
 
                     <!-- ============ PASO 1 — VERIFICAR ============ -->
                     <div invisible="state != 'verify'">
