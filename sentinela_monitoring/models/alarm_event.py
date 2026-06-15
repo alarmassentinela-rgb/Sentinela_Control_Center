@@ -180,6 +180,26 @@ class AlarmEvent(models.Model):
         return val
 
     @api.model
+    def _zone_label(self, device, zone):
+        """Devuelve 'ZONA N: NOMBRE' si la zona está configurada en el panel
+        (ej. 'ZONA 59: PUERTA PRINCIPAL'), o 'ZONA N' si no hay descripción.
+        Usado para enriquecer la descripción del evento/señal en la ingesta."""
+        zone_num = zone or '0'
+        label = f"ZONA {zone_num}"
+        if device and zone_num:
+            try:
+                search_zone = str(int(zone_num)) if (isinstance(zone_num, str) and zone_num.isdigit()) else zone_num
+                zone_obj = self.env['sentinela.monitoring.zone'].sudo().search([
+                    ('device_id', '=', device.id),
+                    ('zone_number', '=', search_zone),
+                ], limit=1)
+                if zone_obj and zone_obj.name:
+                    label = f"ZONA {search_zone}: {self._clean_translated_name(zone_obj.name).upper()}"
+            except Exception:
+                pass
+        return label
+
+    @api.model
     def _cron_detect_offline_panels(self):
         """Genera evento trouble para paneles cuya last_communication superó
         expected_heartbeat_hours. Idempotente: marca el evento con [AUTO_OFFLINE]
@@ -281,6 +301,8 @@ class AlarmEvent(models.Model):
         # 4. Crear Evento si es necesario
         # Texto legible del código (NO el valor crudo del campo traducible jsonb)
         code_label = self._clean_translated_name(alarm_code.name) if alarm_code else f"Evento {code}"
+        # Etiqueta de zona con su descripción (PUERTA/VENTANA/etc.) si está configurada
+        zone_label = self._zone_label(device, zone)
         event = False
         if status == 'active':
             event = self.sudo().create({
@@ -289,7 +311,7 @@ class AlarmEvent(models.Model):
                 'priority_id': priority_id,
                 'zone': str(zone), # GUARDAR ZONA AQUI
                 'alarm_code_id': alarm_code.id if alarm_code else False,
-                'description': f"{code_label} (Z:{zone})",
+                'description': f"{code_label} — {zone_label}",
                 'status': 'active',
                 'partner_id': device.partner_id.id
             })
@@ -297,7 +319,7 @@ class AlarmEvent(models.Model):
         # 5. Crear Señal siempre
         self.env['sentinela.alarm.signal'].sudo().create({
             'signal_type': 'alarm', 'device_id': device.id, 'priority_id': priority_id,
-            'description': f"{code_label} (Z:{zone})",
+            'description': f"{code_label} — {zone_label}",
             'raw_data': raw_data, 'received_date': fields.Datetime.now(),
             'alarm_event_id': event.id if event else False, 
             'alarm_code': f"{qualifier}{code}", 'zone': zone, 
