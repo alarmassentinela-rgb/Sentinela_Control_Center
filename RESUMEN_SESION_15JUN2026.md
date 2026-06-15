@@ -47,7 +47,36 @@ release-modulo (commit+tag+push) + deploy-modulo (rsync→`-u` STAGING→`-u` V1
 Tags `v18.0.1.3.91/.92/.93-sentinela_subscriptions`. Restart del container web en .91 (campos
 Python/modelo nuevo). DB V18 confirmada en 18.0.1.3.93.
 
-## Pendientes para la próxima sesión
+---
+
+## Central de Monitoreo (sentinela_monitoring 18.0.1.10.1 → 18.0.1.13.8)
+
+**1. Prueba del emulador (cadena real) ✅** — robo (130) desde el emulador → receiver `:10001` → Odoo: evento creado, ligado a la casa (`0001`), CRITICA, descripción con nombre de zona, NO cuarentena, auto-resolvió el AUTO_OFFLINE previo.
+
+**2. Catálogo Contact-ID limpiado (datos en prod, sin deploy):**
+- **B (nombres+formato):** 242 códigos con nombre doble-serializado JSON → aplanados; 30 corregidos desde `LIBRERIA_CONTACT_ID_COMPLETA.csv` (130 "RESTABLECIMIENTO"→**ALARMA DE ROBO**, 100→MEDICA). 0 doble-JSON restante.
+- **C (categoría+prioridad+atención):** 242 clasificados por rangos Contact-ID (100-299 alarm/CRITICA/crea evento, 300-399 trouble/Normal/crea evento, 4xx open_close, 5xx status, 6xx test — estos no crean evento). 0 códigos sin prioridad (antes 222 NULL → ya no usa el default 35).
+
+**3. Features desplegadas y funcionando:**
+- v10.1/v11.0: descripción con `_clean_translated_name` (no JSON crudo) + nombre de zona.
+- v12.0/12.1: **Procesamiento múltiple** (cierre en bloque del mismo cliente, candado anti-otra-cuenta), **Historial 24h** del panel (incluye aperturas/cierres), **alerta posible falsa alarma**. Expuesto en el wizard de atención (lo que abre el dashboard). Cierre en bloque verificado (6 eventos de golpe).
+- v12.2/12.3: fix `NotNullViolation` en `contact_id` al guardar el wizard (faltaba `contact_id` oculto en la lista).
+- **Palabra clave de verificación**: campo `monitoring.device.verification_password` + visible al atender (casa = prueba `GARZA2026`).
+- **Click-to-call por contacto**: botón 📞 que marca por la central UCM.
+
+**4. Despacho de patrullero + tracking SentiCar — YA EXISTÍA (confirmado):** `create_fsm_order` manda dirección/cliente/palabra clave/coordenadas; `fsm_order.action_start()` genera `/SentiCar/rastreo/<token>` y lo envía al cliente por Telegram/WhatsApp con ETA. Botón "Enviar patrullero" en el paso Despachar.
+
+**5. Rediseño "todo a la vista" del wizard — REVERTIDO a estable (pendiente):** intenté Datos del Evento prominentes + despacho/badges siempre visibles; rompía el render del modal. Causas: `widget="monetary"` sin `currency_id`, `decoration-*` en campos de form (solo válido en list), y campos `related` que no poblaban. Tras v13.0→13.7 se **revirtió a v13.3 estable (= v13.8)**.
+- ⚠️ **TRAMPA:** el wizard es modal; su render NO se ve desde el backend y `monetary`/`decoration` en form + ciertos related lo rompen sin error en el `-u`. Reintentar SOLO con consola del navegador (F12) o probando en STAGING `:8075` antes que en prod.
+
+### Pendientes monitoring
+1. Retomar el rediseño "todo a la vista" del wizard con diagnóstico de render real (F12/STAGING). La base (palabra clave, llamar, cierre en bloque, historial, falsa alarma) ya quedó OK.
+2. **Sirena no suena:** ninguna prioridad tiene `priority_sound` cargado → subir un `.mp3`/`.wav` en Monitoreo→Prioridades (al menos CRITICA). Además el navegador bloquea audio hasta el primer clic.
+3. **Dashboard sin refresco en tiempo real:** el websocket del bus no entrega (solo al cambiar de pestaña / cada 60s). Revisar proxy/websocket; alternativa: bajar `setInterval` a ~10s.
+4. **Patrullaje de la casa** figura `not_included` → para enviar patrullero hay que "Marcar autorizado" primero (o configurar la matriz de la sub).
+5. Capturar la palabra clave real en los paneles (la de la casa es prueba `GARZA2026`).
+
+## Pendientes para la próxima sesión (GPS)
 1. **Probar real** una plantilla en un N01K de la flota (SUB-0385): elegir "Configurar
    Servidor" y verificar que arme `SERVER,1,gps.senticar.com,5023,0#` y llegue por GraphQL
    floLIVE. **Sin validar** end-to-end aún.
@@ -57,9 +86,8 @@ Python/modelo nuevo). DB V18 confirmada en 18.0.1.3.93.
 4. Persistencia Traccar (DB H2 + assets web a volúmenes antes de recrear `traccar-server`).
 5. Fase C/D SaaS (Stripe en vivo), automatizar reseller, iOS.
 
-## Otro (fuera de esta sesión)
-- Hoy también hubo releases de **sentinela_monitoring v18.0.1.13.0 → .13.6** (rediseño de la
-  ventana de atención) en otra sesión — ver git log; no documentadas aquí.
+## Estado final monitoring
+`sentinela_monitoring` **v18.0.1.13.8** en prod V18, `installed`. Catálogo Contact-ID limpio y clasificado. Tags v18.0.1.10.1 … v18.0.1.13.8 pusheados. (Sección de monitoring documentada arriba.)
 
 ## Archivos sueltos sin commitear (heredados, NO de esta sesión)
 `sentinela_subscriptions/data/ir_cron_data.xml` y `views/mikrotik_profile_views.xml`
