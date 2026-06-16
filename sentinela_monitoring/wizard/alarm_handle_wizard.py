@@ -209,10 +209,12 @@ class AlarmHandleWizard(models.TransientModel):
         if lat or lon:
             mapa = f"""
               <div class="col-md-5 text-center">
-                <div style="width:300px;max-width:100%;aspect-ratio:1/1;margin:auto">
-                  <iframe width="100%" height="100%" frameborder="0" style="border:0;border-radius:8px;display:block"
-                          loading="lazy" referrerpolicy="no-referrer-when-downgrade"
-                          src="https://www.google.com/maps?q={lat},{lon}&amp;z=16&amp;output=embed"></iframe>
+                <div style="width:300px;max-width:100%;margin:auto">
+                  <div style="position:relative;padding-bottom:100%;height:0;overflow:hidden;border-radius:8px">
+                    <iframe frameborder="0" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0"
+                            loading="lazy" referrerpolicy="no-referrer-when-downgrade"
+                            src="https://www.google.com/maps?q={lat},{lon}&amp;z=16&amp;output=embed"></iframe>
+                  </div>
                 </div>
               </div>
             """
