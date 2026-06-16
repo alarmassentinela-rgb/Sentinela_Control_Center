@@ -98,6 +98,7 @@ class AlarmHandleWizard(models.TransientModel):
     verification_password = fields.Char(string='Palabra clave', readonly=True)
     has_video = fields.Boolean(readonly=True)
     sibling_event_count = fields.Integer(string='Eventos abiertos de la cuenta', readonly=True)
+    sibling_event_ids = fields.Many2many('sentinela.alarm.event', string='Eventos abiertos del cliente', readonly=True)
     account_signal_history_ids = fields.Many2many('sentinela.alarm.signal', string='Historial (24h)', readonly=True)
     possible_false_alarm = fields.Boolean(string='Posible falsa alarma', readonly=True)
     false_alarm_hint = fields.Char(readonly=True)
@@ -174,6 +175,7 @@ class AlarmHandleWizard(models.TransientModel):
             vals['has_video'] = event.device_id.has_video
             sibs = event.sibling_event_ids
             vals['sibling_event_count'] = len(sibs)
+            vals['sibling_event_ids'] = [(6, 0, sibs.ids)]
             vals['account_signal_history_ids'] = [(6, 0, event.account_signal_history_ids.ids)]
             vals['possible_false_alarm'] = event.possible_false_alarm
             vals['false_alarm_hint'] = event.false_alarm_hint or ''

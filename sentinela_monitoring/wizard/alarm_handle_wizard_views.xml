@@ -28,10 +28,6 @@
                     <div class="alert alert-danger fw-bold" role="alert" invisible="not possible_false_alarm">
                         ⚠️ <field name="false_alarm_hint" class="oe_inline" readonly="1"/>
                     </div>
-                    <div class="alert alert-info d-flex align-items-center justify-content-between" role="alert" invisible="sibling_event_count == 0">
-                        <span>🔁 Este cliente tiene <field name="sibling_event_count" class="oe_inline"/> evento(s) más abiertos.</span>
-                        <button name="action_bulk_close" type="object" string="Cerrar este + relacionados en bloque" class="btn-primary btn-sm" icon="fa-check-double"/>
-                    </div>
 
                     <!-- ===== CONTACTOS (botón de llamar por fila, sobre el contacto REAL) ===== -->
                     <group string="📞 Contactos del sitio (clic en el teléfono verde para marcar por la central)">
@@ -72,6 +68,21 @@
 
                     <!-- ===== Historial + Bitácora en pestañas ===== -->
                     <notebook>
+                        <page string="🔁 Eventos Múltiples" name="multi" invisible="sibling_event_count == 0">
+                            <div class="alert alert-info d-flex align-items-center justify-content-between" role="alert">
+                                <span class="fs-5">🔁 Este cliente tiene <field name="sibling_event_count" class="oe_inline"/> evento(s) abiertos más (además del actual).</span>
+                                <button name="action_bulk_close" type="object" string="Cerrar TODOS en bloque" class="btn-primary" icon="fa-check-double"/>
+                            </div>
+                            <field name="sibling_event_ids" nolabel="1">
+                                <list create="false" delete="false" edit="false">
+                                    <field name="name" string="Evento"/>
+                                    <field name="start_date" string="Inicio"/>
+                                    <field name="full_description" string="Descripción"/>
+                                    <field name="priority_id" string="Prioridad"/>
+                                    <field name="status" string="Estado"/>
+                                </list>
+                            </field>
+                        </page>
                         <page string="🕓 Historial del panel (24h)" name="historial">
                             <p class="text-muted">Señales del panel en las últimas 24 h (incluye aperturas/cierres que no generan evento).</p>
                             <field name="account_signal_history_ids" readonly="1" nolabel="1">
