@@ -38,10 +38,13 @@
                             <field name="verification_password"/>
                         </group>
                     </group>
-                    <group string="Ubicación">
+                    <group string="Ubicación (se hereda de la suscripción — solo consulta)">
                         <field name="location"/>
-                        <field name="latitude"/>
-                        <field name="longitude"/>
+                        <field name="latitude" readonly="1"/>
+                        <field name="longitude" readonly="1"/>
+                        <div class="text-muted" colspan="2">
+                            Las coordenadas se capturan y modifican en la <b>suscripción</b> (pestaña Instalación → Coordenadas del Sitio). Aquí solo se consultan.
+                        </div>
                     </group>
                     <group string="Estado del Dispositivo">
                         <field name="last_communication"/>
