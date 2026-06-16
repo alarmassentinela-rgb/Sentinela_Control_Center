@@ -10,6 +10,7 @@
                 <field name="unit_kind"/>
                 <field name="license_plate" optional="show"/>
                 <field name="traccar_device_id"/>
+                <field name="is_default_dispatch" widget="boolean_toggle" string="Default despacho"/>
                 <field name="available" widget="boolean_toggle"/>
                 <field name="notes" optional="hide"/>
             </list>
@@ -34,6 +35,7 @@
                         </group>
                         <group string="Estado">
                             <field name="available"/>
+                            <field name="is_default_dispatch"/>
                             <field name="notes"/>
                         </group>
                     </group>

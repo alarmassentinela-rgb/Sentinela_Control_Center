@@ -25,12 +25,38 @@ class PatrolUnit(models.Model):
         help='Solo para vehículos.')
     available = fields.Boolean(string='Disponible', default=True,
         help='Desmárcala para sacar la unidad de circulación (taller, baja) sin borrar su historial.')
+    is_default_dispatch = fields.Boolean(string='Unidad por defecto al despachar',
+        help='Unidad que se autoselecciona al enviar un patrullero (normalmente el celular '
+             'compartido del turno). Solo una unidad debe tenerlo activo.')
     notes = fields.Char(string='Notas')
 
     _sql_constraints = [
         ('traccar_device_id_uniq', 'unique(traccar_device_id)',
          'Ya existe una unidad con ese ID de SentiCar.'),
     ]
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        records = super().create(vals_list)
+        if any(v.get('is_default_dispatch') for v in vals_list):
+            records.filtered('is_default_dispatch')._enforce_single_default()
+        return records
+
+    def write(self, vals):
+        res = super().write(vals)
+        if vals.get('is_default_dispatch'):
+            self._enforce_single_default()
+        return res
+
+    def _enforce_single_default(self):
+        """Solo una unidad puede ser la de despacho por defecto: desmarca las demás."""
+        self.ensure_one() if len(self) == 1 else None
+        others = self.search([('is_default_dispatch', '=', True), ('id', 'not in', self.ids)])
+        others.write({'is_default_dispatch': False})
+
+    @api.model
+    def _get_default_dispatch_unit(self):
+        return self.search([('is_default_dispatch', '=', True), ('available', '=', True)], limit=1)
 
     def name_get(self):
         res = []

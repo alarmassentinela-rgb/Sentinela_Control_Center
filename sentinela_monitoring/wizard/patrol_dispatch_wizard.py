@@ -11,22 +11,27 @@ class PatrolDispatchWizard(models.TransientModel):
     account_number = fields.Char(string='Cuenta', related='alarm_event_id.account_number', readonly=True)
     address = fields.Char(string='Domicilio', compute='_compute_address', readonly=True)
 
-    technician_id = fields.Many2one('res.users', string='Patrullero',
-        required=True, domain="[('is_patrol', '=', True)]",
-        help='Usuario marcado como Patrulla (is_patrol).')
+    technician_id = fields.Many2one('res.users', string='Quién atiende (turno)',
+        domain="[('share', '=', False)]",
+        help='Quien sale a verificar esta vez: puede ser cualquier usuario interno '
+             '(patrullero, técnico, vendedor o administración). Opcional.')
     patrol_unit_id = fields.Many2one('sentinela.patrol.unit', string='Unidad a rastrear',
-        domain="[('available', '=', True)]",
-        help='Dispositivo SentiCar que se rastreará: el celular del patrullero o un vehículo del catálogo. '
-             'Se autoselecciona la unidad por defecto del patrullero; cámbiala si hoy sale en otra unidad.')
+        required=True, domain="[('available', '=', True)]",
+        default=lambda self: self.env['sentinela.patrol.unit']._get_default_dispatch_unit(),
+        help='Dispositivo SentiCar que se rastreará: el celular compartido del turno o un '
+             'vehículo del catálogo. Se autoselecciona el de despacho por defecto; cámbialo '
+             'si hoy salen en otra unidad.')
     notes = fields.Text(string='Instrucciones para el patrullero',
         help='Se anexan a la descripción de la orden (opcional).')
 
     @api.onchange('technician_id')
     def _onchange_technician_default_unit(self):
-        """Preselecciona la unidad por defecto del patrullero (su celular)."""
+        """Si quien atiende tiene una unidad fija propia, la prefiere; si no, deja
+        la unidad por defecto de despacho (el celular compartido)."""
         for w in self:
-            if w.technician_id and w.technician_id.partner_id.default_patrol_unit_id:
-                w.patrol_unit_id = w.technician_id.partner_id.default_patrol_unit_id
+            person_unit = w.technician_id.partner_id.default_patrol_unit_id
+            if person_unit:
+                w.patrol_unit_id = person_unit
 
     @api.depends('alarm_event_id')
     def _compute_address(self):
@@ -63,10 +68,11 @@ class PatrolDispatchWizard(models.TransientModel):
         if order.stage == 'assigned':
             order.action_assign()
 
+        quien = self.technician_id.name or "turno"
         event.message_post(body=_(
-            "🚓 Patrullero <b>%s</b> despachado. Orden %s asignada. "
-            "El cliente será notificado cuando el patrullero confirme su salida."
-        ) % (self.technician_id.name, order.name))
+            "🚓 Patrulla despachada (%s) — unidad <b>%s</b>. Orden %s. "
+            "El cliente será notificado cuando se confirme la salida."
+        ) % (quien, self.patrol_unit_id.name or '—', order.name))
 
         # Abrir la orden para que el operador la monitoree.
         return {
