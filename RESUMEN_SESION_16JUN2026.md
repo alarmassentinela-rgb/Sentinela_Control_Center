@@ -56,7 +56,43 @@ Inicialmente recomendé mover la gestión a `10.10.10.x` (Opción A); era incorr
 - `.64` Saucito 8xp marcado "Dañado".
 - Switch `.65` Quinta Real usa `SentinelaWisp.` (no `SentinelaW1sp.`).
 
-## Pendientes para la próxima sesión
+---
+
+# GPS / SentiCar — Integración con Suscripciones (sesión paralela)
+
+Trabajo sobre `sentinela_subscriptions` (releases 18.0.1.3.91 → **18.0.1.3.99**) e infra de SentiCar/Traccar. Todo desplegado en STAGING + V18 y verificado. Detalle en memoria [[project-gps-subscriptions]] y [[reference-senticar-traccar]].
+
+## Automatización de comandos SMS GPS (v.91 → v.93)
+- **v.91** Catálogo `sentinela.gps.command.template` (plantillas por familia/acción con placeholders `{apn}{server}{port}{pwd}{imei}`); el operador elige y el comando se arma solo. Seed N01K/GT06 + Coban. Menú en Config + ACL + params.
+- **v.92** `{server}` = **dominio** `gps.senticar.com` (no IP, resiliente a cambio de IP); GT06 corregido a modo 1 (`SERVER,1,...`). ⚠️ gotcha noupdate: el seed ya instalado se corrigió por SQL.
+- **v.93** Botones GPS reubicados a su sección (Enviar SMS / Diagnóstico / link). ✅ **Probado real** en un N01K de la flota (sesión previa lo confirmó).
+
+## Endurecimiento integración SentiCar (análisis P0/P1/P2)
+- **P0 infra Traccar** (`/home/egarza/traccar/`): DB H2 + web migrados a **volúmenes** (`./data`/`./web`); **backup diario** 03:30 (rota 14d, `backup_traccar.sh`); pass admin id=1 rotada (`Lcs1992`→`i8dl1QirG0p8DI#6`); imagen **pineada** al digest de **6.14.4** (no `:latest`). Respaldo pre-migración + compose `.bak`. Verificado: 6 devices + 10 usuarios intactos.
+- **P1 #6 reconciliación (v.94):** cron 6h `_cron_senticar_reconcile` + flag `senticar_state` por equipo + botón por sub. Detecta/auto-corrige desajustes del flag `disabled` (kill-switch param). Probado: 1 auto-corregido real.
+- **P1 #5/#7/#8/#9/#10 (v.95):** IMEI único (constraint), rotar/revocar enlace portal, limpieza de share-links vencidos (cron+cap horas), sync email cliente→Traccar, params SentiCar en Ajustes.
+
+## Grupos SentiCar (v.97 Fase 1 + v.99 Fase 2)
+- **Fase 1 (v.97):** 1 grupo Traccar por cliente; los equipos heredan visibilidad (en vez de ligar equipo-por-equipo). Alta + reconciliación crean/asignan/comparten el grupo. Migrados los 6 equipos a 2 grupos.
+- **Fase 2 (v.99):** jerarquía/reseller automática — campo `senticar_distributor_id` ("cuelga de") + grupo raíz paraguas. Anida el grupo del cliente bajo el del distribuidor y comparte hacia arriba. ✅ **Probado real**: DANIA bajo Sentinela → la flota vio en su sesión los 6 equipos (5 propios + el de DANIA); revertido.
+- **🔑 Aprendizaje Traccar:** el query admin `?userId=X` muestra SOLO permisos directos (engaña); en la **sesión real del usuario** sí se ven los del grupo, **y la visibilidad se hereda hacia abajo** en el árbol. Verificar SIEMPRE logueando como el usuario.
+
+## Manual de usuario
+Generado **`Manual_Plataforma_SentiCar.pdf`** (13 pág, reportlab; fuente `gen_manual_senticar.py`) con secciones de integración, altas, diagnósticos, suspensiones y jerarquía, con ejemplos. **Enviado a Telegram** como "Plataforma SentiCar.pdf".
+
+## Notas / incidencias GPS
+- **Colisión de versiones con esta sesión paralela:** la de coordenadas tomó .94/.96/.98 → GPS quedó Fase1=.97, Fase2=.99 (commit `7ce2ab1`). Tags `.91`–`.99` pusheados.
+- Conflicto de concurrencia (`SerializationFailure`) en el `-u` de V18 por las dos sesiones desplegando el mismo módulo a la vez → resuelto reintentando.
+
+## Pendientes GPS/SentiCar
+1. **Revocación automática de distribuidor:** hoy el share es aditivo; cambiar/quitar distribuidor no retira el acceso viejo (manual). Mejora futura.
+2. **Capturar ICCID** en las subs GPS reales de clientes (para diagnóstico/SMS/registro por cliente).
+3. **Limpiar cuentas demo** de la jerarquía SentiCar (Grupo SentiCar id7 / Distribuidor Demo id8 / Subcliente A id9 / B id10).
+4. Rotar pass admin SentiCar id=5 (hijo). Reseller automatizado fino, Stripe live/SaaS, app iOS.
+
+---
+
+## Pendientes para la próxima sesión (WISP)
 1. **Migración de los 3 enlaces** (Saucito, Rusias, Cd Industrial) de la oficina vieja a la nueva: los enlaces nuevos `.227` (Saucito) y `.251` (Rusias) ya están montados/inactivos esperando el cambio. Tras migrar, eliminar la dependencia del brinco provisional `.40/.41`.
 2. **`.64` Saucito EdgePoE 8xp dañado** — reemplazo pendiente.
 3. **Seguridad del inventario**: cifrar el Excel y plan de rotación de passwords de gestión por sitio.
