@@ -116,6 +116,16 @@
                                 <div class="o_row">
                                     <button name="action_make_portal_link" string="🔗 Generar / ver portal del transportista"
                                         type="object" class="btn-secondary"/>
+                                    <button name="action_rotate_portal_link" string="♻️ Regenerar enlace"
+                                        type="object" class="btn-secondary"
+                                        invisible="not senticar_portal_url"
+                                        confirm="¿Regenerar el enlace? El que ya compartiste dejará de funcionar."
+                                        title="Genera un token nuevo: el enlace anterior deja de servir."/>
+                                    <button name="action_revoke_portal_link" string="🚫 Revocar enlace"
+                                        type="object" class="btn-secondary"
+                                        invisible="not senticar_portal_url"
+                                        confirm="¿Revocar el enlace del portal? El cliente perderá el acceso."
+                                        title="Deja sin acceso el enlace del portal del transportista."/>
                                     <button name="action_reconcile_senticar" string="🔄 Reconciliar SentiCar"
                                         type="object" class="btn-secondary" invisible="gps_platform != 'senticar'"
                                         title="Compara los equipos de esta suscripción contra SentiCar y deja el estado consistente."/>

@@ -22,6 +22,48 @@
                             </div>
                         </setting>
                     </block>
+                    <block title="SentiCar / Traccar (GPS)" name="senticar_config">
+                        <setting string="API y panel" help="Acceso de la integración a SentiCar/Traccar y URLs públicas.">
+                            <div class="content-group">
+                                <div class="mt16">
+                                    <label for="traccar_api_url" string="URL API (LAN)"/>
+                                    <field name="traccar_api_url" class="oe_inline"/>
+                                </div>
+                                <div class="mt8">
+                                    <label for="traccar_api_user" string="Usuario API"/>
+                                    <field name="traccar_api_user" class="oe_inline"/>
+                                </div>
+                                <div class="mt8">
+                                    <label for="traccar_api_password" string="Contraseña API"/>
+                                    <field name="traccar_api_password" password="True" class="oe_inline"/>
+                                </div>
+                                <div class="mt8">
+                                    <label for="senticar_public_url" string="URL pública del panel"/>
+                                    <field name="senticar_public_url" class="oe_inline"/>
+                                </div>
+                                <div class="mt8">
+                                    <label for="senticar_portal_base" string="Base portal transportista"/>
+                                    <field name="senticar_portal_base" class="oe_inline"/>
+                                </div>
+                                <div class="mt8">
+                                    <label for="senticar_admin_user_id" string="IDs de admins (ej. 1,5)"/>
+                                    <field name="senticar_admin_user_id" class="oe_inline"/>
+                                </div>
+                            </div>
+                        </setting>
+                        <setting string="Reconciliación y links" help="Comportamiento del cron de reconciliación y de los links de rastreo.">
+                            <div class="content-group">
+                                <div class="mt16">
+                                    <field name="senticar_reconcile_autoheal"/>
+                                    <label for="senticar_reconcile_autoheal" string="Auto-corregir desajustes en la reconciliación"/>
+                                </div>
+                                <div class="mt8">
+                                    <label for="senticar_share_max_hours" string="Máx. horas de link de rastreo"/>
+                                    <field name="senticar_share_max_hours" class="oe_inline"/>
+                                </div>
+                            </div>
+                        </setting>
+                    </block>
                 </app>
             </xpath>
         </field>

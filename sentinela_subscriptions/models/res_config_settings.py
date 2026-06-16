@@ -39,3 +39,34 @@ class SentinelaSubscriptionSettings(models.TransientModel):
         config_parameter='sentinela.gps_server_smake',
         help="Host/IP del servidor para equipos en Smake (rellena {server})."
     )
+    # --- SentiCar / Traccar (API + portal) ---
+    traccar_api_url = fields.Char(
+        string='SentiCar — URL de la API', config_parameter='sentinela.traccar_api_url',
+        default='http://192.168.3.2:8082',
+        help="URL interna de la API de SentiCar/Traccar (LAN). Ej.: http://192.168.3.2:8082")
+    traccar_api_user = fields.Char(
+        string='SentiCar — Usuario API', config_parameter='sentinela.traccar_api_user',
+        help="Cuenta de servicio admin de Traccar que usa la integración (Basic Auth).")
+    traccar_api_password = fields.Char(
+        string='SentiCar — Contraseña API', config_parameter='sentinela.traccar_api_password',
+        help="Contraseña de la cuenta de servicio de Traccar.")
+    senticar_public_url = fields.Char(
+        string='SentiCar — URL pública (panel)', config_parameter='sentinela.senticar_public_url',
+        default='https://radar.senticar.com',
+        help="URL pública del panel (para los links de rastreo). Ej.: https://radar.senticar.com")
+    senticar_portal_base = fields.Char(
+        string='SentiCar — Base portal transportista', config_parameter='sentinela.senticar_portal_base',
+        default='https://senticar.com',
+        help="Dominio base para armar el enlace del portal del transportista (/senticar/t/<token>).")
+    senticar_admin_user_id = fields.Char(
+        string='SentiCar — IDs de admins', config_parameter='sentinela.senticar_admin_user_id',
+        help="IDs de usuarios admin de Traccar que deben ver toda la flota (lista, ej.: 1,5).")
+    senticar_reconcile_autoheal = fields.Boolean(
+        string='Auto-corregir desajustes (reconciliación)', config_parameter='sentinela.senticar_reconcile_autoheal',
+        default=True,
+        help="Si está activo, el cron de reconciliación corrige en SentiCar el estado habilitado/"
+             "deshabilitado para que coincida con Odoo (no toca SIM ni borra nada).")
+    senticar_share_max_hours = fields.Integer(
+        string='Máx. horas de link de rastreo', config_parameter='sentinela.senticar_share_max_hours',
+        default=168,
+        help="Tope de duración de un link de rastreo temporal (por defecto 168 = 7 días).")

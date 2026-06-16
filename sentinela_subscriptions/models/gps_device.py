@@ -1,5 +1,5 @@
 from odoo import models, fields, api, _
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -88,6 +88,23 @@ class SubscriptionGpsDevice(models.Model):
             command, encoding = self.gps_command_template_id.render_for_device(self)
             self.gps_sms_command = command
             self.gps_sms_encoding = encoding
+
+    @api.constrains('gps_imei')
+    def _check_imei_unique(self):
+        """Un IMEI/Device-ID no puede estar en dos equipos (ni del mismo ni de otro cliente):
+        evita que al registrar se ligue una unidad ya existente a otro cliente (fuga de visibilidad)."""
+        for dev in self:
+            if not dev.gps_imei:
+                continue
+            imei = dev.gps_imei.strip()
+            dup = self.search([('id', '!=', dev.id), ('gps_imei', '=', imei)], limit=1)
+            if dup:
+                raise ValidationError(_(
+                    "El IMEI/Device-ID '%s' ya está en la suscripción %s (cliente %s). "
+                    "Un mismo equipo no puede estar en dos suscripciones — si lo transfieres, "
+                    "elimínalo primero de la otra.") % (
+                    imei, dup.subscription_id.name or '?',
+                    dup.subscription_id.partner_id.name or '?'))
 
     # ---- Acciones por equipo ----
     def action_register_senticar(self):

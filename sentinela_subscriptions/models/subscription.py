@@ -1912,6 +1912,25 @@ class SentinelaSubscription(models.Model):
                            'senticar_sync_msg': 'OK', 'senticar_sync_date': now})
         return res
 
+    def action_rotate_portal_link(self):
+        """Botón: regenera el enlace del portal del transportista (invalida el anterior)."""
+        self.ensure_one()
+        self.partner_id.rotate_senticar_portal_token()
+        self.message_post(body=_(
+            "♻️ <b>Enlace del portal regenerado.</b> El anterior ya no sirve. Nuevo: %s"
+        ) % (self.senticar_portal_url or '—'))
+
+    def action_revoke_portal_link(self):
+        """Botón: revoca el enlace del portal del transportista (lo deja sin acceso)."""
+        self.ensure_one()
+        self.partner_id.revoke_senticar_portal_token()
+        self.message_post(body=_("🚫 <b>Enlace del portal revocado.</b> El link ya no da acceso."))
+
+    def _cron_senticar_cleanup_shares(self):
+        """Cron: borra de SentiCar los usuarios temporales (links de rastreo) ya vencidos."""
+        n = self.env['sentinela.senticar.service'].cleanup_expired_temp_users()
+        _logger.info("SENTICAR cleanup: %s usuario(s) temporal(es) de link de rastreo vencido(s) borrado(s).", n)
+
     def _cron_senticar_reconcile(self):
         """Cron: reconcilia TODOS los equipos GPS de SentiCar contra Traccar. Reporta huérfanos
         (devices en Traccar no ligados a ninguna sub: flota/demo/manuales) solo en el log."""

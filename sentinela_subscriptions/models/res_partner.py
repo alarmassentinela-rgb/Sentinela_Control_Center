@@ -1,4 +1,8 @@
+import secrets
+import logging
 from odoo import models, fields, api
+
+_logger = logging.getLogger(__name__)
 
 class ResPartner(models.Model):
     _inherit = 'res.partner'
@@ -13,11 +17,37 @@ class ResPartner(models.Model):
         help="Token del link personal del transportista para generar links de rastreo de sus unidades.")
 
     def ensure_senticar_portal_token(self):
-        import secrets
         for p in self:
             if not p.senticar_portal_token:
                 p.senticar_portal_token = secrets.token_urlsafe(16)
         return self.senticar_portal_token
+
+    def rotate_senticar_portal_token(self):
+        """Regenera el token del portal del transportista → el enlace anterior deja de servir."""
+        for p in self:
+            p.senticar_portal_token = secrets.token_urlsafe(16)
+        return self.senticar_portal_token
+
+    def revoke_senticar_portal_token(self):
+        """Revoca el enlace del portal del transportista (lo deja sin acceso)."""
+        for p in self:
+            p.senticar_portal_token = False
+
+    def write(self, vals):
+        res = super().write(vals)
+        # Si cambia el email del cliente y ya tiene usuario en SentiCar, sincronizar el login
+        # (si no, el cliente acabaría logueando con un correo viejo). Side-effect externo: no truena.
+        if 'email' in vals:
+            svc = self.env['sentinela.senticar.service']
+            for p in self:
+                if p.senticar_user_id and p.email and p.email != p.senticar_user_email:
+                    try:
+                        if svc.update_user_email(p.senticar_user_id, p.email):
+                            p.senticar_user_email = p.email
+                            _logger.info("SENTICAR: email del usuario %s sincronizado a %s", p.senticar_user_id, p.email)
+                    except Exception as e:
+                        _logger.error("SENTICAR update_user_email %s: %s", p.senticar_user_id, e)
+        return res
 
     invoice_grouping_method = fields.Selection([
         ('individual', 'Una factura por servicio detallado'),

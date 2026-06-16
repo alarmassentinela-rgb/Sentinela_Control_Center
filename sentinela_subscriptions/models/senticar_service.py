@@ -103,6 +103,47 @@ class SenticarService(models.AbstractModel):
         return did
 
     @api.model
+    def update_user_email(self, user_id, new_email):
+        """Actualiza el email (= login) de un usuario Traccar. Para sincronizar cuando cambia
+        el email del cliente en Odoo (si no, el cliente acabaría logueando con un correo viejo)."""
+        if not user_id or not new_email:
+            return False
+        r = self._req('GET', '/api/users')
+        if r is None or r.status_code != 200:
+            return False
+        u = next((x for x in r.json() if x.get('id') == user_id), None)
+        if not u:
+            return False
+        u['email'] = new_email
+        r2 = self._req('PUT', f'/api/users/{user_id}', json=u)
+        return r2 is not None and r2.status_code == 200
+
+    @api.model
+    def cleanup_expired_temp_users(self):
+        """Borra de Traccar los usuarios temporales (de links de rastreo) ya vencidos, para que
+        no se acumulen. Devuelve cuántos borró."""
+        r = self._req('GET', '/api/users')
+        if r is None or r.status_code != 200:
+            return 0
+        now = datetime.now(timezone.utc)
+        n = 0
+        for u in r.json():
+            if not u.get('temporary'):
+                continue
+            exp = u.get('expirationTime')
+            if not exp:
+                continue
+            try:
+                dt = datetime.strptime(str(exp)[:19], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=timezone.utc)
+            except Exception:
+                continue
+            if dt < now:
+                d = self._req('DELETE', f"/api/users/{u['id']}")
+                if d is not None and d.status_code in (200, 204):
+                    n += 1
+        return n
+
+    @api.model
     def list_devices(self):
         """Devuelve la lista cruda de TODOS los devices de Traccar (o None si no se pudo leer).
         Para reconciliación: una sola llamada y comparar en Python."""
@@ -145,6 +186,12 @@ class SenticarService(models.AbstractModel):
             hours = int(hours) or 24
         except (ValueError, TypeError):
             hours = 24
+        # Tope de duración para que un link no quede vivo indefinidamente (abuso).
+        try:
+            max_h = int(self.env['ir.config_parameter'].sudo().get_param('sentinela.senticar_share_max_hours', '168') or 168)
+        except (ValueError, TypeError):
+            max_h = 168
+        hours = max(1, min(hours, max_h))
         exp = (datetime.now(timezone.utc) + timedelta(hours=hours)).strftime('%Y-%m-%dT%H:%M:%S.000Z')
         pw = 'Sh' + secrets.token_hex(8)
         email = f'share-{secrets.token_hex(6)}@senticar.com'

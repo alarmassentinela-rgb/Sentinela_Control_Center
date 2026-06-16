@@ -75,4 +75,15 @@
             <field name="interval_type">hours</field>
             <field name="active" eval="True"/>
         </record>
+
+        <!-- Cron: Limpiar links de rastreo vencidos en SentiCar (v18.0.1.3.95) -->
+        <record id="ir_cron_senticar_cleanup_shares" model="ir.cron">
+            <field name="name">Suscripciones: Limpiar Links de Rastreo Vencidos (SentiCar)</field>
+            <field name="model_id" ref="model_sentinela_subscription"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_senticar_cleanup_shares()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="active" eval="True"/>
+        </record>
 </odoo>
