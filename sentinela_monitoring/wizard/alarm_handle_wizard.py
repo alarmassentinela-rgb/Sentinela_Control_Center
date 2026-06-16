@@ -205,6 +205,17 @@ class AlarmHandleWizard(models.TransientModel):
         sla_map = {'ok': ('success', 'SLA OK'), 'met': ('success', 'SLA cumplido'), 'warning': ('warning', 'SLA por vencer'),
                    'overdue': ('danger', 'SLA VENCIDO'), 'breached': ('danger', 'SLA incumplido'), 'no_sla': ('secondary', 'Sin SLA')}
         sl = sla_map.get(event.sla_status, ('secondary', event.sla_status or '—'))
+        # Mapa con el punto de las coordenadas (iframe Google Maps embed, sin API key)
+        if lat or lon:
+            mapa = f"""
+              <div class="col-md-5">
+                <iframe width="100%" height="270" frameborder="0" style="border:0;border-radius:8px"
+                        loading="lazy" referrerpolicy="no-referrer-when-downgrade"
+                        src="https://www.google.com/maps?q={lat},{lon}&amp;z=16&amp;output=embed"></iframe>
+              </div>
+            """
+        else:
+            mapa = """<div class="col-md-5"><div class="alert alert-secondary text-center">Sin coordenadas registradas</div></div>"""
         return f"""
             <div class="row">
               <div class="col-md-7">
@@ -221,9 +232,10 @@ class AlarmHandleWizard(models.TransientModel):
                   <tr><td class="text-muted">Zona</td><td><b>{zona}</b></td></tr>
                   <tr><td class="text-muted">Dirección</td><td>{direccion}</td></tr>
                   <tr><td class="text-muted">Coordenadas</td><td>{coords}
-                      <a href="https://www.google.com/maps/search/?api=1&amp;query={lat},{lon}" target="_blank">ver mapa</a></td></tr>
+                      <a href="https://www.google.com/maps/search/?api=1&amp;query={lat},{lon}" target="_blank">abrir en Google Maps</a></td></tr>
                 </table>
               </div>
+              {mapa}
             </div>
         """
 
