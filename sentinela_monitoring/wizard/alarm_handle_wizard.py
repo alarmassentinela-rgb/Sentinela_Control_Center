@@ -213,7 +213,7 @@ class AlarmHandleWizard(models.TransientModel):
                   <div style="position:relative;padding-bottom:100%;height:0;overflow:hidden;border-radius:8px">
                     <iframe frameborder="0" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0"
                             loading="lazy" referrerpolicy="no-referrer-when-downgrade"
-                            src="https://www.google.com/maps?q={lat},{lon}&amp;z=16&amp;output=embed"></iframe>
+                            src="https://maps.google.com/maps?q={lat},{lon}&amp;t=&amp;z=17&amp;ie=UTF8&amp;iwloc=&amp;output=embed"></iframe>
                   </div>
                 </div>
               </div>
