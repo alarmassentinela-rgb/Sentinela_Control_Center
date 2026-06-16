@@ -28,7 +28,10 @@
                         </group>
                         <group string="GPS / Tracking (Patrullas)">
                             <field name="is_patrol"/>
-                            <field name="traccar_device_id" invisible="not is_patrol"/>
+                            <field name="default_patrol_unit_id" invisible="not is_patrol"
+                                options="{'no_open': True}"/>
+                            <field name="traccar_device_id" invisible="not is_patrol"
+                                string="ID Traccar (respaldo)"/>
                         </group>
                     </group>
                 </page>
@@ -44,7 +47,8 @@
             <list string="Patrulleros (GPS)" editable="bottom">
                 <field name="name"/>
                 <field name="phone"/>
-                <field name="traccar_device_id" placeholder="ID en Traccar"/>
+                <field name="default_patrol_unit_id" options="{'no_open': True}"/>
+                <field name="traccar_device_id" placeholder="ID en Traccar (respaldo)"/>
                 <field name="last_gps_update" readonly="1"/>
                 <field name="last_gps_lat" readonly="1" optional="hide"/>
                 <field name="last_gps_lng" readonly="1" optional="hide"/>
@@ -70,4 +74,12 @@
         parent="menu_sentinela_monitoring_config"
         action="action_patrol_devices"
         sequence="15"/>
+
+    <!-- Catálogo de unidades rastreables (celulares + vehículos). La acción vive
+         en sentinela_fsm; monitoring depende de fsm, así que se puede referenciar. -->
+    <menuitem id="menu_sentinela_patrol_units"
+        name="Unidades de Patrulla"
+        parent="menu_sentinela_monitoring_config"
+        action="sentinela_fsm.action_patrol_unit"
+        sequence="16"/>
 </odoo>

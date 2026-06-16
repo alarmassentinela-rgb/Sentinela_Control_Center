@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Unidades sembradas: ya reportan en SentiCar (deviceId de Traccar).
+         noupdate=1 → Enrique puede renombrar/editar sin que un upgrade las pise. -->
+    <data noupdate="1">
+        <record id="patrol_unit_march" model="sentinela.patrol.unit">
+            <field name="name">Sentinela - March</field>
+            <field name="unit_kind">vehicle</field>
+            <field name="traccar_device_id">5</field>
+            <field name="available" eval="True"/>
+        </record>
+
+        <record id="patrol_unit_celular_1" model="sentinela.patrol.unit">
+            <field name="name">Celular Patrullero 1</field>
+            <field name="unit_kind">phone</field>
+            <field name="traccar_device_id">4</field>
+            <field name="available" eval="True"/>
+        </record>
+    </data>
+</odoo>

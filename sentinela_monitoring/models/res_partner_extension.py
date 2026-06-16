@@ -11,6 +11,11 @@ class ResPartner(models.Model):
 
     is_patrol = fields.Boolean(string='Es Patrulla', default=False)
     traccar_device_id = fields.Char(string='ID Dispositivo Traccar')
+    default_patrol_unit_id = fields.Many2one('sentinela.patrol.unit',
+        string='Unidad por defecto',
+        domain="[('available', '=', True)]",
+        help='Unidad (celular o vehículo) que este patrullero usa normalmente. '
+             'Se preselecciona al despacharlo; el operador puede cambiarla por un vehículo del catálogo.')
     last_gps_lat = fields.Float(string='Última Latitud', digits=(10, 7))
     last_gps_lng = fields.Float(string='Última Longitud', digits=(10, 7))
     last_gps_update = fields.Datetime(string='Última Actualización GPS')

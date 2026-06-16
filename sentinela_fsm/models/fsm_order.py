@@ -30,6 +30,10 @@ class FsmOrder(models.Model):
 
     # Scheduling
     technician_id = fields.Many2one('res.users', string='Técnico Asignado', tracking=True)
+    patrol_unit_id = fields.Many2one('sentinela.patrol.unit', string='Unidad de Patrulla',
+        domain="[('available', '=', True)]", tracking=True,
+        help='Dispositivo SentiCar a rastrear en esta orden (celular o vehículo). '
+             'Si se deja vacío, se rastrea el celular configurado en el patrullero.')
     scheduled_date = fields.Datetime(string='Fecha Programada', tracking=True)
     duration_expected = fields.Float(string='Duración Estimada (Horas)', default=1.0)
     
@@ -759,9 +763,14 @@ class FsmOrder(models.Model):
         return sent
 
     def get_last_location_from_traccar(self):
-        """ Obtiene la última posición del técnico desde Traccar """
+        """ Obtiene la última posición de la unidad de patrulla desde Traccar.
+
+        Prioridad: la unidad elegida en la orden (celular o vehículo del catálogo);
+        si no hay, el celular configurado en el patrullero (compatibilidad).
+        """
         self.ensure_one()
-        traccar_id = self.technician_id.partner_id.traccar_device_id
+        traccar_id = (self.patrol_unit_id.traccar_device_id
+                      or self.technician_id.partner_id.traccar_device_id)
         if not traccar_id:
             return False
         

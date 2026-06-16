@@ -1085,7 +1085,7 @@ class AlarmEvent(models.Model):
             
             rec.full_description = f"{code_name} .- {zone_desc}"
 
-    def create_fsm_order(self, technician_id=None, service_type='patrol'):
+    def create_fsm_order(self, technician_id=None, service_type='patrol', patrol_unit_id=None):
         """F2.7.2 — Crea una sentinela.fsm.order vinculada a este evento.
         Idempotente: si ya hay una orden patrol abierta para este evento,
         la devuelve en lugar de crear duplicado.
@@ -1142,6 +1142,8 @@ class AlarmEvent(models.Model):
         if technician_id:
             vals['technician_id'] = technician_id
             vals['stage'] = 'assigned'
+        if patrol_unit_id:
+            vals['patrol_unit_id'] = patrol_unit_id
 
         order = self.env['sentinela.fsm.order'].sudo().create(vals)
         self.write({'status': 'in_progress'})

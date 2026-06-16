@@ -11,8 +11,12 @@
                 </group>
                 <group string="GPS / Patrulla (SentiCar · Traccar)">
                     <field name="is_patrol"/>
+                    <field name="default_patrol_unit_id" invisible="not is_patrol"
+                        options="{'no_open': True}"
+                        placeholder="Su celular/unidad habitual..."/>
                     <field name="traccar_device_id" invisible="not is_patrol"
-                        placeholder="ID del dispositivo en Traccar"/>
+                        string="ID Traccar (respaldo)"
+                        placeholder="Solo si no usa unidad del catálogo"/>
                     <field name="last_gps_update" readonly="1" invisible="not is_patrol"/>
                 </group>
             </xpath>

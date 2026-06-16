@@ -1,3 +1,4 @@
+from . import patrol_unit
 from . import fsm_order
 from . import fsm_checklist
 from . import subscription

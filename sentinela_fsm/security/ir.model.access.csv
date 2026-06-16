@@ -31,3 +31,6 @@ access_fsm_order_line_subuser,fsm.order.line.subuser.read,model_sentinela_fsm_or
 access_fsm_equipment_subuser,fsm.equipment.subuser.read,model_sentinela_fsm_equipment,sentinela_subscriptions.group_subscription_user,1,0,0,0
 access_fsm_work_log_subuser,fsm.work.log.subuser.read,model_sentinela_fsm_work_log,sentinela_subscriptions.group_subscription_user,1,0,0,0
 access_fsm_chat_message_subuser,fsm.chat.message.subuser.read,model_sentinela_fsm_chat_message,sentinela_subscriptions.group_subscription_user,1,0,0,0
+access_patrol_unit_user,patrol.unit.user,model_sentinela_patrol_unit,group_fsm_user,1,0,0,0
+access_patrol_unit_dispatcher,patrol.unit.dispatcher,model_sentinela_patrol_unit,group_fsm_dispatcher,1,1,1,0
+access_patrol_unit_manager,patrol.unit.manager,model_sentinela_patrol_unit,group_fsm_manager,1,1,1,1

@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- LIST -->
+    <record id="view_patrol_unit_list" model="ir.ui.view">
+        <field name="name">sentinela.patrol.unit.list</field>
+        <field name="model">sentinela.patrol.unit</field>
+        <field name="arch" type="xml">
+            <list string="Unidades de Patrulla" decoration-muted="not available">
+                <field name="name"/>
+                <field name="unit_kind"/>
+                <field name="license_plate" optional="show"/>
+                <field name="traccar_device_id"/>
+                <field name="available" widget="boolean_toggle"/>
+                <field name="notes" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- FORM -->
+    <record id="view_patrol_unit_form" model="ir.ui.view">
+        <field name="name">sentinela.patrol.unit.form</field>
+        <field name="model">sentinela.patrol.unit</field>
+        <field name="arch" type="xml">
+            <form string="Unidad de Patrulla">
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" placeholder="Ej. Camioneta March / Celular Patrullero 1"/></h1>
+                    </div>
+                    <group>
+                        <group string="Dispositivo">
+                            <field name="unit_kind" widget="radio" options="{'horizontal': true}"/>
+                            <field name="traccar_device_id" placeholder="ID numérico en SentiCar"/>
+                            <field name="license_plate" invisible="unit_kind != 'vehicle'"/>
+                        </group>
+                        <group string="Estado">
+                            <field name="available"/>
+                            <field name="notes"/>
+                        </group>
+                    </group>
+                    <div class="text-muted">
+                        El <b>ID SentiCar</b> es el identificador del dispositivo en la plataforma de rastreo
+                        (Ajustes → Radar SentiCar). El celular usa la app SentiCar; el vehículo, su GPS.
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- SEARCH -->
+    <record id="view_patrol_unit_search" model="ir.ui.view">
+        <field name="name">sentinela.patrol.unit.search</field>
+        <field name="model">sentinela.patrol.unit</field>
+        <field name="arch" type="xml">
+            <search string="Buscar Unidades">
+                <field name="name"/>
+                <field name="traccar_device_id"/>
+                <field name="license_plate"/>
+                <filter name="available" string="Disponibles" domain="[('available', '=', True)]"/>
+                <separator/>
+                <filter name="vehicles" string="Vehículos" domain="[('unit_kind', '=', 'vehicle')]"/>
+                <filter name="phones" string="Celulares" domain="[('unit_kind', '=', 'phone')]"/>
+                <group expand="0" string="Agrupar Por">
+                    <filter name="group_kind" string="Tipo" context="{'group_by': 'unit_kind'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ACTION -->
+    <record id="action_patrol_unit" model="ir.actions.act_window">
+        <field name="name">Unidades de Patrulla</field>
+        <field name="res_model">sentinela.patrol.unit</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_patrol_unit_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Registra las unidades rastreables</p>
+            <p>Celulares de patrulleros y vehículos con GPS que reportan a SentiCar.
+               Al despachar una patrulla eliges qué unidad rastrear.</p>
+        </field>
+    </record>
+
+    <menuitem id="menu_fsm_patrol_units" name="Unidades de Patrulla"
+              parent="menu_fsm_config" action="action_patrol_unit" sequence="20"/>
+</odoo>

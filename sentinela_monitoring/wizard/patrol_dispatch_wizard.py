@@ -13,9 +13,20 @@ class PatrolDispatchWizard(models.TransientModel):
 
     technician_id = fields.Many2one('res.users', string='Patrullero',
         required=True, domain="[('is_patrol', '=', True)]",
-        help='Usuario marcado como Patrulla (is_patrol). Su dispositivo Traccar permite el rastreo en vivo.')
+        help='Usuario marcado como Patrulla (is_patrol).')
+    patrol_unit_id = fields.Many2one('sentinela.patrol.unit', string='Unidad a rastrear',
+        domain="[('available', '=', True)]",
+        help='Dispositivo SentiCar que se rastreará: el celular del patrullero o un vehículo del catálogo. '
+             'Se autoselecciona la unidad por defecto del patrullero; cámbiala si hoy sale en otra unidad.')
     notes = fields.Text(string='Instrucciones para el patrullero',
         help='Se anexan a la descripción de la orden (opcional).')
+
+    @api.onchange('technician_id')
+    def _onchange_technician_default_unit(self):
+        """Preselecciona la unidad por defecto del patrullero (su celular)."""
+        for w in self:
+            if w.technician_id and w.technician_id.partner_id.default_patrol_unit_id:
+                w.patrol_unit_id = w.technician_id.partner_id.default_patrol_unit_id
 
     @api.depends('alarm_event_id')
     def _compute_address(self):
@@ -32,8 +43,13 @@ class PatrolDispatchWizard(models.TransientModel):
         event = self.alarm_event_id
 
         # Reutiliza el constructor idempotente del evento (descripción rica + coords).
-        order_id = event.create_fsm_order(technician_id=self.technician_id.id, service_type='patrol')
+        order_id = event.create_fsm_order(
+            technician_id=self.technician_id.id, service_type='patrol',
+            patrol_unit_id=self.patrol_unit_id.id or None)
         order = self.env['sentinela.fsm.order'].browse(order_id)
+        # Si la orden ya existía (idempotente) y el operador eligió otra unidad, la actualiza.
+        if self.patrol_unit_id and order.patrol_unit_id != self.patrol_unit_id:
+            order.sudo().write({'patrol_unit_id': self.patrol_unit_id.id})
 
         # Anexar instrucciones del operador, si las hay.
         if self.notes:
