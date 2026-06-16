@@ -101,6 +101,19 @@ class AlarmHandleWizard(models.TransientModel):
     account_signal_history_ids = fields.Many2many('sentinela.alarm.signal', string='Historial (24h)', readonly=True)
     possible_false_alarm = fields.Boolean(string='Posible falsa alarma', readonly=True)
     false_alarm_hint = fields.Char(readonly=True)
+    # Click-to-call a nivel formulario (un botón dentro de la lista One2many no
+    # se puede ejecutar en un wizard sin guardar; este sí, el form auto-guarda).
+    device_id = fields.Many2one('sentinela.monitoring.device', readonly=True)
+    call_contact_id = fields.Many2one('sentinela.monitoring.contact', string='Llamar a')
+
+    def action_call_selected_contact(self):
+        self.ensure_one()
+        if not self.call_contact_id:
+            raise UserError(_("Selecciona en el desplegable el contacto a llamar."))
+        phone = self.call_contact_id.phone
+        if not phone:
+            raise UserError(_("Ese contacto no tiene teléfono registrado."))
+        return self.alarm_event_id.action_click_to_call(phone)
 
     def action_capture_snapshot(self):
         """Videoverificación: solicita captura al DVR del sitio (si tiene cámara)."""
@@ -162,6 +175,9 @@ class AlarmHandleWizard(models.TransientModel):
             vals['account_signal_history_ids'] = [(6, 0, event.account_signal_history_ids.ids)]
             vals['possible_false_alarm'] = event.possible_false_alarm
             vals['false_alarm_hint'] = event.false_alarm_hint or ''
+            vals['device_id'] = event.device_id.id
+            if contacts:
+                vals['call_contact_id'] = contacts[0].id
         return vals
 
     @api.model

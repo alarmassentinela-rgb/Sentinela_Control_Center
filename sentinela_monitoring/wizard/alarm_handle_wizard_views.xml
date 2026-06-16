@@ -33,16 +33,21 @@
                         <button name="action_bulk_close" type="object" string="Cerrar este + relacionados en bloque" class="btn-primary btn-sm" icon="fa-check-double"/>
                     </div>
 
-                    <!-- ===== CONTACTOS (con click-to-call) ===== -->
-                    <group string="📞 Contactos del sitio (pulsa el botón verde para llamar por la central)">
+                    <!-- ===== CONTACTOS ===== -->
+                    <group string="📞 Llamar por la central">
+                        <field name="device_id" invisible="1"/>
+                        <div class="d-flex align-items-center gap-2">
+                            <field name="call_contact_id" domain="[('device_id', '=', device_id)]" options="{'no_create': True}" placeholder="Elige el contacto…"/>
+                            <button name="action_call_selected_contact" string="📞 Marcar" type="object" class="btn-success"/>
+                        </div>
+                    </group>
+                    <group string="Contactos del sitio · registro de intentos">
                         <field name="contact_attempt_ids" nolabel="1">
                             <list editable="bottom" create="false" delete="false">
                                 <field name="contact_id" column_invisible="1"/>
                                 <field name="sequence" widget="handle"/>
                                 <field name="contact_name" readonly="1"/>
                                 <field name="contact_phone" widget="phone" readonly="1"/>
-                                <button name="action_call" type="object" icon="fa-phone"
-                                        title="Marcar por la central UCM" class="btn-success"/>
                                 <field name="relation" readonly="1"/>
                                 <field name="status"/>
                                 <field name="attempt_notes"/>
