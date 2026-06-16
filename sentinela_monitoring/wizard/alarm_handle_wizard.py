@@ -208,8 +208,8 @@ class AlarmHandleWizard(models.TransientModel):
         # Mapa con el punto de las coordenadas (iframe Google Maps embed, sin API key)
         if lat or lon:
             mapa = f"""
-              <div class="col-md-5">
-                <iframe width="100%" height="270" frameborder="0" style="border:0;border-radius:8px"
+              <div class="col-md-5 text-center">
+                <iframe width="300" height="300" frameborder="0" style="border:0;border-radius:8px;max-width:100%"
                         loading="lazy" referrerpolicy="no-referrer-when-downgrade"
                         src="https://www.google.com/maps?q={lat},{lon}&amp;z=16&amp;output=embed"></iframe>
               </div>
