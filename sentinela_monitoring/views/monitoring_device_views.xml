@@ -39,7 +39,6 @@
                         </group>
                     </group>
                     <group string="Ubicación (se hereda de la suscripción — solo consulta)">
-                        <field name="location"/>
                         <field name="latitude" readonly="1"/>
                         <field name="longitude" readonly="1"/>
                         <div class="text-muted" colspan="2">
@@ -185,7 +184,6 @@
                 <field name="device_type"/>
                 <field name="partner_id"/>
                 <field name="status"/>
-                <field name="location"/>
                 <separator/>
                 <filter name="active" string="Activos" domain="[('status', '=', 'active')]"/>
                 <filter name="inactive" string="Inactivos" domain="[('status', '=', 'inactive')]"/>
