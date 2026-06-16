@@ -9,35 +9,22 @@
                     <field name="state" widget="statusbar" statusbar_visible="verify,contact,dispatch,close"/>
                 </header>
                 <sheet>
-                    <!-- ===== CABECERA ===== -->
-                    <div class="oe_title mb-2">
-                        <h1 class="d-flex align-items-center gap-2">
-                            <span class="badge bg-dark text-white"><field name="account_number"/></span>
-                            <field name="partner_id" readonly="1"/>
-                            <field name="priority_id" widget="badge" readonly="1"/>
-                        </h1>
-                        <h3 class="text-danger fw-bold"><field name="full_description" readonly="1"/></h3>
-                    </div>
-
-                    <!-- Badges de estado (color por valor con invisible, sin decoration) -->
-                    <field name="subscription_state" invisible="1"/>
-                    <field name="sla_status" invisible="1"/>
-                    <field name="google_maps_link" invisible="1"/>
-                    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-                        <span class="badge bg-success" invisible="subscription_state != 'active'">✔ Suscripción activa</span>
-                        <span class="badge bg-warning text-dark" invisible="subscription_state != 'suspended'">⚠ Suscripción SUSPENDIDA</span>
-                        <span class="badge bg-danger" invisible="subscription_state != 'cut'">⛔ Suscripción CANCELADA</span>
-                        <span class="badge bg-secondary" invisible="subscription_state != 'none'">Sin suscripción</span>
-                        <span class="badge bg-success" invisible="sla_status not in ('ok','met')">SLA OK</span>
-                        <span class="badge bg-warning text-dark" invisible="sla_status != 'warning'">SLA por vencer</span>
-                        <span class="badge bg-danger" invisible="sla_status not in ('overdue','breached')">SLA VENCIDO</span>
-                        <span class="text-muted small" invisible="not sla_deadline">Vence: <field name="sla_deadline" readonly="1" class="oe_inline"/></span>
-                    </div>
-
-                    <!-- Alertas -->
+                    <!-- campos de control -->
+                    <field name="has_video" invisible="1"/>
                     <field name="possible_false_alarm" invisible="1"/>
                     <field name="false_alarm_hint" invisible="1"/>
                     <field name="sibling_event_count" invisible="1"/>
+
+                    <!-- ===== DATOS DEL EVENTO (precargado, HTML) ===== -->
+                    <field name="event_info" readonly="1" nolabel="1"/>
+
+                    <!-- ===== PALABRA CLAVE ===== -->
+                    <div class="alert alert-warning text-center mb-2" role="alert" invisible="not verification_password">
+                        🔑 <strong>PALABRA CLAVE DE VERIFICACIÓN:</strong>
+                        <span class="fs-4 fw-bold ms-2"><field name="verification_password" readonly="1" class="oe_inline"/></span>
+                    </div>
+
+                    <!-- ===== ALERTAS ===== -->
                     <div class="alert alert-danger fw-bold" role="alert" invisible="not possible_false_alarm">
                         ⚠️ <field name="false_alarm_hint" class="oe_inline" readonly="1"/>
                     </div>
@@ -46,31 +33,7 @@
                         <button name="action_bulk_close" type="object" string="Cerrar este + relacionados en bloque" class="btn-primary btn-sm" icon="fa-check-double"/>
                     </div>
 
-                    <!-- Palabra clave -->
-                    <div class="alert alert-warning text-center mb-2" role="alert" invisible="not verification_password">
-                        🔑 <strong>PALABRA CLAVE:</strong>
-                        <span class="fs-5 fw-bold ms-2"><field name="verification_password" readonly="1" class="oe_inline"/></span>
-                    </div>
-
-                    <!-- ===== DATOS DEL EVENTO ===== -->
-                    <group string="📍 Datos del Evento">
-                        <group>
-                            <field name="alarm_code_id" readonly="1" string="Código de alarma"/>
-                            <field name="start_date" readonly="1" string="Hora del evento"/>
-                            <field name="zone" readonly="1" string="Zona"/>
-                            <field name="full_description" readonly="1" string="Descripción"/>
-                            <field name="priority_id" readonly="1" string="Prioridad"/>
-                        </group>
-                        <group>
-                            <field name="event_address" readonly="1"/>
-                            <field name="latitude" readonly="1" string="Latitud"/>
-                            <field name="longitude" readonly="1" string="Longitud"/>
-                            <button name="action_open_maps" type="object" string="📍 Ver en Google Maps"
-                                    class="btn-secondary" invisible="not google_maps_link"/>
-                        </group>
-                    </group>
-
-                    <!-- ===== CONTACTOS (siempre, con click-to-call) ===== -->
+                    <!-- ===== CONTACTOS (con click-to-call) ===== -->
                     <group string="📞 Contactos del sitio (pulsa el botón verde para llamar por la central)">
                         <field name="contact_attempt_ids" nolabel="1">
                             <list editable="bottom" create="false" delete="false">
@@ -87,17 +50,8 @@
                         </field>
                     </group>
 
-                    <!-- ===== DESPACHO DE PATRULLERO (siempre visible) ===== -->
-                    <field name="patrol_inclusion_status" invisible="1"/>
-                    <field name="extra_service_authorized" invisible="1"/>
+                    <!-- ===== DESPACHO ===== -->
                     <group string="🚓 Despacho de patrullero">
-                        <div class="d-flex flex-wrap align-items-center gap-2 mb-2" colspan="2">
-                            <span class="badge bg-success" invisible="patrol_inclusion_status != 'included'">Patrullaje INCLUIDO en el plan</span>
-                            <span class="badge bg-warning text-dark" invisible="patrol_inclusion_status != 'not_included'">Patrullaje NO incluido — requiere autorizar cobro</span>
-                            <span class="badge bg-danger" invisible="patrol_inclusion_status != 'no_subscription'">Sin suscripción — no facturable</span>
-                            <span class="badge bg-info" invisible="not extra_service_authorized">Cobro autorizado ✔</span>
-                            <span class="text-muted" invisible="patrol_inclusion_status == 'included'">Costo extra del servicio: $<field name="patrol_extra_price" class="oe_inline" readonly="1"/></span>
-                        </div>
                         <field name="technician_id"
                             domain="[('share', '=', False)]"
                             options="{'no_create': True}"
@@ -106,29 +60,25 @@
                     </group>
                     <div class="d-flex flex-wrap gap-2 mb-3">
                         <button name="action_request_patrol_from_wizard" string="Solicitar autorización (Telegram)"
-                                type="object" class="btn-warning"
-                                invisible="patrol_inclusion_status != 'not_included' or extra_service_authorized"/>
+                                type="object" class="btn-warning"/>
                         <button name="action_authorize_patrol_from_wizard" string="Marcar autorizado"
-                                type="object" class="btn-info"
-                                invisible="patrol_inclusion_status != 'not_included' or extra_service_authorized"/>
+                                type="object" class="btn-info"/>
                         <button name="action_dispatch_patrol" string="🚓 ENVIAR PATRULLERO"
                                 type="object" class="btn-danger"/>
-                        <button name="action_create_technical_ticket" string="Crear orden técnica (FSM)"
-                                type="object" class="btn-secondary"/>
                     </div>
 
-                    <!-- ===== CIERRE (siempre visible) ===== -->
+                    <!-- ===== CIERRE ===== -->
                     <group string="✅ Cierre del evento">
                         <field name="close_reason"/>
                         <field name="final_notes" placeholder="Notas finales que verá el cliente / quedará en el historial."/>
                     </group>
 
-                    <!-- Emergencias + Historial + Bitácora en pestañas -->
+                    <!-- ===== Historial + Bitácora en pestañas ===== -->
                     <notebook>
                         <page string="🕓 Historial del panel (24h)" name="historial">
-                            <p class="text-muted">Todas las señales del panel en las últimas 24 h (incluye aperturas/cierres que no generan evento).</p>
+                            <p class="text-muted">Señales del panel en las últimas 24 h (incluye aperturas/cierres que no generan evento).</p>
                             <field name="account_signal_history_ids" readonly="1" nolabel="1">
-                                <list limit="50">
+                                <list>
                                     <field name="received_date" string="Hora"/>
                                     <field name="alarm_code" string="Código"/>
                                     <field name="zone" string="Zona"/>

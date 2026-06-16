@@ -90,34 +90,17 @@ class AlarmHandleWizard(models.TransientModel):
     technician_id = fields.Many2one('res.users', string='Patrullero',
         help='Patrullero del response_team a despachar.')
 
-    # Panorama de la cuenta (traído del evento) — para procesamiento múltiple e historial
-    sibling_event_ids = fields.Many2many(related='alarm_event_id.sibling_event_ids')
-    sibling_event_count = fields.Integer(related='alarm_event_id.sibling_event_count')
-    account_signal_history_ids = fields.Many2many(related='alarm_event_id.account_signal_history_ids')
-    possible_false_alarm = fields.Boolean(related='alarm_event_id.possible_false_alarm')
-    false_alarm_hint = fields.Char(related='alarm_event_id.false_alarm_hint')
-
-    # Contexto de comando (cabecera) — traído del evento/panel
-    verification_password = fields.Char(related='alarm_event_id.verification_password')
-    full_description = fields.Char(related='alarm_event_id.full_description')
-    event_type = fields.Selection(related='alarm_event_id.event_type')
-    start_date = fields.Datetime(related='alarm_event_id.start_date')
-    # Datos del evento (para la sección destacada)
-    alarm_code_id = fields.Many2one(related='alarm_event_id.alarm_code_id')
-    zone = fields.Char(related='alarm_event_id.zone')
-    latitude = fields.Float(related='alarm_event_id.latitude')
-    longitude = fields.Float(related='alarm_event_id.longitude')
-    event_address = fields.Char(compute='_compute_event_address', string='Dirección')
-
-    @api.depends('alarm_event_id')
-    def _compute_event_address(self):
-        for w in self:
-            p = w.alarm_event_id.partner_id
-            w.event_address = p.contact_address if p else False
-    sla_deadline = fields.Datetime(related='alarm_event_id.sla_deadline')
-    sla_status = fields.Selection(related='alarm_event_id.sla_status')
-    subscription_state = fields.Selection(related='alarm_event_id.subscription_state')
-    has_video = fields.Boolean(related='alarm_event_id.device_id.has_video')
+    # === Panorama PRECARGADO en default_get ===
+    # Los campos related/compute NO se pueblan en un TransientModel nuevo en la UI
+    # hasta guardar (confirmado 16-jun). default_get sí los rellena (como los
+    # contactos). Por eso estos son campos NORMALES llenados en default_get.
+    event_info = fields.Html(string='Datos del evento', readonly=True, sanitize=False)
+    verification_password = fields.Char(string='Palabra clave', readonly=True)
+    has_video = fields.Boolean(readonly=True)
+    sibling_event_count = fields.Integer(string='Eventos abiertos de la cuenta', readonly=True)
+    account_signal_history_ids = fields.Many2many('sentinela.alarm.signal', string='Historial (24h)', readonly=True)
+    possible_false_alarm = fields.Boolean(string='Posible falsa alarma', readonly=True)
+    false_alarm_hint = fields.Char(readonly=True)
 
     def action_capture_snapshot(self):
         """Videoverificación: solicita captura al DVR del sitio (si tiene cámara)."""
@@ -170,7 +153,59 @@ class AlarmHandleWizard(models.TransientModel):
                     (0, 0, {'contact_id': c.id, 'sequence': (i + 1) * 10})
                     for i, c in enumerate(contacts)
                 ]
+            # Precargar TODO el panorama del evento (los related no pueblan en nuevo)
+            vals['event_info'] = self._build_event_info(event)
+            vals['verification_password'] = event.verification_password or ''
+            vals['has_video'] = event.device_id.has_video
+            sibs = event.sibling_event_ids
+            vals['sibling_event_count'] = len(sibs)
+            vals['account_signal_history_ids'] = [(6, 0, event.account_signal_history_ids.ids)]
+            vals['possible_false_alarm'] = event.possible_false_alarm
+            vals['false_alarm_hint'] = event.false_alarm_hint or ''
         return vals
+
+    @api.model
+    def _build_event_info(self, event):
+        """Arma el bloque HTML con los datos del evento (precargado para que se
+        vea sin guardar). Incluye estado de suscripción y SLA con color."""
+        ev = self.env['sentinela.alarm.event']
+        clean = ev._clean_translated_name
+        prioridad = clean(event.priority_id.name) if event.priority_id else '—'
+        codigo = (event.alarm_code_id.code or '') if event.alarm_code_id else ''
+        cod_nombre = clean(event.alarm_code_id.name) if event.alarm_code_id else (event.description or '')
+        hora = str(event.start_date)[:19] if event.start_date else '—'
+        zona = event.full_description or event.zone or '—'
+        direccion = (event.partner_id.contact_address or '').replace('\n', ', ') if event.partner_id else '—'
+        lat, lon = event.latitude, event.longitude
+        coords = f"{lat}, {lon}" if (lat or lon) else '—'
+        # badges estado
+        sub_map = {'active': ('success', 'Suscripción activa'), 'suspended': ('warning', 'Suscripción SUSPENDIDA'),
+                   'cut': ('danger', 'Suscripción CANCELADA'), 'none': ('secondary', 'Sin suscripción')}
+        sc = sub_map.get(event.subscription_state, ('secondary', event.subscription_state or '—'))
+        sla_map = {'ok': ('success', 'SLA OK'), 'met': ('success', 'SLA cumplido'), 'warning': ('warning', 'SLA por vencer'),
+                   'overdue': ('danger', 'SLA VENCIDO'), 'breached': ('danger', 'SLA incumplido'), 'no_sla': ('secondary', 'Sin SLA')}
+        sl = sla_map.get(event.sla_status, ('secondary', event.sla_status or '—'))
+        return f"""
+            <div class="row">
+              <div class="col-md-7">
+                <h3 class="text-danger mb-1"><b>{cod_nombre} {('('+codigo+')') if codigo else ''}</b></h3>
+                <div class="mb-2">
+                  <span class="badge text-bg-dark">Cuenta {event.account_number or '—'}</span>
+                  <span class="badge text-bg-primary">{clean(event.partner_id.name) if event.partner_id else '—'}</span>
+                  <span class="badge text-bg-danger">Prioridad: {prioridad}</span>
+                  <span class="badge text-bg-{sc[0]}">{sc[1]}</span>
+                  <span class="badge text-bg-{sl[0]}">{sl[1]}</span>
+                </div>
+                <table class="table table-sm mb-0">
+                  <tr><td class="text-muted" style="width:120px">Hora</td><td>{hora}</td></tr>
+                  <tr><td class="text-muted">Zona</td><td><b>{zona}</b></td></tr>
+                  <tr><td class="text-muted">Dirección</td><td>{direccion}</td></tr>
+                  <tr><td class="text-muted">Coordenadas</td><td>{coords}
+                      <a href="https://www.google.com/maps/search/?api=1&amp;query={lat},{lon}" target="_blank">ver mapa</a></td></tr>
+                </table>
+              </div>
+            </div>
+        """
 
     @api.depends('alarm_event_id')
     def _compute_site_info(self):
