@@ -154,9 +154,13 @@ class AlarmHandleWizard(models.TransientModel):
         event_id = self.env.context.get('default_alarm_event_id') or vals.get('alarm_event_id')
         if event_id:
             event = self.env['sentinela.alarm.event'].browse(event_id)
-            # Auto-acknowledge al abrir wizard (claim + acknowledged_at + status)
+            # Tomar el evento al abrir el wizard (claim). Si está 'active' además
+            # lo reconoce (acknowledged_at/SLA); si ya estaba reconocido, solo
+            # re-toma el claim (pudo liberarse por inactividad) para poder operarlo.
             if event.status == 'active':
                 event.action_acknowledge()
+            elif event.status not in ('resolved', 'closed'):
+                event._try_claim()
             # Precargar intentos de contacto desde los contactos de emergencia del device
             contacts = self.env['sentinela.monitoring.contact'].search([
                 ('device_id', '=', event.device_id.id),
