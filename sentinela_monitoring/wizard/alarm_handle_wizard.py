@@ -54,8 +54,8 @@ class AlarmHandleWizard(models.TransientModel):
     address_display = fields.Char(string='Dirección', compute='_compute_site_info')
     site_phone = fields.Char(string='Teléfono Sitio', compute='_compute_site_info')
     google_maps_link = fields.Char(string='Mapa')
-    contact_ids = fields.Many2many('sentinela.monitoring.contact', compute='_compute_contacts',
-                                    string='Contactos a Llamar')
+    contact_ids = fields.Many2many('sentinela.monitoring.contact',
+                                    string='Contactos a Llamar', readonly=True)
     recent_signal_ids = fields.Many2many('sentinela.alarm.signal', compute='_compute_signals',
                                           string='Señales')
 
@@ -166,6 +166,8 @@ class AlarmHandleWizard(models.TransientModel):
                     (0, 0, {'contact_id': c.id, 'sequence': (i + 1) * 10})
                     for i, c in enumerate(contacts)
                 ]
+            # Contactos REALES (con id en DB) para el botón de llamar por fila
+            vals['contact_ids'] = [(6, 0, contacts.ids)]
             # Precargar TODO el panorama del evento (los related no pueblan en nuevo)
             vals['event_info'] = self._build_event_info(event)
             vals['verification_password'] = event.verification_password or ''

@@ -33,24 +33,16 @@
                         <button name="action_bulk_close" type="object" string="Cerrar este + relacionados en bloque" class="btn-primary btn-sm" icon="fa-check-double"/>
                     </div>
 
-                    <!-- ===== CONTACTOS ===== -->
-                    <group string="📞 Llamar por la central">
-                        <field name="device_id" invisible="1"/>
-                        <div class="d-flex align-items-center gap-2">
-                            <field name="call_contact_id" domain="[('device_id', '=', device_id)]" options="{'no_create': True}" placeholder="Elige el contacto…"/>
-                            <button name="action_call_selected_contact" string="📞 Marcar" type="object" class="btn-success"/>
-                        </div>
-                    </group>
-                    <group string="Contactos del sitio · registro de intentos">
-                        <field name="contact_attempt_ids" nolabel="1">
-                            <list editable="bottom" create="false" delete="false">
-                                <field name="contact_id" column_invisible="1"/>
-                                <field name="sequence" widget="handle"/>
-                                <field name="contact_name" readonly="1"/>
-                                <field name="contact_phone" widget="phone" readonly="1"/>
-                                <field name="relation" readonly="1"/>
-                                <field name="status"/>
-                                <field name="attempt_notes"/>
+                    <!-- ===== CONTACTOS (botón de llamar por fila, sobre el contacto REAL) ===== -->
+                    <group string="📞 Contactos del sitio (clic en el teléfono verde para marcar por la central)">
+                        <field name="contact_ids" nolabel="1" context="{'active_alarm_event_id': alarm_event_id}">
+                            <list create="false" delete="false" edit="false">
+                                <field name="sequence" string="#"/>
+                                <field name="name" string="Nombre"/>
+                                <field name="relation" string="Relación"/>
+                                <field name="phone" widget="phone" string="Teléfono"/>
+                                <button name="action_call_contact" type="object" icon="fa-phone"
+                                        title="Marcar a este contacto por la central UCM" class="btn-success"/>
                             </list>
                         </field>
                     </group>
