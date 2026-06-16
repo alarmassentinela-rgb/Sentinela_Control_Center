@@ -123,8 +123,27 @@ class MonitoringDevice(models.Model):
             self.subscription_id = False
 
     location = fields.Char(string='Ubicación')
-    latitude = fields.Float(string='Latitud', digits=(10, 7))
+    latitude = fields.Float(string='Latitud', digits=(10, 7),
+        help="Coordenada de la DIRECCIÓN DE INSTALACIÓN (se hereda de la suscripción). "
+             "No confundir con la ubicación GPS/SIM móvil del rastreador.")
     longitude = fields.Float(string='Longitud', digits=(10, 7))
+
+    def _coords_from_subscription(self):
+        """Fase 1 — Copia la coordenada de la DIRECCIÓN DE INSTALACIÓN desde la
+        suscripción (Categoría 1: sitio fijo). La sub la guarda como texto; el
+        device como número. NO toca gps_sim/last_gps (Categoría 2: GPS móvil)."""
+        for d in self:
+            sub = d.subscription_id
+            if sub and sub.latitude and sub.longitude:
+                try:
+                    d.latitude = float(sub.latitude)
+                    d.longitude = float(sub.longitude)
+                except (ValueError, TypeError):
+                    pass
+
+    @api.onchange('subscription_id')
+    def _onchange_subscription_coords(self):
+        self._coords_from_subscription()
 
     status = fields.Selection([
         ('active', 'Activo'),
