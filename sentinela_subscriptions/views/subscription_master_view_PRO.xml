@@ -395,18 +395,28 @@
                                     <field name="address_zip" string="Código Postal"/>
                                 </group>
                                 <group string="Coordenadas del Sitio">
-                                    <field name="latitude" string="Latitud"/>
-                                    <field name="longitude" string="Longitud"/>
+                                    <field name="coords_status" widget="badge"/>
+                                    <field name="latitude" string="Latitud" readonly="coords_status == 'verificada'"/>
+                                    <field name="longitude" string="Longitud" readonly="coords_status == 'verificada'"/>
                                     <field name="location_notes" string="Notas de Acceso" placeholder="Referencias de acceso, llaves, etc."/>
                                     <button name="action_geocode_address" type="object"
                                             string="📍 Obtener Coordenadas de la Dirección"
                                             class="btn-secondary"
+                                            invisible="coords_status == 'verificada'"
                                             help="Llena automáticamente latitud y longitud a partir de la dirección del servicio."/>
                                     <button name="action_open_map" type="object"
                                             string="🗺️ Abrir en Google Maps"
                                             class="btn-link"
                                             invisible="not latitude or not longitude"/>
+                                    <button name="action_unlock_coords" type="object"
+                                            string="🔓 Desbloquear (supervisor)"
+                                            class="btn-warning"
+                                            invisible="coords_status != 'verificada'"
+                                            groups="sentinela_subscriptions.group_subscription_manager"/>
                                 </group>
+                            </group>
+                            <group string="Mapa del sitio">
+                                <field name="coords_map_html" nolabel="1" readonly="1"/>
                             </group>
                         </page>
 
