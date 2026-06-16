@@ -30,10 +30,10 @@ class FsmOrder(models.Model):
 
     # Scheduling
     technician_id = fields.Many2one('res.users', string='Técnico Asignado', tracking=True)
-    patrol_agent_id = fields.Many2one('res.partner', string='Patrullero/Agente',
-        domain="[('is_patrol', '=', True)]", tracking=True,
+    patrol_agent_id = fields.Many2one('res.partner', string='Patrullero/Agente', tracking=True,
         help='Persona que sale a verificar (del catálogo de Patrulleros). No requiere ser '
-             'usuario del sistema: el operador monitorea desde central y la unidad reporta GPS.')
+             'usuario del sistema: el operador monitorea desde central y la unidad reporta GPS. '
+             '(El filtro "Es Patrulla" se aplica en el asistente de despacho.)')
     patrol_unit_id = fields.Many2one('sentinela.patrol.unit', string='Unidad de Patrulla',
         domain="[('available', '=', True)]", tracking=True,
         help='Dispositivo SentiCar a rastrear en esta orden (celular o vehículo). '
