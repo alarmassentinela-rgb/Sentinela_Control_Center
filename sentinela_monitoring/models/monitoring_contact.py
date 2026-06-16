@@ -37,20 +37,28 @@ class MonitoringContact(models.Model):
         return super().write(vals)
 
     def action_call_contact(self):
-        """ Inicia la llamada a este contacto desde el conmutador """
+        """ Inicia la llamada a este contacto desde el conmutador.
+        SIEMPRE devuelve una notificación (toast) para NO cerrar el modal
+        de atención desde el que se dispara. """
         self.ensure_one()
+        def _toast(msg, kind='success'):
+            return {
+                'type': 'ir.actions.client', 'tag': 'display_notification',
+                'params': {'title': 'Telefonía', 'message': msg, 'type': kind, 'sticky': False},
+            }
         if self.phone:
             # Intentar encontrar un evento de alarma activo en el contexto para registrar la nota
             event_id = self.env.context.get('active_alarm_event_id')
             if event_id:
                 event = self.env['sentinela.alarm.event'].browse(event_id)
                 event.action_click_to_call(self.phone)
+                return _toast("Marcando a %s (%s) — descuelga tu extensión." % (self.name, self.phone))
             else:
                 # Llamada directa sin evento
                 operator_extension = self.env.user.sip_extension
                 if not operator_extension:
-                    return False
-                
+                    return _toast("No tienes extensión SIP configurada en tu perfil.", 'danger')
+
                 target_number = "".join(filter(str.isdigit, str(self.phone)))
                 # Credenciales UCM/CDR desde ir.config_parameter (sembradas en el server, NO en el repo)
                 icp = self.env['ir.config_parameter'].sudo()
@@ -59,7 +67,7 @@ class MonitoringContact(models.Model):
                 api_pass = icp.get_param('sentinela_monitoring.ucm_password')
                 if not api_pass:
                     _logger.warning("UCM no configurado (sentinela_monitoring.ucm_password vacío); no se marca")
-                    return True
+                    return _toast("Telefonía no configurada (falta ucm_password).", 'warning')
 
                 import requests
                 try:
@@ -69,6 +77,8 @@ class MonitoringContact(models.Model):
                     if login_res.ok:
                         dial_url = f"https://{ucm_ip}/cgi?action=dial&extension={operator_extension}&number={target_number}"
                         session.get(dial_url, timeout=5, verify=False)
+                    return _toast("Marcando a %s (%s)…" % (self.name, self.phone))
                 except Exception as e:
                     _logger.warning("UCM dial falló para %s: %s", self.name, e)
-        return True
+                    return _toast("No se pudo contactar la central: %s" % e, 'danger')
+        return _toast("Este contacto no tiene teléfono.", 'warning')
