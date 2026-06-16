@@ -1815,11 +1815,15 @@ class SentinelaSubscription(models.Model):
         if did:
             dev.senticar_device_id = did
             svc.set_device_disabled(did, False)
+            dev.write({'senticar_state': 'registered', 'senticar_sync_msg': 'Registrado y activo',
+                       'senticar_sync_date': fields.Datetime.now()})
             msg = f"<b>SentiCar:</b> equipo <b>{dev.name or dev.gps_imei}</b> ({dev.gps_imei}) registrado y activo (device #{did})."
             if pw:
                 msg += f"<br/>👤 Usuario cliente creado: <b>{sub.partner_id.senticar_user_email}</b> / <b>{pw}</b>"
             sub.message_post(body=msg)
         else:
+            dev.write({'senticar_state': 'error', 'senticar_sync_msg': 'No se pudo registrar en SentiCar',
+                       'senticar_sync_date': fields.Datetime.now()})
             sub.message_post(body=f"<b>SentiCar ERROR:</b> no se pudo registrar el equipo {dev.gps_imei}.")
 
     def _provision_senticar_enable(self):
@@ -1845,8 +1849,93 @@ class SentinelaSubscription(models.Model):
             for dev in sub.gps_device_ids.filtered('senticar_device_id'):
                 if svc.set_device_disabled(dev.senticar_device_id, True):
                     n += 1
+                    dev.write({'senticar_state': 'disabled', 'senticar_sync_msg': 'Deshabilitado por suspensión/baja',
+                               'senticar_sync_date': fields.Datetime.now()})
             if sub.gps_device_ids:
                 sub.message_post(body=f"<b>SentiCar:</b> {n} equipo(s) deshabilitado(s) por suspensión.")
+
+    # ---- Reconciliación Odoo ↔ SentiCar (P1 #6) ----
+    def _senticar_reconcile_devices(self, devices):
+        """Compara los equipos `devices` (gps platform=senticar) contra Traccar y deja el estado
+        consistente. Detecta: equipos que faltan en SentiCar (→ error) y desajustes del flag
+        'disabled' (Odoo activo ↔ SentiCar deshabilitado, o viceversa). Si el auto-arreglo está
+        activo (param sentinela.senticar_reconcile_autoheal, default True), corrige el flag en
+        SentiCar (reversible, no toca SIM ni borra nada; Odoo = fuente de verdad). Devuelve un
+        resumen {checked, healed, drift, error}."""
+        svc = self.env['sentinela.senticar.service']
+        traccar = svc.list_devices()
+        if traccar is None:
+            _logger.warning("SENTICAR reconcile: no se pudo leer Traccar; abortado.")
+            return None
+        by_id = {d.get('id'): d for d in traccar}
+        by_imei = {str(d.get('uniqueId')): d for d in traccar}
+        autoheal = self.env['ir.config_parameter'].sudo().get_param(
+            'sentinela.senticar_reconcile_autoheal', 'True') not in ('False', '0', 'false')
+        now = fields.Datetime.now()
+        res = {'checked': 0, 'healed': 0, 'drift': 0, 'error': 0, 'matched_ids': set()}
+        for dev in devices:
+            if dev.gps_platform != 'senticar':
+                continue
+            res['checked'] += 1
+            sub = dev.subscription_id
+            # Estado esperado en SentiCar: deshabilitado si la sub no está activa o el equipo
+            # está suspendido temporalmente. Activo solo si todo está en marcha.
+            expected_disabled = (sub.state != 'active') or (dev.device_state == 'suspended')
+            tdev = by_id.get(dev.senticar_device_id) if dev.senticar_device_id else by_imei.get(str(dev.gps_imei or ''))
+            if not tdev:
+                # Solo es problema si esperábamos que estuviera (ya registrado o sub activa).
+                if dev.senticar_device_id or sub.state == 'active':
+                    dev.write({'senticar_state': 'error',
+                               'senticar_sync_msg': 'No existe en SentiCar (re-registrar)',
+                               'senticar_sync_date': now})
+                    res['error'] += 1
+                continue
+            res['matched_ids'].add(tdev['id'])
+            if dev.senticar_device_id != tdev['id']:
+                dev.senticar_device_id = tdev['id']
+            actual_disabled = bool(tdev.get('disabled'))
+            if actual_disabled != expected_disabled:
+                if autoheal and svc.set_device_disabled(tdev['id'], expected_disabled):
+                    dev.write({'senticar_state': 'disabled' if expected_disabled else 'registered',
+                               'senticar_sync_msg': 'Auto-corregido a %s' % ('deshabilitado' if expected_disabled else 'activo'),
+                               'senticar_sync_date': now})
+                    res['healed'] += 1
+                else:
+                    dev.write({'senticar_state': 'drift',
+                               'senticar_sync_msg': 'SentiCar=%s, Odoo espera %s' % (
+                                   'deshabilitado' if actual_disabled else 'activo',
+                                   'deshabilitado' if expected_disabled else 'activo'),
+                               'senticar_sync_date': now})
+                    res['drift'] += 1
+            else:
+                dev.write({'senticar_state': 'disabled' if actual_disabled else 'registered',
+                           'senticar_sync_msg': 'OK', 'senticar_sync_date': now})
+        return res
+
+    def _cron_senticar_reconcile(self):
+        """Cron: reconcilia TODOS los equipos GPS de SentiCar contra Traccar. Reporta huérfanos
+        (devices en Traccar no ligados a ninguna sub: flota/demo/manuales) solo en el log."""
+        devices = self.env['sentinela.subscription.gps.device'].search([('gps_platform', '=', 'senticar')])
+        res = self._senticar_reconcile_devices(devices)
+        if res is None:
+            return
+        traccar = self.env['sentinela.senticar.service'].list_devices() or []
+        orphans = [d for d in traccar if d.get('id') not in res['matched_ids']]
+        _logger.info("SENTICAR reconcile: %s revisados, %s auto-corregidos, %s desincronizados, "
+                     "%s error, %s en Traccar sin sub (flota/demo/manual).",
+                     res['checked'], res['healed'], res['drift'], res['error'], len(orphans))
+
+    def action_reconcile_senticar(self):
+        """Botón: reconcilia los equipos de ESTA suscripción contra SentiCar y reporta al chatter."""
+        self.ensure_one()
+        if self.service_type != 'gps' or self.gps_platform != 'senticar':
+            raise UserError(_("Esta acción es solo para suscripciones GPS en SentiCar."))
+        res = self._senticar_reconcile_devices(self.gps_device_ids)
+        if res is None:
+            raise UserError(_("No se pudo conectar con SentiCar para reconciliar. Revisa los parámetros de la API."))
+        self.message_post(body=_(
+            "🔄 <b>Reconciliación SentiCar:</b> %s revisados · %s auto-corregidos · %s desincronizados · %s con error."
+        ) % (res['checked'], res['healed'], res['drift'], res['error']))
 
     def action_create_senticar_client_account(self):
         """Botón: crea SOLO la cuenta (usuario Traccar) del cliente en SentiCar, SIN equipos.

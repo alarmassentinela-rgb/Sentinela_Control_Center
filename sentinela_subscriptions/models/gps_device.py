@@ -43,6 +43,18 @@ class SubscriptionGpsDevice(models.Model):
 
     # Enlace SentiCar
     senticar_device_id = fields.Integer(string='ID en SentiCar', readonly=True, copy=False)
+    senticar_state = fields.Selection([
+        ('pending', 'Pendiente'),
+        ('registered', 'Registrado'),
+        ('disabled', 'Deshabilitado'),
+        ('error', 'Error'),
+        ('drift', 'Desincronizado'),
+    ], string='Estado SentiCar', default='pending', readonly=True, copy=False,
+       help="Sincronización del equipo en SentiCar/Traccar. 'Error' = no se pudo registrar/no existe; "
+            "'Desincronizado' = el estado en SentiCar no coincide con lo que dice Odoo (lo detecta y, si "
+            "está activo el auto-arreglo, lo corrige el cron de reconciliación).")
+    senticar_sync_msg = fields.Char(string='Detalle SentiCar', readonly=True, copy=False)
+    senticar_sync_date = fields.Datetime(string='Verificado en SentiCar', readonly=True, copy=False)
 
     # Diagnóstico SIM (solo lectura, floLIVE) — útil para modo vehículo
     gps_sim_status = fields.Char(string='Estado SIM', readonly=True)
@@ -152,6 +164,8 @@ class SubscriptionGpsDevice(models.Model):
             if dev.senticar_device_id:
                 try:
                     svc.set_device_disabled(dev.senticar_device_id, True)
+                    dev.write({'senticar_state': 'disabled', 'senticar_sync_msg': 'Deshabilitado (suspensión temporal)',
+                               'senticar_sync_date': fields.Datetime.now()})
                 except Exception as e:
                     _logger.error("SENTICAR suspend device %s: %s", dev.senticar_device_id, e)
             dev.device_state = 'suspended'
@@ -180,6 +194,8 @@ class SubscriptionGpsDevice(models.Model):
             if dev.senticar_device_id:
                 try:
                     svc.set_device_disabled(dev.senticar_device_id, False)
+                    dev.write({'senticar_state': 'registered', 'senticar_sync_msg': 'Reactivado',
+                               'senticar_sync_date': fields.Datetime.now()})
                 except Exception as e:
                     _logger.error("SENTICAR reactivate device %s: %s", dev.senticar_device_id, e)
             dev.device_state = 'active'

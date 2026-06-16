@@ -103,6 +103,18 @@ class SenticarService(models.AbstractModel):
         return did
 
     @api.model
+    def list_devices(self):
+        """Devuelve la lista cruda de TODOS los devices de Traccar (o None si no se pudo leer).
+        Para reconciliación: una sola llamada y comparar en Python."""
+        r = self._req('GET', '/api/devices', params={'all': 'true'})
+        if r is None or r.status_code != 200:
+            return None
+        try:
+            return r.json()
+        except Exception:
+            return None
+
+    @api.model
     def set_device_disabled(self, device_id, disabled):
         """Habilita/deshabilita un device (Traccar PUT requiere el objeto completo)."""
         if not device_id:
