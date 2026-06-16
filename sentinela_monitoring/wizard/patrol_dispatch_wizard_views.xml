@@ -19,9 +19,9 @@
                         <field name="address"/>
                     </group>
                     <group>
-                        <field name="technician_id"
-                            options="{'no_create': True, 'no_open': True}"/>
                         <field name="patrol_unit_id"
+                            options="{'no_create': True, 'no_open': True}"/>
+                        <field name="patrol_agent_id"
                             options="{'no_create': True, 'no_open': True}"/>
                     </group>
                 </group>

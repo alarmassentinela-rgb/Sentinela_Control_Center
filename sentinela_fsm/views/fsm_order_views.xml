@@ -189,7 +189,14 @@
                         </group>
                         <group string="Programación">
                             <field name="service_type" readonly="not is_fsm_manager and stage != 'new'"/>
-                            <field name="technician_id" readonly="not is_fsm_manager"/>
+                            <field name="technician_id" readonly="not is_fsm_manager"
+                                   invisible="service_type == 'patrol'"/>
+                            <field name="patrol_agent_id" readonly="not is_fsm_manager"
+                                   invisible="service_type != 'patrol'"
+                                   options="{'no_create': True, 'no_open': True}"/>
+                            <field name="patrol_unit_id" readonly="not is_fsm_manager"
+                                   invisible="service_type != 'patrol'"
+                                   options="{'no_create': True, 'no_open': True}"/>
                             <field name="scheduled_date" readonly="not is_fsm_manager"/>
                             <field name="priority" widget="priority" readonly="not is_fsm_manager and stage != 'new'"/>
                             <field name="duration_expected" readonly="not is_fsm_manager"/>
