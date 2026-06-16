@@ -64,6 +64,80 @@ class SenticarService(models.AbstractModel):
         return None, None
 
     @api.model
+    def _admin_user_ids(self):
+        """IDs de los usuarios admin de Traccar (para que la central vea toda la flota).
+        Lee los administrator=True; si no se puede, cae al param senticar_admin_user_id (lista "1,5")."""
+        admin_ids = []
+        ru = self._req('GET', '/api/users')
+        if ru is not None and ru.status_code == 200:
+            try:
+                admin_ids = [u['id'] for u in ru.json() if u.get('administrator')]
+            except Exception:
+                admin_ids = []
+        if not admin_ids:
+            p = self.env['ir.config_parameter'].sudo().get_param('sentinela.senticar_admin_user_id') or ''
+            admin_ids = [int(x) for x in str(p).split(',') if x.strip().isdigit()]
+        return admin_ids
+
+    @api.model
+    def share_group(self, user_id, group_id):
+        """Comparte un grupo con un usuario (POST /api/permissions). Idempotente en la práctica
+        (si ya existe, Traccar lo rechaza; lo ignoramos)."""
+        if not (user_id and group_id):
+            return False
+        r = self._req('POST', '/api/permissions', json={'userId': user_id, 'groupId': group_id})
+        return r is not None and r.status_code in (200, 204)
+
+    @api.model
+    def ensure_client_group(self, partner):
+        """Crea/recupera el GRUPO del cliente en Traccar y lo comparte con todos los admins.
+        Devuelve group_id (o None). 1 grupo por cliente: los equipos del cliente se meten al grupo
+        y la visibilidad se hereda (en vez de ligar equipo por equipo). Idempotente."""
+        partner = partner.sudo()
+        if partner.senticar_group_id:
+            return partner.senticar_group_id
+        name = (partner.name or f"Cliente {partner.id}").strip()
+        # recuperar por nombre si ya existía
+        r = self._req('GET', '/api/groups', params={'all': 'true'})
+        gid = None
+        if r is not None and r.status_code == 200:
+            try:
+                g = next((x for x in r.json() if (x.get('name') or '').strip() == name), None)
+                gid = g['id'] if g else None
+            except Exception:
+                gid = None
+        if not gid:
+            r = self._req('POST', '/api/groups', json={'name': name})
+            if r is not None and r.status_code in (200, 201):
+                gid = r.json().get('id')
+        if not gid:
+            _logger.error("SENTICAR crear grupo falló para %s: %s", name,
+                          r.text[:200] if r is not None else 'sin conexión')
+            return None
+        partner.senticar_group_id = gid
+        # compartir el grupo con los admins (una vez por grupo, no por equipo)
+        for au in self._admin_user_ids():
+            self.share_group(au, gid)
+        return gid
+
+    @api.model
+    def assign_device_to_group(self, device_id, group_id):
+        """Mete un device en un grupo (PUT device con groupId). Traccar exige el objeto completo."""
+        if not (device_id and group_id):
+            return False
+        r = self._req('GET', '/api/devices', params={'all': 'true'})
+        if r is None or r.status_code != 200:
+            return False
+        dev = next((d for d in r.json() if d.get('id') == device_id), None)
+        if not dev:
+            return False
+        if dev.get('groupId') == group_id:
+            return True
+        dev['groupId'] = group_id
+        r2 = self._req('PUT', f'/api/devices/{device_id}', json=dev)
+        return r2 is not None and r2.status_code == 200
+
+    @api.model
     def ensure_device(self, name, imei, user_id=None):
         """Crea/recupera el device por uniqueId=IMEI y (opcional) lo vincula al usuario.
         Devuelve device_id o None."""
@@ -85,19 +159,9 @@ class SenticarService(models.AbstractModel):
         if user_id:
             self._req('POST', '/api/permissions', json={'userId': user_id, 'deviceId': did})
         # Vincular el equipo a TODOS los administradores (Enrique, su hijo, etc.) para que la
-        # central vea toda la flota sin ligar manualmente. Si no se puede leer la lista de
-        # usuarios, cae al param sentinela.senticar_admin_user_id (acepta lista "1,5").
-        admin_ids = []
-        ru = self._req('GET', '/api/users')
-        if ru is not None and ru.status_code == 200:
-            try:
-                admin_ids = [u['id'] for u in ru.json() if u.get('administrator')]
-            except Exception:
-                admin_ids = []
-        if not admin_ids:
-            p = self.env['ir.config_parameter'].sudo().get_param('sentinela.senticar_admin_user_id') or ''
-            admin_ids = [int(x) for x in str(p).split(',') if x.strip().isdigit()]
-        for au in admin_ids:
+        # central vea toda la flota sin ligar manualmente. (Con grupos, los admins además se
+        # comparten a nivel grupo en ensure_client_group; esto queda como respaldo per-equipo.)
+        for au in self._admin_user_ids():
             if au != (user_id or 0):
                 self._req('POST', '/api/permissions', json={'userId': au, 'deviceId': did})
         return did

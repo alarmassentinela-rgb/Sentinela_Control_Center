@@ -15,6 +15,9 @@ class ResPartner(models.Model):
         help="Contraseña generada para que el cliente acceda a SentiCar a ver sus equipos.")
     senticar_portal_token = fields.Char(string='Token Portal Transportista', copy=False, index=True,
         help="Token del link personal del transportista para generar links de rastreo de sus unidades.")
+    senticar_group_id = fields.Integer(string='ID Grupo SentiCar', copy=False,
+        help="Grupo del cliente en SentiCar/Traccar. Sus equipos se meten a este grupo y la "
+             "visibilidad se hereda (en vez de ligar equipo por equipo). Se crea al dar de alta su primer GPS.")
 
     def ensure_senticar_portal_token(self):
         for p in self:

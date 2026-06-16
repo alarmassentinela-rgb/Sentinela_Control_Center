@@ -1852,6 +1852,15 @@ class SentinelaSubscription(models.Model):
         if did:
             dev.senticar_device_id = did
             svc.set_device_disabled(did, False)
+            # Grupo del cliente: crear/recuperar, meter el equipo y compartir el grupo con el cliente.
+            try:
+                gid = svc.ensure_client_group(sub.partner_id)
+                if gid:
+                    svc.assign_device_to_group(did, gid)
+                    if uid:
+                        svc.share_group(uid, gid)
+            except Exception as e:
+                _logger.error("SENTICAR grupo (alta) sub %s dev %s: %s", sub.name, dev.id, e)
             dev.write({'senticar_state': 'registered', 'senticar_sync_msg': 'Registrado y activo',
                        'senticar_sync_date': fields.Datetime.now()})
             msg = f"<b>SentiCar:</b> equipo <b>{dev.name or dev.gps_imei}</b> ({dev.gps_imei}) registrado y activo (device #{did})."
@@ -1909,7 +1918,8 @@ class SentinelaSubscription(models.Model):
         autoheal = self.env['ir.config_parameter'].sudo().get_param(
             'sentinela.senticar_reconcile_autoheal', 'True') not in ('False', '0', 'false')
         now = fields.Datetime.now()
-        res = {'checked': 0, 'healed': 0, 'drift': 0, 'error': 0, 'matched_ids': set()}
+        res = {'checked': 0, 'healed': 0, 'drift': 0, 'error': 0, 'grouped': 0, 'matched_ids': set()}
+        group_cache = {}  # partner_id -> group_id (evita recrear/leer por cada equipo)
         for dev in devices:
             if dev.gps_platform != 'senticar':
                 continue
@@ -1947,6 +1957,18 @@ class SentinelaSubscription(models.Model):
             else:
                 dev.write({'senticar_state': 'disabled' if actual_disabled else 'registered',
                            'senticar_sync_msg': 'OK', 'senticar_sync_date': now})
+            # Pertenencia al GRUPO del cliente (Fase 1). Solo si auto-arreglo activo: asegura el
+            # grupo del cliente (caché por cliente), mete el equipo si no está, y comparte el grupo.
+            if autoheal:
+                pid = sub.partner_id.id
+                if pid not in group_cache:
+                    group_cache[pid] = svc.ensure_client_group(sub.partner_id) or 0
+                gid = group_cache[pid]
+                if gid and tdev.get('groupId') != gid:
+                    if svc.assign_device_to_group(tdev['id'], gid):
+                        if sub.partner_id.senticar_user_id:
+                            svc.share_group(sub.partner_id.senticar_user_id, gid)
+                        res['grouped'] += 1
         return res
 
     def action_rotate_portal_link(self):
@@ -1977,9 +1999,9 @@ class SentinelaSubscription(models.Model):
             return
         traccar = self.env['sentinela.senticar.service'].list_devices() or []
         orphans = [d for d in traccar if d.get('id') not in res['matched_ids']]
-        _logger.info("SENTICAR reconcile: %s revisados, %s auto-corregidos, %s desincronizados, "
+        _logger.info("SENTICAR reconcile: %s revisados, %s auto-corregidos, %s agrupados, %s desincronizados, "
                      "%s error, %s en Traccar sin sub (flota/demo/manual).",
-                     res['checked'], res['healed'], res['drift'], res['error'], len(orphans))
+                     res['checked'], res['healed'], res['grouped'], res['drift'], res['error'], len(orphans))
 
     def action_reconcile_senticar(self):
         """Botón: reconcilia los equipos de ESTA suscripción contra SentiCar y reporta al chatter."""
@@ -1990,8 +2012,8 @@ class SentinelaSubscription(models.Model):
         if res is None:
             raise UserError(_("No se pudo conectar con SentiCar para reconciliar. Revisa los parámetros de la API."))
         self.message_post(body=_(
-            "🔄 <b>Reconciliación SentiCar:</b> %s revisados · %s auto-corregidos · %s desincronizados · %s con error."
-        ) % (res['checked'], res['healed'], res['drift'], res['error']))
+            "🔄 <b>Reconciliación SentiCar:</b> %s revisados · %s auto-corregidos · %s agrupados · %s desincronizados · %s con error."
+        ) % (res['checked'], res['healed'], res['grouped'], res['drift'], res['error']))
 
     def action_create_senticar_client_account(self):
         """Botón: crea SOLO la cuenta (usuario Traccar) del cliente en SentiCar, SIN equipos.
