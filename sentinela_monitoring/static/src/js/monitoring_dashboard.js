@@ -31,7 +31,7 @@ export class MonitoringDashboard extends Component {
         });
 
         onMounted(() => {
-            this.refreshInterval = setInterval(() => this.loadData(), 60000);
+            this.refreshInterval = setInterval(() => this.loadData(), 10000);
             this.busService.addChannel("sentinela_monitoring");
             this.busDebounce = null;
             
