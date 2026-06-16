@@ -34,7 +34,7 @@ class ServiceAuthorizationToken(models.Model):
     ], required=True, default='patrol', string='Servicio')
 
     token = fields.Char(string='Token', required=True, copy=False, readonly=True,
-                        default=lambda self: secrets.token_urlsafe(32),
+                        default=lambda self: secrets.token_hex(20),
                         index=True)
     state = fields.Selection([
         ('pending', 'Pendiente'),
@@ -67,10 +67,12 @@ class ServiceAuthorizationToken(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
-        # secrets ya genera token en default, pero por si acaso defensivo
+        # secrets ya genera token en default, pero por si acaso defensivo.
+        # token_hex (solo 0-9a-f): seguro Y a prueba de Markdown de Telegram
+        # (token_urlsafe usa _ y -, que Telegram interpreta como itálica y rompe la URL).
         for vals in vals_list:
             if not vals.get('token'):
-                vals['token'] = secrets.token_urlsafe(32)
+                vals['token'] = secrets.token_hex(20)
         return super().create(vals_list)
 
     def get_authorization_url(self):
