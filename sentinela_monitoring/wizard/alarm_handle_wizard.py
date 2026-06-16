@@ -107,7 +107,13 @@ class AlarmHandleWizard(models.TransientModel):
     zone = fields.Char(related='alarm_event_id.zone')
     latitude = fields.Float(related='alarm_event_id.latitude')
     longitude = fields.Float(related='alarm_event_id.longitude')
-    event_address = fields.Char(related='alarm_event_id.partner_id.contact_address', string='Dirección')
+    event_address = fields.Char(compute='_compute_event_address', string='Dirección')
+
+    @api.depends('alarm_event_id')
+    def _compute_event_address(self):
+        for w in self:
+            p = w.alarm_event_id.partner_id
+            w.event_address = p.contact_address if p else False
     sla_deadline = fields.Datetime(related='alarm_event_id.sla_deadline')
     sla_status = fields.Selection(related='alarm_event_id.sla_status')
     subscription_state = fields.Selection(related='alarm_event_id.subscription_state')
