@@ -9,14 +9,14 @@
                 <group string="Telefonía IP (Grandstream)">
                     <field name="sip_extension" placeholder="Ej. 101"/>
                 </group>
-                <group string="GPS / Patrulla (SentiCar · Traccar)">
+                <group string="GPS / Patrulla (SentiCar)">
                     <field name="is_patrol"/>
                     <field name="default_patrol_unit_id" invisible="not is_patrol"
                         options="{'no_open': True}"
                         placeholder="Su celular/unidad habitual..."/>
                     <field name="traccar_device_id" invisible="not is_patrol"
-                        string="ID Traccar (respaldo)"
-                        placeholder="Solo si no usa unidad del catálogo"/>
+                        string="ID SentiCar (respaldo)"
+                        placeholder="Opcional — solo si no usa unidad del catálogo"/>
                     <field name="last_gps_update" readonly="1" invisible="not is_patrol"/>
                 </group>
             </xpath>

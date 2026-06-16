@@ -26,12 +26,12 @@
                             <field name="telegram_chat_id" placeholder="ej. 7965190381"/>
                             <field name="whatsapp_number" placeholder="vacío = usa mobile"/>
                         </group>
-                        <group string="GPS / Tracking (Patrullas)">
+                        <group string="GPS / Tracking (Patrullas · SentiCar)">
                             <field name="is_patrol"/>
                             <field name="default_patrol_unit_id" invisible="not is_patrol"
                                 options="{'no_open': True}"/>
                             <field name="traccar_device_id" invisible="not is_patrol"
-                                string="ID Traccar (respaldo)"/>
+                                string="ID SentiCar (respaldo)"/>
                         </group>
                     </group>
                 </page>
@@ -48,7 +48,7 @@
                 <field name="name"/>
                 <field name="phone"/>
                 <field name="default_patrol_unit_id" options="{'no_open': True}"/>
-                <field name="traccar_device_id" placeholder="ID en Traccar (respaldo)"/>
+                <field name="traccar_device_id" string="ID SentiCar (respaldo)" placeholder="Opcional"/>
                 <field name="last_gps_update" readonly="1"/>
                 <field name="last_gps_lat" readonly="1" optional="hide"/>
                 <field name="last_gps_lng" readonly="1" optional="hide"/>
