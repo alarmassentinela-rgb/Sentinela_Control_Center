@@ -104,7 +104,10 @@ class ServiceAuthorizationToken(models.Model):
             f"requiere autorización del costo aparte:\n\n"
             f"💰 *Costo:* ${self.amount:,.2f} {self.currency_id.name or 'MXN'} (sin IVA)\n"
             f"📋 *Evento:* {self.alarm_event_id.name}\n\n"
-            f"👉 Para AUTORIZAR o RECHAZAR haga click aquí:\n{url}\n\n"
+            # URL como enlace Markdown [texto](url): Telegram NO parsea _ ni * dentro
+            # del paréntesis → la URL llega intacta aunque el token tuviera caracteres
+            # especiales (defensa extra sobre el token_hex).
+            f"👉 [AUTORIZAR / RECHAZAR aquí]({url})\n\n"
             f"_Su respuesta queda registrada con fecha, hora y dispositivo para "
             f"efectos de comprobación del consentimiento._"
         )
