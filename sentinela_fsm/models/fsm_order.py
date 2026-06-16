@@ -30,10 +30,6 @@ class FsmOrder(models.Model):
 
     # Scheduling
     technician_id = fields.Many2one('res.users', string='Técnico Asignado', tracking=True)
-    patrol_agent_id = fields.Many2one('res.partner', string='Patrullero/Agente', tracking=True,
-        help='Persona que sale a verificar (del catálogo de Patrulleros). No requiere ser '
-             'usuario del sistema: el operador monitorea desde central y la unidad reporta GPS. '
-             '(El filtro "Es Patrulla" se aplica en el asistente de despacho.)')
     patrol_unit_id = fields.Many2one('sentinela.patrol.unit', string='Unidad de Patrulla',
         domain="[('available', '=', True)]", tracking=True,
         help='Dispositivo SentiCar a rastrear en esta orden (celular o vehículo). '
@@ -272,7 +268,7 @@ class FsmOrder(models.Model):
         if (self.partner_id.notification_channel or 'both') != 'none':
             tracking_url = self.get_tracking_url()
             if self.service_type == 'patrol':
-                oficial = self.patrol_agent_id.name or self.technician_id.name or 'nuestro personal'
+                oficial = self.technician_id.name or 'nuestro personal'
                 msg = (f"🚨 *SENTINELA: EMERGENCIA EN CURSO*\n\n"
                        f"Hola *{self.partner_id.name}*, hemos activado nuestro protocolo de respuesta. "
                        f"La patrulla con el oficial *{oficial}* va en camino a su domicilio ahora mismo.\n\n"
@@ -775,7 +771,6 @@ class FsmOrder(models.Model):
         """
         self.ensure_one()
         traccar_id = (self.patrol_unit_id.traccar_device_id
-                      or self.patrol_agent_id.traccar_device_id
                       or self.technician_id.partner_id.traccar_device_id)
         if not traccar_id:
             return False

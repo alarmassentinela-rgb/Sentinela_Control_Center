@@ -189,11 +189,7 @@
                         </group>
                         <group string="Programación">
                             <field name="service_type" readonly="not is_fsm_manager and stage != 'new'"/>
-                            <field name="technician_id" readonly="not is_fsm_manager"
-                                   invisible="service_type == 'patrol'"/>
-                            <field name="patrol_agent_id" readonly="not is_fsm_manager"
-                                   invisible="service_type != 'patrol'"
-                                   options="{'no_create': True, 'no_open': True}"/>
+                            <field name="technician_id" readonly="not is_fsm_manager"/>
                             <field name="patrol_unit_id" readonly="not is_fsm_manager"
                                    invisible="service_type != 'patrol'"
                                    options="{'no_create': True, 'no_open': True}"/>

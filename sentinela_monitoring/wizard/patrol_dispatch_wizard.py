@@ -11,11 +11,11 @@ class PatrolDispatchWizard(models.TransientModel):
     account_number = fields.Char(string='Cuenta', related='alarm_event_id.account_number', readonly=True)
     address = fields.Char(string='Domicilio', compute='_compute_address', readonly=True)
 
-    patrol_agent_id = fields.Many2one('res.partner', string='Quién atiende (turno)',
-        domain="[('is_patrol', '=', True)]",
-        help='Persona del catálogo de Patrulleros que sale esta vez. Para que alguien '
-             'aparezca aquí, marca su contacto como "Es Patrulla" (puede ser patrullero, '
-             'técnico, vendedor o admin). Opcional.')
+    technician_id = fields.Many2one('res.users', string='Patrullero (turno)',
+        required=True, domain="[('is_patrol', '=', True)]",
+        help='Usuario que sale a verificar. Debe ser usuario del sistema marcado "Es Patrulla" '
+             '(así recibe la orden/push y la trabaja en la app). Pueden ser patrulleros, '
+             'técnicos, vendedores o admin: solo marca su usuario como "Es Patrulla".')
     patrol_unit_id = fields.Many2one('sentinela.patrol.unit', string='Unidad a rastrear',
         required=True, domain="[('available', '=', True)]",
         default=lambda self: self.env['sentinela.patrol.unit']._get_default_dispatch_unit().id,
@@ -25,12 +25,12 @@ class PatrolDispatchWizard(models.TransientModel):
     notes = fields.Text(string='Instrucciones para el patrullero',
         help='Se anexan a la descripción de la orden (opcional).')
 
-    @api.onchange('patrol_agent_id')
-    def _onchange_agent_default_unit(self):
-        """Si quien atiende tiene una unidad fija propia, la prefiere; si no, deja
+    @api.onchange('technician_id')
+    def _onchange_technician_default_unit(self):
+        """Si el patrullero tiene una unidad fija propia, la prefiere; si no, deja
         la unidad por defecto de despacho (el celular compartido)."""
         for w in self:
-            person_unit = w.patrol_agent_id.default_patrol_unit_id
+            person_unit = w.technician_id.partner_id.default_patrol_unit_id
             if person_unit:
                 w.patrol_unit_id = person_unit
 
@@ -50,18 +50,12 @@ class PatrolDispatchWizard(models.TransientModel):
 
         # Reutiliza el constructor idempotente del evento (descripción rica + coords).
         order_id = event.create_fsm_order(
-            service_type='patrol',
-            patrol_unit_id=self.patrol_unit_id.id or None,
-            patrol_agent_id=self.patrol_agent_id.id or None)
+            technician_id=self.technician_id.id, service_type='patrol',
+            patrol_unit_id=self.patrol_unit_id.id or None)
         order = self.env['sentinela.fsm.order'].browse(order_id)
-        # Si la orden ya existía (idempotente) y el operador eligió otra unidad/agente, actualiza.
-        upd = {}
+        # Si la orden ya existía (idempotente) y el operador eligió otra unidad, la actualiza.
         if self.patrol_unit_id and order.patrol_unit_id != self.patrol_unit_id:
-            upd['patrol_unit_id'] = self.patrol_unit_id.id
-        if self.patrol_agent_id and order.patrol_agent_id != self.patrol_agent_id:
-            upd['patrol_agent_id'] = self.patrol_agent_id.id
-        if upd:
-            order.sudo().write(upd)
+            order.sudo().write({'patrol_unit_id': self.patrol_unit_id.id})
 
         # Anexar instrucciones del operador, si las hay.
         if self.notes:
@@ -70,17 +64,14 @@ class PatrolDispatchWizard(models.TransientModel):
                     f"<br/><b>📋 Instrucciones de la central:</b><br/>{self.notes}",
             })
 
-        # Push + correo SOLO si el agente es usuario del sistema (action_assign lo exige).
-        # Si es solo contacto del catálogo, la orden ya quedó 'assigned' en create_fsm_order
-        # y el operador la monitorea desde central.
-        if order.technician_id and order.stage == 'assigned':
+        # Notificar al patrullero (push + correo de asignación) si quedó realmente asignada.
+        if order.stage == 'assigned':
             order.action_assign()
 
-        quien = self.patrol_agent_id.name or "turno"
         event.message_post(body=_(
             "🚓 Patrulla despachada (%s) — unidad <b>%s</b>. Orden %s. "
-            "El cliente será notificado cuando se confirme la salida."
-        ) % (quien, self.patrol_unit_id.name or '—', order.name))
+            "El cliente será notificado cuando el patrullero confirme su salida."
+        ) % (self.technician_id.name, self.patrol_unit_id.name or '—', order.name))
 
         # Abrir la orden para que el operador la monitoree.
         return {

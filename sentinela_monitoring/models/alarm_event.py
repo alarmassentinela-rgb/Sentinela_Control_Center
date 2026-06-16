@@ -1085,7 +1085,7 @@ class AlarmEvent(models.Model):
             
             rec.full_description = f"{code_name} .- {zone_desc}"
 
-    def create_fsm_order(self, technician_id=None, service_type='patrol', patrol_unit_id=None, patrol_agent_id=None):
+    def create_fsm_order(self, technician_id=None, service_type='patrol', patrol_unit_id=None):
         """F2.7.2 — Crea una sentinela.fsm.order vinculada a este evento.
         Idempotente: si ya hay una orden patrol abierta para este evento,
         la devuelve en lugar de crear duplicado.
@@ -1139,19 +1139,8 @@ class AlarmEvent(models.Model):
             vals['install_lon'] = device.longitude
         if device and device.location:
             vals['service_address_id'] = self.partner_id.id
-        if patrol_agent_id:
-            vals['patrol_agent_id'] = patrol_agent_id
-            # Si el agente patrullero es además usuario del sistema, enlázalo
-            # (así recibe push/portal); si es solo contacto, el operador monitorea.
-            if not technician_id:
-                agent_user = self.env['res.users'].sudo().search(
-                    [('partner_id', '=', patrol_agent_id)], limit=1)
-                if agent_user:
-                    technician_id = agent_user.id
         if technician_id:
             vals['technician_id'] = technician_id
-        if technician_id or patrol_agent_id:
-            # Orden lista para rastrear (la ruta pública exige assigned/in_progress).
             vals['stage'] = 'assigned'
         if patrol_unit_id:
             vals['patrol_unit_id'] = patrol_unit_id
