@@ -101,6 +101,9 @@
                                 <group>
                                     <field name="gps_platform"/>
                                     <field name="gps_mode" readonly="1"/>
+                                    <field name="senticar_distributor_id" options="{'no_create_edit': True}"
+                                        invisible="gps_platform != 'senticar'"
+                                        help="Si este cliente cuelga de un distribuidor, su grupo se anida bajo el del distribuidor y el distribuidor ve sus equipos (se aplica en la próxima reconciliación)."/>
                                 </group>
                                 <group>
                                     <field name="gps_device_count"/>

@@ -89,35 +89,103 @@ class SenticarService(models.AbstractModel):
         return r is not None and r.status_code in (200, 204)
 
     @api.model
-    def ensure_client_group(self, partner):
-        """Crea/recupera el GRUPO del cliente en Traccar y lo comparte con todos los admins.
-        Devuelve group_id (o None). 1 grupo por cliente: los equipos del cliente se meten al grupo
-        y la visibilidad se hereda (en vez de ligar equipo por equipo). Idempotente."""
-        partner = partner.sudo()
-        if partner.senticar_group_id:
-            return partner.senticar_group_id
-        name = (partner.name or f"Cliente {partner.id}").strip()
-        # recuperar por nombre si ya existía
+    def _ensure_root_group(self):
+        """Grupo raíz 'umbrella' bajo el que cuelgan los clientes SIN distribuidor (organización).
+        Configurable con param sentinela.senticar_root_group (default 'SentiCar'; vacío = sin raíz)."""
+        name = (self.env['ir.config_parameter'].sudo().get_param(
+            'sentinela.senticar_root_group', 'SentiCar') or '').strip()
+        if not name:
+            return None
         r = self._req('GET', '/api/groups', params={'all': 'true'})
-        gid = None
         if r is not None and r.status_code == 200:
             try:
                 g = next((x for x in r.json() if (x.get('name') or '').strip() == name), None)
-                gid = g['id'] if g else None
+                if g:
+                    return g['id']
             except Exception:
-                gid = None
+                pass
+        r = self._req('POST', '/api/groups', json={'name': name})
+        if r is not None and r.status_code in (200, 201):
+            return r.json().get('id')
+        return None
+
+    @api.model
+    def _set_group_parent(self, group_id, parent_id):
+        """Anida el grupo `group_id` bajo `parent_id` (PUT del objeto grupo con groupId)."""
+        if not (group_id and parent_id) or group_id == parent_id:
+            return False
+        r = self._req('GET', '/api/groups', params={'all': 'true'})
+        if r is None or r.status_code != 200:
+            return False
+        g = next((x for x in r.json() if x.get('id') == group_id), None)
+        if not g:
+            return False
+        if g.get('groupId') == parent_id:
+            return True
+        g['groupId'] = parent_id
+        r2 = self._req('PUT', f'/api/groups/{group_id}', json=g)
+        return r2 is not None and r2.status_code == 200
+
+    @api.model
+    def _distributor_user_chain(self, partner):
+        """IDs de usuario Traccar de los distribuidores ARRIBA de `partner` (cadena 'cuelga de').
+        Crea el usuario del distribuidor si hace falta (para poder compartirle). En Traccar la
+        visibilidad NO se hereda por anidamiento → hay que compartir el grupo del cliente con cada
+        distribuidor de la cadena explícitamente."""
+        users, seen = [], {partner.id}
+        d = partner.sudo().senticar_distributor_id
+        while d and d.id not in seen:
+            seen.add(d.id)
+            uid, _pw = self.ensure_client_user(d)
+            if uid:
+                users.append(uid)
+            d = d.senticar_distributor_id
+        return users
+
+    @api.model
+    def ensure_client_group(self, partner, _seen=None):
+        """Crea/recupera el GRUPO del cliente, lo comparte con los admins, lo ANIDA bajo su
+        distribuidor (o el grupo raíz) y lo comparte con los usuarios de los distribuidores de la
+        cadena (para que el reseller vea a sus clientes). Idempotente. Devuelve group_id o None."""
+        partner = partner.sudo()
+        _seen = _seen if _seen is not None else set()
+        if partner.id in _seen:  # corta ciclos de 'cuelga de'
+            return partner.senticar_group_id or None
+        _seen.add(partner.id)
+        gid = partner.senticar_group_id
         if not gid:
-            r = self._req('POST', '/api/groups', json={'name': name})
-            if r is not None and r.status_code in (200, 201):
-                gid = r.json().get('id')
-        if not gid:
-            _logger.error("SENTICAR crear grupo falló para %s: %s", name,
-                          r.text[:200] if r is not None else 'sin conexión')
-            return None
-        partner.senticar_group_id = gid
-        # compartir el grupo con los admins (una vez por grupo, no por equipo)
+            name = (partner.name or f"Cliente {partner.id}").strip()
+            r = self._req('GET', '/api/groups', params={'all': 'true'})
+            if r is not None and r.status_code == 200:
+                try:
+                    g = next((x for x in r.json() if (x.get('name') or '').strip() == name), None)
+                    gid = g['id'] if g else None
+                except Exception:
+                    gid = None
+            if not gid:
+                r = self._req('POST', '/api/groups', json={'name': name})
+                if r is not None and r.status_code in (200, 201):
+                    gid = r.json().get('id')
+            if not gid:
+                _logger.error("SENTICAR crear grupo falló para %s: %s", name,
+                              r.text[:200] if r is not None else 'sin conexión')
+                return None
+            partner.senticar_group_id = gid
+        # los admins ven todo
         for au in self._admin_user_ids():
             self.share_group(au, gid)
+        # Jerarquía (Fase 2): anidar bajo el distribuidor (o la raíz) + compartir hacia arriba
+        dist = partner.senticar_distributor_id
+        if dist and dist.id != partner.id:
+            parent_gid = self.ensure_client_group(dist, _seen)  # provisiona el grupo del distribuidor
+            if parent_gid:
+                self._set_group_parent(gid, parent_gid)
+            for du in self._distributor_user_chain(partner):
+                self.share_group(du, gid)
+        else:
+            root = self._ensure_root_group()
+            if root:
+                self._set_group_parent(gid, root)
         return gid
 
     @api.model

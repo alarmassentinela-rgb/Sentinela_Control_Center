@@ -61,6 +61,10 @@
                                     <label for="senticar_share_max_hours" string="Máx. horas de link de rastreo"/>
                                     <field name="senticar_share_max_hours" class="oe_inline"/>
                                 </div>
+                                <div class="mt8">
+                                    <label for="senticar_root_group" string="Grupo raíz (paraguas)"/>
+                                    <field name="senticar_root_group" class="oe_inline"/>
+                                </div>
                             </div>
                         </setting>
                     </block>

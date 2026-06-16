@@ -1,6 +1,7 @@
 import secrets
 import logging
-from odoo import models, fields, api
+from odoo import models, fields, api, _
+from odoo.exceptions import ValidationError
 
 _logger = logging.getLogger(__name__)
 
@@ -18,6 +19,21 @@ class ResPartner(models.Model):
     senticar_group_id = fields.Integer(string='ID Grupo SentiCar', copy=False,
         help="Grupo del cliente en SentiCar/Traccar. Sus equipos se meten a este grupo y la "
              "visibilidad se hereda (en vez de ligar equipo por equipo). Se crea al dar de alta su primer GPS.")
+    senticar_distributor_id = fields.Many2one('res.partner', string='Distribuidor SentiCar (cuelga de)',
+        help="Distribuidor/gestor del que depende este cliente en SentiCar. Si se define, el grupo del "
+             "cliente se anida bajo el del distribuidor y el distribuidor ve los equipos del cliente "
+             "(automático). Sin distribuidor, cuelga del grupo raíz.")
+
+    @api.constrains('senticar_distributor_id')
+    def _check_senticar_distributor_no_cycle(self):
+        for p in self:
+            d = p.senticar_distributor_id
+            seen = {p.id}
+            while d:
+                if d.id in seen:
+                    raise ValidationError(_("El distribuidor SentiCar no puede formar un ciclo (un cliente no puede colgar de sí mismo, directa o indirectamente)."))
+                seen.add(d.id)
+                d = d.senticar_distributor_id
 
     def ensure_senticar_portal_token(self):
         for p in self:

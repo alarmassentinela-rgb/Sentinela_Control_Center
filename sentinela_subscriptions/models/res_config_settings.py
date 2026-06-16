@@ -70,3 +70,8 @@ class SentinelaSubscriptionSettings(models.TransientModel):
         string='Máx. horas de link de rastreo', config_parameter='sentinela.senticar_share_max_hours',
         default=168,
         help="Tope de duración de un link de rastreo temporal (por defecto 168 = 7 días).")
+    senticar_root_group = fields.Char(
+        string='Grupo raíz SentiCar', config_parameter='sentinela.senticar_root_group',
+        default='SentiCar',
+        help="Nombre del grupo 'paraguas' bajo el que cuelgan los clientes sin distribuidor. "
+             "Vacío = sin grupo raíz (clientes al nivel superior).")

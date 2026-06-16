@@ -185,8 +185,8 @@ class SentinelaSubscription(models.Model):
                     '<div style="position:relative;padding-bottom:75%;height:0;overflow:hidden;border-radius:8px">'
                     '<iframe style="position:absolute;top:0;left:0;width:100%;height:100%;border:0" '
                     'loading="lazy" referrerpolicy="no-referrer-when-downgrade" '
-                    'src="https://maps.google.com/maps?q=%s,%s&amp;t=&amp;z=17&amp;ie=UTF8&amp;iwloc=&amp;output=embed"></iframe>'
-                    '</div></div>' % (s.latitude, s.longitude)
+                    f'src="https://maps.google.com/maps?q={s.latitude},{s.longitude}&amp;t=&amp;z=17&amp;ie=UTF8&amp;iwloc=&amp;output=embed"></iframe>'
+                    '</div></div>'
                 )
             else:
                 s.coords_map_html = '<div class="text-muted">Sin coordenadas. Captura la dirección y pulsa "Obtener coordenadas".</div>'
@@ -306,6 +306,10 @@ class SentinelaSubscription(models.Model):
     gps_device_count = fields.Integer(string='Nº de Equipos', compute='_compute_gps_device_count', store=True)
     senticar_portal_url = fields.Char(string='Portal del Transportista', compute='_compute_senticar_portal_url',
         help="Link personal del cliente para generar links de rastreo de sus unidades. Genéralo con el botón.")
+    senticar_distributor_id = fields.Many2one(related='partner_id.senticar_distributor_id', readonly=False,
+        string='Distribuidor SentiCar',
+        help="Si el cliente cuelga de un distribuidor, su grupo se anida bajo el del distribuidor y "
+             "el distribuidor ve sus equipos. Se aplica en la próxima alta/reconciliación.")
 
     @api.depends('partner_id.senticar_portal_token')
     def _compute_senticar_portal_url(self):
