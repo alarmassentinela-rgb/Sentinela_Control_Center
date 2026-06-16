@@ -174,13 +174,23 @@
                         </page>
                         <page string="📍 Ubicación y Notas" name="location">
                             <group>
-                                <group string="Coordenadas">
-                                    <field name="latitude" readonly="is_contract_locked"/>
-                                    <field name="longitude" readonly="is_contract_locked"/>
+                                <group string="Coordenadas (dirección de instalación)">
+                                    <field name="coords_status" widget="badge"/>
+                                    <field name="latitude" readonly="coords_status == 'verificada' or is_contract_locked"/>
+                                    <field name="longitude" readonly="coords_status == 'verificada' or is_contract_locked"/>
+                                    <button name="action_geocode_address" type="object" string="📍 Obtener coordenadas de la dirección" class="btn-secondary"
+                                            invisible="coords_status == 'verificada'"/>
+                                    <button name="action_open_map" type="object" string="Abrir en Google Maps" class="btn-link"/>
+                                    <button name="action_unlock_coords" type="object" string="🔓 Desbloquear (supervisor)" class="btn-warning"
+                                            invisible="coords_status != 'verificada'"
+                                            groups="sentinela_subscriptions.group_subscription_manager"/>
                                 </group>
-                                <group string="Referencias">
-                                    <field name="location_notes" readonly="is_contract_locked"/>
+                                <group string="Mapa de ubicación">
+                                    <field name="coords_map_html" nolabel="1" readonly="1"/>
                                 </group>
+                            </group>
+                            <group string="Referencias">
+                                <field name="location_notes" readonly="is_contract_locked"/>
                             </group>
                             <group string="Notas Internas">
                                 <field name="description" readonly="is_contract_locked" nolabel="1"/>

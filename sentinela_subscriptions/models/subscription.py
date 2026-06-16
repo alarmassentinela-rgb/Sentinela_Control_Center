@@ -162,10 +162,43 @@ class SentinelaSubscription(models.Model):
 
     description = fields.Html(string='Notas Internas')
 
-    # --- Ubicación Técnica ---
+    # --- Ubicación Técnica (Categoría 1: dirección de INSTALACIÓN, fija) ---
+    # NO confundir con gps_sim_lat/lon (Categoría 2: ubicación móvil del rastreador GPS/SIM).
     location_notes = fields.Text(string='Referencias de Ubicación')
     latitude = fields.Char(string='Latitud')
     longitude = fields.Char(string='Longitud')
+    coords_status = fields.Selection([
+        ('none', 'Sin ubicación'),
+        ('estimada', 'Estimada (por dirección)'),
+        ('verificada', 'Verificada en sitio'),
+    ], string='Estado de coordenadas', default='none', tracking=True,
+       help="Estimada = capturada por dirección/geocode. Verificada = confirmada en la "
+            "instalación con GPS + firma del cliente (queda bloqueada salvo supervisor).")
+    coords_map_html = fields.Html(string='Mapa de ubicación', compute='_compute_coords_map_html', sanitize=False)
+
+    @api.depends('latitude', 'longitude')
+    def _compute_coords_map_html(self):
+        for s in self:
+            if s.latitude and s.longitude:
+                s.coords_map_html = (
+                    '<div style="width:320px;max-width:100%;margin:0">'
+                    '<div style="position:relative;padding-bottom:75%;height:0;overflow:hidden;border-radius:8px">'
+                    '<iframe style="position:absolute;top:0;left:0;width:100%;height:100%;border:0" '
+                    'loading="lazy" referrerpolicy="no-referrer-when-downgrade" '
+                    'src="https://maps.google.com/maps?q=%s,%s&amp;t=&amp;z=17&amp;ie=UTF8&amp;iwloc=&amp;output=embed"></iframe>'
+                    '</div></div>' % (s.latitude, s.longitude)
+                )
+            else:
+                s.coords_map_html = '<div class="text-muted">Sin coordenadas. Captura la dirección y pulsa "Obtener coordenadas".</div>'
+
+    def action_unlock_coords(self):
+        """Desbloquea las coordenadas verificadas para corrección (solo manager)."""
+        self.ensure_one()
+        if not self.env.user.has_group('sentinela_subscriptions.group_subscription_manager'):
+            raise UserError(_("Solo un supervisor puede desbloquear coordenadas verificadas."))
+        self.coords_status = 'estimada'
+        return True
+
     def action_open_map(self):
         """Abre Google Maps en una nueva pestaña centrado en las coordenadas."""
         self.ensure_one()
@@ -228,7 +261,11 @@ class SentinelaSubscription(models.Model):
                 'Verifica que el CP, ciudad y estado estén correctos, o ingresa las coordenadas manualmente.'
             ))
         lat, lng = result[0], result[1]
-        self.write({'latitude': str(lat), 'longitude': str(lng)})
+        vals = {'latitude': str(lat), 'longitude': str(lng)}
+        # Geocodificar marca la coordenada como ESTIMADA (salvo que esté verificada en sitio)
+        if self.coords_status != 'verificada':
+            vals['coords_status'] = 'estimada'
+        self.write(vals)
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',

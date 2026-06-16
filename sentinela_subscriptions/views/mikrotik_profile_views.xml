@@ -1,17 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <!-- FORM: muestra el nombre legible (description) en grande; el nombre del router
+         queda como "llave técnica" (no se cambia, es el enlace al MikroTik). -->
     <record id="view_sentinela_mikrotik_profile_form" model="ir.ui.view">
         <field name="name">sentinela.mikrotik.profile.form</field>
         <field name="model">sentinela.mikrotik.profile</field>
         <field name="arch" type="xml">
-            <form string="Perfil Mikrotik">
+            <form string="Perfil de Velocidad">
                 <header>
                     <button name="action_sync_to_routers" string="Sincronizar con Routers" type="object" class="btn-primary"/>
                 </header>
                 <sheet>
                     <div class="oe_title">
+                        <label for="description" string="Plan (nombre visible)"/>
                         <h1>
-                            <field name="name" placeholder="Ej: Plan 20 Megas"/>
+                            <field name="description" placeholder="Ej: Plan 10MB"/>
                         </h1>
                     </div>
                     <group>
@@ -24,6 +27,9 @@
                             <field name="remote_address"/>
                         </group>
                     </group>
+                    <group string="Técnico (enlace al router)">
+                        <field name="name" string="Nombre en el router (llave — debe coincidir con el MikroTik)"/>
+                    </group>
                     <notebook>
                         <page string="Routers">
                             <field name="router_ids"/>
@@ -31,6 +37,20 @@
                     </notebook>
                 </sheet>
             </form>
+        </field>
+    </record>
+
+    <!-- LIST: nombre legible primero; el nombre del router como columna opcional/oculta. -->
+    <record id="view_sentinela_mikrotik_profile_list" model="ir.ui.view">
+        <field name="name">sentinela.mikrotik.profile.list</field>
+        <field name="model">sentinela.mikrotik.profile</field>
+        <field name="arch" type="xml">
+            <list string="Perfiles de Velocidad">
+                <field name="description" string="Plan"/>
+                <field name="download_speed" string="Bajada"/>
+                <field name="upload_speed" string="Subida"/>
+                <field name="name" string="Nombre en router" optional="hide"/>
+            </list>
         </field>
     </record>
 
