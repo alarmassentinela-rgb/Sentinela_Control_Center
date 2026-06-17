@@ -29,7 +29,7 @@ Central de monitoreo de alarmas integrada en Odoo: recibe señales de receptores
 | `sentinela.monitoring.config` | `monitoring_config.py` | Configuración del módulo. |
 | `sentinela.monitoring.device.share` | `monitoring_device_share.py` | Compartir dispositivo con cliente final. |
 | `sentinela.alarm.code` | `alarm_code.py` | Catálogo de códigos (Contact-ID), prioridad y `requires_attention`. |
-| `sentinela.alarm.code.template` / `.template.line` | `alarm_code_template.py` | Plantillas de códigos por tipo de panel. |
+| `sentinela.alarm.code.template` / `.template.line` | `alarm_code_template.py` | Plantillas de códigos por tipo de panel. Botones `action_load_all_codes` / `action_load_attention_codes` la pueblan desde el catálogo (idempotentes, Fase 4). Se copia a la cuenta con `device.action_apply_template()` (REEMPLAZA `alarm_config_ids`). |
 | `sentinela.alarm.priority` | `alarm_priority.py` | Prioridades + `sla_response_minutes`. |
 | `sentinela.device.alarm.config` | `device_alarm_config.py` | Config de códigos por dispositivo. |
 | `sentinela.response.team` | `response_team.py` | Equipos de respuesta. |
