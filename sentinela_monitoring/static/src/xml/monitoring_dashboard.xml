@@ -120,7 +120,46 @@
                 </t>
 
                 <!-- TABLA: TRÁFICO -->
-                <t t-if="state.currentTab === 'traffic'">
+                <!-- TABLA: COMENTADAS (eventos cerrados con comentario del operador) -->
+                <t t-if="state.currentTab === 'traffic' and state.trafficFilter === 'commented'">
+                    <table class="table table-sm table-hover m-0">
+                        <thead class="bg-info text-dark sticky-top">
+                            <tr>
+                                <th class="ps-3">ID</th>
+                                <th>PRIORIDAD</th>
+                                <th>CLIENTE</th>
+                                <th>CUENTA</th>
+                                <th>CÓDIGO</th>
+                                <th>CERRADO</th>
+                                <th>MOTIVO</th>
+                                <th>COMENTARIO DEL OPERADOR</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <t t-foreach="state.commented" t-as="c" t-key="c.id">
+                                <tr class="align-middle">
+                                    <td class="ps-3"><t t-esc="c.id"/></td>
+                                    <td>
+                                        <span class="badge" t-att-style="'background-color:' + c.priority_color + ';color:' + c.priority_text_color + ';'">
+                                            <t t-esc="c.priority_name"/>
+                                        </span>
+                                    </td>
+                                    <td class="fw-bold"><t t-esc="c.client_name"/></td>
+                                    <td><span class="badge bg-light text-dark border"><t t-esc="c.account"/></span></td>
+                                    <td><b><t t-esc="c.code_display"/></b></td>
+                                    <td><t t-esc="c.close_date"/></td>
+                                    <td><span class="badge bg-secondary"><t t-esc="c.close_reason_label"/></span></td>
+                                    <td style="white-space: pre-wrap; max-width: 420px;"><t t-esc="c.comment"/></td>
+                                </tr>
+                            </t>
+                            <tr t-if="!state.commented.length">
+                                <td colspan="8" class="text-center text-muted py-3">Sin eventos cerrados con comentarios.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </t>
+
+                <t t-if="state.currentTab === 'traffic' and state.trafficFilter !== 'commented'">
                     <table class="table table-sm table-hover m-0">
                         <thead class="bg-dark text-white sticky-top">
                             <tr>

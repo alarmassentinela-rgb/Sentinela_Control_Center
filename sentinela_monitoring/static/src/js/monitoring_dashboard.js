@@ -12,6 +12,7 @@ export class MonitoringDashboard extends Component {
             events: [],
             pendingEvents: [],
             signals: [],
+            commented: [],
             receiverStatus: 'offline', 
             lastHeartbeat: '---',
             alarmCount: 0,
@@ -91,6 +92,7 @@ export class MonitoringDashboard extends Component {
                 events: (data.events || []).map(e => this._safeMap(e)),
                 pendingEvents: (data.pending_events || []).map(e => this._safeMap(e)),
                 signals: (data.signals || []),
+                commented: (data.commented || []),
                 lastUpdate: new Date().toLocaleTimeString()
             });
 

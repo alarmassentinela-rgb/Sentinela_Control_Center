@@ -550,12 +550,47 @@ class AlarmEvent(models.Model):
             'pending_events': self._prepare_dashboard_list(pending_domain),
             'signals': []
         }
+        res['commented'] = []
         if current_tab == 'traffic':
-            signal_domain = []
-            if traffic_filter == 'active': signal_domain = [('alarm_event_id.status', '=', 'active')]
-            elif traffic_filter == 'commented': signal_domain = [('operator_notes', '!=', False)]
-            res['signals'] = self._prepare_signal_list(signal_domain)
+            if traffic_filter == 'commented':
+                # Eventos CERRADOS/resueltos con comentario del operador (bitácora
+                # consolidada en resolution_notes). NO son señales.
+                res['commented'] = self._prepare_commented_list()
+            else:
+                signal_domain = []
+                if traffic_filter == 'active':
+                    signal_domain = [('alarm_event_id.status', '=', 'active')]
+                res['signals'] = self._prepare_signal_list(signal_domain)
         return res
+
+    def _prepare_commented_list(self):
+        domain = [('status', 'in', ('resolved', 'closed')), ('resolution_notes', '!=', False)]
+        recs = self.sudo().search_read(
+            domain,
+            ["id", "partner_id", "device_id", "alarm_code_id", "zone", "end_date",
+             "write_date", "close_reason", "resolution_notes", "priority_id"],
+            order="id desc", limit=50)
+        reason_map = dict(self._fields['close_reason'].selection)
+        code_ids = list(set([r['alarm_code_id'][0] for r in recs if r['alarm_code_id']]))
+        codes_map = {c.id: c.name for c in self.env['sentinela.alarm.code'].sudo().browse(code_ids)} if code_ids else {}
+        pri_ids = list(set([r['priority_id'][0] for r in recs if r['priority_id']]))
+        pri_map = {p.id: p for p in self.env['sentinela.alarm.priority'].sudo().browse(pri_ids)}
+        for r in recs:
+            p_name = r['partner_id'][1] if r['partner_id'] else "⚠️ CUENTA NO REGISTRADA"
+            code_name = codes_map.get(r['alarm_code_id'][0], 'Evento') if r['alarm_code_id'] else '---'
+            pri = pri_map.get(r['priority_id'][0]) if r['priority_id'] else None
+            r.update({
+                'client_name': self._clean_translated_name(p_name),
+                'account': r['device_id'][1].split(' ')[0] if r['device_id'] else '0000',
+                'code_display': self._clean_translated_name(code_name),
+                'close_date': str(r['end_date'] or r['write_date'] or '')[:19],
+                'close_reason_label': reason_map.get(r['close_reason'], r['close_reason'] or '—'),
+                'comment': r['resolution_notes'] or '',
+                'priority_name': self._clean_translated_name(pri.name) if pri else '—',
+                'priority_color': (pri.color_hex or '#6c757d') if pri else '#6c757d',
+                'priority_text_color': (pri.text_color_hex or '#FFFFFF') if pri else '#FFFFFF',
+            })
+        return recs
 
     def _prepare_dashboard_list(self, domain):
         recs = self.sudo().search_read(domain, ["id", "partner_id", "device_id", "alarm_code_id", "zone", "description", "start_date", "status"], order="id desc", limit=50)
