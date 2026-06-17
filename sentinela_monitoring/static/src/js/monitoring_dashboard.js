@@ -75,33 +75,22 @@ export class MonitoringDashboard extends Component {
         await this.loadData();
     }
 
-    // ---- Filtros por columna (tipo Excel), client-side, combinables (AND) ----
+    // ---- Filtros por columna (tipo Excel), combinables (AND), SERVER-SIDE ----
+    // Al escribir, se re-consulta al backend (debounce 300ms) para buscar en
+    // TODO el historial con ese criterio, no solo en las filas ya cargadas.
     setColFilter(table, field, ev) {
-        const v = (ev.target.value || "").trim().toLowerCase();
+        const v = (ev.target.value || "").trim();
         const key = table === "commented" ? "commentedFilters" : "signalFilters";
         const f = { ...this.state[key] };
         if (v) { f[field] = v; } else { delete f[field]; }
         this.state[key] = f;
+        if (this.filterDebounce) clearTimeout(this.filterDebounce);
+        this.filterDebounce = setTimeout(() => this.loadData(), 300);
     }
 
-    _matchRow(row, filters, fieldMap) {
-        return Object.entries(filters).every(([k, v]) => {
-            const val = (row[fieldMap[k]] ?? "").toString().toLowerCase();
-            return val.includes(v);
-        });
-    }
-
-    get filteredSignals() {
-        const fmap = { priority: "priority_name", client: "client_name", account: "account",
-                       code: "alarm_code", zone: "zone", desc: "zone_description" };
-        return this.state.signals.filter((s) => this._matchRow(s, this.state.signalFilters, fmap));
-    }
-
-    get filteredCommented() {
-        const fmap = { priority: "priority_name", client: "client_name", account: "account",
-                       code: "code_display", reason: "close_reason_label", comment: "comment" };
-        return this.state.commented.filter((c) => this._matchRow(c, this.state.commentedFilters, fmap));
-    }
+    // El backend ya devuelve las filas filtradas; aquí solo se exponen.
+    get filteredSignals() { return this.state.signals; }
+    get filteredCommented() { return this.state.commented; }
 
     async loadData() {
         if (this.state.loading) return;
@@ -110,7 +99,9 @@ export class MonitoringDashboard extends Component {
         try {
             const data = await this.orm.call("sentinela.alarm.event", "get_dashboard_data", [], {
                 current_tab: this.state.currentTab,
-                traffic_filter: this.state.trafficFilter
+                traffic_filter: this.state.trafficFilter,
+                signal_filters: this.state.signalFilters,
+                commented_filters: this.state.commentedFilters
             });
             if (!data) return;
 

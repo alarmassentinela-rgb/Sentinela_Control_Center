@@ -537,7 +537,8 @@ class AlarmEvent(models.Model):
                 _logger.exception("Notif cliente: Email falló (partner %s)", partner.id)
 
     @api.model
-    def get_dashboard_data(self, current_tab='alarms', traffic_filter='live'):
+    def get_dashboard_data(self, current_tab='alarms', traffic_filter='live',
+                           signal_filters=None, commented_filters=None):
         alarm_domain = [('status', '=', 'active')]
         pending_domain = [('status', 'in', ['acknowledged', 'in_progress', 'paused', 'escalated'])]
         status_rec = self.env['sentinela.receiver.status'].sudo().search([], order='last_heartbeat desc', limit=1)
@@ -555,21 +556,51 @@ class AlarmEvent(models.Model):
             if traffic_filter == 'commented':
                 # Eventos CERRADOS/resueltos con comentario del operador (bitácora
                 # consolidada en resolution_notes). NO son señales.
-                res['commented'] = self._prepare_commented_list()
+                res['commented'] = self._prepare_commented_list(commented_filters or {})
             else:
                 signal_domain = []
                 if traffic_filter == 'active':
                     signal_domain = [('alarm_event_id.status', '=', 'active')]
-                res['signals'] = self._prepare_signal_list(signal_domain)
+                res['signals'] = self._prepare_signal_list(signal_domain, signal_filters or {})
         return res
 
-    def _prepare_commented_list(self):
-        domain = [('status', 'in', ('resolved', 'closed')), ('resolution_notes', '!=', False)]
+    def _signal_filter_domain(self, filters):
+        """Traduce los filtros por columna (tipo Excel) a dominio sobre
+        sentinela.alarm.signal. Permite buscar en TODO el historial al filtrar."""
+        m = {'account': 'device_id.account_number', 'code': 'alarm_code',
+             'zone': 'zone', 'client': 'partner_id.name',
+             'priority': 'priority_id.name', 'desc': 'description'}
+        dom = []
+        for k, v in (filters or {}).items():
+            if v and k in m:
+                dom.append((m[k], 'ilike', v))
+        return dom
+
+    def _commented_filter_domain(self, filters):
+        """Filtros por columna → dominio sobre eventos (vista Comentadas)."""
+        m = {'account': 'device_id.account_number', 'code': 'alarm_code_id.code',
+             'client': 'partner_id.name', 'priority': 'priority_id.name',
+             'comment': 'resolution_notes'}
+        dom = []
+        for k, v in (filters or {}).items():
+            if not v:
+                continue
+            if k == 'reason':
+                reason_map = dict(self._fields['close_reason'].selection)
+                vals = [rv for rv, label in reason_map.items() if v.lower() in (label or '').lower()]
+                dom.append(('close_reason', 'in', vals or [False]))
+            elif k in m:
+                dom.append((m[k], 'ilike', v))
+        return dom
+
+    def _prepare_commented_list(self, filters=None):
+        fdom = self._commented_filter_domain(filters)
+        domain = [('status', 'in', ('resolved', 'closed')), ('resolution_notes', '!=', False)] + fdom
         recs = self.sudo().search_read(
             domain,
             ["id", "partner_id", "device_id", "alarm_code_id", "zone", "end_date",
              "write_date", "close_reason", "resolution_notes", "priority_id"],
-            order="id desc", limit=200)
+            order="id desc", limit=300 if fdom else 200)
         reason_map = dict(self._fields['close_reason'].selection)
         code_ids = list(set([r['alarm_code_id'][0] for r in recs if r['alarm_code_id']]))
         codes_map = {c.id: c.name for c in self.env['sentinela.alarm.code'].sudo().browse(code_ids)} if code_ids else {}
@@ -606,8 +637,9 @@ class AlarmEvent(models.Model):
             })
         return recs
 
-    def _prepare_signal_list(self, domain):
-        signals = self.env['sentinela.alarm.signal'].sudo().search_read(domain, ["id", "received_date", "alarm_code", "zone", "description", "partner_id", "device_id", "alarm_event_id", "priority_id"], order="id desc", limit=200)
+    def _prepare_signal_list(self, domain, filters=None):
+        fdom = self._signal_filter_domain(filters)
+        signals = self.env['sentinela.alarm.signal'].sudo().search_read(domain + fdom, ["id", "received_date", "alarm_code", "zone", "description", "partner_id", "device_id", "alarm_event_id", "priority_id"], order="id desc", limit=300 if fdom else 200)
         # Mapa de prioridades (nombre + color) para la columna de prioridad
         pri_ids = list(set([s['priority_id'][0] for s in signals if s['priority_id']]))
         pri_map = {}
