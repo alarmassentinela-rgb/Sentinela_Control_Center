@@ -410,7 +410,22 @@ class AlarmEvent(models.Model):
 
         # 2. Inteligencia de Codigo y Prioridad
         alarm_code = self.env['sentinela.alarm.code'].sudo().search([('code', '=', code)], limit=1)
-        priority_id = alarm_code.priority_id.id if alarm_code and alarm_code.priority_id else 35
+        # Fase 1 (Opción A): la prioridad puede personalizarse POR CUENTA.
+        # Resolución: override de la cuenta (device.alarm.config) → prioridad
+        # global del código → default 35. Así una misma señal puede tener
+        # prioridad/sonido distinto según la cuenta que la envía.
+        dev_cfg = False
+        if alarm_code:
+            dev_cfg = self.env['sentinela.device.alarm.config'].sudo().search([
+                ('device_id', '=', device.id),
+                ('alarm_code_id', '=', alarm_code.id),
+            ], limit=1)
+        if dev_cfg and dev_cfg.priority_id:
+            priority_id = dev_cfg.priority_id.id
+        elif alarm_code and alarm_code.priority_id:
+            priority_id = alarm_code.priority_id.id
+        else:
+            priority_id = 35
         
         # 3. Determinar si requiere Atencion (Alarma Activa)
         # v18.0.1.3.5: clientes suspendidos por mora se muestran al operador con bandera
