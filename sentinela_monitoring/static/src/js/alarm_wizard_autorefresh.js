@@ -51,32 +51,34 @@ export class AlarmWizardAutoRefresh extends Component {
         return tag === "input" || tag === "textarea" || el.isContentEditable;
     }
 
-    async _doRefresh() {
-        const record = this.props.record;
-        this.state.busy = true;
-        try {
-            await this.orm.call(record.resModel, "action_refresh_related", [[record.resId]]);
-            await record.load();
-            this.state.last = new Date().toLocaleTimeString();
-        } catch (e) {
-            // Silencioso: un fallo puntual no debe romper la ventana de atención.
-            console.warn("[alarm autorefresh]", e);
-        } finally {
-            this.state.busy = false;
-        }
-    }
-
     async tick() {
         const record = this.props.record;
         if (!record || !record.resId || this.state.busy) {
             return;
         }
-        // No interrumpir al operador: si hay cambios sin guardar o está escribiendo,
-        // se salta este ciclo (lo intentará de nuevo en REFRESH_MS).
-        if (record.isDirty || this._operatorIsTyping()) {
+        // No yankear mientras el operador teclea (en un input/textarea). Si ese
+        // ciclo se salta, lo reintenta en REFRESH_MS.
+        if (this._operatorIsTyping()) {
             return;
         }
-        await this._doRefresh();
+        this.state.busy = true;
+        try {
+            // Si hay cambios sin guardar (bitácora), se persisten ANTES de recargar
+            // para no perderlos — así el refresco NO depende de que el form esté limpio.
+            if (record.isDirty) {
+                const ok = await record.save();
+                if (!ok) {
+                    return; // validación bloqueó el guardado → reintentar luego
+                }
+            }
+            await this.orm.call(record.resModel, "action_refresh_related", [[record.resId]]);
+            await record.load();
+            this.state.last = new Date().toLocaleTimeString();
+        } catch (e) {
+            console.warn("[alarm autorefresh]", e);
+        } finally {
+            this.state.busy = false;
+        }
     }
 }
 
