@@ -59,35 +59,9 @@
 
             <div class="flex-grow-1 overflow-auto p-0">
                 
-                <!-- TABLA: ALARMAS ACTIVAS -->
-                <t t-if="state.currentTab === 'alarms'">
-                    <table class="table table-hover m-0">
-                        <thead class="bg-light sticky-top">
-                            <tr>
-                                <th class="ps-3">ID</th>
-                                <th>CLIENTE</th>
-                                <th>CUENTA</th>
-                                <th>CÓDIGO</th>
-                                <th>ZONA</th>
-                                <th class="text-end pe-3">ACCIÓN</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <t t-foreach="state.events" t-as="event" t-key="event.id">
-                                <tr class="align-middle" t-on-dblclick="() => this.handleAlarm(event.id)">
-                                    <td class="ps-3 fw-bold"><t t-esc="event.id"/></td>
-                                    <td class="fw-bold"><t t-esc="event.partner_name"/></td>
-                                    <td><span class="badge bg-dark text-white"><t t-esc="event.account"/></span></td>
-                                    <td><b><t t-esc="event.code_display"/></b></td>
-                                    <td><span class="badge bg-secondary"><t t-esc="event.zone"/></span></td>
-                                    <td class="text-end pe-3">
-                                        <button t-if="!event.is_blocked" class="btn btn-sm btn-outline-primary" t-on-click="() => this.handleAlarm(event.id)">ATENDER</button>
-                                    </td>
-                                </tr>
-                            </t>
-                        </tbody>
-                    </table>
-                </t>
+                <!-- ALARMAS usa la MISMA presentación que Tráfico→Activos (tabla de
+                     señales con prioridad/color, filtros por columna y doble-clic
+                     para tomar). Ver la tabla de señales más abajo (t-if incluye 'alarms'). -->
 
                 <!-- TABLA: EVENTOS PENDIENTES -->
                 <t t-if="state.currentTab === 'pending'">
@@ -169,7 +143,7 @@
                     </table>
                 </t>
 
-                <t t-if="state.currentTab === 'traffic' and state.trafficFilter !== 'commented'">
+                <t t-if="state.currentTab === 'alarms' or (state.currentTab === 'traffic' and state.trafficFilter !== 'commented')">
                     <table class="table table-sm table-hover m-0">
                         <thead class="bg-dark text-white sticky-top">
                             <tr>

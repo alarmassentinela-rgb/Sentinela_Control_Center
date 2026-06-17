@@ -552,6 +552,11 @@ class AlarmEvent(models.Model):
             'signals': []
         }
         res['commented'] = []
+        if current_tab == 'alarms':
+            # ALARMAS usa la misma vista que Tráfico→Activos: señales de eventos
+            # activos (tabla con prioridad/color, filtros y doble-clic para tomar).
+            res['signals'] = self._prepare_signal_list(
+                [('alarm_event_id.status', '=', 'active')], signal_filters or {})
         if current_tab == 'traffic':
             if traffic_filter == 'commented':
                 # Eventos CERRADOS/resueltos con comentario del operador (bitácora
