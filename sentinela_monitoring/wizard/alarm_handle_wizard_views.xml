@@ -66,15 +66,18 @@
                         <field name="final_notes" placeholder="Notas finales que verá el cliente / quedará en el historial."/>
                     </group>
 
-                    <!-- ===== Multi-evento/Historial (EN VIVO) + Bitácora en pestañas ===== -->
+                    <!-- ===== Activas por procesar / Historial (EN VIVO, separados) + Bitácora ===== -->
                     <notebook>
-                        <page string="🔁 Multi-evento e Historial (en vivo)" name="multi">
+                        <page string="🔴 Activas por procesar" name="activas">
                             <div class="d-flex justify-content-end mb-2">
-                                <button name="action_bulk_close" type="object" string="Cerrar TODOS en bloque" class="btn-primary" icon="fa-check-double"/>
+                                <button name="action_bulk_close" type="object" string="Cerrar TODAS en bloque" class="btn-primary" icon="fa-check-double"/>
                             </div>
-                            <!-- Panel OWL que hace polling al servidor cada 10s y pinta sus
-                                 propias tablas (no depende del registro del wizard). -->
-                            <widget name="alarm_companion"/>
+                            <!-- Solo eventos abiertos del cliente (cierre múltiple). Polling propio cada 10s. -->
+                            <widget name="alarm_companion_active"/>
+                        </page>
+                        <page string="🕓 Historial 24h" name="historial">
+                            <!-- Todos los últimos eventos/señales del panel en 24h. Polling propio cada 10s. -->
+                            <widget name="alarm_companion_history"/>
                         </page>
                         <page string="📝 Bitácora del operador" name="bitacora">
                             <field name="notes" nolabel="1" placeholder="Anota cualquier dato adicional aquí. Se guarda al cerrar."/>

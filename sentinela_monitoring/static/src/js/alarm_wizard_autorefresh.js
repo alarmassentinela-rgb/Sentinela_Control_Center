@@ -5,54 +5,20 @@ import { Component, onMounted, onWillUnmount, useState, xml } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 
 /**
- * Panel EN VIVO de la ventana de atención de alarmas.
+ * Paneles EN VIVO de la ventana de atención de alarmas.
  *
- * Hace polling cada REFRESH_MS al servidor (`get_attention_companion_data`) y
- * pinta sus PROPIAS tablas: eventos abiertos del mismo cliente + historial de
- * señales 24h del panel. NO depende del registro transitorio del wizard ni de
- * record.load() → las señales/eventos que llegan DESPUÉS de abrir aparecen solos
- * y nunca toca la bitácora que el operador está capturando.
+ * Hacen polling cada REFRESH_MS al servidor (`get_attention_companion_data`) y
+ * pintan sus PROPIAS tablas. NO dependen del registro transitorio del wizard ni
+ * de record.load() → las señales/eventos que llegan DESPUÉS de abrir aparecen
+ * solos y nunca tocan la bitácora que el operador captura.
+ *
+ * Son DOS widgets separados (son cosas distintas):
+ *  - alarm_companion_active  → eventos abiertos del cliente (activas por procesar)
+ *  - alarm_companion_history → historial de señales 24h del panel (últimos eventos)
  */
 const REFRESH_MS = 10000;
 
-export class AlarmCompanionLive extends Component {
-    static template = xml`
-        <div>
-            <div class="text-end text-muted small mb-2">
-                <i t-att-class="state.busy ? 'fa fa-sync fa-spin me-1' : 'fa fa-sync me-1'"/>
-                En vivo (cada 10 s)<t t-if="state.last"> · <t t-esc="state.last"/></t>
-            </div>
-
-            <h6 class="fw-bold">🔁 Eventos múltiples del cliente (<t t-esc="state.siblings.length"/>)</h6>
-            <table class="table table-sm table-striped" t-if="state.siblings.length">
-                <thead><tr><th>Evento</th><th>Inicio</th><th>Código</th><th>Prioridad</th><th>Estado</th></tr></thead>
-                <tbody>
-                    <tr t-foreach="state.siblings" t-as="ev" t-key="ev.id">
-                        <td><t t-esc="ev.name"/></td>
-                        <td><t t-esc="ev.start"/></td>
-                        <td><t t-esc="ev.code"/></td>
-                        <td><t t-esc="ev.priority"/></td>
-                        <td><t t-esc="ev.status"/></td>
-                    </tr>
-                </tbody>
-            </table>
-            <p t-if="!state.siblings.length" class="text-muted small">Sin otros eventos abiertos de este cliente por ahora.</p>
-
-            <h6 class="fw-bold mt-3">🕓 Historial del panel 24 h (<t t-esc="state.signals.length"/>)</h6>
-            <p class="text-muted small mb-1">Incluye aperturas/cierres y fallas (AC, batería) que no generan evento.</p>
-            <table class="table table-sm table-striped" t-if="state.signals.length">
-                <thead><tr><th>Hora</th><th>Código</th><th>Zona</th><th>Descripción</th></tr></thead>
-                <tbody>
-                    <tr t-foreach="state.signals" t-as="s" t-key="s_index">
-                        <td><t t-esc="s.received"/></td>
-                        <td><t t-esc="s.code"/></td>
-                        <td><t t-esc="s.zone"/></td>
-                        <td><t t-esc="s.desc"/></td>
-                    </tr>
-                </tbody>
-            </table>
-            <p t-if="!state.signals.length" class="text-muted small">Sin señales en las últimas 24 h.</p>
-        </div>`;
+class AlarmCompanionBase extends Component {
     static props = { "*": true };
 
     setup() {
@@ -101,6 +67,55 @@ export class AlarmCompanionLive extends Component {
     }
 }
 
-registry.category("view_widgets").add("alarm_companion", {
-    component: AlarmCompanionLive,
-});
+const LIVE_HEADER = `
+    <div class="text-end text-muted small mb-2">
+        <i t-att-class="state.busy ? 'fa fa-sync fa-spin me-1' : 'fa fa-sync me-1'"/>
+        En vivo (cada 10 s)<t t-if="state.last"> · <t t-esc="state.last"/></t>
+    </div>`;
+
+/** Solo las activas por procesar (eventos abiertos del cliente) + cierre múltiple. */
+export class AlarmCompanionActive extends AlarmCompanionBase {
+    static template = xml`
+        <div>
+            ${LIVE_HEADER}
+            <h6 class="fw-bold">🔴 Activas por procesar de este cliente (<t t-esc="state.siblings.length"/>)</h6>
+            <table class="table table-sm table-striped" t-if="state.siblings.length">
+                <thead><tr><th>Evento</th><th>Inicio</th><th>Código</th><th>Prioridad</th><th>Estado</th></tr></thead>
+                <tbody>
+                    <tr t-foreach="state.siblings" t-as="ev" t-key="ev.id">
+                        <td><t t-esc="ev.name"/></td>
+                        <td><t t-esc="ev.start"/></td>
+                        <td><t t-esc="ev.code"/></td>
+                        <td><t t-esc="ev.priority"/></td>
+                        <td><t t-esc="ev.status"/></td>
+                    </tr>
+                </tbody>
+            </table>
+            <p t-if="!state.siblings.length" class="text-muted small">Sin otros eventos abiertos de este cliente por ahora.</p>
+        </div>`;
+}
+
+/** Solo el historial de señales 24h del panel (todos los últimos eventos). */
+export class AlarmCompanionHistory extends AlarmCompanionBase {
+    static template = xml`
+        <div>
+            ${LIVE_HEADER}
+            <h6 class="fw-bold">🕓 Últimos eventos del panel · 24 h (<t t-esc="state.signals.length"/>)</h6>
+            <p class="text-muted small mb-1">Incluye aperturas/cierres y fallas (AC, batería) que no generan evento.</p>
+            <table class="table table-sm table-striped" t-if="state.signals.length">
+                <thead><tr><th>Hora</th><th>Código</th><th>Zona</th><th>Descripción</th></tr></thead>
+                <tbody>
+                    <tr t-foreach="state.signals" t-as="s" t-key="s_index">
+                        <td><t t-esc="s.received"/></td>
+                        <td><t t-esc="s.code"/></td>
+                        <td><t t-esc="s.zone"/></td>
+                        <td><t t-esc="s.desc"/></td>
+                    </tr>
+                </tbody>
+            </table>
+            <p t-if="!state.signals.length" class="text-muted small">Sin señales en las últimas 24 h.</p>
+        </div>`;
+}
+
+registry.category("view_widgets").add("alarm_companion_active", { component: AlarmCompanionActive });
+registry.category("view_widgets").add("alarm_companion_history", { component: AlarmCompanionHistory });
