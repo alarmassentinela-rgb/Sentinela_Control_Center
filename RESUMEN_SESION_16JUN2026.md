@@ -92,6 +92,44 @@ Generado **`Manual_Plataforma_SentiCar.pdf`** (13 pág, reportlab; fuente `gen_m
 
 ---
 
+## Central de Monitoreo + FSM Patrullaje (continuación, noche 16-jun)
+
+### Autorización de servicio (patrulla con cobro) — link Telegram
+- **Bug "link no válido":** el token (`token_urlsafe`, con `_`/`-`) se enviaba **desnudo** en un mensaje Telegram con `parse_mode='Markdown'` → Telegram interpretaba los `_` como itálica y **rompía la URL**. FIX doble: `token_hex(20)` (solo 0-9a-f) + URL como enlace Markdown `[texto](url)`. (monitoring v14.15/.16) **Verificado real: el cliente autorizó.**
+- **Claim al abrir wizard (v14.14):** re-toma el claim si el evento no está resuelto/cerrado (antes solo si `active`) → evita "Toma el evento antes de operarlo" al despachar un evento ya reconocido.
+
+### Rastreo de patrulla en vivo (SentiCar) — `/SentiCar/rastreo/<token>`
+- **Bug 404:** el controller `tracking_portal.py` **nunca se importaba** en `controllers/__init__.py` → la ruta no se registraba. FIX: agregado el import (fsm v7.2). El link al cliente abre.
+- **Bug "isla nula" (pin en África):** Traccar devuelve **0,0** cuando el device no tiene fix GPS real (caso N01K heredado). FIX: `get_last_location_from_traccar` descarta 0,0 como "sin señal" + el mapa del cliente **no dibuja el pin** hasta tener posición válida (muestra "🛰️ Esperando señal GPS…"). (fsm v8.5)
+- **Destino del mapa/"Cómo llegar"** apuntaban a `service_address` (vacío) → ahora usan **`install_lat/install_lon`** (coords de la alarma).
+
+### Catálogo de Unidades de Patrulla (modelo nuevo `sentinela.patrol.unit`)
+- **Concepto clave (2 cosas distintas):** la **UNIDAD** (celular compartido o vehículo, dispositivo SentiCar con `deviceId`) es lo que **se rastrea** por GPS; el **PATRULLERO** es un **usuario del sistema** marcado "Es Patrulla" que **trabaja la orden** en la app FSM (push, tareas, check-in, evidencias, cierre). Encajan: en el celular compartido, cada turno entra a Odoo con SU usuario; la app SentiCar reporta bajo el `deviceId` del celular.
+- Modelo en `sentinela_fsm` (`is_patrol` vive en monitoring que está por encima → el filtro `is_patrol` va solo en el wizard, no en el campo del modelo fsm). Campos: tipo (celular/vehículo), `traccar_device_id`, placa, disponible, `is_default_dispatch` (solo una). Menú en Config de FSM y de Monitoreo.
+- **Seed:** 🚓 Sentinela - March (deviceId 5) + 📱 Celular Patrullero 1 (deviceId 4, default despacho). Ambos reportando en SentiCar.
+- **Wizard "Enviar Patrullero":** Unidad (obligatoria, default=celular compartido) + Patrullero (usuario `is_patrol`). Orden guarda `patrol_unit_id`; rastreo = unidad → fallback celular del patrullero.
+- **Usuario creado: Manuel Sandoval** (`manuel.sandoval`/`Sentinela1`, interno + grupo FSM + is_patrol + unidad default March, reutilizando su contacto id 26095).
+
+### Depuración del formulario de orden del patrullero (`tech_order_view`)
+- **500 al abrir orden:** la plantilla usaba `subscription.keyword` (no existe) → cambiado a `security_code` (Clave de Seguridad de voz). (fsm v8.6)
+- **"Cómo llegar"** ahora abre **navegación real** Google Maps + Waze (turn-by-turn) al domicilio. (SentiCar **solo rastrea, no navega**.)
+- **Patrullaje depurado (v8.8):** oculta pestaña **Datos Técnicos** + tarjeta **Cita Programada**; **checklist propio** de patrullaje (solo 5 ítems: puertas/ventanas/perímetro/iluminación/sospechosos — `_populate_checklist` ya no mezcla las 'all' de instalación en patrol); **dictamen** (resultado+intrusión+policía) **movido DENTRO del form** (estaba fuera → no se guardaba).
+- **Geocerca en "Llegada al sitio" (v8.9):** el handler `/arrival` valida la distancia GPS↔domicilio (Haversine); solo confirma (y notifica al cliente) si está dentro del radio. Param `sentinela_fsm.arrival_geofence_m` (default **150 m**, editable en Ajustes→Técnico→Parámetros). Si la cuenta no tiene coords, se omite la validación.
+
+### Coordenadas (Categoría 1 = dirección instalación)
+- Device hereda lat/lon de la suscripción (solo consulta); quitado el campo "Ubicación" del device. (monitoring v14.12/.13) — fuente única = suscripción (pestaña Instalación).
+
+### Versiones al cierre
+- **sentinela_fsm 18.0.1.8.9** · **sentinela_monitoring 18.0.1.15.5**. Todo en prod V18, 0 errores, HTTP 200.
+
+### Pendientes patrullaje/monitoring
+1. **Validar ciclo completo de patrullaje de punta a punta:** despacho → push a Manuel → app (orden limpia) → "Cómo llegar" → geocerca "Llegué" (probar lejos=rechaza / en sitio=confirma) → dictamen → finalizar → reporte al cliente. (Hoy se probó por partes.)
+2. **Capturar coordenadas reales** en las suscripciones (sin coords la geocerca se omite).
+3. Editar/ampliar el checklist de patrullaje si se requieren más ítems (plantillas tipo "Patrullaje").
+4. Limpiar dispositivos de prueba SentiCar (N01K device 1 = 0,0; celular PAT-001 si aplica).
+
+---
+
 ## Pendientes para la próxima sesión (WISP)
 1. **Migración de los 3 enlaces** (Saucito, Rusias, Cd Industrial) de la oficina vieja a la nueva: los enlaces nuevos `.227` (Saucito) y `.251` (Rusias) ya están montados/inactivos esperando el cambio. Tras migrar, eliminar la dependencia del brinco provisional `.40/.41`.
 2. **`.64` Saucito EdgePoE 8xp dañado** — reemplazo pendiente.
