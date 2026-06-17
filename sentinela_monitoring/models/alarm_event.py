@@ -557,6 +557,12 @@ class AlarmEvent(models.Model):
             # activos (tabla con prioridad/color, filtros y doble-clic para tomar).
             res['signals'] = self._prepare_signal_list(
                 [('alarm_event_id.status', '=', 'active')], signal_filters or {})
+        if current_tab == 'pending':
+            # PENDIENTES: misma tabla, señales de eventos que el operador trabaja
+            # (acknowledged/in_progress/paused/escalated) → doble-clic para retomar.
+            res['signals'] = self._prepare_signal_list(
+                [('alarm_event_id.status', 'in', ['acknowledged', 'in_progress', 'paused', 'escalated'])],
+                signal_filters or {})
         if current_tab == 'traffic':
             if traffic_filter == 'commented':
                 # Eventos CERRADOS/resueltos con comentario del operador (bitácora
