@@ -212,6 +212,7 @@ class MonitoringDevice(models.Model):
                 'priority_id': line.priority_id.id if line.priority_id else False,
                 'notify_email': line.notify_email,
                 'notify_telegram': line.notify_telegram,
+                'notify_whatsapp': line.notify_whatsapp,
             })
         if vals_list:
             self.env['sentinela.device.alarm.config'].create(vals_list)

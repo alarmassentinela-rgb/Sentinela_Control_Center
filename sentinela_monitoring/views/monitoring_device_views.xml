@@ -124,6 +124,7 @@
                                     <field name="priority_id" widget="badge"/>
                                     <field name="notify_email"/>
                                     <field name="notify_telegram"/>
+                                    <field name="notify_whatsapp"/>
                                 </list>
                             </field>
                         </page>

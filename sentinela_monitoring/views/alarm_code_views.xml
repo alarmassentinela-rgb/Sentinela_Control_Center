@@ -43,6 +43,11 @@
                             <field name="color_hex" widget="color"/>
                             <field name="is_billable"/>
                         </group>
+                        <group string="Avisar al Cliente (default; la cuenta puede sobreescribir)">
+                            <field name="notify_email"/>
+                            <field name="notify_telegram"/>
+                            <field name="notify_whatsapp"/>
+                        </group>
                     </group>
                 </sheet>
             </form>

@@ -54,6 +54,12 @@ class AlarmCode(models.Model):
 
     is_billable = fields.Boolean(string='Generable Cobro?', help="Si es True, este evento podría generar un cargo por evento.")
 
+    # --- Notificación instantánea al CLIENTE (Fase 3) — defaults globales ---
+    # La cuenta puede sobrescribir estos flags en sentinela.device.alarm.config.
+    notify_email = fields.Boolean(string='Avisar Cliente: Email', default=False)
+    notify_telegram = fields.Boolean(string='Avisar Cliente: Telegram', default=False)
+    notify_whatsapp = fields.Boolean(string='Avisar Cliente: WhatsApp', default=False)
+
     _sql_constraints = [
         ('code_protocol_uniq', 'unique(code, protocol_type)', 'El código debe ser único por protocolo.')
     ]

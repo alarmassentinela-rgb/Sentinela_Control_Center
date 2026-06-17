@@ -461,6 +461,13 @@ class AlarmEvent(models.Model):
             'partner_id': device.partner_id.id, 'status': 'received'
         })
 
+        # 5b. Notificación instantánea al CLIENTE (Fase 3) — según flags efectivos
+        # por cuenta (device.alarm.config) o, si no hay fila, los del código global.
+        try:
+            self._dispatch_client_notification(device, alarm_code, dev_cfg, code_label, zone_label)
+        except Exception:
+            _logger.exception("No se pudo notificar al cliente (cuenta %s, código %s)", account, code)
+
         # 6. Avisar al Bus (UNA SOLA VEZ)
         self.env['bus.bus']._sendone('sentinela_monitoring', 'sentinela_monitoring', {'refresh': True})
         
@@ -474,6 +481,52 @@ class AlarmEvent(models.Model):
         if status_rec: status_rec.write({'last_heartbeat': fields.Datetime.now()})
         
         return True
+
+    def _dispatch_client_notification(self, device, alarm_code, dev_cfg, code_label, zone_label):
+        """Fase 3 — Notifica al cliente (partner del panel) cuando el código está
+        marcado para avisar. Flags EFECTIVOS: si la cuenta tiene fila en
+        device.alarm.config para este código, mandan sus flags; si no, los del
+        código global. Canales: email / Telegram / WhatsApp (SMS pendiente de
+        gateway). Fail-safe por canal: un error en uno no tumba la ingesta."""
+        if not alarm_code:
+            return
+        src = dev_cfg if dev_cfg else alarm_code
+        want_email = bool(getattr(src, 'notify_email', False))
+        want_tg = bool(getattr(src, 'notify_telegram', False))
+        want_wa = bool(getattr(src, 'notify_whatsapp', False))
+        if not (want_email or want_tg or want_wa):
+            return
+        partner = device.partner_id
+        if not partner:
+            return
+        when = fields.Datetime.context_timestamp(self, fields.Datetime.now()).strftime('%d/%m/%Y %H:%M')
+        sitio = device.location or device.name or device.account_number or ''
+        msg = (f"🔔 *Sentinela* — evento en su sistema\n"
+               f"*{code_label}*\n"
+               f"{zone_label}\n"
+               f"Cuenta {device.account_number or '—'}{(' · ' + sitio) if sitio else ''}\n"
+               f"{when}")
+        if want_tg:
+            try:
+                partner.send_telegram_message(msg)
+            except Exception:
+                _logger.exception("Notif cliente: Telegram falló (partner %s)", partner.id)
+        if want_wa:
+            try:
+                partner.send_whatsapp_message(msg)
+            except Exception:
+                _logger.exception("Notif cliente: WhatsApp falló (partner %s)", partner.id)
+        if want_email and partner.email:
+            try:
+                body = msg.replace('*', '').replace('\n', '<br/>')
+                self.env['mail.mail'].sudo().create({
+                    'subject': f"Sentinela — {code_label}",
+                    'body_html': f"<p>{body}</p>",
+                    'email_to': partner.email,
+                    'auto_delete': True,
+                }).send()
+            except Exception:
+                _logger.exception("Notif cliente: Email falló (partner %s)", partner.id)
 
     @api.model
     def get_dashboard_data(self, current_tab='alarms', traffic_filter='live'):

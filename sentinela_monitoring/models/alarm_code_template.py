@@ -20,5 +20,6 @@ class AlarmCodeTemplateLine(models.Model):
     priority_id = fields.Many2one('sentinela.alarm.priority', string='Prioridad')
     notify_email = fields.Boolean(string='Notificar Email', default=False)
     notify_telegram = fields.Boolean(string='Notificar Telegram', default=False)
-    
+    notify_whatsapp = fields.Boolean(string='Notificar WhatsApp', default=False)
+
     notes = fields.Char(string='Notas de Reacción')

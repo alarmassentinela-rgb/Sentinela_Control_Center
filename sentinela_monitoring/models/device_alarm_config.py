@@ -10,10 +10,11 @@ class DeviceAlarmConfig(models.Model):
     # Sobrescribe la prioridad global
     priority_id = fields.Many2one('sentinela.alarm.priority', string='Prioridad Personalizada')
     
-    # Notificaciones
+    # Notificaciones al cliente (Fase 3)
     notify_email = fields.Boolean(string='Notificar Email', default=False)
     notify_telegram = fields.Boolean(string='Notificar Telegram', default=False)
-    
+    notify_whatsapp = fields.Boolean(string='Notificar WhatsApp', default=False)
+
     _sql_constraints = [
         ('device_code_uniq', 'unique(device_id, alarm_code_id)', 'Ya existe una configuración para este código en este dispositivo.')
     ]
