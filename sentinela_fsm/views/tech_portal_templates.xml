@@ -223,7 +223,7 @@
                                         
                                         <div class="bg-dark text-warning p-2 rounded mt-2 text-center">
                                             <div class="extra-small text-uppercase">Palabras Clave</div>
-                                            <div class="fw-bold fs-6" t-esc="order.alarm_event_id.subscription_id.keyword or 'SIN PALABRA CLAVE'"/>
+                                            <div class="fw-bold fs-6" t-esc="order.alarm_event_id.subscription_id.security_code or 'SIN PALABRA CLAVE'"/>
                                         </div>
 
                                         <!-- PROTOCOLO 360 (NUEVO) -->
