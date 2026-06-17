@@ -21,9 +21,10 @@ const REFRESH_MS = 10000;
 export class AlarmWizardAutoRefresh extends Component {
     static template = xml`
         <span class="text-muted small d-inline-flex align-items-center">
-            <i class="fa fa-sync me-1" t-att-class="state.busy ? 'fa fa-sync fa-spin me-1' : 'fa fa-sync me-1'"/>
+            <i t-att-class="state.busy ? 'fa fa-sync fa-spin me-1' : 'fa fa-sync me-1'"/>
             Actualización automática activa
             <t t-if="state.last"> · última: <t t-esc="state.last"/></t>
+            <button type="button" class="btn btn-sm btn-link p-0 ms-2" t-on-click="refreshNow">Refrescar ahora</button>
         </span>`;
     static props = { "*": true };
 
@@ -51,16 +52,8 @@ export class AlarmWizardAutoRefresh extends Component {
         return tag === "input" || tag === "textarea" || el.isContentEditable;
     }
 
-    async tick() {
+    async _doRefresh() {
         const record = this.props.record;
-        if (!record || !record.resId || this.state.busy) {
-            return;
-        }
-        // No interrumpir al operador: si hay cambios sin guardar o está escribiendo,
-        // se salta este ciclo (lo intentará de nuevo en REFRESH_MS).
-        if (record.isDirty || this._operatorIsTyping()) {
-            return;
-        }
         this.state.busy = true;
         try {
             await this.orm.call(record.resModel, "action_refresh_related", [[record.resId]]);
@@ -72,6 +65,36 @@ export class AlarmWizardAutoRefresh extends Component {
         } finally {
             this.state.busy = false;
         }
+    }
+
+    async tick() {
+        const record = this.props.record;
+        if (!record || !record.resId || this.state.busy) {
+            return;
+        }
+        // No interrumpir al operador: si hay cambios sin guardar o está escribiendo,
+        // se salta este ciclo (lo intentará de nuevo en REFRESH_MS).
+        if (record.isDirty || this._operatorIsTyping()) {
+            return;
+        }
+        await this._doRefresh();
+    }
+
+    async refreshNow() {
+        // Refresco manual del operador. Si hay cambios sin guardar (bitácora),
+        // se persisten ANTES de recargar para no perderlos.
+        const record = this.props.record;
+        if (!record || !record.resId || this.state.busy) {
+            return;
+        }
+        if (record.isDirty) {
+            const ok = await record.save();
+            if (!ok) {
+                // La validación bloqueó el guardado → no recargamos, conservamos lo escrito.
+                return;
+            }
+        }
+        await this._doRefresh();
     }
 }
 
