@@ -326,8 +326,13 @@ class AlarmEvent(models.Model):
             ('expected_heartbeat_hours', '>', 0),
             ('status', '=', 'active'),
         ])
-        priority = self.env['sentinela.alarm.priority'].sudo().search(
-            [], order='level asc', limit=1)
+        # Un panel sin reportar es una FALLA (trouble), no una emergencia:
+        # va a la prioridad "Falla" (level 2), NO a la sirena crítica (level 1).
+        # Esquema de prioridades: 1=más importante (sirena), 2=falla, 3=rutina.
+        Priority = self.env['sentinela.alarm.priority'].sudo()
+        priority = (Priority.search([('level', '=', 2)], limit=1)
+                    or Priority.search([('level', '=', 3)], limit=1)
+                    or Priority.search([], order='level desc', limit=1))
         priority_id = priority.id if priority else False
         created = 0
         for dev in devices:
@@ -1161,7 +1166,8 @@ class AlarmEvent(models.Model):
             'service_type': service_type,
             'alarm_event_id': self.id,
             'description': '<br/>'.join(desc_parts),
-            'priority': '3' if self.priority_id and self.priority_id.level >= 8 else '2',
+            # FSM: '3'=urgente. Crítica = level 1 (esquema 1=más importante).
+            'priority': '3' if self.priority_id and self.priority_id.level <= 1 else '2',
             'scheduled_date': fields.Datetime.now(),
         }
         if self.subscription_id:

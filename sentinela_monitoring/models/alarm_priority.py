@@ -3,11 +3,13 @@ from odoo import models, fields, api
 class AlarmPriority(models.Model):
     _name = 'sentinela.alarm.priority'
     _description = 'Prioridad de Alarma Personalizable'
-    _order = 'level desc'
+    _order = 'level asc'
 
+    active = fields.Boolean(string='Activa', default=True)
     name = fields.Char(string='Nombre', required=True, translate=True)
     code = fields.Char(string='Código Interno', required=True, help="Ej. P1, P2, CRITICA")
-    level = fields.Integer(string='Nivel (1-10)', default=1, required=True, help="10 es la más alta.")
+    level = fields.Integer(string='Nivel', default=1, required=True,
+                           help="1 = la más importante (sirena); el número sube = menos importante.")
     
     color_hex = fields.Char(string='Color Hex', default='#FFFFFF', help="Color de fondo para el Dashboard (Ej. #FF0000)")
     text_color_hex = fields.Char(string='Color Texto', default='#000000')

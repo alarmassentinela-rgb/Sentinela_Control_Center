@@ -91,8 +91,8 @@ export const alarmService = {
             const eligible = (data.active_alarms || []).filter(
                 (a) => a.has_sound && !a.is_claimed_by_me
             );
-            // mayor priority_level primero
-            eligible.sort((a, b) => (b.priority_level || 0) - (a.priority_level || 0));
+            // menor priority_level primero (1 = la más importante / sirena)
+            eligible.sort((a, b) => (a.priority_level || 999) - (b.priority_level || 999));
             const target = eligible[0];
 
             if (!target) {
