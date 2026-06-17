@@ -68,10 +68,17 @@
 
                     <!-- ===== Historial + Bitácora en pestañas ===== -->
                     <notebook>
-                        <page string="🔁 Eventos Múltiples" name="multi" invisible="sibling_event_count == 0">
-                            <div class="alert alert-info d-flex align-items-center justify-content-between" role="alert">
+                        <page string="🔁 Eventos Múltiples" name="multi">
+                            <div class="alert alert-info d-flex align-items-center justify-content-between" role="alert" invisible="sibling_event_count == 0">
                                 <span class="fs-5">🔁 Este cliente tiene <field name="sibling_event_count" class="oe_inline"/> evento(s) abiertos más (además del actual).</span>
-                                <button name="action_bulk_close" type="object" string="Cerrar TODOS en bloque" class="btn-primary" icon="fa-check-double"/>
+                                <div>
+                                    <button name="action_refresh_related" type="object" string="Refrescar" class="btn-secondary" icon="fa-refresh"/>
+                                    <button name="action_bulk_close" type="object" string="Cerrar TODOS en bloque" class="btn-primary" icon="fa-check-double"/>
+                                </div>
+                            </div>
+                            <div class="alert alert-secondary d-flex align-items-center justify-content-between" role="alert" invisible="sibling_event_count != 0">
+                                <span>Sin otros eventos abiertos de este cliente por ahora. Si siguen llegando señales, pulsa Refrescar.</span>
+                                <button name="action_refresh_related" type="object" string="Refrescar" class="btn-secondary" icon="fa-refresh"/>
                             </div>
                             <field name="sibling_event_ids" nolabel="1">
                                 <list create="false" delete="false" edit="false">
@@ -84,7 +91,10 @@
                             </field>
                         </page>
                         <page string="🕓 Historial del panel (24h)" name="historial">
-                            <p class="text-muted">Señales del panel en las últimas 24 h (incluye aperturas/cierres que no generan evento).</p>
+                            <div class="d-flex align-items-center justify-content-between">
+                                <p class="text-muted mb-0">Señales del panel en las últimas 24 h (incluye aperturas/cierres que no generan evento).</p>
+                                <button name="action_refresh_related" type="object" string="Refrescar" class="btn-secondary" icon="fa-refresh"/>
+                            </div>
                             <field name="account_signal_history_ids" readonly="1" nolabel="1">
                                 <list>
                                     <field name="received_date" string="Hora"/>

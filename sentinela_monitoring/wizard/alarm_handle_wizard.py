@@ -127,6 +127,25 @@ class AlarmHandleWizard(models.TransientModel):
         self.ensure_one()
         return self.alarm_event_id.action_open_bulk_close()
 
+    def action_refresh_related(self):
+        """Re-consulta Eventos Múltiples e Historial 24h del panel. Las señales/eventos
+        que siguieron llegando DESPUÉS de abrir la ventana (misma cuenta, otra zona)
+        aparecen al refrescar — sin perder la bitácora capturada."""
+        self.ensure_one()
+        event = self.alarm_event_id
+        if event:
+            sibs = event.sibling_event_ids
+            self.write({
+                'sibling_event_count': len(sibs),
+                'sibling_event_ids': [(6, 0, sibs.ids)],
+                'account_signal_history_ids': [(6, 0, event.account_signal_history_ids.ids)],
+                'possible_false_alarm': event.possible_false_alarm,
+                'false_alarm_hint': event.false_alarm_hint or '',
+            })
+        # Sin retorno de acción → el cliente recarga el registro del wizard en el
+        # modal y muestra las listas actualizadas (no cierra la ventana).
+        return False
+
     @api.depends('alarm_event_id', 'alarm_event_id.subscription_id')
     def _compute_patrol_inclusion(self):
         """Lee subscription.service_inclusion_ids del evento y decide estado.
