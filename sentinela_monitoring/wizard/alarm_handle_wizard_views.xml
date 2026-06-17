@@ -67,6 +67,10 @@
                     </group>
 
                     <!-- ===== Historial + Bitácora en pestañas ===== -->
+                    <!-- Auto-refresco de Eventos Múltiples / Historial (no pisa la bitácora) -->
+                    <div class="text-end mb-1">
+                        <widget name="alarm_autorefresh"/>
+                    </div>
                     <notebook>
                         <page string="🔁 Eventos Múltiples" name="multi">
                             <div class="alert alert-info d-flex align-items-center justify-content-between" role="alert" invisible="sibling_event_count == 0">

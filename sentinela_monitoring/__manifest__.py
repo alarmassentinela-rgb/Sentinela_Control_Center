@@ -1,6 +1,6 @@
 {
     'name': 'Sentinela Monitoring System',
-    'version': '18.0.1.15.6',
+    'version': '18.0.1.15.7',
     'category': 'Industries/Security',
     'summary': 'Sistema de monitoreo de alarmas integrado con Odoo',
     'description': """Sistema completo de monitoreo de alarmas para centrales de monitoreo.""",
@@ -47,6 +47,7 @@
             'sentinela_monitoring/static/src/xml/monitoring_dashboard.xml',
             'sentinela_monitoring/static/src/js/alarm_service.js',
             'sentinela_monitoring/static/src/js/monitoring_dashboard.js',
+            'sentinela_monitoring/static/src/js/alarm_wizard_autorefresh.js',
         ],
     },
     'post_init_hook': 'post_init_hook',
