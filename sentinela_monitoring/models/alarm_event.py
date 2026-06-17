@@ -229,6 +229,38 @@ class AlarmEvent(models.Model):
                         ) % str(s.received_date)[11:16]
                         break
 
+    def get_attention_companion_data(self):
+        """Datos en vivo para la ventana de atención (widget OWL que hace polling):
+        eventos abiertos del mismo cliente + historial de señales 24h del panel.
+        Se lee fresco en cada llamada → muestra lo que llega DESPUÉS de abrir."""
+        self.ensure_one()
+        from odoo.tools import format_datetime
+        sibs = self.sibling_event_ids
+        sigs = self.account_signal_history_ids
+        status_sel = dict(self._fields['status'].selection)
+
+        def fdt(dt):
+            return format_datetime(self.env, dt, dt_format='dd/MM HH:mm') if dt else ''
+
+        return {
+            'sibling_count': len(sibs),
+            'siblings': [{
+                'id': e.id,
+                'name': e.name or '',
+                'start': fdt(e.start_date),
+                'code': (e.alarm_code_id.code or '') if e.alarm_code_id else '',
+                'priority': (e.priority_id.name or '') if e.priority_id else '',
+                'status': status_sel.get(e.status, e.status or ''),
+            } for e in sibs],
+            'signal_count': len(sigs),
+            'signals': [{
+                'received': fdt(s.received_date),
+                'code': s.alarm_code or '',
+                'zone': s.zone or '',
+                'desc': s.description or '',
+            } for s in sigs],
+        }
+
     def action_open_bulk_close(self):
         """Abre el wizard de cierre en bloque precargado con este evento + los
         demás abiertos del MISMO cliente (candado natural por partner)."""

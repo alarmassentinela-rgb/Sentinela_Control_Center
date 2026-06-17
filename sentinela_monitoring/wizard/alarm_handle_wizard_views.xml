@@ -66,40 +66,15 @@
                         <field name="final_notes" placeholder="Notas finales que verá el cliente / quedará en el historial."/>
                     </group>
 
-                    <!-- ===== Historial + Bitácora en pestañas ===== -->
-                    <!-- Auto-refresco de Eventos Múltiples / Historial (no pisa la bitácora) -->
-                    <div class="text-end mb-1">
-                        <widget name="alarm_autorefresh"/>
-                    </div>
+                    <!-- ===== Multi-evento/Historial (EN VIVO) + Bitácora en pestañas ===== -->
                     <notebook>
-                        <page string="🔁 Eventos Múltiples" name="multi">
-                            <div class="alert alert-info d-flex align-items-center justify-content-between" role="alert" invisible="sibling_event_count == 0">
-                                <span class="fs-5">🔁 Este cliente tiene <field name="sibling_event_count" class="oe_inline"/> evento(s) abiertos más (además del actual).</span>
+                        <page string="🔁 Multi-evento e Historial (en vivo)" name="multi">
+                            <div class="d-flex justify-content-end mb-2">
                                 <button name="action_bulk_close" type="object" string="Cerrar TODOS en bloque" class="btn-primary" icon="fa-check-double"/>
                             </div>
-                            <div class="alert alert-secondary" role="alert" invisible="sibling_event_count != 0">
-                                <span>Sin otros eventos abiertos de este cliente por ahora. La lista se actualiza sola.</span>
-                            </div>
-                            <field name="sibling_event_ids" nolabel="1">
-                                <list create="false" delete="false" edit="false">
-                                    <field name="name" string="Evento"/>
-                                    <field name="start_date" string="Inicio"/>
-                                    <field name="full_description" string="Descripción"/>
-                                    <field name="priority_id" string="Prioridad"/>
-                                    <field name="status" string="Estado"/>
-                                </list>
-                            </field>
-                        </page>
-                        <page string="🕓 Historial del panel (24h)" name="historial">
-                            <p class="text-muted">Señales del panel en las últimas 24 h (incluye aperturas/cierres que no generan evento). Se actualiza sola.</p>
-                            <field name="account_signal_history_ids" readonly="1" nolabel="1">
-                                <list>
-                                    <field name="received_date" string="Hora"/>
-                                    <field name="alarm_code" string="Código"/>
-                                    <field name="zone" string="Zona"/>
-                                    <field name="description" string="Descripción"/>
-                                </list>
-                            </field>
+                            <!-- Panel OWL que hace polling al servidor cada 10s y pinta sus
+                                 propias tablas (no depende del registro del wizard). -->
+                            <widget name="alarm_companion"/>
                         </page>
                         <page string="📝 Bitácora del operador" name="bitacora">
                             <field name="notes" nolabel="1" placeholder="Anota cualquier dato adicional aquí. Se guarda al cerrar."/>
