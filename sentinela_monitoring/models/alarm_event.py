@@ -500,12 +500,20 @@ class AlarmEvent(models.Model):
         if not partner:
             return
         when = fields.Datetime.context_timestamp(self, fields.Datetime.now()).strftime('%d/%m/%Y %H:%M')
-        sitio = device.location or device.name or device.account_number or ''
-        msg = (f"🔔 *Sentinela* — evento en su sistema\n"
-               f"*{code_label}*\n"
-               f"{zone_label}\n"
-               f"Cuenta {device.account_number or '—'}{(' · ' + sitio) if sitio else ''}\n"
-               f"{when}")
+        # Dirección de la cuenta: ubicación del panel + domicilio del cliente.
+        addr = ", ".join([x for x in [device.location, partner.street,
+                                      partner.street2, partner.city] if x])
+        maps = device.get_location_map_url() if hasattr(device, 'get_location_map_url') else False
+        lines = [
+            "🔔 *Sentinela* — evento en su sistema",
+            f"*{code_label}*",
+            zone_label,
+            f"📍 {addr}" if addr else None,
+            f"🗺️ {maps}" if maps else None,
+            f"Cuenta {device.account_number or '—'}",
+            f"🕒 {when}",
+        ]
+        msg = "\n".join([ln for ln in lines if ln])
         if want_tg:
             try:
                 partner.send_telegram_message(msg)
