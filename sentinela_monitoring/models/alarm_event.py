@@ -545,7 +545,7 @@ class AlarmEvent(models.Model):
         is_online = status_rec and status_rec.last_heartbeat > (fields.Datetime.now() - timedelta(minutes=5))
         
         res = {
-            'receiver': {'state': 'online' if is_online else 'offline', 'last_seen': str(status_rec.last_heartbeat)[:19] if status_rec else '---'},
+            'receiver': {'state': 'online' if is_online else 'offline', 'last_seen': self._fmt_local(status_rec.last_heartbeat, with_date=False) if status_rec else '---'},
             'counts': {'alarms': self.sudo().search_count(alarm_domain), 'pending': self.sudo().search_count(pending_domain)},
             'events': self._prepare_dashboard_list(alarm_domain),
             'pending_events': self._prepare_dashboard_list(pending_domain),
@@ -614,7 +614,7 @@ class AlarmEvent(models.Model):
                 'client_name': self._clean_translated_name(p_name),
                 'account': r['device_id'][1].split(' ')[0] if r['device_id'] else '0000',
                 'code_display': self._clean_translated_name(code_name),
-                'close_date': str(r['end_date'] or r['write_date'] or '')[:19],
+                'close_date': self._fmt_local(r['end_date'] or r['write_date']),
                 'close_reason_label': reason_map.get(r['close_reason'], r['close_reason'] or '—'),
                 'comment': r['resolution_notes'] or '',
                 'priority_name': self._clean_translated_name(pri.name) if pri else '—',
@@ -622,6 +622,15 @@ class AlarmEvent(models.Model):
                 'priority_text_color': (pri.text_color_hex or '#FFFFFF') if pri else '#FFFFFF',
             })
         return recs
+
+    def _fmt_local(self, value, with_date=True):
+        """Formatea un Datetime (UTC en BD) a la zona horaria del usuario.
+        Sin esto el dashboard mostraba la hora en UTC (bug TZ)."""
+        if not value:
+            return '—' if with_date else '---'
+        dt = fields.Datetime.to_datetime(value)
+        local = fields.Datetime.context_timestamp(self, dt)
+        return local.strftime('%d/%m/%Y %H:%M:%S' if with_date else '%H:%M:%S')
 
     def _prepare_dashboard_list(self, domain):
         recs = self.sudo().search_read(domain, ["id", "partner_id", "device_id", "alarm_code_id", "zone", "description", "start_date", "status"], order="id desc", limit=200)
@@ -632,7 +641,7 @@ class AlarmEvent(models.Model):
             code_name = codes_map.get(r['alarm_code_id'][0], 'Evento') if r['alarm_code_id'] else '---'
             r.update({
                 'partner_name': self._clean_translated_name(p_name), 'account': r['device_id'][1].split(' ')[0] if r['device_id'] else '0000',
-                'code_display': self._clean_translated_name(code_name), 'start_date': str(r['start_date'])[:19],
+                'code_display': self._clean_translated_name(code_name), 'start_date': self._fmt_local(r['start_date']),
                 'is_blocked': "BLOQUEADO" in (r['description'] or "").upper()
             })
         return recs
@@ -676,7 +685,7 @@ class AlarmEvent(models.Model):
             pri = pri_map.get(s['priority_id'][0]) if s['priority_id'] else None
             s.update({
                 'client_name': self._clean_translated_name(p_name), 'account': s['device_id'][1].split(' ')[0] if s['device_id'] else '0000',
-                'received_date': str(s['received_date'])[:19], 'zone_description': f"{str(self._clean_translated_name(c_info['name'])).upper()} .- {str(self._clean_translated_name(point_name)).upper()}",
+                'received_date': self._fmt_local(s['received_date']), 'zone_description': f"{str(self._clean_translated_name(c_info['name'])).upper()} .- {str(self._clean_translated_name(point_name)).upper()}",
                 'event_id': ev_id, 'is_blocked': p_name.startswith("⚠️"),
                 'priority_name': pri['name'] if pri else '—',
                 'priority_color': pri['color'] if pri else '#6c757d',
