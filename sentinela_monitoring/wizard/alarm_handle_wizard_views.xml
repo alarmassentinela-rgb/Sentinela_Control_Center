@@ -30,7 +30,7 @@
                     </div>
 
                     <!-- ===== CONTACTOS (botón de llamar por fila, sobre el contacto REAL) ===== -->
-                    <group string="📞 Contactos del sitio (clic en el teléfono verde para marcar por la central)">
+                    <group string="📞 Contactos del sitio (clic en el teléfono verde para marcar por la central)" invisible="state == 'close'">
                         <field name="contact_ids" nolabel="1" context="{'active_alarm_event_id': alarm_event_id}">
                             <list create="false" delete="false" edit="false">
                                 <field name="sequence" string="#"/>
@@ -44,14 +44,14 @@
                     </group>
 
                     <!-- ===== DESPACHO ===== -->
-                    <group string="🚓 Despacho de patrullero">
+                    <group string="🚓 Despacho de patrullero" invisible="state == 'close'">
                         <field name="technician_id"
                             domain="[('share', '=', False)]"
                             options="{'no_create': True}"
                             placeholder="Selecciona el patrullero a enviar"/>
                         <field name="dispatch_notes" placeholder="Notas del despacho (placa, etc.)"/>
                     </group>
-                    <div class="d-flex flex-wrap gap-2 mb-3">
+                    <div class="d-flex flex-wrap gap-2 mb-3" invisible="state == 'close'">
                         <button name="action_request_patrol_from_wizard" string="Solicitar autorización (Telegram)"
                                 type="object" class="btn-warning"/>
                         <button name="action_authorize_patrol_from_wizard" string="Marcar autorizado"
@@ -60,14 +60,20 @@
                                 type="object" class="btn-danger"/>
                     </div>
 
-                    <!-- ===== CIERRE ===== -->
-                    <group string="✅ Cierre del evento">
-                        <field name="close_reason"/>
-                        <field name="final_notes" placeholder="Notas finales que verá el cliente / quedará en el historial."/>
-                    </group>
+                    <!-- ===== CIERRE (paso enfocado) ===== -->
+                    <div invisible="state != 'close'">
+                        <div class="alert alert-success" role="alert">
+                            <h4 class="mb-1">✅ Cierre del evento</h4>
+                            <p class="mb-0 small">Elige el <b>motivo</b> y agrega un <b>comentario</b>. Luego: <b>Cerrar evento</b> para finalizar · <b>Seguimiento</b> para documentar y retomar después (p. ej. hasta que llegue el patrullero) · <b>Regresar</b> para volver.</p>
+                        </div>
+                        <group>
+                            <field name="close_reason" required="state == 'close'"/>
+                            <field name="final_notes" placeholder="Comentario del cierre (lo verá el cliente / queda en el historial)."/>
+                        </group>
+                    </div>
 
                     <!-- ===== Activas por procesar / Historial (EN VIVO, separados) + Bitácora ===== -->
-                    <notebook>
+                    <notebook invisible="state == 'close'">
                         <page string="🔴 Activas por procesar" name="activas">
                             <div class="d-flex justify-content-end mb-2">
                                 <button name="action_bulk_close" type="object" string="Cerrar TODAS en bloque" class="btn-primary" icon="fa-check-double"/>
@@ -91,14 +97,22 @@
                     </notebook>
                 </sheet>
                 <footer>
-                    <button name="action_finalize" string="✅ Resolver y cerrar"
-                            type="object" class="btn-success"/>
+                    <!-- Paso OPERATIVO: ir al cierre + atajos -->
+                    <button name="action_goto_close" string="Resolver y cerrar →"
+                            type="object" class="btn-success" invisible="state == 'close'"/>
                     <button name="action_shortcut_false_alarm" string="Atajo: Falsa alarma"
-                            type="object" class="btn-outline-secondary"/>
+                            type="object" class="btn-outline-secondary" invisible="state == 'close'"/>
                     <button name="action_shortcut_customer_ok" string="Atajo: Cliente OK"
-                            type="object" class="btn-outline-secondary"/>
+                            type="object" class="btn-outline-secondary" invisible="state == 'close'"/>
                     <button name="action_pause_event" string="Pausar"
-                            type="object" class="btn-secondary"/>
+                            type="object" class="btn-secondary" invisible="state == 'close'"/>
+                    <!-- Paso de CIERRE: regresar / seguimiento / cerrar -->
+                    <button name="action_back_from_close" string="← Regresar"
+                            type="object" class="btn-link" invisible="state != 'close'"/>
+                    <button name="action_pause_event" string="🕓 Seguimiento (pausar)"
+                            type="object" class="btn-warning" invisible="state != 'close'"/>
+                    <button name="action_finalize" string="✅ Cerrar evento"
+                            type="object" class="btn-success" invisible="state != 'close'"/>
                     <button string="Cancelar" class="btn-link" special="cancel"/>
                 </footer>
             </form>

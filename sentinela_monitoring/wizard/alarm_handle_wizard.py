@@ -429,6 +429,34 @@ class AlarmHandleWizard(models.TransientModel):
             parts.append(f"Cierre:\n{self.final_notes}")
         return "\n\n".join(parts) if parts else ""
 
+    def _reopen(self):
+        """Reabre ESTE mismo wizard (mismo registro) → navega entre pasos sin
+        cerrar el diálogo (un botón que retorna False/None lo cerraría)."""
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': self._name,
+            'res_id': self.id,
+            'view_mode': 'form',
+            'views': [(False, 'form')],
+            'target': 'new',
+            'context': self.env.context,
+        }
+
+    def action_goto_close(self):
+        """Lleva al PASO DE CIERRE enfocado (motivo + comentario), sin finalizar."""
+        self.ensure_one()
+        self.alarm_event_id._ensure_claim_held()
+        self.state = 'close'
+        return self._reopen()
+
+    def action_back_from_close(self):
+        """Regresa del paso de cierre al paso operativo anterior (no cierra nada)."""
+        self.ensure_one()
+        idx = self._STATE_ORDER.index(self.state)
+        if idx > 0:
+            self.state = self._STATE_ORDER[idx - 1]
+        return self._reopen()
+
     def action_finalize(self):
         """Cierra el evento: setea resolution_notes consolidado y llama action_resolve."""
         self.ensure_one()
