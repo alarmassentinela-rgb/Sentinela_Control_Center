@@ -162,6 +162,15 @@
                     
                     <!-- BOTÓN DE LLEGADA AL SITIO -->
                     <div t-if="order.stage == 'in_progress' and not order.arrival_date" class="mt-3">
+                        <!-- Aviso de geocerca: rechazo por estar lejos o sin GPS -->
+                        <div t-if="request.params.get('arr_err') == 'far'" class="alert alert-danger py-2 small mb-2">
+                            <i class="fa fa-ban me-1"/> <b>No se puede confirmar la llegada:</b> estás a
+                            <b><t t-esc="request.params.get('dist')"/> m</b> del domicilio
+                            (máximo permitido: <t t-esc="request.params.get('radius')"/> m). Acércate al sitio e inténtalo de nuevo.
+                        </div>
+                        <div t-if="request.params.get('arr_err') == 'nogps'" class="alert alert-warning py-2 small mb-2">
+                            <i class="fa fa-location-arrow me-1"/> <b>Activa la ubicación</b> de tu celular para poder confirmar la llegada.
+                        </div>
                         <form t-attf-action="/tech/order/#{order.id}/arrival" method="post" id="arrival_form">
                             <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                             <input type="hidden" name="lat" id="arrival_lat"/>

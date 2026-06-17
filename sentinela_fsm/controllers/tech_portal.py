@@ -79,16 +79,39 @@ class TechnicianPortal(http.Controller):
 
     @http.route(['/tech/order/<int:order_id>/arrival'], type='http', auth="user", website=True, methods=['POST'])
     def technician_order_arrival(self, order_id, **post):
-        """ Registrar llegada al sitio vía GPS del móvil """
+        """ Registrar llegada al sitio vía GPS del móvil, con GEOCERCA:
+        solo confirma si el patrullero está dentro del radio del domicilio. """
         order = request.env['sentinela.fsm.order'].browse(order_id)
-        if order.exists():
-            order.action_arrival()
-            # Guardar coordenadas de llegada
-            if post.get('lat') and post.get('lon'):
-                order.write({
-                    'arrival_lat': float(post.get('lat')),
-                    'arrival_lon': float(post.get('lon')),
-                })
+        if not order.exists():
+            return request.redirect('/tech/dashboard')
+
+        # GPS del móvil al pulsar el botón
+        try:
+            lat = float(post.get('lat')) if post.get('lat') else None
+            lon = float(post.get('lon')) if post.get('lon') else None
+        except (ValueError, TypeError):
+            lat = lon = None
+        if not lat or not lon:
+            # Sin ubicación no se puede comprobar la llegada
+            return request.redirect(f'/tech/order/{order_id}?arr_err=nogps')
+
+        # Coordenadas del domicilio (alarma); fallback al contacto del servicio
+        dest_lat = order.install_lat or order.service_address_id.partner_latitude or 0.0
+        dest_lon = order.install_lon or order.service_address_id.partner_longitude or 0.0
+
+        # Radio de geocerca configurable (metros); default 150
+        radius_m = int(request.env['ir.config_parameter'].sudo().get_param(
+            'sentinela_fsm.arrival_geofence_m', 150))
+
+        # Solo validamos si el domicilio tiene coordenadas reales
+        if abs(dest_lat) > 0.0001 or abs(dest_lon) > 0.0001:
+            dist_m = order._haversine_km(lat, lon, dest_lat, dest_lon) * 1000.0
+            if dist_m > radius_m:
+                return request.redirect(
+                    f'/tech/order/{order_id}?arr_err=far&dist={int(dist_m)}&radius={radius_m}')
+
+        order.action_arrival()
+        order.write({'arrival_lat': lat, 'arrival_lon': lon})
         return request.redirect(f'/tech/order/{order_id}')
 
     @http.route(['/tech/order/<int:order_id>/save'], type='http', auth="user", website=True, methods=['POST'])

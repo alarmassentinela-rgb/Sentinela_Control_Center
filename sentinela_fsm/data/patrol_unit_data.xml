@@ -17,5 +17,12 @@
             <field name="available" eval="True"/>
             <field name="is_default_dispatch" eval="True"/>
         </record>
+
+        <!-- Radio de geocerca para confirmar la llegada del patrullero (metros).
+             Editable en Ajustes → Técnico → Parámetros del sistema. -->
+        <record id="param_arrival_geofence" model="ir.config_parameter">
+            <field name="key">sentinela_fsm.arrival_geofence_m</field>
+            <field name="value">150</field>
+        </record>
     </data>
 </odoo>
