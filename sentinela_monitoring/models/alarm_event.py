@@ -601,7 +601,10 @@ class AlarmEvent(models.Model):
             raw_point = s.get('zone') or '0'
             clean_point = str(int(raw_point)) if raw_point.isdigit() else raw_point
             is_user_code = cid_code in ['401', '407', '403', '408', '409']
-            point_name = users_map.get((s['device_id'][0], clean_point)) or f"USUARIO {raw_point}" if (c_info['point_type'] == 'user' or is_user_code) else zones_map.get((s['device_id'][0], clean_point)) or f"ZONA {raw_point}"
+            # device_id puede ser False en señales de CUARENTENA (cuenta no
+            # registrada) → no buscar zona/usuario, evita 'bool not subscriptable'.
+            dev_pk = s['device_id'][0] if s['device_id'] else False
+            point_name = (users_map.get((dev_pk, clean_point)) or f"USUARIO {raw_point}") if (c_info['point_type'] == 'user' or is_user_code) else (zones_map.get((dev_pk, clean_point)) or f"ZONA {raw_point}")
             ev_id = s.get('alarm_event_id') and s['alarm_event_id'][0] or False
             pri = pri_map.get(s['priority_id'][0]) if s['priority_id'] else None
             s.update({
