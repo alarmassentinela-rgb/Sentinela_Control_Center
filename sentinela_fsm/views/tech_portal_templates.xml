@@ -122,9 +122,13 @@
                 <div class="data-label">Ubicación</div>
                 <div class="data-value small"><t t-esc="order.service_address_id.contact_address"/></div>
                 
-                <div class="d-grid mt-2">
-                    <a t-attf-href="https://www.google.com/maps/search/?api=1&amp;query=#{order.service_address_id.partner_latitude},#{order.service_address_id.partner_longitude}" 
-                       target="_blank" class="btn btn-outline-primary btn-sm"><i class="fa fa-map-signs me-2"/> Cómo llegar</a>
+                <!-- Navegación turn-by-turn: SentiCar/Traccar solo rastrea, NO navega.
+                     El destino son las coords de instalación (alarma); fallback al contacto. -->
+                <div class="d-grid gap-2 mt-2">
+                    <a t-attf-href="https://www.google.com/maps/dir/?api=1&amp;destination=#{order.install_lat or order.service_address_id.partner_latitude},#{order.install_lon or order.service_address_id.partner_longitude}&amp;travelmode=driving"
+                       target="_blank" class="btn btn-primary btn-sm"><i class="fa fa-location-arrow me-2"/> Cómo llegar (Google Maps)</a>
+                    <a t-attf-href="https://waze.com/ul?ll=#{order.install_lat or order.service_address_id.partner_latitude},#{order.install_lon or order.service_address_id.partner_longitude}&amp;navigate=yes"
+                       target="_blank" class="btn btn-outline-info btn-sm"><i class="fa fa-road me-2"/> Cómo llegar (Waze)</a>
                 </div>
             </div>
 
@@ -659,8 +663,8 @@
 
                 <script t-inline="javascript">
                     var token = "<t t-esc="order.tracking_token"/>";
-                    var destLat = <t t-esc="order.service_address_id.partner_latitude or 0"/>;
-                    var destLon = <t t-esc="order.service_address_id.partner_longitude or 0"/>;
+                    var destLat = <t t-esc="order.install_lat or order.service_address_id.partner_latitude or 0"/>;
+                    var destLon = <t t-esc="order.install_lon or order.service_address_id.partner_longitude or 0"/>;
                     
                     var map = L.map('map').setView([destLat, destLon], 14);
                     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
