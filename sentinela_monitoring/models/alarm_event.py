@@ -553,15 +553,15 @@ class AlarmEvent(models.Model):
         }
         res['commented'] = []
         if current_tab == 'alarms':
-            # ALARMAS usa la misma vista que Tráfico→Activos: señales de eventos
-            # activos (tabla con prioridad/color, filtros y doble-clic para tomar).
-            res['signals'] = self._prepare_signal_list(
-                [('alarm_event_id.status', '=', 'active')], signal_filters or {})
+            # ALARMAS = EVENTOS activos (la cola de trabajo; incluye troubles
+            # offline que no tienen señal), presentados con la MISMA tabla
+            # estándar (prioridad/color, filtros, doble-clic). 1 fila por evento
+            # → cuadra con el contador.
+            res['signals'] = self._prepare_events_as_signals(
+                [('status', '=', 'active')], signal_filters or {})
         if current_tab == 'pending':
-            # PENDIENTES: misma tabla, señales de eventos que el operador trabaja
-            # (acknowledged/in_progress/paused/escalated) → doble-clic para retomar.
-            res['signals'] = self._prepare_signal_list(
-                [('alarm_event_id.status', 'in', ['acknowledged', 'in_progress', 'paused', 'escalated'])],
+            res['signals'] = self._prepare_events_as_signals(
+                [('status', 'in', ['acknowledged', 'in_progress', 'paused', 'escalated'])],
                 signal_filters or {})
         if current_tab == 'traffic':
             if traffic_filter == 'commented':
@@ -603,6 +603,51 @@ class AlarmEvent(models.Model):
             elif k in m:
                 dom.append((m[k], 'ilike', v))
         return dom
+
+    def _event_filter_domain(self, filters):
+        """Filtros por columna → dominio sobre EVENTOS (vistas Alarmas/Pendientes)."""
+        m = {'account': 'device_id.account_number', 'code': 'alarm_code_id.code',
+             'zone': 'zone', 'client': 'partner_id.name',
+             'priority': 'priority_id.name', 'desc': 'description'}
+        dom = []
+        for k, v in (filters or {}).items():
+            if v and k in m:
+                dom.append((m[k], 'ilike', v))
+        return dom
+
+    def _prepare_events_as_signals(self, base_domain, filters=None):
+        """Devuelve EVENTOS con la MISMA forma que la tabla de señales (mismas
+        claves) para que ALARMAS/PENDIENTES usen el mismo render: prioridad con
+        color, filtros, doble-clic. 1 fila por evento (cuadra con el contador)."""
+        fdom = self._event_filter_domain(filters)
+        recs = self.sudo().search_read(
+            base_domain + fdom,
+            ["id", "partner_id", "device_id", "alarm_code_id", "zone", "description",
+             "start_date", "priority_id"],
+            order="id desc", limit=300 if fdom else 200)
+        pri_ids = list(set([r['priority_id'][0] for r in recs if r['priority_id']]))
+        pri_map = {p.id: p for p in self.env['sentinela.alarm.priority'].sudo().browse(pri_ids)}
+        code_ids = list(set([r['alarm_code_id'][0] for r in recs if r['alarm_code_id']]))
+        codes_map = {c.id: c.code for c in self.env['sentinela.alarm.code'].sudo().browse(code_ids)} if code_ids else {}
+        out = []
+        for r in recs:
+            p_name = r['partner_id'][1] if r['partner_id'] else "⚠️ CUENTA NO REGISTRADA"
+            pri = pri_map.get(r['priority_id'][0]) if r['priority_id'] else None
+            out.append({
+                'id': r['id'], 'event_id': r['id'],
+                'priority_name': self._clean_translated_name(pri.name) if pri else '—',
+                'priority_color': (pri.color_hex or '#6c757d') if pri else '#6c757d',
+                'priority_text_color': (pri.text_color_hex or '#FFFFFF') if pri else '#FFFFFF',
+                'client_name': self._clean_translated_name(p_name),
+                'received_date': self._fmt_local(r['start_date']),
+                'account': r['device_id'][1].split(' ')[0] if r['device_id'] else '0000',
+                'alarm_code': codes_map.get(r['alarm_code_id'][0], '') if r['alarm_code_id'] else '',
+                'zone': r['zone'] or '',
+                'zone_description': self._clean_translated_name(r['description'] or ''),
+                'processable': True,
+                'is_blocked': p_name.startswith("⚠️"),
+            })
+        return out
 
     def _prepare_commented_list(self, filters=None):
         fdom = self._commented_filter_domain(filters)
