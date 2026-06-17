@@ -569,7 +569,7 @@ class AlarmEvent(models.Model):
             domain,
             ["id", "partner_id", "device_id", "alarm_code_id", "zone", "end_date",
              "write_date", "close_reason", "resolution_notes", "priority_id"],
-            order="id desc", limit=50)
+            order="id desc", limit=200)
         reason_map = dict(self._fields['close_reason'].selection)
         code_ids = list(set([r['alarm_code_id'][0] for r in recs if r['alarm_code_id']]))
         codes_map = {c.id: c.name for c in self.env['sentinela.alarm.code'].sudo().browse(code_ids)} if code_ids else {}
@@ -593,7 +593,7 @@ class AlarmEvent(models.Model):
         return recs
 
     def _prepare_dashboard_list(self, domain):
-        recs = self.sudo().search_read(domain, ["id", "partner_id", "device_id", "alarm_code_id", "zone", "description", "start_date", "status"], order="id desc", limit=50)
+        recs = self.sudo().search_read(domain, ["id", "partner_id", "device_id", "alarm_code_id", "zone", "description", "start_date", "status"], order="id desc", limit=200)
         code_ids = list(set([r['alarm_code_id'][0] for r in recs if r['alarm_code_id']]))
         codes_map = {c.id: c.name for c in self.env['sentinela.alarm.code'].sudo().browse(code_ids)} if code_ids else {}
         for r in recs:
@@ -607,7 +607,7 @@ class AlarmEvent(models.Model):
         return recs
 
     def _prepare_signal_list(self, domain):
-        signals = self.env['sentinela.alarm.signal'].sudo().search_read(domain, ["id", "received_date", "alarm_code", "zone", "description", "partner_id", "device_id", "alarm_event_id", "priority_id"], order="id desc", limit=50)
+        signals = self.env['sentinela.alarm.signal'].sudo().search_read(domain, ["id", "received_date", "alarm_code", "zone", "description", "partner_id", "device_id", "alarm_event_id", "priority_id"], order="id desc", limit=200)
         # Mapa de prioridades (nombre + color) para la columna de prioridad
         pri_ids = list(set([s['priority_id'][0] for s in signals if s['priority_id']]))
         pri_map = {}

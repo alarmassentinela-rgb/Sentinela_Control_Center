@@ -13,6 +13,8 @@ export class MonitoringDashboard extends Component {
             pendingEvents: [],
             signals: [],
             commented: [],
+            signalFilters: {},
+            commentedFilters: {},
             receiverStatus: 'offline', 
             lastHeartbeat: '---',
             alarmCount: 0,
@@ -71,6 +73,34 @@ export class MonitoringDashboard extends Component {
     async setTrafficFilter(filter) {
         this.state.trafficFilter = filter;
         await this.loadData();
+    }
+
+    // ---- Filtros por columna (tipo Excel), client-side, combinables (AND) ----
+    setColFilter(table, field, ev) {
+        const v = (ev.target.value || "").trim().toLowerCase();
+        const key = table === "commented" ? "commentedFilters" : "signalFilters";
+        const f = { ...this.state[key] };
+        if (v) { f[field] = v; } else { delete f[field]; }
+        this.state[key] = f;
+    }
+
+    _matchRow(row, filters, fieldMap) {
+        return Object.entries(filters).every(([k, v]) => {
+            const val = (row[fieldMap[k]] ?? "").toString().toLowerCase();
+            return val.includes(v);
+        });
+    }
+
+    get filteredSignals() {
+        const fmap = { priority: "priority_name", client: "client_name", account: "account",
+                       code: "alarm_code", zone: "zone", desc: "zone_description" };
+        return this.state.signals.filter((s) => this._matchRow(s, this.state.signalFilters, fmap));
+    }
+
+    get filteredCommented() {
+        const fmap = { priority: "priority_name", client: "client_name", account: "account",
+                       code: "code_display", reason: "close_reason_label", comment: "comment" };
+        return this.state.commented.filter((c) => this._matchRow(c, this.state.commentedFilters, fmap));
     }
 
     async loadData() {
