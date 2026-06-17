@@ -701,6 +701,11 @@ class AlarmEvent(models.Model):
         ])
         result = []
         uid = self.env.uid
+        # "Atendiendo": el operador actual tiene al menos un evento tomado y abierto.
+        # Mientras atiende, el frontend baja las DEMÁS alarmas a un tono tenue
+        # (reminder) para que pueda hablar por teléfono sin la sirena encima.
+        attending = bool(events.filtered(
+            lambda e: e.current_operator_id and e.current_operator_id.id == uid))
         for ev in events:
             pri = ev.priority_id
             has_sound = bool(pri.priority_sound)
@@ -720,7 +725,7 @@ class AlarmEvent(models.Model):
                 'is_claimed_by_me': bool(ev.current_operator_id and
                                           ev.current_operator_id.id == uid),
             })
-        return {'active_alarms': result}
+        return {'active_alarms': result, 'attending': attending}
 
     @api.model
     def _cron_release_stale_locks(self):

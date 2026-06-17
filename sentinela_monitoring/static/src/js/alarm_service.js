@@ -29,6 +29,10 @@ export const alarmService = {
 
         const MUTE_DURATION_MS = 5 * 60 * 1000;       // 5 minutos por click de mute
         const REMINDER_INTERVAL_MS = 30 * 1000;       // recordatorios cada 30s
+        // Sonido tenue para cuando el operador está atendiendo (hablando por
+        // teléfono): las demás alarmas no gritan la sirena, solo recuerdan suave.
+        const SOFT_URL = "/sentinela_monitoring/static/src/sounds/reminder.wav";
+        const SOFT_VOLUME = 0.35;
 
         const stopCurrent = () => {
             if (currentAudio) {
@@ -55,7 +59,9 @@ export const alarmService = {
 
         const playPriority = (target) => {
             const audio = getOrCreateAudio(target.priority_id, target.sound_url);
-            audio.loop = !target.is_reminder;
+            const soft = Boolean(target.is_reminder);   // modo tenue (atendiendo)
+            audio.loop = !soft;
+            audio.volume = soft ? SOFT_VOLUME : 1.0;
             audio.currentTime = 0;
             const playPromise = audio.play();
             if (playPromise && playPromise.catch) {
@@ -65,7 +71,7 @@ export const alarmService = {
             currentAudio = audio;
             currentPriorityId = target.priority_id;
 
-            if (target.is_reminder) {
+            if (soft) {
                 reminderTimer = setInterval(() => {
                     try {
                         audio.currentTime = 0;
@@ -93,13 +99,19 @@ export const alarmService = {
             );
             // menor priority_level primero (1 = la más importante / sirena)
             eligible.sort((a, b) => (a.priority_level || 999) - (b.priority_level || 999));
-            const target = eligible[0];
+            const top = eligible[0];
 
-            if (!target) {
+            if (!top) {
                 stopCurrent();
                 return;
             }
-            // si ya estamos tocando la misma prioridad, no reiniciar
+            // Si el operador está atendiendo un evento (lo tomó), las DEMÁS alarmas
+            // no gritan la sirena: suenan tenue (reminder, bajo y cada 30s) para que
+            // pueda hablar por teléfono. Al cerrar/soltar su evento, vuelve la sirena.
+            const target = data.attending
+                ? { priority_id: "__soft__", sound_url: SOFT_URL, is_reminder: true }
+                : top;
+            // si ya estamos tocando lo mismo, no reiniciar
             if (currentPriorityId === target.priority_id && currentAudio) return;
             stopCurrent();
             playPriority(target);
