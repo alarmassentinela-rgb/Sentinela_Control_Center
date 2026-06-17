@@ -791,9 +791,15 @@ class FsmOrder(models.Model):
             res = requests.get(url, params=params, auth=HTTPBasicAuth(user, password), timeout=5)
             if res.ok and res.json():
                 pos = res.json()[0]
+                lat = pos.get('latitude') or 0.0
+                lon = pos.get('longitude') or 0.0
+                # Traccar devuelve 0,0 ("isla nula" frente a África) cuando el dispositivo
+                # aún no tiene fix GPS real. No es una posición: trátalo como sin señal.
+                if abs(lat) < 0.0001 and abs(lon) < 0.0001:
+                    return False
                 return {
-                    'lat': pos.get('latitude'),
-                    'lon': pos.get('longitude'),
+                    'lat': lat,
+                    'lon': lon,
                     'speed': pos.get('speed'),
                     'last_update': pos.get('fixTime')
                 }

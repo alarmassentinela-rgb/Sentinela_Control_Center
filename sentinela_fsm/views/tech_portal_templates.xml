@@ -625,6 +625,9 @@
                             </div>
                         </div>
                         
+                        <div class="text-center pb-2">
+                            <span id="gps_status" class="fw-bold text-muted">🛰️ Esperando señal GPS de la unidad…</span>
+                        </div>
                         <div class="row text-center border-top pt-3">
                             <div class="col-6 border-end">
                                 <small class="text-muted d-block">Folio</small>
@@ -659,18 +662,24 @@
                     var destLat = <t t-esc="order.service_address_id.partner_latitude or 0"/>;
                     var destLon = <t t-esc="order.service_address_id.partner_longitude or 0"/>;
                     
-                    var map = L.map('map').setView([destLat, destLon], 13);
+                    var map = L.map('map').setView([destLat, destLon], 14);
                     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-                    var techMarker = L.marker([0, 0], {
-                        icon: L.icon({
-                            iconUrl: 'https://cdn-icons-png.flaticon.com/512/2554/2554978.png',
-                            iconSize: [40, 40],
-                            iconAnchor: [20, 20]
-                        })
-                    }).addTo(map);
-
                     var destMarker = L.marker([destLat, destLon]).addTo(map).bindPopup('Su Domicilio').openPopup();
+
+                    // El marcador de la patrulla se crea SOLO cuando llega una posición real
+                    // (evita el pin en 0,0 / "isla nula" frente a África cuando no hay fix GPS).
+                    var techIcon = L.icon({
+                        iconUrl: 'https://cdn-icons-png.flaticon.com/512/2554/2554978.png',
+                        iconSize: [40, 40], iconAnchor: [20, 20]
+                    });
+                    var techMarker = null;
+                    var centered = false;
+
+                    function setStatus(txt) {
+                        var el = document.getElementById('gps_status');
+                        if (el) { el.textContent = txt; }
+                    }
 
                     function updatePosition() {
                         fetch('/rastreo/' + token + '/data', {
@@ -678,15 +687,25 @@
                             headers: {'Content-Type': 'application/json'},
                             body: JSON.stringify({params: {}})
                         }).then(res => res.json()).then(data => {
-                            if (data.result &amp;&amp; data.result.lat) {
-                                var newPos = [data.result.lat, data.result.lon];
-                                techMarker.setLatLng(newPos);
-                                // Ajustar mapa si es la primera vez
-                                if (techMarker.getLatLng().lat === 0) {
-                                    var group = new L.featureGroup([techMarker, destMarker]);
-                                    map.fitBounds(group.getBounds().pad(0.2));
+                            var r = (data &amp;&amp; data.result) || {};
+                            if (r.lat &amp;&amp; r.lon) {
+                                var newPos = [r.lat, r.lon];
+                                if (!techMarker) {
+                                    techMarker = L.marker(newPos, {icon: techIcon}).addTo(map).bindPopup('Patrulla en camino');
+                                } else {
+                                    techMarker.setLatLng(newPos);
                                 }
+                                if (!centered) {
+                                    var group = new L.featureGroup([techMarker, destMarker]);
+                                    map.fitBounds(group.getBounds().pad(0.3));
+                                    centered = true;
+                                }
+                                setStatus('🚓 Patrulla en camino — ubicación en vivo');
+                            } else {
+                                setStatus('🛰️ Esperando señal GPS de la unidad…');
                             }
+                        }).catch(function () {
+                            setStatus('🛰️ Esperando señal GPS…');
                         });
                     }
 
