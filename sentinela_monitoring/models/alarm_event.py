@@ -572,7 +572,20 @@ class AlarmEvent(models.Model):
         return recs
 
     def _prepare_signal_list(self, domain):
-        signals = self.env['sentinela.alarm.signal'].sudo().search_read(domain, ["id", "received_date", "alarm_code", "zone", "description", "partner_id", "device_id", "alarm_event_id"], order="id desc", limit=50)
+        signals = self.env['sentinela.alarm.signal'].sudo().search_read(domain, ["id", "received_date", "alarm_code", "zone", "description", "partner_id", "device_id", "alarm_event_id", "priority_id"], order="id desc", limit=50)
+        # Mapa de prioridades (nombre + color) para la columna de prioridad
+        pri_ids = list(set([s['priority_id'][0] for s in signals if s['priority_id']]))
+        pri_map = {}
+        for p in self.env['sentinela.alarm.priority'].sudo().browse(pri_ids):
+            pri_map[p.id] = {
+                'name': self._clean_translated_name(p.name or ''),
+                'color': p.color_hex or '#6c757d',
+                'text_color': p.text_color_hex or '#FFFFFF',
+                'level': p.level,
+            }
+        # Estado de los eventos ligados → saber si la señal es "procesable" (tomable)
+        ev_ids = list(set([s['alarm_event_id'][0] for s in signals if s['alarm_event_id']]))
+        ev_status = {e.id: e.status for e in self.sudo().browse(ev_ids)} if ev_ids else {}
         dev_ids = list(set([s['device_id'][0] for s in signals if s['device_id']]))
         zones_recs = self.env['sentinela.monitoring.zone'].sudo().search([('device_id', 'in', dev_ids)])
         zones_map = {(z.device_id.id, str(int(z.zone_number))): z.name for z in zones_recs}
@@ -589,10 +602,17 @@ class AlarmEvent(models.Model):
             clean_point = str(int(raw_point)) if raw_point.isdigit() else raw_point
             is_user_code = cid_code in ['401', '407', '403', '408', '409']
             point_name = users_map.get((s['device_id'][0], clean_point)) or f"USUARIO {raw_point}" if (c_info['point_type'] == 'user' or is_user_code) else zones_map.get((s['device_id'][0], clean_point)) or f"ZONA {raw_point}"
+            ev_id = s.get('alarm_event_id') and s['alarm_event_id'][0] or False
+            pri = pri_map.get(s['priority_id'][0]) if s['priority_id'] else None
             s.update({
                 'client_name': self._clean_translated_name(p_name), 'account': s['device_id'][1].split(' ')[0] if s['device_id'] else '0000',
                 'received_date': str(s['received_date'])[:19], 'zone_description': f"{str(self._clean_translated_name(c_info['name'])).upper()} .- {str(self._clean_translated_name(point_name)).upper()}",
-                'event_id': s.get('alarm_event_id') and s['alarm_event_id'][0] or False, 'is_blocked': p_name.startswith("⚠️")
+                'event_id': ev_id, 'is_blocked': p_name.startswith("⚠️"),
+                'priority_name': pri['name'] if pri else '—',
+                'priority_color': pri['color'] if pri else '#6c757d',
+                'priority_text_color': pri['text_color'] if pri else '#FFFFFF',
+                # Procesable = tiene evento atendible (no resuelto/cerrado) → click abre
+                'processable': bool(ev_id) and ev_status.get(ev_id) in ('active', 'acknowledged', 'in_progress', 'paused', 'escalated'),
             })
         return signals
 

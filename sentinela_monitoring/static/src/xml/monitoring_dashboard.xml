@@ -125,6 +125,7 @@
                         <thead class="bg-dark text-white sticky-top">
                             <tr>
                                 <th class="ps-3">ID</th>
+                                <th>PRIORIDAD</th>
                                 <th>CLIENTE</th>
                                 <th>FECHA</th>
                                 <th>CUENTA</th>
@@ -135,8 +136,16 @@
                         </thead>
                         <tbody>
                             <t t-foreach="state.signals" t-as="s" t-key="s.id">
-                                <tr t-att-class="s.is_blocked ? 'opacity-50 grayscale' : ''" style="font-family: monospace;">
+                                <tr t-att-class="(s.is_blocked ? 'opacity-50 grayscale ' : '') + (s.processable ? 'cursor-pointer' : '')"
+                                    t-att-title="s.processable ? 'Doble clic para atender el evento' : ''"
+                                    t-att-style="'font-family: monospace;' + (s.processable ? ' cursor: pointer;' : '')"
+                                    t-on-dblclick="() => s.processable ? this.handleAlarm(s.event_id) : null">
                                     <td class="ps-3"><t t-esc="s.id"/></td>
+                                    <td>
+                                        <span class="badge" t-att-style="'background-color:' + s.priority_color + ';color:' + s.priority_text_color + ';'">
+                                            <t t-esc="s.priority_name"/>
+                                        </span>
+                                    </td>
                                     <td class="fw-bold"><t t-esc="s.client_name"/></td>
                                     <td><t t-esc="s.received_date"/></td>
                                     <td><span class="badge bg-light text-dark border"><t t-esc="s.account"/></span></td>
