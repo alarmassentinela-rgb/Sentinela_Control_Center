@@ -6,7 +6,10 @@ class DeviceAlarmConfig(models.Model):
 
     device_id = fields.Many2one('sentinela.monitoring.device', string='Dispositivo', ondelete='cascade', required=True)
     alarm_code_id = fields.Many2one('sentinela.alarm.code', string='Código de Alarma', required=True)
-    
+    code_number = fields.Char(related='alarm_code_id.code', string='Código', store=True)
+    code_description = fields.Char(related='alarm_code_id.name', string='Descripción')
+    event_category = fields.Selection(related='alarm_code_id.event_category', string='Categoría')
+
     # Sobrescribe la prioridad global
     priority_id = fields.Many2one('sentinela.alarm.priority', string='Prioridad Personalizada')
     

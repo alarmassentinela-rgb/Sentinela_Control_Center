@@ -5,23 +5,31 @@
         <field name="model">sentinela.alarm.code.template</field>
         <field name="arch" type="xml">
             <form string="Plantilla Maestra de Códigos">
+                <header>
+                    <button name="action_load_all_codes" string="Cargar TODO el catálogo" type="object" class="btn-primary" icon="fa-download"/>
+                    <button name="action_load_attention_codes" string="Cargar solo alarmas/fallas" type="object" class="btn-secondary" icon="fa-download"/>
+                </header>
                 <sheet>
                     <div class="oe_title">
                         <h1><field name="name" placeholder="Ej. Plantilla Residencial"/></h1>
                     </div>
                     <group>
                         <field name="description"/>
+                        <field name="line_count"/>
                         <field name="active" widget="boolean_toggle"/>
                     </group>
                     <notebook>
                         <page string="Configuración de Reacción">
                             <field name="line_ids">
-                                <list editable="bottom">
-                                    <field name="alarm_code_id"/>
+                                <list editable="bottom" default_order="code_number">
+                                    <field name="alarm_code_id" string="Código"/>
+                                    <field name="code_description"/>
+                                    <field name="event_category"/>
+                                    <field name="code_number" column_invisible="1"/>
                                     <field name="priority_id" widget="badge"/>
-                                    <field name="notify_email"/>
-                                    <field name="notify_telegram"/>
-                                    <field name="notify_whatsapp"/>
+                                    <field name="notify_email" string="Email"/>
+                                    <field name="notify_telegram" string="Telegram"/>
+                                    <field name="notify_whatsapp" string="WhatsApp"/>
                                     <field name="notes"/>
                                 </list>
                             </field>
