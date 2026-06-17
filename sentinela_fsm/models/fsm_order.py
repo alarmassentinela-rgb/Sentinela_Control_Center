@@ -566,12 +566,17 @@ class FsmOrder(models.Model):
         if self.subscription_id:
             tech = self.subscription_id.service_type
         
-        # Buscar tareas que apliquen a este servicio y esta tecnología
-        domain = [
-            ('service_type', 'in', ['all', self.service_type]),
-            ('tech_category', 'in', ['all', tech])
-        ]
-        
+        # Buscar tareas que apliquen a este servicio y esta tecnología.
+        # En PATRULLAJE el checklist es propio (perímetro/puertas/sospechosos): NO se
+        # mezclan las tareas genéricas 'all' (que son de instalación/configuración).
+        if self.service_type == 'patrol':
+            domain = [('service_type', '=', 'patrol')]
+        else:
+            domain = [
+                ('service_type', 'in', ['all', self.service_type]),
+                ('tech_category', 'in', ['all', tech])
+            ]
+
         templates = self.env['sentinela.fsm.task.template'].search(domain, order='sequence asc')
         lines = []
         for t in templates:

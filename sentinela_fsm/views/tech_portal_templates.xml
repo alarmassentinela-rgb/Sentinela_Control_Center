@@ -132,8 +132,8 @@
                 </div>
             </div>
 
-            <!-- CITA PROGRAMADA (NUEVO) -->
-            <div class="tech-card p-3 shadow-sm bg-light">
+            <!-- CITA PROGRAMADA (NUEVO) — en patrullaje no aplica (es despacho inmediato) -->
+            <div t-if="order.service_type != 'patrol'" class="tech-card p-3 shadow-sm bg-light">
                 <div class="row align-items-center">
                     <div class="col-2 text-center text-primary">
                         <i class="fa fa-calendar fa-2x"/>
@@ -230,33 +230,9 @@
                                             <div class="fw-bold fs-6" t-esc="order.alarm_event_id.subscription_id.security_code or 'SIN PALABRA CLAVE'"/>
                                         </div>
 
-                                        <!-- PROTOCOLO 360 (NUEVO) -->
-                                        <div class="mt-4 p-3 border rounded bg-white shadow-sm">
-                                            <h6 class="fw-bold text-primary"><i class="fa fa-shield me-2"/> PROTOCOLO SENTINELA 360</h6>
-                                            <p class="extra-small text-muted mb-3">Complete la inspección perimetral antes de dictaminar.</p>
-                                            
-                                            <div class="mb-3">
-                                                <label class="data-label">Dictamen de Situación</label>
-                                                <select name="patrol_result" class="form-select form-select-sm fw-bold border-primary">
-                                                    <option value="">-- Seleccione Resultado --</option>
-                                                    <t t-foreach="request.env['sentinela.fsm.order']._fields['patrol_result'].selection" t-as="opt">
-                                                        <option t-att-value="opt[0]" t-att-selected="'selected' if order.patrol_result == opt[0] else None">
-                                                            <t t-esc="opt[1]"/>
-                                                        </option>
-                                                    </t>
-                                                </select>
-                                            </div>
-
-                                            <div class="form-check form-switch mb-2">
-                                                <input class="form-check-input" type="checkbox" name="is_forced_entry" id="swForced" t-att-checked="'checked' if order.is_forced_entry else None"/>
-                                                <label class="form-check-label small fw-bold text-danger" for="swForced">¿Hay señales de intrusión forzada?</label>
-                                            </div>
-
-                                            <div class="form-check form-switch mb-3">
-                                                <input class="form-check-input" type="checkbox" name="police_notified" id="swPolice" t-att-checked="'checked' if order.police_notified else None"/>
-                                                <label class="form-check-label small fw-bold" for="swPolice">¿Se dio aviso a la Policía / 911?</label>
-                                            </div>
-
+                                        <!-- Acción inmediata. El DICTAMEN se captura en la pestaña
+                                             RESOLUCIÓN (dentro del formulario, así SÍ se guarda). -->
+                                        <div class="mt-3">
                                             <button type="button" class="btn btn-outline-danger btn-sm w-100 fw-bold" onclick="alert('🆘 ALERTA ENVIADA A CENTRAL: El operador está coordinando apoyo ahora mismo.')">
                                                 <i class="fa fa-bullhorn me-2"/> SOLICITAR APOYO / POLICÍA
                                             </button>
@@ -319,7 +295,7 @@
                         <li class="nav-item">
                             <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-check" type="button">CHECKLIST</button>
                         </li>
-                        <li class="nav-item">
+                        <li t-if="order.service_type != 'patrol'" class="nav-item">
                             <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-tech" type="button">DATOS TÉCNICOS</button>
                         </li>
                     </ul>
@@ -327,9 +303,34 @@
                     <div class="tab-content" id="pills-tabContent">
                         <!-- Pestaña Resolución -->
                         <div class="tab-pane fade show active" id="tab-res" role="tabpanel">
+                            <!-- DICTAMEN DE PATRULLAJE (Protocolo 360) — dentro del form: se guarda -->
+                            <div t-if="order.service_type == 'patrol'" class="tech-card p-3 mb-3 border border-primary shadow-sm">
+                                <h6 class="fw-bold text-primary"><i class="fa fa-shield me-2"/> DICTAMEN DE LA PATRULLA</h6>
+                                <p class="extra-small text-muted mb-3">Complete la inspección perimetral antes de dictaminar.</p>
+                                <div class="mb-3">
+                                    <label class="data-label">Dictamen de Situación</label>
+                                    <select name="patrol_result" class="form-select form-select-sm fw-bold border-primary">
+                                        <option value="">-- Seleccione Resultado --</option>
+                                        <t t-foreach="request.env['sentinela.fsm.order']._fields['patrol_result'].selection" t-as="opt">
+                                            <option t-att-value="opt[0]" t-att-selected="'selected' if order.patrol_result == opt[0] else None">
+                                                <t t-esc="opt[1]"/>
+                                            </option>
+                                        </t>
+                                    </select>
+                                </div>
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input" type="checkbox" name="is_forced_entry" id="swForced" t-att-checked="'checked' if order.is_forced_entry else None"/>
+                                    <label class="form-check-label small fw-bold text-danger" for="swForced">¿Hay señales de intrusión forzada?</label>
+                                </div>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="police_notified" id="swPolice" t-att-checked="'checked' if order.police_notified else None"/>
+                                    <label class="form-check-label small fw-bold" for="swPolice">¿Se dio aviso a la Policía / 911?</label>
+                                </div>
+                            </div>
+
                             <label class="form-label small fw-bold">Reporte de lo Realizado</label>
                             <textarea name="resolution_notes" class="form-control mb-3" rows="4" placeholder="Explique qué se reparó o instaló..."><t t-esc="order.resolution_notes"/></textarea>
-                            
+
                             <div class="tech-card p-3 bg-light border-0">
                                 <h6 class="fw-bold small mb-3 text-primary"><i class="fa fa-user-check me-1"/> FORMALIZACIÓN DE ENTREGA</h6>
                                 <label class="data-label">Nombre de quien recibe</label>
@@ -390,8 +391,8 @@
                             </t>
                         </div>
 
-                        <!-- Pestaña Datos Técnicos (INTELIGENTE) -->
-                        <div class="tab-pane fade" id="tab-tech" role="tabpanel">
+                        <!-- Pestaña Datos Técnicos (INTELIGENTE) — no aplica en patrullaje -->
+                        <div t-if="order.service_type != 'patrol'" class="tab-pane fade" id="tab-tech" role="tabpanel">
                             <!-- Si no hay tipo definido, permitir seleccionar para mostrar los campos -->
                             <div class="alert alert-secondary py-2 small mb-3">
                                 <b>Categoría Técnica:</b>
