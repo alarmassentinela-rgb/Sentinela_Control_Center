@@ -28,6 +28,11 @@
                     </group>
                     <group string="Comprobante Fiscal">
                         <field name="requiere_factura" widget="boolean_toggle"/>
+                        <field name="invoice_cc_partner_ids"
+                            widget="many2many_tags"
+                            domain="[('id', 'child_of', id), ('id', '!=', id)]"
+                            options="{'no_create_edit': True}"
+                            placeholder="Contactos que reciben copia de TODAS sus facturas (global/sucursal)"/>
                     </group>
                 </group>
             </page>

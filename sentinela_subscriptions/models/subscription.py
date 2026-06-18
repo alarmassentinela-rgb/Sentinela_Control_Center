@@ -985,11 +985,15 @@ class SentinelaSubscription(models.Model):
         if any(s.auto_send_mail for s in subs_list) and partner.email:
             template = self.env.ref('account.email_template_edi_invoice', raise_if_not_found=False)
             if template:
-                # Destinatarios adicionales en COPIA (CC): contactos del cliente que el
-                # operador marcó en la(s) suscripción(es). Se excluye el partner principal
-                # (ya es el destinatario directo) y los que no tengan correo.
-                cc_partners = subs_list.mapped('extra_invoice_partner_ids').filtered(
-                    lambda p: p.email and p.id != partner.id)
+                # Destinatarios adicionales en COPIA (CC). Se combinan dos fuentes:
+                #  - CC a nivel CLIENTE (partner.invoice_cc_partner_ids): aplica a TODAS sus
+                #    facturas, ideal para agrupación global/por-sucursal (se configura 1 vez).
+                #  - CC a nivel SUSCRIPCIÓN (extra_invoice_partner_ids): por contrato puntual.
+                # La unión de recordset deduplica; se excluye el partner principal (ya es el
+                # destinatario directo) y los contactos sin correo.
+                cc_partners = (
+                    subs_list.mapped('extra_invoice_partner_ids') | partner.invoice_cc_partner_ids
+                ).filtered(lambda p: p.email and p.id != partner.id)
                 email_values = None
                 if cc_partners:
                     email_values = {'email_cc': ','.join(cc_partners.mapped('email'))}

@@ -72,8 +72,19 @@ class ResPartner(models.Model):
         ('individual', 'Una factura por servicio detallado'),
         ('by_branch', 'Agrupar por sucursal'),
         ('global', 'Una factura global todo junto')
-    ], string='Preferencia de Facturación', default='individual', 
+    ], string='Preferencia de Facturación', default='individual',
     help="Define cómo prefiere el cliente recibir sus facturas de suscripción.")
+
+    invoice_cc_partner_ids = fields.Many2many(
+        'res.partner',
+        'res_partner_invoice_cc_rel',
+        'partner_id', 'contact_id',
+        string='Correos adicionales de facturación (CC)',
+        help="Contactos que reciben COPIA (CC) de TODAS las facturas/remisiones de este "
+             "cliente, sin importar la agrupación. Ideal para facturación global o por "
+             "sucursal: se configura UNA sola vez aquí en vez de en cada suscripción. "
+             "Se combina con los CC definidos a nivel de cada suscripción. Solo se usan "
+             "los contactos que tengan correo cargado.")
 
     # --- Condiciones de Venta para Facturación Automática ---
     invoice_payment_condition = fields.Selection([
