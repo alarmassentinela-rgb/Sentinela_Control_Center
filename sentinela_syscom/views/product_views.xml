@@ -30,6 +30,16 @@
                             <field name="syscom_suggested_price_usd" string="Precio Especial USD"/>
                             <field name="syscom_price_usd" string="Precio Distribuidor 1 USD"/>
                         </group>
+                        <group string="Datos Fiscales (SAT)">
+                            <field name="syscom_sat_description"/>
+                            <field name="syscom_sat_unit_key"/>
+                        </group>
+                        <group string="Recursos">
+                            <field name="syscom_datasheet_url" widget="url" string="Ficha Técnica (PDF)"/>
+                        </group>
+                    </group>
+                    <group string="Características">
+                        <field name="syscom_caracteristicas" nolabel="1"/>
                     </group>
                     <group string="Detalle Técnico">
                         <field name="syscom_description" nolabel="1"/>

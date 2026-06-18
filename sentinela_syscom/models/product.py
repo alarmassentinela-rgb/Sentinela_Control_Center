@@ -19,6 +19,11 @@ class ProductTemplate(models.Model):
     syscom_suggested_price_usd = fields.Float(string='Precio Especial USD')
     syscom_price_usd = fields.Float(string='Precio Distribuidor 1 USD')
     syscom_description = fields.Html(string='Descripción Técnica Syscom')
+    # v18.0.1.4.0: enriquecimiento de ficha desde la API de Syscom
+    syscom_sat_description = fields.Char(string='Descripción SAT')
+    syscom_sat_unit_key = fields.Char(string='Clave Unidad SAT', help='Clave de unidad del SAT (ej. H87 = Pieza) según Syscom.')
+    syscom_caracteristicas = fields.Html(string='Características Syscom')
+    syscom_datasheet_url = fields.Char(string='Ficha Técnica (URL)')
     # v18.0.1.3.0: marcado de productos descontinuados
     syscom_discontinued = fields.Boolean(
         string='Descontinuado en Syscom',
@@ -32,6 +37,28 @@ class ProductTemplate(models.Model):
     )
 
     @api.model
+    @api.model
+    def _syscom_extract_enrichment(self, payload):
+        """Extrae datos de enriquecimiento de la ficha Syscom (/productos/{id}):
+        descripción SAT, clave de unidad SAT, características (HTML) y ficha técnica."""
+        import html as _html
+        datasheet = False
+        for r in (payload.get('recursos') or []):
+            if isinstance(r, dict) and 'ficha' in (r.get('recurso') or '').lower():
+                datasheet = r.get('path')
+                break
+        caracs = payload.get('caracteristicas') or []
+        caracs_html = False
+        if isinstance(caracs, list) and caracs:
+            caracs_html = '<ul>' + ''.join('<li>%s</li>' % _html.escape(str(c)) for c in caracs) + '</ul>'
+        um = payload.get('unidad_de_medida') or {}
+        return {
+            'syscom_sat_description': payload.get('sat_description'),
+            'syscom_sat_unit_key': um.get('clave_unidad_sat') if isinstance(um, dict) else False,
+            'syscom_caracteristicas': caracs_html,
+            'syscom_datasheet_url': datasheet,
+        }
+
     def _cron_update_syscom_products(self):
         """Robot Nocturno con Reporte a Telegram"""
         start_time = datetime.now()
@@ -123,12 +150,16 @@ class ProductTemplate(models.Model):
                             'syscom_stock': float(res_prod.get('existencia', {}).get('nuevo', 0)),
                             'syscom_last_update': fields.Datetime.now(),
                         }
-                        # El list_price (Venta) se basa en MSRP. Si no hay MSRP, usamos costo * 1.30 como fallback
-                        if msrp_usd > 0:
-                            vals['list_price'] = msrp_usd * tc
-                        else:
-                            vals['list_price'] = (costo_usd * tc) * 1.30
-                            
+                        # v18.0.1.4.0: enriquecimiento (SAT, características, ficha técnica)
+                        vals.update(self._syscom_extract_enrichment(res_prod))
+                        # Opción B: el precio de venta SOLO se fija si el producto
+                        # nunca tuvo precio real (<=1.0, "rescate"). Si ya tiene precio
+                        # de venta capturado, se respeta y no se sobre-escribe.
+                        if (p.list_price or 0.0) <= 1.0:
+                            if msrp_usd > 0:
+                                vals['list_price'] = msrp_usd * tc
+                            else:
+                                vals['list_price'] = (costo_usd * tc) * 1.30
                         p.write(vals)
                         stats['success'] += 1
                     else: stats['errors'] += 1

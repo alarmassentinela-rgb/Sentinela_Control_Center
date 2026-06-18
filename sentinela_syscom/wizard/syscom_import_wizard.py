@@ -112,10 +112,19 @@ class SyscomImportWizard(models.TransientModel):
 
         Product = self.env['product.template']
         syscom_id = str(product_data.get('producto_id'))
-        
-        _logger.info(f"SYSCOM DEBUG: Importando {product_data.get('modelo')} - Data: {product_data}")
-        
-        existing = Product.search([('syscom_id', '=', syscom_id)], limit=1)
+        modelo = product_data.get('modelo')
+
+        _logger.info(f"SYSCOM DEBUG: Importando {modelo} - Data: {product_data}")
+
+        # Match por syscom_id O por referencia interna (default_code) para no
+        # duplicar productos capturados a mano que aún no tienen syscom_id.
+        if modelo:
+            existing = Product.search(
+                ['|', ('syscom_id', '=', syscom_id), ('default_code', '=', modelo)],
+                limit=1,
+            )
+        else:
+            existing = Product.search([('syscom_id', '=', syscom_id)], limit=1)
         
         # Pricing Logic (Convert USD -> Company Currency)
         precios = product_data.get('precios', {})
@@ -150,10 +159,8 @@ class SyscomImportWizard(models.TransientModel):
         if categorias_list:
             cat_id = self._get_or_create_category(categorias_list)
 
-        vals = {
-            'name': product_data.get('titulo'),
-            'default_code': product_data.get('modelo'),
-            'list_price': cost_in_company_currency * 1.30,
+        # Datos "vivos" de Syscom: SIEMPRE se sincronizan (costo, stock, info Syscom).
+        sync_vals = {
             'standard_price': cost_in_company_currency,
             'syscom_id': syscom_id,
             'syscom_model': product_data.get('modelo'),
@@ -165,16 +172,38 @@ class SyscomImportWizard(models.TransientModel):
             'syscom_price_usd': price_usd,
             'syscom_list_price_usd': list_price_usd,
             'syscom_suggested_price_usd': special_price_usd,
-            'weight': self._safe_float(product_data.get('peso')), # Peso nativo Odoo
-            'l10n_mx_edi_code_sat': product_data.get('sat_key'), # Nuevo mapeo SAT
             'syscom_last_update': fields.Datetime.now(),
-            'type': 'consu', # Consumible (Seguro)
         }
-        
+        # v18.0.1.4.0: enriquecimiento (SAT, características, ficha técnica).
+        # Solo aporta datos si product_data trae la ficha de detalle (/productos/{id}).
+        sync_vals.update(self.env['product.template']._syscom_extract_enrichment(product_data))
+
+        if existing:
+            # Opción B: producto ya existe -> NO se sobre-escribe.
+            # Solo actualizamos costo/stock/datos Syscom. Se respeta lo capturado
+            # a mano: nombre, precio de venta (list_price), referencia, categoría,
+            # imagen y clave SAT.
+            vals = dict(sync_vals)
+            # Rescate: si el producto nunca tuvo precio de venta real (<=1.0), lo fijamos.
+            if (existing.list_price or 0.0) <= 1.0:
+                vals['list_price'] = cost_in_company_currency * 1.30
+            existing.write(vals)
+            return existing
+
+        # Producto NUEVO: se crea completo.
+        vals = dict(sync_vals)
+        vals.update({
+            'name': product_data.get('titulo'),
+            'default_code': modelo,
+            'list_price': cost_in_company_currency * 1.30,
+            'weight': self._safe_float(product_data.get('peso')),  # Peso nativo Odoo
+            'l10n_mx_edi_code_sat': product_data.get('sat_key'),  # Mapeo SAT
+            'type': 'consu',  # Consumible (Seguro)
+        })
         if cat_id:
             vals['categ_id'] = cat_id
 
-        # Image Download
+        # Imagen: solo se descarga al CREAR (no se pisa la de productos existentes).
         img_url = product_data.get('img_portada')
         if img_url:
             try:
@@ -184,11 +213,7 @@ class SyscomImportWizard(models.TransientModel):
             except Exception as e:
                 _logger.warning(f"Failed to download image for {syscom_id}: {e}")
 
-        if existing:
-            existing.write(vals)
-            return existing
-        else:
-            return Product.create(vals)
+        return Product.create(vals)
 
     def action_search_and_import(self):
         token = self._get_syscom_token()
@@ -226,7 +251,19 @@ class SyscomImportWizard(models.TransientModel):
             for p in products:
                 if count >= self.limit:
                     break
-                prod = self._import_single_product(p)
+                # Traer la ficha de detalle (/productos/{id}): incluye descripción,
+                # características, recursos (ficha técnica) y unidad de medida SAT,
+                # que la búsqueda no devuelve. Si falla, se usa el dato de búsqueda.
+                detail = p
+                pid = p.get('producto_id')
+                if pid:
+                    try:
+                        rd = requests.get(f"{api_url}/productos/{pid}", headers=headers, timeout=20)
+                        if rd.status_code == 200:
+                            detail = rd.json()
+                    except Exception as e:
+                        _logger.warning(f"SYSCOM: no se pudo traer detalle de {pid}: {e}")
+                prod = self._import_single_product(detail)
                 if prod:
                     imported_ids.append(prod.id)
                     count += 1
