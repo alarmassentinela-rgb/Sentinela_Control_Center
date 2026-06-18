@@ -23,8 +23,24 @@
                     <group>
                         <group string="Canal preferido">
                             <field name="notification_channel"/>
-                            <field name="telegram_chat_id" placeholder="ej. 7965190381"/>
+                            <field name="telegram_chat_id" placeholder="se llena solo al vincular" readonly="1"/>
                             <field name="whatsapp_number" placeholder="vacío = usa mobile"/>
+                        </group>
+                        <group string="Vinculación Telegram (Bot Clientes)">
+                            <button name="action_generate_telegram_link" type="object"
+                                    string="Generar liga de vinculación" icon="fa-telegram"
+                                    class="btn-primary"/>
+                            <field name="telegram_link_url" widget="url" readonly="1"
+                                   invisible="not telegram_link_url"/>
+                            <label for="telegram_chat_id" string="Estado"/>
+                            <div>
+                                <span invisible="not telegram_chat_id" class="text-success">
+                                    <i class="fa fa-check-circle"/> Vinculado
+                                </span>
+                                <span invisible="telegram_chat_id" class="text-muted">
+                                    <i class="fa fa-clock-o"/> Sin vincular — manda la liga al cliente
+                                </span>
+                            </div>
                         </group>
                         <group string="GPS / Tracking (Patrullas · SentiCar)">
                             <field name="is_patrol"/>

@@ -1,7 +1,8 @@
-from odoo import models, fields
+from odoo import models, fields, api
 import base64
 import logging
 import re
+import secrets
 
 _logger = logging.getLogger(__name__)
 
@@ -21,6 +22,20 @@ class ResPartner(models.Model):
     last_gps_update = fields.Datetime(string='Última Actualización GPS')
     manual_geolocation = fields.Boolean(string='Geolocalización Manual', default=False)
     telegram_chat_id = fields.Char(string='Telegram Chat ID', help="ID de chat para notificaciones automáticas")
+    # Vinculación por Telegram: token de un solo sentido que va en la liga t.me/<bot>?start=<token>.
+    # El cliente abre la liga, da /start, comparte su contacto y el cron escribe telegram_chat_id solo.
+    telegram_link_token = fields.Char(string='Token de Vinculación Telegram', copy=False, readonly=True, index=True)
+    telegram_link_url = fields.Char(string='Liga de Telegram', compute='_compute_telegram_link_url')
+
+    @api.depends('telegram_link_token')
+    def _compute_telegram_link_url(self):
+        username = (self.env['ir.config_parameter'].sudo()
+                    .get_param('sentinela_monitoring.telegram_client_bot_username') or '').lstrip('@')
+        for partner in self:
+            if partner.telegram_link_token and username:
+                partner.telegram_link_url = f"https://t.me/{username}?start={partner.telegram_link_token}"
+            else:
+                partner.telegram_link_url = False
 
     # F3 — Canal de notificación del cliente
     notification_channel = fields.Selection([
@@ -35,7 +50,12 @@ class ResPartner(models.Model):
 
     def _get_telegram_token(self):
         # El token vive en ir.config_parameter (sembrado en el server, NO en el repo).
-        return self.env['ir.config_parameter'].sudo().get_param('sentinela_syscom.telegram_token')
+        # IMPORTANTE: el chat_id es POR BOT. El bot que CAPTURA el chat_id (vinculación) debe
+        # ser el mismo que ENVÍA. Por eso preferimos el token del Bot Clientes; si no está
+        # sembrado, caemos al token histórico para no romper envíos existentes.
+        p = self.env['ir.config_parameter'].sudo()
+        return (p.get_param('sentinela_monitoring.telegram_client_bot_token')
+                or p.get_param('sentinela_syscom.telegram_token'))
 
     def send_telegram_message(self, message):
         """ Envía un mensaje de Telegram a este contacto """
@@ -54,6 +74,133 @@ class ResPartner(models.Model):
             return res.ok
         except:
             return False
+
+    # ---------------- Vinculación de cliente por Telegram ----------------
+
+    def action_generate_telegram_link(self):
+        """Genera (o reusa) el token de vinculación y devuelve la liga t.me para
+        mandársela al cliente. El cliente abre la liga → /start → comparte contacto →
+        el cron _cron_telegram_poll_updates escribe su telegram_chat_id."""
+        self.ensure_one()
+        if not self.telegram_link_token:
+            self.telegram_link_token = secrets.token_urlsafe(24)
+        username = (self.env['ir.config_parameter'].sudo()
+                    .get_param('sentinela_monitoring.telegram_client_bot_username') or '').lstrip('@')
+        if not username:
+            return {
+                'type': 'ir.actions.client', 'tag': 'display_notification',
+                'params': {
+                    'title': 'Falta configurar el bot',
+                    'message': "Define el usuario del Bot Clientes en Parámetros del sistema "
+                               "(sentinela_monitoring.telegram_client_bot_username).",
+                    'type': 'danger', 'sticky': True,
+                },
+            }
+        url = f"https://t.me/{username}?start={self.telegram_link_token}"
+        self.message_post(body=f"🔗 Liga de vinculación de Telegram generada:<br/><a href='{url}'>{url}</a>")
+        return {
+            'type': 'ir.actions.client', 'tag': 'display_notification',
+            'params': {
+                'title': 'Liga generada',
+                'message': f"Mándale esta liga al cliente:\n{url}\n(quedó también en la bitácora).",
+                'type': 'success', 'sticky': True,
+            },
+        }
+
+    @api.model
+    def _telegram_api(self, method, payload, files=None, timeout=20):
+        """Llamada cruda al Bot API del Bot Clientes. Devuelve el JSON o None."""
+        token = self._get_telegram_token()
+        if not token:
+            return None
+        import requests
+        try:
+            url = f"https://api.telegram.org/bot{token}/{method}"
+            res = requests.post(url, data=payload, files=files, timeout=timeout)
+            return res.json()
+        except Exception as e:
+            _logger.warning("Telegram %s falló: %s", method, e)
+            return None
+
+    @api.model
+    def _cron_telegram_poll_updates(self):
+        """Cron de vinculación. Hace getUpdates al Bot Clientes y procesa:
+          - '/start <token>'  → casa el token con el partner y guarda telegram_chat_id.
+          - contacto compartido → guarda el teléfono (verificación) en el mismo chat.
+        Es idempotente vía el offset guardado en ir.config_parameter. NO requiere
+        endpoint público: el Bot Clientes NO debe tener webhook (si lo tiene, getUpdates
+        da 409 y se ignora). Solo este cron consume el bot por getUpdates."""
+        ICP = self.env['ir.config_parameter'].sudo()
+        token = ICP.get_param('sentinela_monitoring.telegram_client_bot_token')
+        if not token:
+            return  # Bot Clientes no configurado todavía
+        offset = int(ICP.get_param('sentinela_monitoring.telegram_getupdates_offset') or 0)
+
+        import requests
+        try:
+            res = requests.get(
+                f"https://api.telegram.org/bot{token}/getUpdates",
+                params={'offset': offset, 'timeout': 0, 'allowed_updates': '["message"]'},
+                timeout=20,
+            )
+            data = res.json()
+        except Exception as e:
+            _logger.warning("Telegram getUpdates falló: %s", e)
+            return
+        if not data.get('ok'):
+            _logger.warning("Telegram getUpdates no-ok: %s", data.get('description'))
+            return
+
+        max_update_id = offset
+        for upd in data.get('result', []):
+            max_update_id = max(max_update_id, upd['update_id'] + 1)
+            msg = upd.get('message') or {}
+            chat = msg.get('chat') or {}
+            chat_id = chat.get('id')
+            if not chat_id:
+                continue
+            chat_id = str(chat_id)
+            text = (msg.get('text') or '').strip()
+            contact = msg.get('contact')
+
+            # 1) /start <token> → vincula el chat_id al partner del token
+            if text.startswith('/start'):
+                parts = text.split(maxsplit=1)
+                link_token = parts[1].strip() if len(parts) > 1 else ''
+                partner = self.search([('telegram_link_token', '=', link_token)], limit=1) if link_token else False
+                if partner:
+                    partner.telegram_chat_id = chat_id
+                    partner.message_post(body=f"✅ Telegram vinculado por el cliente (chat_id {chat_id}).")
+                    # Pedimos el contacto para verificar el teléfono (botón nativo de Telegram)
+                    self._telegram_api('sendMessage', {
+                        'chat_id': chat_id,
+                        'text': f"¡Hola {partner.name}! Quedaste vinculado a Sentinela ✅\n"
+                                "Por favor comparte tu número para confirmar tu cuenta.",
+                        'reply_markup': '{"keyboard":[[{"text":"📱 Compartir mi número","request_contact":true}]],'
+                                        '"resize_keyboard":true,"one_time_keyboard":true}',
+                    })
+                else:
+                    self._telegram_api('sendMessage', {
+                        'chat_id': chat_id,
+                        'text': "No reconozco esta liga. Pídele a Sentinela tu liga de vinculación personal.",
+                    })
+                continue
+
+            # 2) Contacto compartido → guarda el teléfono en el partner ya vinculado
+            if contact and contact.get('phone_number'):
+                partner = self.search([('telegram_chat_id', '=', chat_id)], limit=1)
+                if partner:
+                    if not partner.whatsapp_number:
+                        partner.whatsapp_number = contact['phone_number']
+                    partner.message_post(body=f"📱 Teléfono confirmado por Telegram: {contact['phone_number']}")
+                    self._telegram_api('sendMessage', {
+                        'chat_id': chat_id,
+                        'text': "Listo, ya recibirás tus avisos por aquí. 🛡️",
+                        'reply_markup': '{"remove_keyboard":true}',
+                    })
+
+        if max_update_id != offset:
+            ICP.set_param('sentinela_monitoring.telegram_getupdates_offset', str(max_update_id))
 
     # ---------------- F3 WhatsApp vía EvoApi ----------------
 
