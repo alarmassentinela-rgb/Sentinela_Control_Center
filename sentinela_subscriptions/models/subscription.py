@@ -653,6 +653,15 @@ class SentinelaSubscription(models.Model):
              "ciclo nace como 'Pendiente de Timbrado'; si no, queda como remisión. "
              "Para cambiarlo, edita 'Requiere Factura CFDI' en el cliente.")
     auto_send_mail = fields.Boolean(string='Enviar automáticamente por Correo', default=False)
+    extra_invoice_partner_ids = fields.Many2many(
+        'res.partner',
+        'sentinela_sub_extra_invoice_partner_rel',
+        'subscription_id', 'partner_id',
+        string='Correos adicionales (CC)',
+        help="Contactos del cliente que recibirán COPIA (CC) de la factura/remisión del "
+             "ciclo, además del correo principal. Útil cuando la empresa quiere que el "
+             "documento también llegue al gerente, contabilidad, etc. Solo se usan los "
+             "contactos que tengan correo cargado.")
     billing_mode = fields.Selection([
         ('normal', 'Normal'),
         ('courtesy', 'Cortesía'),
@@ -976,7 +985,15 @@ class SentinelaSubscription(models.Model):
         if any(s.auto_send_mail for s in subs_list) and partner.email:
             template = self.env.ref('account.email_template_edi_invoice', raise_if_not_found=False)
             if template:
-                template.send_mail(move.id, force_send=True)
+                # Destinatarios adicionales en COPIA (CC): contactos del cliente que el
+                # operador marcó en la(s) suscripción(es). Se excluye el partner principal
+                # (ya es el destinatario directo) y los que no tengan correo.
+                cc_partners = subs_list.mapped('extra_invoice_partner_ids').filtered(
+                    lambda p: p.email and p.id != partner.id)
+                email_values = None
+                if cc_partners:
+                    email_values = {'email_cc': ','.join(cc_partners.mapped('email'))}
+                template.send_mail(move.id, force_send=True, email_values=email_values)
 
         for sub in subs_list:
             sub.next_billing_date = sub.next_billing_date + relativedelta(months=int(sub.recurring_interval))

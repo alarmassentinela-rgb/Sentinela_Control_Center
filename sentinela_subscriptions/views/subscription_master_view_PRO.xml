@@ -246,6 +246,12 @@
                                     <field name="billing_mode" widget="radio" options="{'horizontal': True}" readonly="not can_edit_billing_mode"/>
                                     <field name="auto_invoice" widget="boolean_toggle" invisible="billing_mode == 'courtesy'"/>
                                     <field name="auto_send_mail" widget="boolean_toggle"/>
+                                    <field name="extra_invoice_partner_ids"
+                                        widget="many2many_tags"
+                                        invisible="not auto_send_mail"
+                                        domain="[('id', 'child_of', partner_id), ('id', '!=', partner_id)]"
+                                        options="{'no_create_edit': True}"
+                                        placeholder="Contactos del cliente que reciben copia (gerente, contabilidad…)"/>
                                     <field name="days_to_suspend"
                                         help="Después de cuántos días vencida la factura el sistema corta el servicio. Default 5."/>
                                     <field name="is_forced_contract" widget="boolean_toggle"/>
