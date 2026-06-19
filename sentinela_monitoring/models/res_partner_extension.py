@@ -26,11 +26,54 @@ class ResPartner(models.Model):
     # El cliente abre la liga, da /start, comparte su contacto y el cron escribe telegram_chat_id solo.
     telegram_link_token = fields.Char(string='Token de Vinculación Telegram', copy=False, readonly=True, index=True)
     telegram_link_url = fields.Char(string='Liga de Telegram', compute='_compute_telegram_link_url')
+    # Consentimiento (opt-in): fecha del primer /start del cliente al Bot Clientes.
+    telegram_opt_in_date = fields.Datetime(string='Aceptó Telegram (opt-in)', readonly=True, copy=False,
+        help="Fecha/hora en que el cliente aceptó recibir avisos por Telegram (su primer /start).")
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        # Cada partner nace con su token de vinculación (como FSM con tracking_token):
+        # así factura/portal pueden pintar el QR personal sin escribir en tiempo de render.
+        for vals in vals_list:
+            if not vals.get('telegram_link_token'):
+                vals['telegram_link_token'] = secrets.token_urlsafe(24)
+        return super().create(vals_list)
+
+    def _telegram_bot_username(self):
+        return (self.env['ir.config_parameter'].sudo()
+                .get_param('sentinela_monitoring.telegram_client_bot_username') or '').lstrip('@')
+
+    def _telegram_invite_url(self):
+        """Asegura el token y devuelve la liga t.me, o False si el bot no está configurado."""
+        self.ensure_one()
+        username = self._telegram_bot_username()
+        if not username:
+            return False
+        if not self.telegram_link_token:
+            self.sudo().telegram_link_token = secrets.token_urlsafe(24)
+        return f"https://t.me/{username}?start={self.telegram_link_token}"
+
+    def _telegram_qr_for_report(self):
+        """QR (PNG base64) de la liga de invitación, para embeber en factura/portal.
+        Devuelve False si el cliente YA está vinculado (no lo molestamos), si no hay
+        bot configurado, o si falla la generación. Sin lanzar."""
+        self.ensure_one()
+        if self.telegram_chat_id:
+            return False  # ya vinculado → no invitar
+        url = self._telegram_invite_url()
+        if not url:
+            return False
+        try:
+            import qrcode, io, base64
+            buf = io.BytesIO()
+            qrcode.make(url).save(buf, format='PNG')
+            return base64.b64encode(buf.getvalue()).decode()
+        except Exception:
+            return False
 
     @api.depends('telegram_link_token')
     def _compute_telegram_link_url(self):
-        username = (self.env['ir.config_parameter'].sudo()
-                    .get_param('sentinela_monitoring.telegram_client_bot_username') or '').lstrip('@')
+        username = self._telegram_bot_username()
         for partner in self:
             if partner.telegram_link_token and username:
                 partner.telegram_link_url = f"https://t.me/{username}?start={partner.telegram_link_token}"
@@ -169,7 +212,10 @@ class ResPartner(models.Model):
                 link_token = parts[1].strip() if len(parts) > 1 else ''
                 partner = self.search([('telegram_link_token', '=', link_token)], limit=1) if link_token else False
                 if partner:
-                    partner.telegram_chat_id = chat_id
+                    vals = {'telegram_chat_id': chat_id}
+                    if not partner.telegram_opt_in_date:
+                        vals['telegram_opt_in_date'] = fields.Datetime.now()
+                    partner.write(vals)
                     partner.message_post(body=f"✅ Telegram vinculado por el cliente (chat_id {chat_id}).")
                     # Pedimos el contacto para verificar el teléfono (botón nativo de Telegram)
                     self._telegram_api('sendMessage', {

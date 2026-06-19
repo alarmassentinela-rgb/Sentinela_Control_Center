@@ -239,6 +239,29 @@
                         </div>
                     </t>
 
+                    <!-- INVITACIÓN TELEGRAM — solo si el cliente NO está vinculado al Bot Clientes -->
+                    <t t-if="'telegram_link_token' in o.partner_id._fields">
+                        <t t-set="tg_qr" t-value="o.partner_id._telegram_qr_for_report()"/>
+                        <t t-if="tg_qr">
+                            <div style="border:1px solid #29a3df; border-radius:6px; margin-top:12px; background:#f2fbff; display:table; width:100%;">
+                                <div style="display:table-cell; vertical-align:middle; padding:10px 14px;">
+                                    <div style="color:#1a3a5c; font-weight:bold; font-size:12px; margin-bottom:3px;">
+                                        🛡️ Únete a Sentinela en Telegram
+                                    </div>
+                                    <div style="font-size:9px; color:#333; line-height:1.5;">
+                                        Recibe <b>avisos de tus alarmas</b>, el <b>rastreo en vivo</b> de tu técnico
+                                        o patrulla, y recordatorios — directo en tu Telegram.<br/>
+                                        Escanea el código con la cámara de tu celular para activarlo.
+                                    </div>
+                                </div>
+                                <div style="display:table-cell; vertical-align:middle; text-align:center; width:96px; padding:6px;">
+                                    <img t-att-src="'data:image/png;base64,' + tg_qr"
+                                         style="width:84px; height:84px; display:block; margin:0 auto;"/>
+                                </div>
+                            </div>
+                        </t>
+                    </t>
+
                 </div>
             </t>
         </xpath>

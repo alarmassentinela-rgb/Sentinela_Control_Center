@@ -12,6 +12,35 @@
         </xpath>
     </template>
 
+    <!-- Invitación a Telegram en el home del portal — solo si el cliente NO está vinculado -->
+    <template id="portal_my_home_telegram_invite" name="Portal — Únete a Telegram"
+              inherit_id="portal.portal_my_home" customize_show="True" priority="5">
+        <xpath expr="//div[hasclass('o_portal_docs')]" position="before">
+            <t t-set="_tg_partner" t-value="request.env.user.partner_id"/>
+            <t t-set="_tg_qr" t-value="_tg_partner._telegram_qr_for_report() if 'telegram_link_token' in _tg_partner._fields else False"/>
+            <t t-if="_tg_qr">
+                <div class="card mb-4 border-info">
+                    <div class="card-body d-flex align-items-center flex-wrap">
+                        <div class="flex-grow-1 pe-3" style="min-width:220px;">
+                            <h5 class="text-info mb-1">🛡️ Únete a Sentinela en Telegram</h5>
+                            <p class="mb-1 text-muted">
+                                Recibe <b>avisos de tus alarmas</b>, el <b>rastreo en vivo</b> de tu técnico
+                                o patrulla, y recordatorios — directo en tu Telegram.
+                            </p>
+                            <a t-att-href="_tg_partner._telegram_invite_url()" target="_blank"
+                               class="btn btn-info btn-sm mt-1">Activar mis avisos por Telegram</a>
+                            <div class="small text-muted mt-1">o escanea el código con la cámara de tu celular.</div>
+                        </div>
+                        <div class="text-center">
+                            <img t-att-src="'data:image/png;base64,' + _tg_qr"
+                                 style="width:120px; height:120px;" alt="QR Telegram Sentinela"/>
+                        </div>
+                    </div>
+                </div>
+            </t>
+        </xpath>
+    </template>
+
     <!-- Lista paginada de eventos del cliente -->
     <template id="portal_my_events" name="Mis Alarmas / Eventos">
         <t t-call="portal.portal_layout">
