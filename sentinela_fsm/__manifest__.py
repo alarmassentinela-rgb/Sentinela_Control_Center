@@ -1,6 +1,6 @@
 {
     'name': 'Gestion de Servicios',
-    'version': '18.0.1.10.2',
+    'version': '18.0.1.10.3',
     'category': 'Services/Field Service',
     'summary': 'Gestión de órdenes de servicio en campo (Instalaciones, Reparaciones).',
     'description': """
