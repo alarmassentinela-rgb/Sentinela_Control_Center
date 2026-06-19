@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Plantillas de checklist por tecnología. noupdate=1: el técnico/operador
+         puede editarlas o agregar tareas sin que un upgrade las sobreescriba. -->
+    <data noupdate="1">
+
+        <!-- ============ CCTV / CÁMARAS ============ -->
+        <!-- Instalación -->
+        <record id="task_cctv_inst_punto" model="sentinela.fsm.task.template">
+            <field name="name">Verificar puntos de cámara, ruta de cableado y alimentación</field>
+            <field name="service_type">install</field>
+            <field name="tech_category">cctv</field>
+            <field name="sequence">10</field>
+        </record>
+        <record id="task_cctv_inst_montaje" model="sentinela.fsm.task.template">
+            <field name="name">Montar y fijar cámaras en las posiciones acordadas</field>
+            <field name="service_type">install</field>
+            <field name="tech_category">cctv</field>
+            <field name="sequence">20</field>
+        </record>
+        <record id="task_cctv_inst_cableado" model="sentinela.fsm.task.template">
+            <field name="name">Cablear y conectorizar (UTP/coaxial + energía)</field>
+            <field name="service_type">install</field>
+            <field name="tech_category">cctv</field>
+            <field name="sequence">30</field>
+        </record>
+        <record id="task_cctv_inst_dvr" model="sentinela.fsm.task.template">
+            <field name="name">Instalar DVR/NVR: disco duro, fecha/hora y red</field>
+            <field name="service_type">install</field>
+            <field name="tech_category">cctv</field>
+            <field name="sequence">40</field>
+        </record>
+        <record id="task_cctv_inst_canales" model="sentinela.fsm.task.template">
+            <field name="name">Configurar canales, resolución y detección de movimiento</field>
+            <field name="service_type">install</field>
+            <field name="tech_category">cctv</field>
+            <field name="sequence">50</field>
+        </record>
+        <record id="task_cctv_inst_encuadre" model="sentinela.fsm.task.template">
+            <field name="name">Ajustar encuadre y enfoque de cada cámara</field>
+            <field name="service_type">install</field>
+            <field name="tech_category">cctv</field>
+            <field name="sequence">60</field>
+        </record>
+        <record id="task_cctv_inst_grabacion" model="sentinela.fsm.task.template">
+            <field name="name">Configurar grabación y días de retención</field>
+            <field name="service_type">install</field>
+            <field name="tech_category">cctv</field>
+            <field name="sequence">70</field>
+        </record>
+        <record id="task_cctv_inst_remoto" model="sentinela.fsm.task.template">
+            <field name="name">Configurar acceso remoto (app, usuario y contraseña)</field>
+            <field name="service_type">install</field>
+            <field name="tech_category">cctv</field>
+            <field name="sequence">80</field>
+        </record>
+        <record id="task_cctv_inst_pruebas" model="sentinela.fsm.task.template">
+            <field name="name">Probar visualización en vivo y reproducción de grabaciones</field>
+            <field name="service_type">install</field>
+            <field name="tech_category">cctv</field>
+            <field name="sequence">90</field>
+        </record>
+        <record id="task_cctv_inst_capacita" model="sentinela.fsm.task.template">
+            <field name="name">Capacitar al cliente en la app y entregar credenciales</field>
+            <field name="service_type">install</field>
+            <field name="tech_category">cctv</field>
+            <field name="sequence">100</field>
+        </record>
+
+        <!-- Mantenimiento -->
+        <record id="task_cctv_mant_limpieza" model="sentinela.fsm.task.template">
+            <field name="name">Limpiar lentes y carcasas de las cámaras</field>
+            <field name="service_type">maintenance</field>
+            <field name="tech_category">cctv</field>
+            <field name="sequence">10</field>
+        </record>
+        <record id="task_cctv_mant_encuadre" model="sentinela.fsm.task.template">
+            <field name="name">Revisar y reajustar encuadre/enfoque</field>
+            <field name="service_type">maintenance</field>
+            <field name="tech_category">cctv</field>
+            <field name="sequence">20</field>
+        </record>
+        <record id="task_cctv_mant_cables" model="sentinela.fsm.task.template">
+            <field name="name">Verificar estado de cables, conectores y fuente/UPS</field>
+            <field name="service_type">maintenance</field>
+            <field name="tech_category">cctv</field>
+            <field name="sequence">30</field>
+        </record>
+        <record id="task_cctv_mant_disco" model="sentinela.fsm.task.template">
+            <field name="name">Verificar salud del disco y días de grabación disponibles</field>
+            <field name="service_type">maintenance</field>
+            <field name="tech_category">cctv</field>
+            <field name="sequence">40</field>
+        </record>
+        <record id="task_cctv_mant_firmware" model="sentinela.fsm.task.template">
+            <field name="name">Actualizar firmware de DVR/NVR si aplica</field>
+            <field name="service_type">maintenance</field>
+            <field name="tech_category">cctv</field>
+            <field name="sequence">50</field>
+        </record>
+        <record id="task_cctv_mant_remoto" model="sentinela.fsm.task.template">
+            <field name="name">Verificar acceso remoto y notificaciones</field>
+            <field name="service_type">maintenance</field>
+            <field name="tech_category">cctv</field>
+            <field name="sequence">60</field>
+        </record>
+        <record id="task_cctv_mant_pruebas" model="sentinela.fsm.task.template">
+            <field name="name">Probar grabación y reproducción de cada canal</field>
+            <field name="service_type">maintenance</field>
+            <field name="tech_category">cctv</field>
+            <field name="sequence">70</field>
+        </record>
+
+        <!-- ============ ENERGÍA SOLAR (PANELES) ============ -->
+        <!-- Instalación -->
+        <record id="task_solar_inst_estructura" model="sentinela.fsm.task.template">
+            <field name="name">Verificar techo/estructura y puntos de anclaje</field>
+            <field name="service_type">install</field>
+            <field name="tech_category">solar</field>
+            <field name="sequence">10</field>
+        </record>
+        <record id="task_solar_inst_montaje" model="sentinela.fsm.task.template">
+            <field name="name">Montar estructura y fijar los paneles</field>
+            <field name="service_type">install</field>
+            <field name="tech_category">solar</field>
+            <field name="sequence">20</field>
+        </record>
+        <record id="task_solar_inst_dc" model="sentinela.fsm.task.template">
+            <field name="name">Conexión DC serie/paralelo: revisar polaridad y voltaje de cadena</field>
+            <field name="service_type">install</field>
+            <field name="tech_category">solar</field>
+            <field name="sequence">30</field>
+        </record>
+        <record id="task_solar_inst_inversor" model="sentinela.fsm.task.template">
+            <field name="name">Instalar inversor con protecciones DC/AC y tierra física</field>
+            <field name="service_type">install</field>
+            <field name="tech_category">solar</field>
+            <field name="sequence">40</field>
+        </record>
+        <record id="task_solar_inst_ac" model="sentinela.fsm.task.template">
+            <field name="name">Conexión AC al tablero/medidor</field>
+            <field name="service_type">install</field>
+            <field name="tech_category">solar</field>
+            <field name="sequence">50</field>
+        </record>
+        <record id="task_solar_inst_monitoreo" model="sentinela.fsm.task.template">
+            <field name="name">Configurar inversor y monitoreo (WiFi/app)</field>
+            <field name="service_type">install</field>
+            <field name="tech_category">solar</field>
+            <field name="sequence">60</field>
+        </record>
+        <record id="task_solar_inst_pruebas" model="sentinela.fsm.task.template">
+            <field name="name">Pruebas de generación, voltajes y paro de emergencia</field>
+            <field name="service_type">install</field>
+            <field name="tech_category">solar</field>
+            <field name="sequence">70</field>
+        </record>
+        <record id="task_solar_inst_entrega" model="sentinela.fsm.task.template">
+            <field name="name">Capacitar al cliente y entregar manual/garantía</field>
+            <field name="service_type">install</field>
+            <field name="tech_category">solar</field>
+            <field name="sequence">80</field>
+        </record>
+
+        <!-- Mantenimiento -->
+        <record id="task_solar_mant_limpieza" model="sentinela.fsm.task.template">
+            <field name="name">Limpieza de paneles (sin abrasivos)</field>
+            <field name="service_type">maintenance</field>
+            <field name="tech_category">solar</field>
+            <field name="sequence">10</field>
+        </record>
+        <record id="task_solar_mant_estructura" model="sentinela.fsm.task.template">
+            <field name="name">Inspeccionar estructura y reapretar tornillería</field>
+            <field name="service_type">maintenance</field>
+            <field name="tech_category">solar</field>
+            <field name="sequence">20</field>
+        </record>
+        <record id="task_solar_mant_cableado" model="sentinela.fsm.task.template">
+            <field name="name">Revisar cableado DC/AC y conectores MC4</field>
+            <field name="service_type">maintenance</field>
+            <field name="tech_category">solar</field>
+            <field name="sequence">30</field>
+        </record>
+        <record id="task_solar_mant_termo" model="sentinela.fsm.task.template">
+            <field name="name">Inspección de puntos calientes (termografía)</field>
+            <field name="service_type">maintenance</field>
+            <field name="tech_category">solar</field>
+            <field name="sequence">40</field>
+        </record>
+        <record id="task_solar_mant_inversor" model="sentinela.fsm.task.template">
+            <field name="name">Revisar inversor: errores, voltajes y temperatura</field>
+            <field name="service_type">maintenance</field>
+            <field name="tech_category">solar</field>
+            <field name="sequence">50</field>
+        </record>
+        <record id="task_solar_mant_tierra" model="sentinela.fsm.task.template">
+            <field name="name">Verificar tierra física y protecciones</field>
+            <field name="service_type">maintenance</field>
+            <field name="tech_category">solar</field>
+            <field name="sequence">60</field>
+        </record>
+        <record id="task_solar_mant_produccion" model="sentinela.fsm.task.template">
+            <field name="name">Comparar producción real vs esperada en la app de monitoreo</field>
+            <field name="service_type">maintenance</field>
+            <field name="tech_category">solar</field>
+            <field name="sequence">70</field>
+        </record>
+
+    </data>
+</odoo>

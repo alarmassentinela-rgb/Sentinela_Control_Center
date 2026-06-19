@@ -16,10 +16,15 @@ class FsmTaskTemplate(models.Model):
     ], string='Tipo de Servicio', default='all')
     tech_category = fields.Selection([
         ('all', 'Todas'),
+        ('internet', 'Internet'),
         ('alarm', 'Alarmas'),
-        ('gps', 'Senticar (Rastreo)'),
         ('cctv', 'Cámaras (CCTV)'),
-        ('internet', 'Internet')
+        ('gps', 'Senticar (Rastreo)'),
+        ('solar', 'Energía Solar (Paneles)'),
+        ('access', 'Control de Acceso'),
+        ('fence', 'Cercas Eléctricas'),
+        ('fire', 'Detección de Incendio'),
+        ('phone', 'Telefonía'),
     ], string='Tecnología', default='all')
 
 class FsmOrderLine(models.Model):
