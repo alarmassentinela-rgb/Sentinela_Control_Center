@@ -5,3 +5,5 @@ __pycache__/
 .ssh/
 .vpn_*_credentials.json
 vpn_laptop/
+SENTINELA_MASTER_CREDENTIALS.md
+.backup_*.json
