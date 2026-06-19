@@ -176,6 +176,40 @@ class FsmOrder(models.Model):
         for order in self:
             order.is_fsm_manager = self.env.user.has_group('sentinela_fsm.group_fsm_manager')
 
+    @api.onchange('subscription_id')
+    def _onchange_subscription_id(self):
+        """Al elegir/heredar una suscripción (p.ej. desde el botón 'Órdenes Técnicas'
+        de la sub, que pasa default_subscription_id), rellena la orden con los datos
+        que ya tiene la sub: cliente, dirección de servicio, coordenadas, cuenta de
+        monitoreo y usuario PPPoE. Solo rellena lo vacío para no pisar capturas previas.
+        NO toca service_type (el de la orden es el TIPO DE TRABAJO: instalación/
+        reparación/...; la tecnología internet/alarma/gps ya la aporta subscription_id)."""
+        sub = self.subscription_id
+        if not sub:
+            return
+
+        def _to_float(v):
+            try:
+                return float(str(v).replace(',', ' ').split()[0])
+            except (TypeError, ValueError, IndexError):
+                return 0.0
+
+        self.partner_id = sub.partner_id
+        if sub.service_address_id:
+            self.service_address_id = sub.service_address_id
+        if sub.monitoring_account_number and not self.monitoring_account_number:
+            self.monitoring_account_number = sub.monitoring_account_number
+        if sub.pppoe_user and not self.internet_pppoe_user:
+            self.internet_pppoe_user = sub.pppoe_user
+        lat, lon = _to_float(sub.latitude), _to_float(sub.longitude)
+        if lat and not self.install_lat:
+            self.install_lat = lat
+        if lon and not self.install_lon:
+            self.install_lon = lon
+        if not self.description:
+            plan = sub.product_id.name or sub.name
+            self.description = _("<p>Servicio relacionado a la suscripción <b>%s</b> (%s).</p>") % (sub.name, plan)
+
     def send_push_notification(self, title, message, recipient_user=None, notification_type='update'):
         """
         Método para enviar notificaciones push al técnico asignado o usuario específico
