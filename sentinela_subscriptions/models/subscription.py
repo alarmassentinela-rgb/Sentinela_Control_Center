@@ -1443,6 +1443,22 @@ class SentinelaSubscription(models.Model):
                 self.write({'nav_status': verdict, 'nav_status_date': fields.Datetime.now()})
                 self.message_post(body=_('🔎 <b>Validación de navegación:</b> %s') % verdict)
                 return self._nav_notif(verdict, 'warning')
+            # 2.5 ¿la IP sigue en el address-list de bloqueo? El perfil del secret puede decir
+            # "plan" pero la sesión viva o una entrada dinámica residual dejar la IP amurallada
+            # por el firewall (el conntrack contaría las respuestas del propio walled-garden como
+            # "datos de vuelta" → 🟢 falso). Verificamos el bloqueo REAL, no el perfil que debería.
+            cip_only = str(client_ip).split(':')[0]
+            blocked = api.get_resource('/ip/firewall/address-list').get(
+                **{'list': SUSPENDED_PROFILE, 'address': cip_only})
+            if not blocked:
+                blocked = [e for e in api.get_resource('/ip/firewall/address-list').get(
+                    **{'list': SUSPENDED_PROFILE}) if e.get('comment') == self.pppoe_user]
+            if blocked:
+                verdict = _('🔴 SUSPENDIDO — IP %s aún bloqueada en el firewall (walled-garden), pese al perfil. Reactiva el servicio para liberarla.') % client_ip
+                conn.disconnect()
+                self.write({'nav_status': verdict, 'nav_status_date': fields.Datetime.now()})
+                self.message_post(body=_('🔎 <b>Validación de navegación:</b> %s') % verdict)
+                return self._nav_notif(verdict, 'warning')
             # 3. conntrack: ¿tiene conexiones a Internet CON respuesta?
             def es_publica(ip):
                 ip = (ip or '').split(':')[0]
