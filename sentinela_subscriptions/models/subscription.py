@@ -1805,14 +1805,39 @@ class SentinelaSubscription(models.Model):
                         comment=f'Odoo SUB/{sub.name}'
                     )
 
-                # Quitar de address-list suspendidos si estaba ahí
+                # IP(s) de la(s) sesión(es) activas: las entradas del walled-garden son
+                # DINÁMICAS y sin comment (las pone el perfil suspendido por dirección),
+                # así que hay que limpiarlas por address, no solo por comment.
+                active = api.get_resource('/ppp/active')
+                active_sessions = active.get(name=sub.pppoe_user)
+                active_ips = {s.get('address') for s in active_sessions if s.get('address')}
+
+                # Quitar de address-list suspendidos: por comment Y por dirección (dinámicas)
                 addr_list = api.get_resource('/ip/firewall/address-list')
-                suspended_entries = addr_list.get(**{'list': 'argusblack_servicio_suspendido', 'comment': sub.pppoe_user})
-                for entry in suspended_entries:
-                    addr_list.remove(id=entry['id'])
+                seen = set()
+                entries = addr_list.get(**{'list': 'argusblack_servicio_suspendido', 'comment': sub.pppoe_user})
+                for ip in active_ips:
+                    entries += addr_list.get(**{'list': 'argusblack_servicio_suspendido', 'address': ip})
+                for entry in entries:
+                    if entry['id'] in seen:
+                        continue
+                    seen.add(entry['id'])
+                    try:
+                        addr_list.remove(id=entry['id'])
+                    except Exception as ex:
+                        _logger.warning("No se pudo quitar %s de suspendidos (sub %s): %s", entry.get('address'), sub.name, ex)
+
+                # Cortar la sesión activa para que reconecte YA con el perfil del plan.
+                # El perfil del secret solo se aplica al conectar; sin esto el cliente sigue
+                # navegando sobre la sesión vieja con el perfil suspendido (walled-garden).
+                for session in active_sessions:
+                    try:
+                        active.remove(id=session['id'])
+                    except Exception as ex:
+                        _logger.warning("No se pudo cortar sesión PPPoE %s (sub %s): %s", sub.pppoe_user, sub.name, ex)
 
                 conn.disconnect()
-                sub.message_post(body=f"<b>MikroTik:</b> Secret PPPoE <b>{sub.pppoe_user}</b> activado con perfil <b>{profile_name}</b>.")
+                sub.message_post(body=f"<b>MikroTik:</b> Secret PPPoE <b>{sub.pppoe_user}</b> activado con perfil <b>{profile_name}</b> (sesión reiniciada para aplicar el perfil).")
             except Exception as e:
                 try:
                     conn.disconnect()
