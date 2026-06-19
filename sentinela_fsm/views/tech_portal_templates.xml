@@ -72,9 +72,11 @@
                             <span t-if="order.service_type == 'install'" class="badge bg-success">Instalación</span>
                             <span t-if="order.service_type == 'repair'" class="badge bg-warning text-dark">Reparación / Falla</span>
                             <span t-if="order.service_type == 'maintenance'" class="badge bg-info text-dark">Mantenimiento</span>
-                            <span t-if="order.service_type == 'transfer'" class="badge bg-secondary">Traslado</span>
+                            <span t-if="order.service_type == 'transfer'" class="badge bg-secondary">Traslado / Reubicación</span>
                             <span t-if="order.service_type == 'removal'" class="badge bg-danger">Retiro</span>
                             <span t-if="order.service_type == 'patrol'" class="badge bg-dark">Patrullaje</span>
+                            <span t-if="order.service_type in ('revision','config','reconnection','warranty')" class="badge bg-warning text-dark" t-field="order.service_type"/>
+                            <span t-if="order.service_category" class="badge" style="background-color:#6f42c1;color:#fff;" t-field="order.service_category"/>
                             <span t-if="order.stage == 'assigned'" class="badge bg-info">ASIGNADO</span>
                             <span t-if="order.stage == 'in_progress'" class="badge bg-primary">EN PROCESO</span>
                             <span t-if="order.stage == 'paused'" class="badge bg-secondary">PAUSADO</span>
@@ -262,6 +264,8 @@
                     <span t-if="order.service_type == 'transfer'" class="badge bg-info">TRASLADO</span>
                     <span t-if="order.service_type == 'removal'" class="badge bg-danger">RETIRO</span>
                     <span t-if="order.service_type == 'patrol'" class="badge bg-dark">PATRULLAJE</span>
+                    <span t-if="order.service_type in ('maintenance','revision','config','reconnection','warranty')" class="badge bg-secondary text-uppercase" t-field="order.service_type"/>
+                    <span t-if="order.service_category" class="badge text-uppercase" style="background-color:#6f42c1;color:#fff;" t-field="order.service_category"/>
                 </div>
                 <div class="data-value mt-2" style="font-size: 14px; line-height: 1.4;">
                     <t t-out="order.description"/>

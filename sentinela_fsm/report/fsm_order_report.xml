@@ -27,6 +27,8 @@
                             <div class="col-6 text-end">
                                 <p>
                                     <strong>Fecha:</strong> <span t-field="o.check_out_date" t-options='{"widget": "datetime"}'/><br/>
+                                    <strong>Tipo de Servicio:</strong> <span t-field="o.service_type"/><br/>
+                                    <strong>Sistema:</strong> <span t-field="o.service_category"/><br/>
                                     <strong>Prioridad:</strong> <span t-field="o.priority"/>
                                 </p>
                             </div>

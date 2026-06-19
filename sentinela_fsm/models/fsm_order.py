@@ -60,11 +60,34 @@ class FsmOrder(models.Model):
         ('install', 'Instalación'),
         ('repair', 'Reparación / Falla (Correctivo)'),
         ('maintenance', 'Mantenimiento Preventivo'),
-        ('transfer', 'Traslado'),
+        ('revision', 'Revisión / Diagnóstico'),
+        ('config', 'Configuración'),
+        ('reconnection', 'Reconexión en Sitio'),
+        ('transfer', 'Traslado / Reubicación'),
         ('removal', 'Retiro de Equipo / Desinstalación'),
+        ('warranty', 'Garantía'),
         ('patrol', 'Patrullaje / Respuesta'),
         ('other', 'Otro')
     ], string='Tipo de Servicio', default='other')
+
+    # Eje INDEPENDIENTE del tipo de trabajo: sobre QUÉ sistema/equipo es el servicio.
+    # Una orden puede no tener suscripción (cliente sin contrato) o ser de algo que la
+    # sub no contempla (CCTV, paneles solares, alarma sin monitoreo); por eso es un campo
+    # propio de la orden, no se deriva solo de subscription_id. Se autollena desde la sub
+    # cuando aplica (ver _onchange_subscription_id) y si no, lo elige el operador.
+    service_category = fields.Selection([
+        ('internet', 'Internet / WISP'),
+        ('alarm', 'Alarma'),
+        ('cctv', 'CCTV / Cámaras'),
+        ('gps', 'GPS / Rastreo'),
+        ('solar', 'Energía Solar (Paneles)'),
+        ('access', 'Control de Acceso'),
+        ('fence', 'Cercas Eléctricas'),
+        ('fire', 'Detección de Incendio'),
+        ('phone', 'Telefonía'),
+        ('other', 'Otro'),
+    ], string='Sistema / Tecnología', tracking=True,
+       help='Sobre qué sistema o equipo es el servicio. Independiente del tipo de trabajo.')
 
     # Datos Técnicos capturados en campo (Instalaciones GPS)
     vehicle_brand = fields.Char(string='Marca del Vehículo')
@@ -195,6 +218,11 @@ class FsmOrder(models.Model):
                 return 0.0
 
         self.partner_id = sub.partner_id
+        # Tecnología desde la sub (solo las que la sub contempla; CCTV/solar/etc. los pone
+        # el operador a mano). Solo si la orden aún no tiene una elegida.
+        tech_map = {'internet': 'internet', 'alarm': 'alarm', 'gps': 'gps'}
+        if not self.service_category and sub.service_type in tech_map:
+            self.service_category = tech_map[sub.service_type]
         if sub.service_address_id:
             self.service_address_id = sub.service_address_id
         if sub.monitoring_account_number and not self.monitoring_account_number:
@@ -595,10 +623,13 @@ class FsmOrder(models.Model):
 
     def _populate_checklist(self):
         """ Copies templates to order lines based on service type AND technology """
-        # Determinar tecnología (desde suscripción o producto)
+        # Determinar tecnología: desde la suscripción si la hay; si no (cliente sin
+        # contrato), usar el Sistema/Tecnología capturado en la propia orden.
         tech = 'all'
         if self.subscription_id:
             tech = self.subscription_id.service_type
+        elif self.service_category:
+            tech = self.service_category
         
         # Buscar tareas que apliquen a este servicio y esta tecnología.
         # En PATRULLAJE el checklist es propio (perímetro/puertas/sospechosos): NO se

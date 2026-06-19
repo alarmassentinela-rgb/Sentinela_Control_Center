@@ -100,6 +100,7 @@
                 <field name="scheduled_date"/>
                 <field name="partner_id"/>
                 <field name="service_type"/>
+                <field name="service_category"/>
                 <field name="technician_id" widget="many2one_avatar_user"/>
                 <field name="priority" widget="priority"/>
                 <field name="stage" widget="badge"
@@ -120,6 +121,7 @@
                 <field name="name" string="Folio / Descripción" filter_domain="['|', ('name','ilike',self), ('description','ilike',self)]"/>
                 <field name="partner_id"/>
                 <field name="technician_id" string="Técnico / Patrullero"/>
+                <field name="service_category" string="Sistema / Tecnología"/>
                 <separator/>
                 <filter name="f_pendientes" string="Pendientes"
                         domain="[('stage','in',('new','assigned','in_progress','paused'))]"/>
@@ -148,6 +150,7 @@
                     <filter name="g_tec" string="Técnico / Patrullero" context="{'group_by':'technician_id'}"/>
                     <filter name="g_stage" string="Estado" context="{'group_by':'stage'}"/>
                     <filter name="g_type" string="Tipo de servicio" context="{'group_by':'service_type'}"/>
+                    <filter name="g_cat" string="Sistema / Tecnología" context="{'group_by':'service_category'}"/>
                     <filter name="g_dia" string="Día programado" context="{'group_by':'scheduled_date:day'}"/>
                     <filter name="g_prio" string="Prioridad" context="{'group_by':'priority'}"/>
                 </group>
@@ -189,6 +192,7 @@
                         </group>
                         <group string="Programación">
                             <field name="service_type" readonly="not is_fsm_manager and stage != 'new'"/>
+                            <field name="service_category" readonly="not is_fsm_manager and stage != 'new'"/>
                             <field name="technician_id" readonly="not is_fsm_manager"/>
                             <field name="patrol_unit_id" readonly="not is_fsm_manager"
                                    invisible="service_type != 'patrol'"
