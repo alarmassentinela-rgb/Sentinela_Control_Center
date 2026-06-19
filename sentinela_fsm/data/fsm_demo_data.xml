@@ -12,16 +12,19 @@
         <record id="task_install_mount" model="sentinela.fsm.task.template">
             <field name="name">Instalar y fijar antena/mástil</field>
             <field name="service_type">install</field>
+            <field name="tech_category">internet</field>
             <field name="sequence">20</field>
         </record>
         <record id="task_install_signal" model="sentinela.fsm.task.template">
             <field name="name">Alineación y niveles de señal óptimos</field>
             <field name="service_type">install</field>
+            <field name="tech_category">internet</field>
             <field name="sequence">30</field>
         </record>
         <record id="task_install_router" model="sentinela.fsm.task.template">
             <field name="name">Configurar Router (PPPoE)</field>
             <field name="service_type">install</field>
+            <field name="tech_category">internet</field>
             <field name="sequence">40</field>
         </record>
 
@@ -34,6 +37,7 @@
         <record id="task_repair_speedtest" model="sentinela.fsm.task.template">
             <field name="name">Prueba de velocidad (Speedtest)</field>
             <field name="service_type">repair</field>
+            <field name="tech_category">internet</field>
             <field name="sequence">50</field>
         </record>
 
