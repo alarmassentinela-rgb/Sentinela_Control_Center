@@ -29,6 +29,13 @@ class ResPartner(models.Model):
     # Consentimiento (opt-in): fecha del primer /start del cliente al Bot Clientes.
     telegram_opt_in_date = fields.Datetime(string='Aceptó Telegram (opt-in)', readonly=True, copy=False,
         help="Fecha/hora en que el cliente aceptó recibir avisos por Telegram (su primer /start).")
+    # Qué BOT capturó el chat_id (= el mismo que puede enviarle). Lo sella el cron al vincular.
+    telegram_bot = fields.Selection([
+        ('client', 'Clientes (SentiBot)'),
+        ('internal', 'Interno (Sentinela)'),
+    ], string='Bot de Telegram', readonly=True, copy=False,
+       help="Bot por el que está vinculado este contacto. El chat_id solo sirve para enviar "
+            "desde este mismo bot. Lo determina el cron según por cuál bot dio /start.")
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -39,14 +46,28 @@ class ResPartner(models.Model):
                 vals['telegram_link_token'] = secrets.token_urlsafe(24)
         return super().create(vals_list)
 
-    def _telegram_bot_username(self):
-        return (self.env['ir.config_parameter'].sudo()
-                .get_param('sentinela_monitoring.telegram_client_bot_username') or '').lstrip('@')
+    def _is_internal_staff(self):
+        """True si el partner corresponde a un usuario interno de Odoo (no portal/cliente)."""
+        self.ensure_one()
+        return bool(self.user_ids.filtered(lambda u: not u.share))
+
+    def _telegram_bot_kind(self):
+        """Qué bot le toca a este partner para INVITAR: interno si es personal de Odoo,
+        si no, clientes."""
+        self.ensure_one()
+        return 'internal' if self._is_internal_staff() else 'client'
+
+    def _telegram_bot_username(self, kind='client'):
+        ICP = self.env['ir.config_parameter'].sudo()
+        key = ('sentinela_monitoring.telegram_internal_bot_username' if kind == 'internal'
+               else 'sentinela_monitoring.telegram_client_bot_username')
+        return (ICP.get_param(key) or '').lstrip('@')
 
     def _telegram_invite_url(self):
-        """Asegura el token y devuelve la liga t.me, o False si el bot no está configurado."""
+        """Asegura el token y devuelve la liga t.me del bot que le toca (interno/cliente),
+        o False si ese bot no está configurado."""
         self.ensure_one()
-        username = self._telegram_bot_username()
+        username = self._telegram_bot_username(self._telegram_bot_kind())
         if not username:
             return False
         if not self.telegram_link_token:
@@ -71,10 +92,10 @@ class ResPartner(models.Model):
         except Exception:
             return False
 
-    @api.depends('telegram_link_token')
+    @api.depends('telegram_link_token', 'user_ids.share')
     def _compute_telegram_link_url(self):
-        username = self._telegram_bot_username()
         for partner in self:
+            username = partner._telegram_bot_username(partner._telegram_bot_kind())
             if partner.telegram_link_token and username:
                 partner.telegram_link_url = f"https://t.me/{username}?start={partner.telegram_link_token}"
             else:
@@ -93,10 +114,14 @@ class ResPartner(models.Model):
 
     def _get_telegram_token(self):
         # El token vive en ir.config_parameter (sembrado en el server, NO en el repo).
-        # IMPORTANTE: el chat_id es POR BOT. El bot que CAPTURA el chat_id (vinculación) debe
-        # ser el mismo que ENVÍA. Por eso preferimos el token del Bot Clientes; si no está
-        # sembrado, caemos al token histórico para no romper envíos existentes.
+        # IMPORTANTE: el chat_id es POR BOT → el bot que CAPTURÓ el chat_id es el único que
+        # le puede enviar. Por eso ruteamos por el bot del partner (telegram_bot):
+        #   - 'internal' → bot Sentinela (personal de Odoo)
+        #   - 'client'/None → Bot Clientes (SentiBot), con fallback al token histórico.
         p = self.env['ir.config_parameter'].sudo()
+        if self and self.telegram_bot == 'internal':
+            return (p.get_param('sentinela_monitoring.telegram_internal_bot_token')
+                    or p.get_param('sentinela_syscom.telegram_token'))
         return (p.get_param('sentinela_monitoring.telegram_client_bot_token')
                 or p.get_param('sentinela_syscom.telegram_token'))
 
@@ -125,35 +150,32 @@ class ResPartner(models.Model):
         mandársela al cliente. El cliente abre la liga → /start → comparte contacto →
         el cron _cron_telegram_poll_updates escribe su telegram_chat_id."""
         self.ensure_one()
-        if not self.telegram_link_token:
-            self.telegram_link_token = secrets.token_urlsafe(24)
-        username = (self.env['ir.config_parameter'].sudo()
-                    .get_param('sentinela_monitoring.telegram_client_bot_username') or '').lstrip('@')
-        if not username:
+        url = self._telegram_invite_url()
+        if not url:
+            kind = self._telegram_bot_kind()
             return {
                 'type': 'ir.actions.client', 'tag': 'display_notification',
                 'params': {
                     'title': 'Falta configurar el bot',
-                    'message': "Define el usuario del Bot Clientes en Parámetros del sistema "
-                               "(sentinela_monitoring.telegram_client_bot_username).",
+                    'message': f"Define el usuario del bot ({kind}) en Parámetros del sistema "
+                               f"(sentinela_monitoring.telegram_{'internal' if kind=='internal' else 'client'}_bot_username).",
                     'type': 'danger', 'sticky': True,
                 },
             }
-        url = f"https://t.me/{username}?start={self.telegram_link_token}"
-        self.message_post(body=f"🔗 Liga de vinculación de Telegram generada:<br/><a href='{url}'>{url}</a>")
+        destino = 'personal interno (bot Sentinela)' if self._is_internal_staff() else 'cliente (SentiBot)'
+        self.message_post(body=f"🔗 Liga de vinculación Telegram [{destino}]:<br/><a href='{url}'>{url}</a>")
         return {
             'type': 'ir.actions.client', 'tag': 'display_notification',
             'params': {
                 'title': 'Liga generada',
-                'message': f"Mándale esta liga al cliente:\n{url}\n(quedó también en la bitácora).",
+                'message': f"Liga para {destino}:\n{url}\n(quedó también en la bitácora).",
                 'type': 'success', 'sticky': True,
             },
         }
 
     @api.model
-    def _telegram_api(self, method, payload, files=None, timeout=20):
-        """Llamada cruda al Bot API del Bot Clientes. Devuelve el JSON o None."""
-        token = self._get_telegram_token()
+    def _telegram_api(self, method, payload, token, files=None, timeout=20):
+        """Llamada cruda al Bot API usando el token EXPLÍCITO del bot dado. JSON o None."""
         if not token:
             return None
         import requests
@@ -167,18 +189,31 @@ class ResPartner(models.Model):
 
     @api.model
     def _cron_telegram_poll_updates(self):
-        """Cron de vinculación. Hace getUpdates al Bot Clientes y procesa:
-          - '/start <token>'  → casa el token con el partner y guarda telegram_chat_id.
-          - contacto compartido → guarda el teléfono (verificación) en el mismo chat.
-        Es idempotente vía el offset guardado en ir.config_parameter. NO requiere
-        endpoint público: el Bot Clientes NO debe tener webhook (si lo tiene, getUpdates
-        da 409 y se ignora). Solo este cron consume el bot por getUpdates."""
+        """Cron de vinculación. Sondea AMBOS bots con offsets separados y etiqueta cada
+        chat_id con el bot que lo capturó (telegram_bot):
+          - Bot Clientes (SentiBot)  → telegram_bot='client'
+          - Bot Sentinela (interno)  → telegram_bot='internal'
+        Cada bot tiene su propio getUpdates (sin conflicto entre sí). Ninguno debe tener
+        webhook (si lo tiene, getUpdates da 409 y se ignora ese bot)."""
         ICP = self.env['ir.config_parameter'].sudo()
-        token = ICP.get_param('sentinela_monitoring.telegram_client_bot_token')
-        if not token:
-            return  # Bot Clientes no configurado todavía
-        offset = int(ICP.get_param('sentinela_monitoring.telegram_getupdates_offset') or 0)
+        bots = [
+            ('client',
+             ICP.get_param('sentinela_monitoring.telegram_client_bot_token'),
+             'sentinela_monitoring.telegram_getupdates_offset'),
+            ('internal',
+             ICP.get_param('sentinela_monitoring.telegram_internal_bot_token')
+             or ICP.get_param('sentinela_syscom.telegram_token'),
+             'sentinela_monitoring.telegram_internal_getupdates_offset'),
+        ]
+        for kind, token, offset_key in bots:
+            if token:
+                self._telegram_poll_one_bot(kind, token, offset_key)
 
+    @api.model
+    def _telegram_poll_one_bot(self, bot_kind, token, offset_key):
+        """Procesa los updates de UN bot. Best-effort: si falla, no toca el offset."""
+        ICP = self.env['ir.config_parameter'].sudo()
+        offset = int(ICP.get_param(offset_key) or 0)
         import requests
         try:
             res = requests.get(
@@ -188,10 +223,10 @@ class ResPartner(models.Model):
             )
             data = res.json()
         except Exception as e:
-            _logger.warning("Telegram getUpdates falló: %s", e)
+            _logger.warning("Telegram getUpdates (%s) falló: %s", bot_kind, e)
             return
         if not data.get('ok'):
-            _logger.warning("Telegram getUpdates no-ok: %s", data.get('description'))
+            _logger.warning("Telegram getUpdates (%s) no-ok: %s", bot_kind, data.get('description'))
             return
 
         max_update_id = offset
@@ -206,35 +241,36 @@ class ResPartner(models.Model):
             text = (msg.get('text') or '').strip()
             contact = msg.get('contact')
 
-            # 1) /start <token> → vincula el chat_id al partner del token
+            # 1) /start <token> → vincula el chat_id al partner del token, etiquetando el bot
             if text.startswith('/start'):
                 parts = text.split(maxsplit=1)
                 link_token = parts[1].strip() if len(parts) > 1 else ''
                 partner = self.search([('telegram_link_token', '=', link_token)], limit=1) if link_token else False
                 if partner:
-                    vals = {'telegram_chat_id': chat_id}
+                    vals = {'telegram_chat_id': chat_id, 'telegram_bot': bot_kind}
                     if not partner.telegram_opt_in_date:
                         vals['telegram_opt_in_date'] = fields.Datetime.now()
                     partner.write(vals)
-                    partner.message_post(body=f"✅ Telegram vinculado por el cliente (chat_id {chat_id}).")
-                    # Pedimos el contacto para verificar el teléfono (botón nativo de Telegram)
+                    quien = 'el cliente' if bot_kind == 'client' else 'personal interno'
+                    partner.message_post(body=f"✅ Telegram vinculado por {quien} (chat_id {chat_id}, bot {bot_kind}).")
                     self._telegram_api('sendMessage', {
                         'chat_id': chat_id,
                         'text': f"¡Hola {partner.name}! Quedaste vinculado a Sentinela ✅\n"
                                 "Por favor comparte tu número para confirmar tu cuenta.",
                         'reply_markup': '{"keyboard":[[{"text":"📱 Compartir mi número","request_contact":true}]],'
                                         '"resize_keyboard":true,"one_time_keyboard":true}',
-                    })
+                    }, token)
                 else:
                     self._telegram_api('sendMessage', {
                         'chat_id': chat_id,
                         'text': "No reconozco esta liga. Pídele a Sentinela tu liga de vinculación personal.",
-                    })
+                    }, token)
                 continue
 
-            # 2) Contacto compartido → guarda el teléfono en el partner ya vinculado
+            # 2) Contacto compartido → guarda el teléfono en el partner de ESTE bot
             if contact and contact.get('phone_number'):
-                partner = self.search([('telegram_chat_id', '=', chat_id)], limit=1)
+                partner = self.search([('telegram_chat_id', '=', chat_id),
+                                       ('telegram_bot', '=', bot_kind)], limit=1)
                 if partner:
                     if not partner.whatsapp_number:
                         partner.whatsapp_number = contact['phone_number']
@@ -243,10 +279,10 @@ class ResPartner(models.Model):
                         'chat_id': chat_id,
                         'text': "Listo, ya recibirás tus avisos por aquí. 🛡️",
                         'reply_markup': '{"remove_keyboard":true}',
-                    })
+                    }, token)
 
         if max_update_id != offset:
-            ICP.set_param('sentinela_monitoring.telegram_getupdates_offset', str(max_update_id))
+            ICP.set_param(offset_key, str(max_update_id))
 
     # ---------------- F3 WhatsApp vía EvoApi ----------------
 

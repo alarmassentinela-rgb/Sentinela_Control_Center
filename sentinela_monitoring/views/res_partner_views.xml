@@ -24,6 +24,7 @@
                         <group string="Canal preferido">
                             <field name="notification_channel"/>
                             <field name="telegram_chat_id" placeholder="se llena solo al vincular" readonly="1"/>
+                            <field name="telegram_bot" readonly="1" invisible="not telegram_chat_id"/>
                             <field name="whatsapp_number" placeholder="vacío = usa mobile"/>
                         </group>
                         <group string="Vinculación Telegram (Bot Clientes)">
