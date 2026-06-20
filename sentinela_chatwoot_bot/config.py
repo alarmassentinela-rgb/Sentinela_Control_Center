@@ -19,6 +19,23 @@ CHATWOOT_PUBLIC_URL = os.environ.get("CHATWOOT_PUBLIC_URL", "https://chat.sentin
 # Team al que se asigna la conversación cuando el bot termina el intake o el
 # cliente pide asesor (2 = soporte, según teams de Chatwoot).
 HANDOFF_TEAM_ID = int(os.environ.get("HANDOFF_TEAM_ID", "2"))
+
+# ── Ruteo por tema → equipo + agente asignado (quien recibe la notificación) ──
+# Chatwoot notifica al ASIGNADO (assignee). team = bucket en la bandeja;
+# assignee = persona que recibe email/push. assignee 0 = solo al equipo.
+# Agentes (cuenta 1): 1 Enrique Garza, 2 Enrique Garza Bedolla, 3 Irma Bedolla, 4 Mirna Barbosa.
+# Teams: 1 ventas, 2 soporte, 3 administracion.
+def _route(env_team, env_assignee, dteam, dassignee):
+    return {"team": int(os.environ.get(env_team, str(dteam))),
+            "assignee": int(os.environ.get(env_assignee, str(dassignee)))}
+
+ROUTING = {
+    "soporte":     _route("ROUTE_SOPORTE_TEAM",     "ROUTE_SOPORTE_AGENT",     2, 1),  # equipo soporte → Enrique (único miembro hoy)
+    "cobranza":    _route("ROUTE_COBRANZA_TEAM",    "ROUTE_COBRANZA_AGENT",    3, 3),  # administracion → Irma
+    "facturacion": _route("ROUTE_FACTURACION_TEAM", "ROUTE_FACTURACION_AGENT", 3, 3),  # administracion → Irma
+    "ventas":      _route("ROUTE_VENTAS_TEAM",      "ROUTE_VENTAS_AGENT",      1, 2),  # ventas → Enrique Garza Bedolla
+}
+DEFAULT_TOPIC = os.environ.get("DEFAULT_TOPIC", "soporte")
 HANDOFF_KEYWORDS = [
     w.strip().lower() for w in os.environ.get(
         "HANDOFF_KEYWORDS",
@@ -26,12 +43,37 @@ HANDOFF_KEYWORDS = [
     ).split(",") if w.strip()
 ]
 
-# ── Horario de oficina (atención humana) ───────────────────────────
-TZ = ZoneInfo(os.environ.get("TZ", "America/Mexico_City"))
-OFFICE_START = int(os.environ.get("OFFICE_START", "9"))   # hora inicio (24h)
-OFFICE_END = int(os.environ.get("OFFICE_END", "18"))      # hora fin (24h)
-# Días hábiles: lunes=0 ... domingo=6. Default L-V.
-OFFICE_DAYS = [int(d) for d in os.environ.get("OFFICE_DAYS", "0,1,2,3,4").split(",") if d.strip()]
+# ── Horario de atención humana ─────────────────────────────────────
+# Matamoros (lada 868) sigue el horario de verano de EE.UU. → en verano va 1h
+# adelante de CDMX; usar America/Matamoros, no America/Mexico_City.
+TZ = ZoneInfo(os.environ.get("TZ", "America/Matamoros"))
+
+
+def _parse_schedule(s: str) -> dict:
+    """'0-4:9-18,5:9-13' → {0:(9,18),...,5:(9,13)}. lunes=0 ... domingo=6."""
+    sched = {}
+    for part in s.split(","):
+        part = part.strip()
+        if ":" not in part:
+            continue
+        days, hours = part.split(":", 1)
+        hs, he = (int(x) for x in hours.split("-"))
+        if "-" in days:
+            a, b = (int(x) for x in days.split("-"))
+            day_list = range(a, b + 1)
+        else:
+            day_list = [int(days)]
+        for d in day_list:
+            sched[d] = (hs, he)
+    return sched
+
+
+# Horario por día (24h). Default: L-V 9-18, Sábado 9-13, Domingo cerrado.
+OFFICE_SCHEDULE = _parse_schedule(os.environ.get("OFFICE_SCHEDULE", "0-4:9-18,5:9-13"))
+# Texto legible (para los mensajes al cliente y el prompt del LLM).
+OFFICE_HOURS_TEXT = os.environ.get(
+    "OFFICE_HOURS_TEXT",
+    "lunes a viernes de 9:00 a 18:00 y sábados de 9:00 a 13:00 (domingos cerrado)")
 
 # ── Idempotencia ───────────────────────────────────────────────────
 # Etiqueta que marca que ya se levantó el reporte en esta conversación.
@@ -111,9 +153,18 @@ amablemente qué problema tiene. NO levantes reporte por mensajes sin contenido.
 ADJUNTA a su reporte para que el técnico la vea, y pídele que además describa el problema POR ESCRITO \
 (tú todavía no puedes ver fotos ni oír audios).
 - Usa handoff SOLO si: (a) pide explícitamente un asesor/persona; (b) está molesto o es una queja; o \
-(c) es tema de ventas/cobranza/pagos que requiere una persona. Para preguntas curiosas inofensivas \
-("¿cuántos clientes tienen?", "¿quién es el dueño?"), NO hagas handoff: responde breve que no tienes \
-esa información y sigue ayudando.
+(c) es tema de ventas/cobranza/facturación/pagos que requiere una persona. Para preguntas curiosas \
+inofensivas ("¿cuántos clientes tienen?", "¿quién es el dueño?"), NO hagas handoff: responde breve que \
+no tienes esa información y sigue ayudando.
+
+CLASIFICA EL TEMA (campo `topic`) en CADA respuesta, para enrutar a la persona correcta:
+- "soporte" → falla técnica de internet/alarma/GPS (es lo que tú atiendes con diagnóstico + reporte).
+- "cobranza" → pagos, adeudos, suspensión por falta de pago, fechas de corte, comprobantes de pago.
+- "facturacion" → factura/CFDI, datos fiscales, complementos de pago, timbrado.
+- "ventas" → contratar/cotizar un servicio nuevo, ampliar plan, precios para nuevo servicio.
+Si el tema NO es soporte técnico (cobranza/facturacion/ventas): NO hagas diagnóstico ni create_ticket; \
+recaba breve QUÉ necesita (1-2 preguntas) y usa action=handoff con el `topic` correcto para pasarlo al \
+área. Un asesor de esa área lo atenderá.
 
 Contexto del cliente (de nuestro sistema Odoo):
 {ficha}
@@ -126,7 +177,7 @@ donde el cliente confirma, ya con todos los datos (subscription, contact_time, a
 
 Responde SIEMPRE con UN único JSON válido y NADA de texto fuera del JSON. Campos `summary`, \
 `subscription`, `contact_time` y `alt_phone` SOLO aplican con create_ticket (ponlos solo si los tienes):
-{{"action": "reply" | "create_ticket" | "handoff", "message": "<lo que le dices al cliente>", "summary": "<problema + pasos + modelo>", "subscription": "<SUB-XXXX o vacío>", "contact_time": "<horario preferido o vacío>", "alt_phone": "<teléfono alterno o vacío>"}}\
+{{"action": "reply" | "create_ticket" | "handoff", "topic": "soporte" | "cobranza" | "facturacion" | "ventas", "message": "<lo que le dices al cliente>", "summary": "<problema + pasos + modelo>", "subscription": "<SUB-XXXX o vacío>", "contact_time": "<horario preferido o vacío>", "alt_phone": "<teléfono alterno o vacío>"}}\
 """)
 
 # Prompt para números NO ENCONTRADOS en Odoo: persona NO verificada. Seguridad/privacidad

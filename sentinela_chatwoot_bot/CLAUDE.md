@@ -54,10 +54,19 @@ WhatsApp 8688225875
      a humano** (queda en `pending`): el bot sigue activo para los follow-ups del cliente. Guarda
      el folio en `state` (anti-duplicado; en turnos siguientes el prompt le dice al LLM que NO cree
      otra orden y conteste dudas).
-   - `handoff` → AHÍ sí pasa a humano (asigna soporte + abre la conversación). Lo dispara el cliente
-     (palabra clave) o el LLM cuando no puede resolver. Tras esto la conversación queda `open` → bot calla.
+   - `handoff` → AHÍ sí pasa a humano, **ruteado por tema**. El LLM clasifica `topic`
+     (soporte|cobranza|facturacion|ventas); el escape duro usa `_guess_topic` por palabra clave.
+     `config.ROUTING` mapea topic→(team, assignee) y se asigna **equipo + agente** (Chatwoot notifica
+     al assignee por email/push). Default `soporte`. Temas NO técnicos = intake breve + handoff (sin
+     diagnóstico ni create_ticket). Tras el handoff la conversación queda `open` → bot calla.
+     Ruteo actual: cobranza/facturacion→Irma(3,admin), ventas→E.G.Bedolla(2,ventas), soporte→equipo soporte/E.Garza(1).
    - LLM falla/parsea mal → fallback seguro: pide el detalle (no crea nada).
-7. **Horario** (`OFFICE_*`): solo cambia el texto del folio; en ambos casos queda en cola de soporte.
+7. **Horario** (`OFFICE_SCHEDULE` por día + `TZ=America/Matamoros`): el bot atiende 24/7 (diagnóstico
+   + folio) pero **los asesores humanos no**. Default L-V 9-18, Sáb 9-13, Dom cerrado. Afecta: (a) el
+   texto del folio, (b) el mensaje de **handoff** (dentro = "te atienden en breve"; fuera = "queda en
+   cola, te contactan {próxima apertura}", calculada con `_next_office_open()`), y (c) una línea
+   inyectada al **system prompt** para que el LLM no prometa atención humana inmediata fuera de horario.
+   En todos los casos la conversación queda en la cola del team soporte.
 
 ## El cerebro: SYSTEM_PROMPT (config.py) — soporte de primera línea
 El bot DIAGNOSTICA antes de mandar técnico (ajustable por env `SYSTEM_PROMPT`):

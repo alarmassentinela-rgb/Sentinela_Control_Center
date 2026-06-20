@@ -54,6 +54,12 @@ def assign_team(conversation_id: int, team_id: int) -> bool:
     return _post(f"/conversations/{conversation_id}/assignments", {"team_id": team_id})
 
 
+def assign_agent(conversation_id: int, assignee_id: int) -> bool:
+    """Asigna la conversación a un agente concreto → Chatwoot le manda la
+    notificación (email/push) de 'conversación asignada'."""
+    return _post(f"/conversations/{conversation_id}/assignments", {"assignee_id": assignee_id})
+
+
 def toggle_status(conversation_id: int, status: str = "open") -> bool:
     return _post(f"/conversations/{conversation_id}/toggle_status", {"status": status})
 

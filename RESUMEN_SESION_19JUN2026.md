@@ -108,3 +108,60 @@ Web reiniciado donde hubo cambios de campos/Python. Tags de respaldo en GitHub p
 4. **Teléfono en orden FSM**: es related de `partner_id.phone`; si el número está en *Móvil* sale
    vacío. ¿Hacer fallback a mobile?
 5. (Monitoring, heredados) ¿quitar sub-filtro "Activos" de Tráfico?; SMS al cliente (falta gateway).
+
+---
+---
+
+# Sesión 2 (tarde-noche) — Agentes IA (Telegram + WhatsApp/Chatwoot)
+
+Segunda sesión del día, enfocada en **agentes de IA**. Nada del módulo FSM; trabajo sobre
+apps standalone (server-only, fuera del árbol de release del módulo).
+
+## Mantenimiento WSL
+- `apt update && upgrade` en el Ubuntu de la PC (45 paquetes, 0 pendientes, sin reinicio).
+- Password sudo del WSL (`egarza`/`sentinela`) documentado en el índice de credenciales (§10b).
+
+## Revisión de auto-suspensión (preventivo)
+- Replicada la lógica del cron `_cron_auto_suspend_overdue` contra prod (solo lectura): **17
+  suscripciones** se suspenderían al reactivar el cron, adeudo total **$8,578**. PDF a Telegram.
+- ⚠️ **`api_user` está ciego a la contabilidad** (record rules) → reportes de cobranza vía esa
+  credencial salen en CERO falso. Hay que usar admin (egarza uid=2) para ver `account.move`.
+- Aclarado: **varias subs por cliente es NORMAL** (alarma+internet, casa+oficina, sucursales), NO
+  duplicado. Memoria [[multi-sub-por-cliente-normal]].
+
+## SentiAI — nuevo agente IA en Telegram (bot propio @SentinelaAsistente_bot)
+- App nueva `/home/egarza/sentinela_tg_agent/agent.py` (long-polling, OpenRouter→`claude-sonnet-4.6`).
+  **Solo responde al chat de Enrique** (7965190381); guardrail por chat_id.
+- Bot **propio dedicado** (no choca con crones de Odoo que sondean los otros bots de Telegram).
+- **Lectura** Odoo (clientes, suscripciones, facturas vencidas) + **escritura con CONFIRMACIÓN por
+  "SÍ"**: dar prórroga (`apply_extension`) y aplicar pago (`account.payment.register`). El LLM solo
+  *propone*; la ejecución la dispara código determinista al recibir "SÍ" (no puede auto-confirmarse).
+- Desplegado como **systemd en el server** (`sentinela-tg-agent.service`, enabled, Restart=always),
+  migrado desde la PC. Self-test OK (OpenRouter 200 + Odoo uid 2). Mecánica de pago validada en prod
+  sin postear (wizard transient). 2 manuales PDF (uno con logo) a Telegram. Memoria [[agente-ia-telegram-sentiai]].
+
+## Bot de Reportes WhatsApp (Chatwoot AgentBot, 8688225875) — go-live + ruteo
+- **AgentBot REACTIVADO** (`AgentBotInbox` inbox 1 → `status=active`) tras pre-flight (webhooks
+  chatwoot↔evoapi correctos, instancia `open`). El "no contestó" en la prueba era por diseño: la
+  conversación estaba `open` → el bot calla (idempotencia por status); se reabre a `pending` para probar.
+- **Horarios de atención humana** (app.py/config.py): `OFFICE_SCHEDULE` por día (**L-V 9-18, Sáb 9-13,
+  Dom cerrado**) + `_next_office_open()`. **Bug corregido: TZ → `America/Matamoros`** (lada 868 sigue DST
+  de EE.UU.; el `.env` tenía `America/Mexico_City` → el bot se creía abierto 1h de más). Handoff y folio
+  ahora honestos según horario; horario inyectado al system prompt.
+- **Handoff ruteado por tema + notificaciones:** el LLM clasifica `topic`; `config.ROUTING` asigna
+  **equipo + agente** y Chatwoot notifica al assignee (email+push, ya activados para agentes 1/2/3):
+  **cobranza/facturación→Irma, ventas→E.G.Bedolla, soporte→equipo soporte/Enrique.** `assign_agent`
+  añadido a chatwoot.py (probado: el AgentBot SÍ puede asignar assignee). Manual PDF a Telegram.
+- Desplegado por rsync + `docker compose up -d --build`. **Sin validar end-to-end con cliente** (regla
+  dura: NO probar contra clientes reales; Enrique probaría desde su cel). Cambios de código del bot
+  (`app.py/config.py/chatwoot.py/CLAUDE.md`) versionados en este commit; **el `.env` del server NO**
+  (TZ/OFFICE/ROUTING quedaron también ahí, backup `.env.bak_tz_*`).
+
+## Pendientes sesión 2
+1. **Probar end-to-end** el bot de reportes desde el cel de Enrique: cobranza→Irma, ventas→EGB,
+   soporte→folio. (Conversación #14 quedó en `pending` lista.)
+2. **App Chatwoot** instalada por cada agente (Irma, EGB, Enrique) para que llegue el push; el email ya jala.
+3. **Mirna Barbosa** (recepción, central@) tiene la cuenta Chatwoot **sin confirmar** — activarla si entra a soporte.
+4. Cuando soporte tenga >1 miembro → auto-assignment round-robin.
+5. SentiAI: ¿más herramientas (crear orden FSM, avisos)? ¿usuario Odoo dedicado "Agente IA" para auditoría?
+6. Trampa viva: `SERVER_URL=192.168.3.2:8080` en EvoApi deja armado el webhook (no re-correr `/chatwoot/set`).

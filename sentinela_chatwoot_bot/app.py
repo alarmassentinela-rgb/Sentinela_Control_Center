@@ -17,7 +17,7 @@ import base64
 import json
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import httpx
 from fastapi import FastAPI, Request
@@ -42,16 +42,27 @@ app = FastAPI(title="Sentinela Chatwoot FSM Bot")
 _handled: set[int] = set()
 
 # ── Mensajes de plantilla (folio/handoff/error los controla el bot, no el LLM) ──
-MSG_HANDOFF = (
-    "Con gusto. 🧑‍💼 Te comunico con un asesor; en breve te atiende una persona del equipo."
+# Cola de atención: dentro de horario te atienden "en breve"; fuera de horario el
+# texto es honesto y dice cuándo (no promete atención inmediata).
+MSG_HANDOFF_OFFICE = (
+    "Con gusto. 🧑‍💼 Te comunico con {area}; en breve te atiende una persona del equipo por aquí."
 )
+MSG_HANDOFF_AFTERHOURS = (
+    "Con gusto te paso con {area}. 🧑‍💼 En este momento estamos fuera de horario de atención "
+    "({hours}); tu caso queda en cola y te contactan {when}. Gracias por tu paciencia. 🙏"
+)
+# Nombre legible del área para el mensaje al cliente.
+AREA_NAMES = {
+    "soporte": "soporte técnico", "cobranza": "cobranza",
+    "facturacion": "facturación", "ventas": "ventas",
+}
 MSG_FOLIO_OFFICE = (
     "✅ Listo{name}, levantamos tu reporte con folio *{folio}*.\n"
     "Un asesor le dará seguimiento en breve. Si necesitas algo más, aquí estoy."
 )
 MSG_FOLIO_AFTERHOURS = (
     "✅ Listo{name}, registramos tu reporte con folio *{folio}*.\n"
-    "Estamos fuera de horario de oficina; un asesor te contacta el siguiente día hábil. "
+    "En este momento estamos fuera de horario ({hours}); un asesor te dará seguimiento {when}. "
     "Gracias por tu paciencia. 🙏"
 )
 MSG_ERROR = (
@@ -64,9 +75,33 @@ MSG_LLM_FALLBACK = (
 )
 
 
+_DAY_NAMES = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+
+
 def _office_hours_now() -> bool:
     now = datetime.now(config.TZ)
-    return now.weekday() in config.OFFICE_DAYS and config.OFFICE_START <= now.hour < config.OFFICE_END
+    rng = config.OFFICE_SCHEDULE.get(now.weekday())
+    return bool(rng and rng[0] <= now.hour < rng[1])
+
+
+def _next_office_open() -> str:
+    """Texto humano del próximo momento de atención: 'hoy a las 9:00', 'mañana a
+    las 9:00' o 'el lunes a las 9:00'. Para usar fuera de horario."""
+    now = datetime.now(config.TZ)
+    for i in range(0, 8):
+        day = now + timedelta(days=i)
+        rng = config.OFFICE_SCHEDULE.get(day.weekday())
+        if not rng:
+            continue
+        start, _end = rng
+        if i == 0 and now.hour >= start:
+            continue  # hoy ya abrimos; toca otro día
+        if i == 0:
+            return f"hoy a las {start}:00"
+        if i == 1:
+            return f"mañana a las {start}:00"
+        return f"el {_DAY_NAMES[day.weekday()]} a las {start}:00"
+    return "en horario de oficina"
 
 
 def _wants_human(content: str) -> bool:
@@ -137,6 +172,17 @@ def _llm_decide(conv_id: int, name: str, ficha: str, order_folio: str | None = N
     cuenta, solo recaba datos para un reporte interno (VERIFICAR IDENTIDAD)."""
     base = config.SYSTEM_PROMPT if verified else config.SYSTEM_PROMPT_UNVERIFIED
     system = base.format(name=name or "(desconocido)", ficha=ficha)
+    # Conciencia de horario: el bot atiende 24/7 pero los asesores humanos NO.
+    if _office_hours_now():
+        system += (f"\n\nHORARIO DE ATENCIÓN HUMANA: {config.OFFICE_HOURS_TEXT}. "
+                   "AHORA MISMO estamos DENTRO de horario: si pasas con un asesor o prometes "
+                   "seguimiento, di que lo atienden en breve.")
+    else:
+        system += (f"\n\nHORARIO DE ATENCIÓN HUMANA: {config.OFFICE_HOURS_TEXT}. "
+                   f"AHORA MISMO estamos FUERA de horario; el próximo horario hábil es {_next_office_open()}. "
+                   "NUNCA prometas atención inmediata de un asesor: di con claridad que su reporte queda "
+                   "registrado y que un asesor lo contactará en el próximo horario hábil. El soporte "
+                   "automático (diagnóstico, levantar el folio) SÍ sigue disponible ahora.")
     if order_folio:
         # Ya hay reporte: el bot atiende follow-ups, NO crea otra orden.
         system += (
@@ -230,11 +276,53 @@ def _attach_pending_photos(conv_id: int, order_id: int):
     state.clear_photos(conv_id)
 
 
-def _do_handoff(conv_id: int, message: str | None):
-    chatwoot.send_message(conv_id, message or MSG_HANDOFF)
-    chatwoot.assign_team(conv_id, config.HANDOFF_TEAM_ID)
+# ── Ruteo por tema ──────────────────────────────────────────────────
+_TOPIC_KW = {
+    "cobranza": ["pago", "pagar", "adeudo", "debo", "cobr", "suspendid", "corte", "deuda", "recibo"],
+    "facturacion": ["factura", "cfdi", "fiscal", "timbr", "complemento"],
+    "ventas": ["contratar", "cotiz", "precio", "nuevo servicio", "quiero internet", "dar de alta"],
+}
+
+
+def _guess_topic(content: str) -> str:
+    """Clasificador por palabra clave (para el escape duro a humano, sin LLM)."""
+    c = content.lower()
+    for topic, kws in _TOPIC_KW.items():
+        if any(k in c for k in kws):
+            return topic
+    return config.DEFAULT_TOPIC
+
+
+def _route_for(topic: str | None) -> dict:
+    return config.ROUTING.get(topic or config.DEFAULT_TOPIC, config.ROUTING[config.DEFAULT_TOPIC])
+
+
+def _assign_route(conv_id: int, topic: str | None) -> dict:
+    """Asigna la conversación al equipo + agente del tema (el agente recibe la
+    notificación email/push). NO cambia el status ni manda mensaje."""
+    route = _route_for(topic)
+    chatwoot.assign_team(conv_id, route["team"])
+    if route.get("assignee"):
+        chatwoot.assign_agent(conv_id, route["assignee"])
+    return route
+
+
+def _handoff_message(topic: str | None) -> str:
+    """Mensaje de handoff honesto según el horario, nombrando el área."""
+    area = AREA_NAMES.get(topic or config.DEFAULT_TOPIC, "un asesor")
+    if _office_hours_now():
+        return MSG_HANDOFF_OFFICE.format(area=area)
+    return MSG_HANDOFF_AFTERHOURS.format(area=area, hours=config.OFFICE_HOURS_TEXT, when=_next_office_open())
+
+
+def _do_handoff(conv_id: int, topic: str | None = None):
+    topic = topic or config.DEFAULT_TOPIC
+    route = _assign_route(conv_id, topic)
+    chatwoot.send_message(conv_id, _handoff_message(topic))
     chatwoot.toggle_status(conv_id, "open")
     _handled.add(conv_id)
+    logger.info("conv %s: handoff topic=%s team=%s assignee=%s",
+                conv_id, topic, route["team"], route.get("assignee"))
 
 
 def _process(payload: dict):
@@ -273,7 +361,7 @@ def _process(payload: dict):
 
     # Atajo duro: el cliente SIEMPRE puede escapar a un humano, pase lo que pase el LLM.
     if _wants_human(content):
-        _do_handoff(conv_id, MSG_HANDOFF)
+        _do_handoff(conv_id, _guess_topic(content))
         return
 
     # Contexto del cliente (Odoo) + decisión del LLM. Si ya hay folio, el bot sigue
@@ -283,11 +371,12 @@ def _process(payload: dict):
     decision = _llm_decide(conv_id, name, ficha, existing_folio, verified=bool(partner))
     action = (decision.get("action") or "reply").lower()
     message = decision.get("message") or ""
+    topic = (decision.get("topic") or config.DEFAULT_TOPIC).lower()
 
     # ── HANDOFF (sí suelta a humano: cliente lo pide o el bot no puede resolver) ──
     if action == "handoff":
-        _do_handoff(conv_id, message or MSG_HANDOFF)
-        logger.info("conv %s: handoff (IA)", conv_id)
+        _do_handoff(conv_id, topic)
+        logger.info("conv %s: handoff (IA) topic=%s", conv_id, topic)
         return
 
     # ── CREATE_TICKET ──
@@ -301,20 +390,21 @@ def _process(payload: dict):
         if not res or not res.get("ok"):
             logger.error("conv %s: fallo al crear orden FSM", conv_id)
             chatwoot.send_message(conv_id, MSG_ERROR)
-            _do_handoff(conv_id, None)
+            _do_handoff(conv_id)
             return
         folio = res["name"]
         state.set_order(conv_id, folio)
         greet = f" {name}" if name else ""
         tmpl = MSG_FOLIO_OFFICE if _office_hours_now() else MSG_FOLIO_AFTERHOURS
-        folio_msg = tmpl.format(name=greet, folio=folio)
+        folio_msg = tmpl.format(name=greet, folio=folio,
+                                hours=config.OFFICE_HOURS_TEXT, when=_next_office_open())
         chatwoot.send_message(conv_id, folio_msg)
         state.add_message(conv_id, "assistant", folio_msg)
         _attach_pending_photos(conv_id, res["id"])
         _post_client_note(conv_id, d["phone"])
-        # Asigna a soporte para ruteo, pero NO suelta a humano todavía: la conversación
-        # queda en 'pending' y el bot sigue atendiendo los follow-ups del cliente.
-        chatwoot.assign_team(conv_id, config.HANDOFF_TEAM_ID)
+        # Asigna a soporte (equipo + agente, para que le llegue la notificación), pero
+        # NO suelta a humano: la conversación queda en 'pending' y el bot sigue los follow-ups.
+        _assign_route(conv_id, "soporte")
         logger.info("conv %s: orden %s creada (match=%s); bot sigue activo", conv_id, folio, bool(partner))
         return
 
