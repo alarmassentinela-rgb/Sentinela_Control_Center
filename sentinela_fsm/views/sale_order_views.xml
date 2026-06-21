@@ -23,6 +23,10 @@
             <xpath expr="//field[@name='partner_shipping_id']" position="attributes">
                 <attribute name="domain">[('id', 'child_of', partner_id)]</attribute>
             </xpath>
+            <!-- Dirección de factura: igual, solo direcciones del cliente -->
+            <xpath expr="//field[@name='partner_invoice_id']" position="attributes">
+                <attribute name="domain">[('id', 'child_of', partner_id)]</attribute>
+            </xpath>
         </field>
     </record>
 </odoo>
