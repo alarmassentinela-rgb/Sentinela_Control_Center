@@ -8,5 +8,12 @@
             <field name="padding">5</field>
             <field name="company_id" eval="False"/>
         </record>
+        <record id="seq_sentinela_fsm_raffle_ticket" model="ir.sequence">
+            <field name="name">Boleto de Rifa (Encuesta de Satisfacción)</field>
+            <field name="code">sentinela.fsm.raffle.ticket</field>
+            <field name="prefix">RIF-</field>
+            <field name="padding">5</field>
+            <field name="company_id" eval="False"/>
+        </record>
     </data>
 </odoo>

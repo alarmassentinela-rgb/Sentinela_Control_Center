@@ -185,6 +185,15 @@ class FsmOrder(models.Model):
     work_log_ids = fields.One2many('sentinela.fsm.work.log', 'order_id', string='Bitácora de Trabajo')
     tracking_token = fields.Char(string='Token de Rastreo', copy=False, readonly=True)
 
+    # --- Encuesta de satisfacción + Rifa ---
+    survey_token = fields.Char(string='Token de Encuesta', copy=False, readonly=True)
+    survey_sent_date = fields.Datetime(string='Encuesta Enviada', readonly=True, copy=False)
+    survey_submitted_date = fields.Datetime(string='Encuesta Respondida', readonly=True, copy=False)
+    raffle_ticket = fields.Char(string='Boleto de Rifa', readonly=True, copy=False,
+        help='Número de boleto asignado al responder la encuesta. Cada boleto = una participación en la rifa del mes.')
+    raffle_won = fields.Boolean(string='Ganador de Rifa', readonly=True, copy=False)
+    raffle_won_date = fields.Datetime(string='Fecha en que ganó', readonly=True, copy=False)
+
     def _generate_tracking_token(self):
         import uuid
         for order in self:
@@ -195,6 +204,74 @@ class FsmOrder(models.Model):
         self.ensure_one()
         base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
         return f"{base_url}/SentiCar/rastreo/{self.tracking_token}"
+
+    def _ensure_survey_token(self):
+        import uuid
+        for order in self:
+            if not order.survey_token:
+                order.survey_token = str(uuid.uuid4())
+
+    def get_survey_url(self):
+        """URL pública de la encuesta de satisfacción del cliente."""
+        self.ensure_one()
+        self._ensure_survey_token()
+        base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
+        return f"{base_url}/encuesta/{self.survey_token}"
+
+    def get_survey_qr_src(self):
+        """src de imagen para el QR de la encuesta (usa el controlador de barcode de Odoo)."""
+        self.ensure_one()
+        from urllib.parse import urlencode
+        params = urlencode({'barcode_type': 'QR', 'value': self.get_survey_url(),
+                            'width': 180, 'height': 180})
+        return f"/report/barcode/?{params}"
+
+    def _send_satisfaction_survey(self):
+        """Manda al cliente la liga de la encuesta por Telegram (el correo la incluye
+        por separado en action_send_report_to_customer). Respeta notification_channel."""
+        for order in self:
+            p = order.partner_id
+            if not p:
+                continue
+            order._ensure_survey_token()
+            url = order.get_survey_url()
+            tech = order.technician_id.name or 'nuestro técnico'
+            channel = getattr(p, 'notification_channel', 'both')
+            if channel in ('both', 'telegram') and getattr(p, 'telegram_chat_id', False):
+                msg = (f"⭐ <b>¡Tu opinión nos ayuda a mejorar!</b>\n"
+                       f"Califica el servicio de <b>{tech}</b> (orden {order.name}).\n"
+                       f"Al terminar recibes un <b>boleto para la rifa del mes</b> 🎟️\n\n"
+                       f"👉 {url}")
+                try:
+                    p.send_telegram_message(msg)
+                except Exception as e:
+                    _logger.warning("Encuesta Telegram falló orden %s: %s", order.name, e)
+            order.survey_sent_date = fields.Datetime.now()
+
+    def register_survey_response(self, rating, feedback=None):
+        """Registra la respuesta del cliente y asigna boleto de rifa (una sola vez).
+        Devuelve el boleto. Llamado desde el controlador público."""
+        self.ensure_one()
+        try:
+            rating = int(rating)
+        except (TypeError, ValueError):
+            rating = 0
+        rating = max(1, min(5, rating))
+        if self.survey_submitted_date:
+            return self.raffle_ticket  # ya respondida: no re-asigna boleto (anti-spam)
+        ticket = self.env['ir.sequence'].next_by_code('sentinela.fsm.raffle.ticket') or False
+        self.sudo().write({
+            'customer_rating': rating,
+            'customer_feedback': feedback or self.customer_feedback,
+            'survey_submitted_date': fields.Datetime.now(),
+            'raffle_ticket': ticket,
+        })
+        stars = '⭐' * rating
+        self.message_post(body=_(
+            "📋 <b>Encuesta respondida por el cliente:</b> %s (%s/5). Boleto de rifa: <b>%s</b>."
+            "%s") % (stars, rating, ticket or 's/n',
+                     ("<br/>💬 " + feedback) if feedback else ""))
+        return ticket
 
     def _compute_is_fsm_manager(self):
         for order in self:
@@ -627,9 +704,10 @@ class FsmOrder(models.Model):
         for vals in vals_list:
             if vals.get('name', 'Nuevo') == 'Nuevo':
                 vals['name'] = self.env['ir.sequence'].next_by_code('sentinela.fsm.order') or 'OS-0000'
-            # Generar token de rastreo
+            # Generar tokens públicos (rastreo + encuesta)
             import uuid
             vals['tracking_token'] = str(uuid.uuid4())
+            vals['survey_token'] = str(uuid.uuid4())
         
         orders = super().create(vals_list)
         
@@ -936,7 +1014,17 @@ class FsmOrder(models.Model):
             'mimetype': 'application/pdf'
         })
 
-        # 3. Enviar Correo
+        # 3. Liga de encuesta de satisfacción (con incentivo de rifa)
+        survey_url = self.get_survey_url()
+        survey_block = f"""
+                <div style="margin:18px 0;padding:14px;border:1px solid #e0e0e0;border-radius:8px;background:#fafafa;">
+                    <p style="margin:0 0 8px;"><b>¿Cómo estuvo nuestro servicio?</b><br/>
+                       Tu opinión nos ayuda a mejorar y participas en la <b>rifa del mes</b> 🎟️</p>
+                    <a href="{survey_url}" style="display:inline-block;padding:10px 18px;background:#6f42c1;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;">⭐ Calificar mi servicio</a>
+                </div>
+        """
+
+        # 4. Enviar Correo
         # Nota: Idealmente usar una plantilla, pero aquí lo hacemos directo para asegurar los adjuntos
         body = f"""
             <div style="font-family: Arial, sans-serif;">
@@ -945,11 +1033,11 @@ class FsmOrder(models.Model):
                 <p>Adjunto encontrará el reporte detallado de la atención realizada por nuestro equipo en su domicilio.</p>
                 <br/>
                 <p><b>Resumen:</b> {self.resolution_notes or 'Revisión técnica completada.'}</p>
-                <br/>
+                {survey_block}
                 <p>Atentamente,<br/><b>Central de Monitoreo Sentinela</b></p>
             </div>
         """
-        
+
         self.message_post(
             body=body,
             partner_ids=self.partner_id.ids,
@@ -957,8 +1045,11 @@ class FsmOrder(models.Model):
             subtype_xmlid='mail.mt_comment'
         )
 
+        # 5. Mandar también la liga por Telegram (si el cliente está vinculado)
+        self._send_satisfaction_survey()
+
         self.report_sent_date = fields.Datetime.now()
-        self.message_post(body="📧 Reporte de patrullaje enviado al cliente con adjunto PDF.")
+        self.message_post(body="📧 Reporte enviado al cliente (PDF + encuesta de satisfacción).")
         return True
 
 class SentinelaFsmWorkLog(models.Model):

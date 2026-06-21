@@ -74,8 +74,13 @@
                             </div>
                         </div>
 
-                        <div class="row mt64" t-if="o.customer_signature">
-                            <div class="col-6 offset-6 text-center">
+                        <div class="row mt64">
+                            <div class="col-6 text-center">
+                                <p><strong>Califica nuestro servicio</strong></p>
+                                <img t-att-src="o.get_survey_qr_src()" style="width:120px;height:120px;"/>
+                                <p class="small text-muted">Escanea y participa en la <strong>rifa del mes</strong> 🎟️</p>
+                            </div>
+                            <div class="col-6 text-center" t-if="o.customer_signature">
                                 <p><strong>Firma de Conformidad</strong></p>
                                 <img t-att-src="image_data_uri(o.customer_signature)" style="max-height: 100px; max-width: 200px;"/><br/>
                                 <span t-field="o.partner_id.name"/>

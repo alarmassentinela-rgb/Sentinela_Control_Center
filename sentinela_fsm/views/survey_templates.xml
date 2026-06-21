@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Layout base de la encuesta (página pública autocontenida, mobile-first) -->
+    <template id="survey_layout" name="Encuesta — Layout">
+        <t t-name="sentinela_fsm.survey_layout">
+            <html lang="es">
+                <head>
+                    <meta charset="utf-8"/>
+                    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                    <title>Encuesta de Satisfacción — Sentinela</title>
+                    <style>
+                        body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#f4f4f7;margin:0;padding:0;color:#2b2b2b;}
+                        .wrap{max-width:480px;margin:0 auto;padding:18px;}
+                        .card{background:#fff;border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,.08);overflow:hidden;}
+                        .head{background:#6f42c1;color:#fff;padding:22px 20px;text-align:center;}
+                        .head h1{margin:0;font-size:20px;}
+                        .head p{margin:6px 0 0;opacity:.9;font-size:13px;}
+                        .body{padding:22px 20px;}
+                        .stars{display:flex;flex-direction:row-reverse;justify-content:center;margin:6px 0 18px;}
+                        .stars input{display:none;}
+                        .stars label{font-size:46px;color:#dcdce3;cursor:pointer;padding:0 5px;line-height:1;}
+                        .stars label:hover, .stars label:hover ~ label, .stars input:checked ~ label{color:#f5b301;}
+                        textarea{width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:8px;padding:10px;font-size:15px;min-height:90px;}
+                        .btn{display:block;width:100%;box-sizing:border-box;margin-top:16px;padding:13px;background:#6f42c1;color:#fff;border:none;border-radius:8px;font-size:16px;font-weight:bold;cursor:pointer;text-decoration:none;text-align:center;}
+                        .muted{color:#888;font-size:13px;}
+                        .ticket{font-size:26px;font-weight:bold;color:#6f42c1;letter-spacing:1px;}
+                        .gift{background:#faf7ff;border:1px dashed #c9b6ee;border-radius:10px;padding:14px;text-align:center;margin-top:16px;}
+                        .center{text-align:center;}
+                    </style>
+                </head>
+                <body>
+                    <div class="wrap">
+                        <div class="card">
+                            <t t-out="0"/>
+                        </div>
+                        <p class="center muted" style="margin-top:14px;">Sentinela · Seguridad y Conectividad</p>
+                    </div>
+                </body>
+            </html>
+        </t>
+    </template>
+
+    <!-- Formulario de la encuesta -->
+    <template id="survey_form" name="Encuesta — Formulario">
+        <t t-call="sentinela_fsm.survey_layout">
+            <div class="head">
+                <h1>¿Cómo estuvo tu servicio?</h1>
+                <p>Orden <t t-esc="order.name"/><t t-if="order.technician_id"> · Técnico: <t t-esc="order.technician_id.name"/></t></p>
+            </div>
+            <div class="body">
+                <form t-attf-action="/encuesta/{{ order.survey_token }}/submit" method="post">
+                    <p class="center" style="margin:0 0 4px;font-weight:bold;">Califica a tu técnico</p>
+                    <div class="stars">
+                        <input type="radio" id="s5" name="rating" value="5" required="required"/><label for="s5">★</label>
+                        <input type="radio" id="s4" name="rating" value="4"/><label for="s4">★</label>
+                        <input type="radio" id="s3" name="rating" value="3"/><label for="s3">★</label>
+                        <input type="radio" id="s2" name="rating" value="2"/><label for="s2">★</label>
+                        <input type="radio" id="s1" name="rating" value="1"/><label for="s1">★</label>
+                    </div>
+                    <label class="muted" for="feedback">Comentarios (opcional)</label>
+                    <textarea id="feedback" name="feedback" placeholder="¿Qué hicimos bien? ¿Qué podemos mejorar?"/>
+                    <button class="btn" type="submit">Enviar y participar en la rifa 🎟️</button>
+                    <p class="muted center" style="margin-top:12px;">Al enviar recibes un boleto para la <b>rifa del mes</b>. ¡Gracias por ayudarnos a mejorar!</p>
+                </form>
+            </div>
+        </t>
+    </template>
+
+    <!-- Página de agradecimiento + boleto -->
+    <template id="survey_thanks" name="Encuesta — Gracias">
+        <t t-call="sentinela_fsm.survey_layout">
+            <div class="head">
+                <h1>¡Gracias por tu opinión! 🙌</h1>
+                <p>Orden <t t-esc="order.name"/></p>
+            </div>
+            <div class="body center">
+                <p>Registramos tu calificación de
+                   <b><t t-esc="order.customer_rating"/>/5</b>
+                   <span t-if="order.customer_rating"><t t-esc="'⭐' * order.customer_rating"/></span>.</p>
+                <div class="gift">
+                    <p style="margin:0 0 6px;">Tu boleto para la <b>rifa del mes</b>:</p>
+                    <div class="ticket"><t t-esc="order.raffle_ticket or 'Registrado'"/></div>
+                    <p class="muted" style="margin:8px 0 0;">Guárdalo. Si resultas ganador te contactamos. 🎁</p>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <!-- Liga inválida -->
+    <template id="survey_invalid" name="Encuesta — No válida">
+        <t t-call="sentinela_fsm.survey_layout">
+            <div class="head" style="background:#b00020;">
+                <h1>Liga no válida</h1>
+            </div>
+            <div class="body center">
+                <p class="muted">Esta liga de encuesta no es válida o expiró. Si crees que es un error, contáctanos.</p>
+            </div>
+        </t>
+    </template>
+
+</odoo>

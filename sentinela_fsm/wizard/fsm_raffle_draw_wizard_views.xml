@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Wizard de sorteo -->
+    <record id="view_fsm_raffle_draw_wizard_form" model="ir.ui.view">
+        <field name="name">sentinela.fsm.raffle.draw.wizard.form</field>
+        <field name="model">sentinela.fsm.raffle.draw.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Sorteo de Rifa">
+                <group invisible="winner_order_id">
+                    <p colspan="2" class="text-muted">
+                        Elige el periodo. Participan las órdenes cuyo cliente respondió la encuesta
+                        (tienen boleto) en ese rango. El sorteo elige un ganador al azar.
+                    </p>
+                    <group>
+                        <field name="date_from"/>
+                        <field name="date_to"/>
+                    </group>
+                    <group>
+                        <field name="only_unwon"/>
+                        <field name="entry_count"/>
+                    </group>
+                </group>
+                <div invisible="not winner_order_id" class="alert alert-success text-center" role="alert">
+                    <h2 style="margin:0;">🎉 ¡Tenemos ganador!</h2>
+                    <p style="margin:8px 0 0;font-size:18px;">
+                        Boleto <b><field name="winner_ticket" readonly="1" nolabel="1"/></b>
+                    </p>
+                    <p style="margin:4px 0 0;font-size:18px;">
+                        Cliente: <b><field name="winner_partner" readonly="1" nolabel="1"/></b>
+                    </p>
+                    <field name="winner_order_id" invisible="1"/>
+                </div>
+                <footer>
+                    <button name="action_draw" string="🎲 Sortear ganador" type="object"
+                            class="btn-primary" invisible="winner_order_id"/>
+                    <button name="action_open_winner" string="Abrir orden ganadora" type="object"
+                            class="btn-primary" invisible="not winner_order_id"/>
+                    <button string="Cerrar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_fsm_raffle_draw" model="ir.actions.act_window">
+        <field name="name">Sortear Ganador (Rifa)</field>
+        <field name="res_model">sentinela.fsm.raffle.draw.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <!-- Lista de participaciones -->
+    <record id="view_fsm_raffle_entries_list" model="ir.ui.view">
+        <field name="name">sentinela.fsm.order.raffle.list</field>
+        <field name="model">sentinela.fsm.order</field>
+        <field name="arch" type="xml">
+            <list string="Participaciones de Rifa" create="0">
+                <field name="raffle_ticket"/>
+                <field name="survey_submitted_date"/>
+                <field name="partner_id"/>
+                <field name="technician_id"/>
+                <field name="customer_rating" string="Estrellas"/>
+                <field name="name" string="Orden"/>
+                <field name="raffle_won" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_fsm_raffle_entries" model="ir.actions.act_window">
+        <field name="name">Participaciones de Rifa</field>
+        <field name="res_model">sentinela.fsm.order</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('raffle_ticket', '!=', False)]</field>
+        <field name="context">{'search_default_group_won': 0}</field>
+        <field name="view_id" ref="view_fsm_raffle_entries_list"/>
+    </record>
+
+    <!-- Menús (bajo Reportes y Análisis) -->
+    <menuitem id="menu_fsm_raffle_entries" name="Rifa: Participaciones"
+              parent="menu_fsm_reporting" action="action_fsm_raffle_entries"
+              sequence="20" groups="group_fsm_manager"/>
+    <menuitem id="menu_fsm_raffle_draw" name="Rifa: Sortear Ganador"
+              parent="menu_fsm_reporting" action="action_fsm_raffle_draw"
+              sequence="21" groups="group_fsm_manager"/>
+
+</odoo>

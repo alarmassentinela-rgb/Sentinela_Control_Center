@@ -34,3 +34,4 @@ access_fsm_chat_message_subuser,fsm.chat.message.subuser.read,model_sentinela_fs
 access_patrol_unit_user,patrol.unit.user,model_sentinela_patrol_unit,group_fsm_user,1,0,0,0
 access_patrol_unit_dispatcher,patrol.unit.dispatcher,model_sentinela_patrol_unit,group_fsm_dispatcher,1,1,1,0
 access_patrol_unit_manager,patrol.unit.manager,model_sentinela_patrol_unit,group_fsm_manager,1,1,1,1
+access_fsm_raffle_draw_wizard_mgr,fsm.raffle.draw.wizard.mgr,model_sentinela_fsm_raffle_draw_wizard,group_fsm_manager,1,1,1,1
