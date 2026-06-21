@@ -21,3 +21,4 @@ access_subscription_gps_device_user,sentinela.subscription.gps.device.user,model
 access_subscription_gps_device_manager,sentinela.subscription.gps.device.manager,model_sentinela_subscription_gps_device,group_subscription_manager,1,1,1,1
 access_gps_command_template_user,sentinela.gps.command.template.user,model_sentinela_gps_command_template,group_subscription_user,1,0,0,0
 access_gps_command_template_manager,sentinela.gps.command.template.manager,model_sentinela_gps_command_template,group_subscription_manager,1,1,1,1
+access_gps_device_transfer_user,sentinela.gps.device.transfer.user,model_sentinela_gps_device_transfer,group_subscription_user,1,1,1,1

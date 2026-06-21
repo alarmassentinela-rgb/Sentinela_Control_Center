@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_gps_device_transfer_form" model="ir.ui.view">
+        <field name="name">sentinela.gps.device.transfer.form</field>
+        <field name="model">sentinela.gps.device.transfer</field>
+        <field name="arch" type="xml">
+            <form string="Transferir equipo GPS">
+                <field name="gps_platform" invisible="1"/>
+                <field name="gps_mode" invisible="1"/>
+                <field name="source_subscription_id" invisible="1"/>
+                <div class="alert alert-info" role="alert">
+                    Mueve este equipo a la suscripción del cliente destino. Conserva su historial en
+                    SentiCar (mismo IMEI), pasará a verse en la cuenta del cliente destino y dejará de
+                    verse en la cuenta actual. Los administradores lo siguen viendo.
+                </div>
+                <group>
+                    <group string="Equipo a transferir">
+                        <field name="device_id" readonly="1"/>
+                        <field name="source_subscription_id" readonly="1"/>
+                        <field name="source_partner_id" readonly="1"/>
+                    </group>
+                    <group string="Destino">
+                        <field name="target_subscription_id"
+                               options="{'no_create': True}"/>
+                        <field name="target_partner_id" readonly="1"/>
+                    </group>
+                </group>
+                <footer>
+                    <button name="action_confirm" string="Transferir equipo" type="object"
+                            class="btn-primary"
+                            confirm="¿Transferir este equipo a la suscripción destino? Dejará de verse en la cuenta actual."/>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

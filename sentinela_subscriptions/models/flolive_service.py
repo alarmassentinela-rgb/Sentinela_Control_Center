@@ -40,6 +40,40 @@ class FloliveService(models.AbstractModel):
         return None
 
     @api.model
+    def _get_graphql_token(self):
+        """Token para el GraphQL de floLIVE (envío de SMS). Desde ~jun-2026 floLIVE migró el
+        GraphQL a **Keycloak** (SSO): el token REST de /api/v2/auth/token ya NO autentica las
+        mutations (devuelve AUTHENTICATION_ERROR_MESSAGE) — las consultas REST (diagnóstico/estado
+        SIM) sí siguen con _get_auth_token. Aquí se pide un access_token al realm de Keycloak por
+        'password grant' con las MISMAS credenciales del portal (connecta_client_id/access_token).
+        Config del SSO en params (descubierta del bundle del portal, GET /keycloak/config):
+          sentinela.flolive_sso_url   = https://sso.globalconnectauth.net/auth
+          sentinela.flolive_sso_realm = flo-realm
+          sentinela.flolive_sso_client = flo-portal-ui
+        """
+        cfg = self.env['ir.config_parameter'].sudo()
+        username = cfg.get_param('sentinela.connecta_client_id')
+        password = cfg.get_param('sentinela.connecta_access_token')
+        if not username or not password:
+            _logger.error("FLOLIVE SSO: credenciales no configuradas")
+            return None
+        base = (cfg.get_param('sentinela.flolive_sso_url') or 'https://sso.globalconnectauth.net/auth').rstrip('/')
+        realm = cfg.get_param('sentinela.flolive_sso_realm') or 'flo-realm'
+        client_id = cfg.get_param('sentinela.flolive_sso_client') or 'flo-portal-ui'
+        url = f"{base}/realms/{realm}/protocol/openid-connect/token"
+        try:
+            r = requests.post(url, data={
+                'grant_type': 'password', 'client_id': client_id,
+                'username': username, 'password': password, 'scope': 'openid',
+            }, timeout=15)
+            if r.status_code == 200:
+                return r.json().get('access_token')
+            _logger.error("FLOLIVE SSO FAIL: %s - %s", r.status_code, r.text[:200])
+        except Exception as e:
+            _logger.error("FLOLIVE SSO EXCEPTION: %s", e)
+        return None
+
+    @api.model
     def update_sim_status(self, iccid, new_status):
         """
         Cambia el estado de una SIM en floLIVE.
@@ -163,9 +197,9 @@ class FloliveService(models.AbstractModel):
         cfg = self.env['ir.config_parameter'].sudo()
         if cfg.get_param('sentinela.flolive_sms_enabled', 'True') in ('False', '0', 'false'):
             return {'ok': False, 'detail': 'Envío de SMS deshabilitado (param sentinela.flolive_sms_enabled).'}
-        token = self._get_auth_token()
+        token = self._get_graphql_token()
         if not token:
-            return {'ok': False, 'detail': 'No se pudo autenticar con floLIVE.'}
+            return {'ok': False, 'detail': 'No se pudo autenticar con floLIVE (SSO/Keycloak).'}
         raw = self.get_sim_details(iccid)
         c = raw.get('content') if raw else None
         if isinstance(c, list) and c:

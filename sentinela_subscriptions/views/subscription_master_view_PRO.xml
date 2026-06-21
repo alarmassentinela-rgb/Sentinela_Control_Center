@@ -163,6 +163,9 @@
                                         invisible="device_state != 'suspended'"/>
                                     <button name="action_register_senticar" string="SentiCar" type="object"
                                         icon="fa-cloud-upload" invisible="parent.gps_platform != 'senticar'"/>
+                                    <button name="action_transfer_device" string="Transferir" type="object"
+                                        title="Mover este equipo a otra suscripción (otro cliente)"
+                                        icon="fa-exchange"/>
                                 </list>
                                 <form>
                                     <field name="gps_mode" invisible="1"/>
@@ -175,6 +178,8 @@
                                             type="object" class="btn-success" invisible="device_state != 'suspended'"/>
                                         <button name="action_register_senticar" string="📲 Registrar en SentiCar"
                                             type="object" class="btn-primary" invisible="gps_platform != 'senticar'"/>
+                                        <button name="action_transfer_device" string="🔄 Transferir a otra suscripción"
+                                            type="object" class="btn-secondary"/>
                                         <field name="device_state" widget="statusbar"/>
                                     </header>
                                     <group>

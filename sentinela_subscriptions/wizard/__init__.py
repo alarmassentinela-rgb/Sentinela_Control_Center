@@ -5,3 +5,4 @@ from . import subscription_generate_confirm
 from . import subscription_selection_wizard
 from . import subscription_transfer_wizard
 from . import subscription_advance_wizard
+from . import gps_device_transfer_wizard

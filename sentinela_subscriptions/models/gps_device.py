@@ -111,6 +111,82 @@ class SubscriptionGpsDevice(models.Model):
         for dev in self:
             dev.subscription_id._senticar_register_device(dev)
 
+    def action_transfer_device(self):
+        """Abre el asistente para mover ESTE equipo a otra suscripción (p.ej. de la cuenta maestra
+        a la del cliente que lo compró)."""
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Transferir equipo a otra suscripción'),
+            'res_model': 'sentinela.gps.device.transfer',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {'default_device_id': self.id},
+        }
+
+    def transfer_to_subscription(self, target_sub):
+        """Mueve este equipo a `target_sub`, conservando su device en SentiCar (mismo IMEI/historial)
+        y reapuntando la visibilidad al cliente destino:
+          1) reescribe subscription_id → conserva device id, SIM, placa, bitácora (el constraint de
+             IMEI no truena: es el mismo registro);
+          2) en SentiCar lo re-vincula a la cuenta/grupo del cliente destino (reusa el alta probada)
+             y lo renombra;
+          3) REVOCA el permiso directo del cliente anterior (si es otro), para que su cuenta deje de
+             verlo (al salir de su grupo pierde la visibilidad de grupo; el permiso directo del alta
+             NO se borra solo → hay que revocarlo aquí).
+        Los administradores (central) siguen viéndolo todo."""
+        self.ensure_one()
+        dev = self
+        svc = self.env['sentinela.senticar.service']
+        old_sub = dev.subscription_id
+        old_partner = old_sub.partner_id
+        new_partner = target_sub.partner_id
+
+        if target_sub == old_sub:
+            raise UserError(_("La suscripción destino es la misma que la actual."))
+        if target_sub.service_type != 'gps':
+            raise UserError(_("La suscripción destino '%s' no es de GPS.") % (target_sub.name or '?'))
+        if target_sub.gps_platform != old_sub.gps_platform:
+            raise UserError(_("Las plataformas no coinciden (origen %s ≠ destino %s). "
+                              "No se puede transferir entre plataformas distintas.") % (
+                              old_sub.gps_platform or '—', target_sub.gps_platform or '—'))
+        if target_sub.gps_mode != old_sub.gps_mode:
+            raise UserError(_("El modo del equipo (vehículo/móvil) no coincide con el de la "
+                              "suscripción destino."))
+
+        old_uid = old_partner.senticar_user_id
+        old_did = dev.senticar_device_id
+        same_partner = old_partner.id == new_partner.id
+
+        # 1) mover el renglón en Odoo
+        dev.subscription_id = target_sub.id
+
+        # 2) re-vincular en SentiCar al cliente destino (solo plataforma propia)
+        if dev.gps_platform == 'senticar' and dev.gps_imei:
+            try:
+                target_sub._senticar_register_device(dev)
+                if dev.senticar_device_id:
+                    svc.update_device_name(
+                        dev.senticar_device_id,
+                        f"{new_partner.name} - {dev.name or dev.gps_imei}")
+                    # 3) revocar visibilidad del cliente anterior (si es otro cliente)
+                    if not same_partner and old_uid and old_did:
+                        svc.revoke_device_from_user(old_uid, old_did)
+            except Exception as e:
+                _logger.error("SENTICAR transfer dev %s: %s", dev.id, e)
+                target_sub.message_post(body=_("<b>SentiCar ERROR</b> al transferir %s: %s") % (
+                    dev.name or dev.gps_imei, e))
+
+        # 4) bitácora en ambas suscripciones
+        old_sub.message_post(body=_(
+            "📤 Equipo <b>%s</b> (IMEI %s) TRANSFERIDO a <b>%s</b> (%s). Sale de esta suscripción."
+        ) % (dev.name or '—', dev.gps_imei or '—', target_sub.name, new_partner.name))
+        target_sub.message_post(body=_(
+            "📥 Equipo <b>%s</b> (IMEI %s) RECIBIDO desde <b>%s</b> (%s)%s."
+        ) % (dev.name or '—', dev.gps_imei or '—', old_sub.name, old_partner.name,
+             _(" — ya visible solo en la cuenta del nuevo cliente") if not same_partner else ""))
+        return True
+
     def action_generate_share_link(self):
         """Genera el link público temporal para rastrear SOLO esta unidad (X horas)."""
         self.ensure_one()

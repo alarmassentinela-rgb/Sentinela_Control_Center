@@ -206,6 +206,32 @@ class SenticarService(models.AbstractModel):
         return r2 is not None and r2.status_code == 200
 
     @api.model
+    def revoke_device_from_user(self, user_id, device_id):
+        """Quita el permiso DIRECTO usuario↔equipo (DELETE /api/permissions). Se usa al transferir
+        un equipo a otro cliente: sin esto, el dueño anterior (p.ej. la cuenta maestra) sigue viendo
+        el GPS aunque cambie de grupo, porque el permiso directo del alta no se borra solo."""
+        if not (user_id and device_id):
+            return False
+        r = self._req('DELETE', '/api/permissions', json={'userId': user_id, 'deviceId': device_id})
+        return r is not None and r.status_code in (200, 204)
+
+    @api.model
+    def update_device_name(self, device_id, name):
+        """Renombra un device en Traccar (PUT con el objeto completo). Al transferir, deja el equipo
+        con el nombre del cliente nuevo en lugar del dueño anterior."""
+        if not (device_id and name):
+            return False
+        r = self._req('GET', '/api/devices', params={'all': 'true'})
+        if r is None or r.status_code != 200:
+            return False
+        dev = next((d for d in r.json() if d.get('id') == device_id), None)
+        if not dev or dev.get('name') == name:
+            return bool(dev)
+        dev['name'] = name
+        r2 = self._req('PUT', f'/api/devices/{device_id}', json=dev)
+        return r2 is not None and r2.status_code == 200
+
+    @api.model
     def ensure_device(self, name, imei, user_id=None):
         """Crea/recupera el device por uniqueId=IMEI y (opcional) lo vincula al usuario.
         Devuelve device_id o None."""
