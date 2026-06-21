@@ -40,10 +40,48 @@ class SenticarService(models.AbstractModel):
             return None
 
     @api.model
+    def _client_share_attrs(self):
+        """Atributos que damos al usuario del cliente para que pueda usar el 'Compartir' NATIVO de
+        SentiCar (link temporal por unidad) por sí mismo, sin pedirnos el portal. Traccar exige que
+        quien comparte sea **manager** (userLimit≠0) — un usuario normal recibe 'Administrator access
+        required' al generar el link. Lo dejamos lo más acotado posible:
+          - userLimit=-1  → manager (necesario para que el botón Compartir funcione).
+          - limitCommands=True → NO puede enviar comandos crudos al GPS (p.ej. corte de motor).
+          - administrator/readonly/deviceReadonly se quedan en False: poner deviceReadonly/readonly
+            ESCONDE el botón Compartir (hook useDeviceReadonly de Traccar) → incompatible con el fin.
+        Gated por param sentinela.senticar_clients_can_share (default True). Si se apaga, devuelve
+        usuario normal (userLimit=0) y se vuelve a depender del portal del transportista."""
+        on = (self.env['ir.config_parameter'].sudo().get_param(
+            'sentinela.senticar_clients_can_share', 'True') not in ('False', '0', 'false'))
+        return {'userLimit': -1 if on else 0, 'limitCommands': bool(on),
+                'administrator': False, 'readonly': False, 'deviceReadonly': False}
+
+    @api.model
+    def apply_client_share_role(self, user_id):
+        """Aplica (idempotente) el rol de auto-compartir a un usuario existente. Devuelve True si quedó
+        con el rol esperado. Usado al recuperar un usuario ya creado y por la promoción masiva."""
+        if not user_id:
+            return False
+        want = self._client_share_attrs()
+        r = self._req('GET', '/api/users')
+        if r is None or r.status_code != 200:
+            return False
+        u = next((x for x in r.json() if x.get('id') == user_id), None)
+        if not u or u.get('administrator'):  # nunca tocar a un admin
+            return False
+        if all(u.get(k) == v for k, v in want.items()):
+            return True
+        u.update(want)
+        r2 = self._req('PUT', f'/api/users/{user_id}', json=u)
+        return r2 is not None and r2.status_code == 200
+
+    @api.model
     def ensure_client_user(self, partner):
-        """Crea/recupera el usuario Traccar del cliente. Devuelve (user_id, password_nueva_o_None)."""
+        """Crea/recupera el usuario Traccar del cliente. Devuelve (user_id, password_nueva_o_None).
+        El usuario queda con rol de auto-compartir (ver _client_share_attrs)."""
         partner = partner.sudo()
         if partner.senticar_user_id:
+            self.apply_client_share_role(partner.senticar_user_id)
             return partner.senticar_user_id, None
         email = partner.email or f"cliente{partner.id}@senticar.local"
         r = self._req('GET', '/api/users')
@@ -52,10 +90,12 @@ class SenticarService(models.AbstractModel):
                 if (u.get('email') or '').lower() == email.lower():
                     partner.senticar_user_id = u['id']
                     partner.senticar_user_email = email
+                    self.apply_client_share_role(u['id'])
                     return u['id'], None
         pw = 'Sc' + secrets.token_hex(5)
         r = self._req('POST', '/api/users',
-                      json={'name': partner.name or email, 'email': email, 'password': pw})
+                      json={'name': partner.name or email, 'email': email, 'password': pw,
+                            **self._client_share_attrs()})
         if r is not None and r.status_code in (200, 201):
             uid = r.json()['id']
             partner.write({'senticar_user_id': uid, 'senticar_user_email': email, 'senticar_user_password': pw})
