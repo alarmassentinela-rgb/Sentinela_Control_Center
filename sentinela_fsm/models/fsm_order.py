@@ -1000,9 +1000,9 @@ class FsmOrder(models.Model):
         if not self.is_authorized_by_operator:
             raise models.ValidationError(_("El reporte debe ser autorizado por el operador antes de enviarlo."))
         
-        # 1. Generar PDF
-        report_action = self.env.ref('sentinela_fsm.action_report_fsm_order')
-        pdf_content, content_type = report_action._render_qweb_pdf(self.ids)
+        # 1. Generar PDF (Odoo 18: report_ref primero, luego res_ids)
+        pdf_content, content_type = self.env['ir.actions.report']._render_qweb_pdf(
+            'sentinela_fsm.action_report_fsm_order', self.ids)
         
         # 2. Crear adjunto
         attachment = self.env['ir.attachment'].create({
