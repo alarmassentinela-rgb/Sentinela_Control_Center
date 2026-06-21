@@ -206,5 +206,87 @@
             <field name="sequence">70</field>
         </record>
 
+        <!-- ============ TAREAS RECLASIFICADAS (antes creadas a mano, sin respaldo XML) ============
+             service_type='all' = aplican a cualquier tipo de trabajo de su tecnología.
+             En las BD existentes (STAGING/PROD) estos xml_id se pre-vinculan a los registros
+             vivos para que el -u NO los duplique. En una instalación nueva se crean aquí. -->
+        <!-- Alarma -->
+        <record id="task_alarm_panic" model="sentinela.fsm.task.template">
+            <field name="name">¿Probó sensores y botones de pánico?</field>
+            <field name="service_type">all</field>
+            <field name="tech_category">alarm</field>
+            <field name="sequence">10</field>
+        </record>
+        <record id="task_alarm_battery" model="sentinela.fsm.task.template">
+            <field name="name">¿Verificó batería de respaldo?</field>
+            <field name="service_type">all</field>
+            <field name="tech_category">alarm</field>
+            <field name="sequence">10</field>
+        </record>
+        <record id="task_alarm_training" model="sentinela.fsm.task.template">
+            <field name="name">¿Capacitó en armado/desarmado?</field>
+            <field name="service_type">all</field>
+            <field name="tech_category">alarm</field>
+            <field name="sequence">10</field>
+        </record>
+        <!-- GPS -->
+        <record id="task_gps_engine_cut" model="sentinela.fsm.task.template">
+            <field name="name">¿Verificó corte de motor?</field>
+            <field name="service_type">all</field>
+            <field name="tech_category">gps</field>
+            <field name="sequence">10</field>
+        </record>
+        <record id="task_gps_platform_signal" model="sentinela.fsm.task.template">
+            <field name="name">¿Validó señal en plataforma?</field>
+            <field name="service_type">all</field>
+            <field name="tech_category">gps</field>
+            <field name="sequence">10</field>
+        </record>
+        <record id="task_gps_hidden" model="sentinela.fsm.task.template">
+            <field name="name">¿Ocultó correctamente el equipo?</field>
+            <field name="service_type">all</field>
+            <field name="tech_category">gps</field>
+            <field name="sequence">10</field>
+        </record>
+        <!-- CCTV -->
+        <record id="task_cctv_lens" model="sentinela.fsm.task.template">
+            <field name="name">¿Enfocó y limpió todos los lentes?</field>
+            <field name="service_type">all</field>
+            <field name="tech_category">cctv</field>
+            <field name="sequence">10</field>
+        </record>
+        <record id="task_cctv_motion_rec" model="sentinela.fsm.task.template">
+            <field name="name">¿Configuró grabación por movimiento?</field>
+            <field name="service_type">all</field>
+            <field name="tech_category">cctv</field>
+            <field name="sequence">10</field>
+        </record>
+        <!-- Internet -->
+        <record id="task_inet_antenna_align" model="sentinela.fsm.task.template">
+            <field name="name">¿Alineó antena para máxima señal?</field>
+            <field name="service_type">all</field>
+            <field name="tech_category">internet</field>
+            <field name="sequence">10</field>
+        </record>
+        <record id="task_inet_speedtest_check" model="sentinela.fsm.task.template">
+            <field name="name">¿Realizó test de velocidad?</field>
+            <field name="service_type">all</field>
+            <field name="tech_category">internet</field>
+            <field name="sequence">10</field>
+        </record>
+        <record id="task_inet_wifi_pass" model="sentinela.fsm.task.template">
+            <field name="name">¿Cambió clave de WiFi a petición del cliente?</field>
+            <field name="service_type">all</field>
+            <field name="tech_category">internet</field>
+            <field name="sequence">10</field>
+        </record>
+        <!-- Genérica (cualquier tecnología) -->
+        <record id="task_gen_client_app" model="sentinela.fsm.task.template">
+            <field name="name">¿Configuró App en el celular del cliente?</field>
+            <field name="service_type">all</field>
+            <field name="tech_category">all</field>
+            <field name="sequence">10</field>
+        </record>
+
     </data>
 </odoo>
