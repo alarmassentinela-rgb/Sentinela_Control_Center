@@ -200,6 +200,16 @@ class FsmOrder(models.Model):
         for order in self:
             order.is_fsm_manager = self.env.user.has_group('sentinela_fsm.group_fsm_manager')
 
+    @api.depends('name', 'partner_id')
+    def _compute_display_name(self):
+        """Folio + cliente, para que en el calendario/agenda y en los selectores se vea
+        de quién es la orden (antes solo salía el folio, p.ej. OS-00019)."""
+        for o in self:
+            if o.partner_id and o.name and o.name != 'Nuevo':
+                o.display_name = f"{o.name} - {o.partner_id.name}"
+            else:
+                o.display_name = o.name or _('Nuevo')
+
     @api.depends('partner_id.phone', 'partner_id.mobile')
     def _compute_phone(self):
         """Teléfono del cliente con fallback a móvil: muchos clientes solo tienen el
