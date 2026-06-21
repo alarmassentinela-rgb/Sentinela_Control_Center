@@ -12,7 +12,8 @@ class FsmOrder(models.Model):
     partner_id = fields.Many2one('res.partner', string='Cliente', required=True, tracking=True)
     service_address_id = fields.Many2one('res.partner', string='Dirección de Servicio',
         domain="['|', ('id', '=', partner_id), ('parent_id', '=', partner_id)]")
-    phone = fields.Char(related='partner_id.phone', string='Teléfono')
+    phone = fields.Char(string='Teléfono', compute='_compute_phone', store=True,
+        help='Teléfono fijo del cliente; si no tiene, usa el móvil.')
 
     # Location Tracking
     check_in_lat = fields.Float(string='Latitud Check-In', digits=(10, 7))
@@ -198,6 +199,13 @@ class FsmOrder(models.Model):
     def _compute_is_fsm_manager(self):
         for order in self:
             order.is_fsm_manager = self.env.user.has_group('sentinela_fsm.group_fsm_manager')
+
+    @api.depends('partner_id.phone', 'partner_id.mobile')
+    def _compute_phone(self):
+        """Teléfono del cliente con fallback a móvil: muchos clientes solo tienen el
+        número en el campo Móvil; antes (related a partner_id.phone) salía vacío."""
+        for order in self:
+            order.phone = order.partner_id.phone or order.partner_id.mobile or False
 
     @api.onchange('subscription_id')
     def _onchange_subscription_id(self):
