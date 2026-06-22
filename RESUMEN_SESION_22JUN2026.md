@@ -112,11 +112,29 @@ Telmex tiraría las dos → ¿sirve TotalPlay (ISP2/ether2) de respaldo?
 - Rutas `fo-ISP2` (en to_ISP1 y to_ISP3) a **dist=3** → TotalPlay = último recurso
   (solo si caen los DOS Telmex; un Telmex caído usa el otro Telmex dist 2).
 
-**Resultado:** ether2/TotalPlay = **failover real y estable de último recurso, 0% loss**
-(latencia 50-140ms por rutear vía Houston, normal — eso es latencia, NO pérdida). La
-LÍNEA TotalPlay siempre estuvo sana; todo era config (subred vieja + IP fija en
-conflicto con el pool DHCP). Jerarquía: `to_ISP1`=ISP1→ISP3→TotalPlay;
-`to_ISP3`=ISP3→ISP1→TotalPlay. No se simuló caída real de ambos Telmex.
+**Resultado intermedio:** ether2/TotalPlay quedó reachable y estable, 0% loss.
+
+### Tercera parte: ISP2 ACTIVO en el PCC (balanceo 3-way) + MSS clamp
+Enrique decidió meter ISP2 al balance (no solo failover). Al forzar tráfico de prueba
+por una ruta /32 manual, una descarga grande **stalleaba** (1 byte) aunque el ping y el
+HTTPS chico funcionaban → síntoma de **MTU**. Path-MTU medido por TotalPlay = **1480**
+(el módem recorta 20 bytes). **FIX: MSS clamp `new-mss=1440` en ether2** (chain forward,
+in+out, tcp syn) — igual que el enlace FFW. (El stall del demo era además agravado por
+ir mi tráfico por el trunk+doble-NAT, camino que NO usan los clientes.)
+- **foIsps → `{{1;1};{2;1};{3;1}}` (3-way equitativo).** El motor armó 3 buckets
+  (`3/0→ISP1`, `3/1→ISP2`, `3/2→ISP3`) arriba de `*14`.
+- **Verificado con tráfico REAL de clientes:** ether2 RX subió a varios Mbps; de 629
+  conexiones ISP2, **561 con retorno y 141 con descargas reales (>10KB, hasta 5.9 MB)**;
+  `reply-dst=192.168.100.4` (ether2) en 318/320 → NAT correcto, NO se fuga a ISP1. El
+  bug de ether3 (clasificador) NO se repite porque ya está arriba de `*14`.
+- TotalPlay tiene más latencia (50-140ms, Houston) → conexiones ahí algo más lentas pero
+  funcionales. Peso ajustable (ej. 2:1:2 Telmex-favorecido) si se quiere que cargue menos.
+
+**Estado final del Balanceador:** **balanceo 3-way ISP1+ISP2+ISP3 activo y sano**, las
+3 WAN cargando tráfico real de clientes, clasificador arriba de `*14`, MSS clamp en
+ether2, ether2 en DHCP (`192.168.100.4`). Todo persistente. La LÍNEA TotalPlay siempre
+estuvo sana; todo era config (subred vieja + IP fija en conflicto con pool DHCP + faltaba
+MSS clamp).
 
 ## Pendientes para la próxima sesión
 
