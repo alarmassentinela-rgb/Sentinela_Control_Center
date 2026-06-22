@@ -98,29 +98,36 @@ Telmex tiraría las dos → ¿sirve TotalPlay (ISP2/ether2) de respaldo?
   `192.168.2.254`** → subred equivocada (el módem se cambió/reseteó; la nota del
   26-may del "cable" era incompleta). No era cable ni línea — **config desfasada.**
 
-**Fix aplicado:**
-- ether2 IP `192.168.2.50/24` → **`192.168.100.50/24`**.
-- `probe-ISP2`: gw `192.168.2.254` → **`192.168.100.1`** → quedó **active=true**.
-- `to_ISP2 principal` (recursiva a 208.67.220.220) → **active** (con jitter leve;
-  TotalPlay rutea por Houston, latencia 50-140ms — aceptable para último recurso).
-- Bajé las 2 rutas `fo-ISP2` (en to_ISP1 y to_ISP3) a **dist=3** → TotalPlay = último
-  recurso (solo si caen los DOS Telmex; un solo Telmex caído usa el otro Telmex dist 2).
-- Limpié 3 rutas legacy con gw `192.168.2.254` y **deshabilité** un default main vía
-  ether2 (legacy, no deseado).
+**Fix aplicado (dos partes):**
+1. **Subred:** el módem TotalPlay está en `192.168.100.0/24` gw `192.168.100.1`; ether2
+   tenía `192.168.2.x`. Se corrigió `probe-ISP2` gw → `192.168.100.1`, se limpiaron 3
+   rutas legacy con gw `192.168.2.254` y se deshabilitó un default main vía ether2.
+2. **Loss del 70-80% = CONFLICTO DE IP, no línea degradada.** Al poner ether2 con IP
+   FIJA `192.168.100.50`, esa IP estaba **dentro del pool DHCP del módem** → ARP
+   peleado → 70-80% loss. **Prueba clave:** desde una PC directo al módem con DHCP
+   (`.5`) = **30/30 0% loss**; con la fija `.50` = pérdida. **FIX: ether2 → cliente
+   DHCP** (`add-default-route=no`, `use-peer-dns=no`) → tomó `192.168.100.4` →
+   **`to_ISP2 principal` pasó de 3/8 a 8/8 active (estable)** y el ping de prueba
+   (8.8.8.8 forzado por /32 vía TotalPlay) = **10/10 0% loss.**
+- Rutas `fo-ISP2` (en to_ISP1 y to_ISP3) a **dist=3** → TotalPlay = último recurso
+  (solo si caen los DOS Telmex; un Telmex caído usa el otro Telmex dist 2).
 
-**Resultado:** ether2/TotalPlay queda como **failover real de último recurso**.
-Jerarquía: `to_ISP1` = ISP1→ISP3→TotalPlay; `to_ISP3` = ISP3→ISP1→TotalPlay.
-Verificado por estado de rutas (no se simuló caída real de ambos Telmex).
+**Resultado:** ether2/TotalPlay = **failover real y estable de último recurso, 0% loss**
+(latencia 50-140ms por rutear vía Houston, normal — eso es latencia, NO pérdida). La
+LÍNEA TotalPlay siempre estuvo sana; todo era config (subred vieja + IP fija en
+conflicto con el pool DHCP). Jerarquía: `to_ISP1`=ISP1→ISP3→TotalPlay;
+`to_ISP3`=ISP3→ISP1→TotalPlay. No se simuló caída real de ambos Telmex.
 
 ## Pendientes para la próxima sesión
 
-1. **TotalPlay tiene jitter** (latencia 50-140ms, la sonda `to_ISP2 principal` parpadea
-   ocasionalmente). Sirve como último recurso pero no es rock-solid. Si se quiere
-   robusto, reportar calidad a TotalPlay 8196616.
-2. **No se simuló la caída real de ambos Telmex** — la jerarquía de failover está bien
-   en config y las rutas activas, pero el evento end-to-end (ambos Telmex abajo →
-   tráfico real por TotalPlay) no se probó en vivo. Validar en una ventana si se quiere
-   certeza total.
+1. **No se simuló la caída real de ambos Telmex** — la jerarquía de failover está bien
+   en config y las rutas activas/estables, pero el evento end-to-end (ambos Telmex
+   abajo → tráfico real por TotalPlay) no se probó en vivo. Validar en una ventana si se
+   quiere certeza total.
+2. **ether2 quedó en DHCP** (`192.168.100.4`, dinámica). La IP puede cambiar si el
+   módem la reasigna; el failover no depende de la IP (usa gw `192.168.100.1` fijo +
+   masquerade por interfaz), así que es robusto. Si TotalPlay vuelve a cambiar de
+   subred, reconfigurar `probe-ISP2`/gateway.
 3. Vigilar convergencia del 50/50 (el conteo de conexiones converge más lento que el
    tráfico; normal — ver memoria 26-may). Al cierre ya iba ISP1 96 / ISP3 96 Mbps.
 4. Riesgo histórico: ISP3 (Telmex 8688225875) es el que flapea; si cae, el failover de
