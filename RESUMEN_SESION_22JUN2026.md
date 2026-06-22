@@ -130,11 +130,23 @@ ir mi tráfico por el trunk+doble-NAT, camino que NO usan los clientes.)
 - TotalPlay tiene más latencia (50-140ms, Houston) → conexiones ahí algo más lentas pero
   funcionales. Peso ajustable (ej. 2:1:2 Telmex-favorecido) si se quiere que cargue menos.
 
-**Estado final del Balanceador:** **balanceo 3-way ISP1+ISP2+ISP3 activo y sano**, las
-3 WAN cargando tráfico real de clientes, clasificador arriba de `*14`, MSS clamp en
-ether2, ether2 en DHCP (`192.168.100.4`). Todo persistente. La LÍNEA TotalPlay siempre
-estuvo sana; todo era config (subred vieja + IP fija en conflicto con pool DHCP + faltaba
-MSS clamp).
+**El 3-way se REVIRTIÓ a los pocos minutos** — llegaron alertas de "caída" del
+CCRsentinela (monitorea `1.1.1.1`): ~1/3 de sus pings de keepalive salían por TotalPlay,
+y el **jitter de TotalPlay** (la sonda `to_ISP2 principal` flapea) los hacía fallar
+intermitente → falsas caídas (y probables blips reales a clientes que caían en ISP2).
+**Revertido a `foIsps={{1;1};{3;1}}` (50/50 ISP1+ISP3); las alertas pararon de inmediato.**
+
+**LECCIÓN:** TotalPlay NO sirve para balance activo por su jitter; queda como **failover
+de último recurso (dist-3)**. Confirma el diseño original (TotalPlay = emergencia).
+
+**Estado final del Balanceador (cierre real de la sesión):**
+- **Balanceo 50/50 ISP1+ISP3** (ambos Telmex) — clasificador arriba de `*14`.
+- **ISP2/TotalPlay = failover dist-3** (DHCP `192.168.100.4`, MSS clamp 1440, probe
+  activo). Cero tráfico/monitoreo por ISP2 en operación normal → sin alertas. Solo entra
+  si caen los DOS Telmex.
+- `foIsps=foIspsAnt=1;1;3;1`. Todo persistente.
+- Todo el trabajo de ISP2 (subred, DHCP, MSS clamp, dist-3) sigue válido y deja el
+  failover listo y funcional.
 
 ## Pendientes para la próxima sesión
 
