@@ -162,3 +162,62 @@ de último recurso (dist-3)**. Confirma el diseño original (TotalPlay = emergen
    tráfico; normal — ver memoria 26-may). Al cierre ya iba ISP1 96 / ISP3 96 Mbps.
 4. Riesgo histórico: ISP3 (Telmex 8688225875) es el que flapea; si cae, el failover de
    ruta lo saca solo.
+
+---
+
+# Parte 4 — Usuarios del equipo + página de rastreo SentiCar (FSM)
+
+(Sesión vespertina, independiente del trabajo de red de arriba.)
+
+## Alta de usuarios del equipo operativo (prod `Sentinela_V18`)
+Se dieron de alta / ajustaron **7 usuarios** vía XML-RPC. Credenciales entregadas por
+PDF a Telegram (no se guardan en repo ni memoria). Detalle de roles en memoria
+`project_usuarios_equipo_fsm_central.md`.
+
+| Persona | Login | Rol | Notas |
+|---|---|---|---|
+| Mirna Barbosa | `central@sentinela.com.mx` | Despacho FSM + tablero (`group_fsm_dispatcher`) | id 8: era portal "PRUEBAS SENTINELA", **convertido a interno** (quitar `base.group_portal`, agregar interno+dispatcher) |
+| Kevin Rivera | `kevin.rivera` | Despacho FSM + tablero | nuevo (id 15) |
+| Juan José Hernández | `juan.jose.hernandez` | Despacho FSM + tablero | nuevo (id 16) |
+| Jesús González | `jgonzalez@sentinela.com.mx` | Técnico (`group_fsm_user`) | ya existía; password reseteado |
+| Juan Padilla | `jpadilla@sentinela.com.mx` | Técnico | ya existía SIN grupo → se agregó `group_fsm_user` |
+| Manuel Sandoval | `manuel.sandoval` | Patrullero | ya existía; unidad **March** (unit id 1) |
+| Diego Banda Cruz | `diego.banda` | Patrullero | nuevo (id 14), `is_patrol=True`, unidad **Rapid** (unit id 3) |
+
+- **Trampa confirmada:** el campo `default_patrol_unit_id` solo aparece en el form si
+  `is_patrol=True` (`res_users_views.xml`: `invisible="not is_patrol"`).
+- **Login NO tiene que ser correo** (Manuel/Diego/Kevin/Juan José usan usuario simple).
+- **Unidades:** Rapid (id 3) NO es vehículo exclusivo de patrulla — habitual de Diego pero
+  compartible para despachos puntuales. La unidad por defecto se cambia en el form o al despachar.
+- Verificación: los 7 logins autenticaron por XML-RPC (`AUTH_OK=True`).
+
+## Entregables a Telegram (bot interno @Sentinela2026_bot, chat Enrique 7965190381)
+- **PDF `Usuarios_Sentinela_Odoo.pdf`** (reportlab): credenciales + permisos por rol +
+  guía paso a paso para agregar/quitar permisos desde Odoo. ⚠️ salió **sin logo**
+  (pendiente: regenerar con logo por la regla `feedback_logo_documentos_sentinela`).
+- **4 mensajes** listos para reenviar a cada técnico/patrullero con la liga de la app
+  **Sentinela Tech** (`https://sentinela.mx/tech/dashboard`, PWA), su usuario, contraseña
+  y pasos de instalación (Android/iPhone).
+
+## Página de rastreo del cliente (`/SentiCar/rastreo/<token>`)
+Plantilla `customer_tracking_map` en `sentinela_fsm/views/tech_portal_templates.xml`.
+- **v18.0.1.11.2** (commit `be0033e`): ícono **SentiCar pwa-512** (copiado a
+  `static/src/senticar_pwa_512.png`). Se agregó al `<head>` favicon + apple-touch-icon +
+  **Open Graph** (`og:image` con URL absoluta vía `web.base.url`) → la **miniatura del
+  enlace en el Telegram "técnico en camino"** ahora muestra el ícono SentiCar. También se
+  reemplazó el logo interno (carrito viejo → ícono pwa-512, 64px redondeado).
+- **v18.0.1.11.3** (commit `d3c2f32`): la celda **"Estatus"** dejaba puro branding
+  ("SentiCar Security/Service by Sentinela"); ahora muestra **estatus real** según la orden:
+  `🕒 Asignado` / `🚚 En camino` (servicio) / `🚓 En camino` (patrullaje) / `✅ En sitio`
+  (cuando `arrival_date` está puesto). La publicidad ya la cubren el ícono + logo del pie.
+
+Deploy verificado: STAGING limpio → PROD `V18`, ambas versiones cargadas, página real
+renderizando el ícono (`og:image` presente) y el estatus (`🚓 En camino` en OS-00010).
+Tags: `v18.0.1.11.2-sentinela_fsm`, `v18.0.1.11.3-sentinela_fsm`.
+⚠️ Nota Telegram: cachea el preview por URL; los enlaces NUEVOS (cada orden = token nuevo)
+ya saldrán con ícono; enlaces viejos ya mostrados pueden seguir cacheados un rato.
+
+## Pendientes (parte 4)
+1. **Regenerar el PDF de credenciales CON el logo** de Sentinela y reenviarlo (regla
+   `feedback_logo_documentos_sentinela`). Quedó sin logo en el primer envío.
+2. (Opcional) Disparar una orden de prueba para ver en vivo la miniatura del Telegram con el ícono.
