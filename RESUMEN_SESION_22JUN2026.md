@@ -82,16 +82,46 @@ no había 2do WAN sano para balancear, y el WISP estaba en **ISP1-único**.
 - `.backup_failoverConfig_pre5050_22jun.rsc` (local, el `failoverConfig` original).
 - Scripts de diagnóstico en la raíz: `diag_pcc_estado_22jun.py`, `diag_wan_salud_22jun.py`.
 
+## Segunda parte: failover TotalPlay (ISP2) si cae Telmex — RESUELTO
+
+Pedido por Enrique: como ISP1 e ISP3 son **ambos Telmex**, una caída regional de
+Telmex tiraría las dos → ¿sirve TotalPlay (ISP2/ether2) de respaldo?
+
+**Diagnóstico (mismo patrón que ISP3):**
+- ether2 estaba **disabled**. Al habilitarlo, el ping nativo de Winbox al módem
+  `192.168.2.254` dio **"host unreachable"** (ARP falla) y a internet 0/4.
+- Parecía TotalPlay muerto, PERO conectando una PC **directo al módem TotalPlay**
+  (brincando el Balanceador): internet OK, IP pública **`187.190.18.23` (rango
+  TotalPlay)** → **la línea funciona perfecto.**
+- **Causa raíz:** el módem TotalPlay está en **`192.168.100.0/24` (gateway
+  `192.168.100.1`)**, pero ether2 tenía config vieja **`192.168.2.50/24` gw
+  `192.168.2.254`** → subred equivocada (el módem se cambió/reseteó; la nota del
+  26-may del "cable" era incompleta). No era cable ni línea — **config desfasada.**
+
+**Fix aplicado:**
+- ether2 IP `192.168.2.50/24` → **`192.168.100.50/24`**.
+- `probe-ISP2`: gw `192.168.2.254` → **`192.168.100.1`** → quedó **active=true**.
+- `to_ISP2 principal` (recursiva a 208.67.220.220) → **active** (con jitter leve;
+  TotalPlay rutea por Houston, latencia 50-140ms — aceptable para último recurso).
+- Bajé las 2 rutas `fo-ISP2` (en to_ISP1 y to_ISP3) a **dist=3** → TotalPlay = último
+  recurso (solo si caen los DOS Telmex; un solo Telmex caído usa el otro Telmex dist 2).
+- Limpié 3 rutas legacy con gw `192.168.2.254` y **deshabilité** un default main vía
+  ether2 (legacy, no deseado).
+
+**Resultado:** ether2/TotalPlay queda como **failover real de último recurso**.
+Jerarquía: `to_ISP1` = ISP1→ISP3→TotalPlay; `to_ISP3` = ISP3→ISP1→TotalPlay.
+Verificado por estado de rutas (no se simuló caída real de ambos Telmex).
+
 ## Pendientes para la próxima sesión
 
-1. **Failover de TotalPlay (ISP2/ether2) si cae Telmex** — PEDIDO POR ENRIQUE.
-   Ambas WAN actuales (ISP1 y ISP3) son **Telmex**; una caída regional de Telmex
-   tiraría las dos. Falta verificar: (a) si `ether2` (TotalPlay, hoy **disabled**,
-   degradado desde mayo) levanta enlace y llega a internet; (b) si el failover de ruta
-   (las rutas recursivas `to_ISP1`/`to_ISP3` tienen respaldo `fo-ISP2` a 208.67.220.220
-   vía ether2) realmente lo mete cuando caen los Telmex. Investigar read-only primero;
-   probar con Enrique en Winbox. **Sin validar aún.**
-2. Vigilar convergencia del 50/50 las próximas horas (el conteo de conexiones converge
-   más lento que el tráfico; normal — ver memoria 26-may).
-3. Riesgo histórico: ISP3 (Telmex 8688225875) es el que flapea; si cae, el failover de
-   ruta lo saca solo (probado el mecanismo, no este evento puntual).
+1. **TotalPlay tiene jitter** (latencia 50-140ms, la sonda `to_ISP2 principal` parpadea
+   ocasionalmente). Sirve como último recurso pero no es rock-solid. Si se quiere
+   robusto, reportar calidad a TotalPlay 8196616.
+2. **No se simuló la caída real de ambos Telmex** — la jerarquía de failover está bien
+   en config y las rutas activas, pero el evento end-to-end (ambos Telmex abajo →
+   tráfico real por TotalPlay) no se probó en vivo. Validar en una ventana si se quiere
+   certeza total.
+3. Vigilar convergencia del 50/50 (el conteo de conexiones converge más lento que el
+   tráfico; normal — ver memoria 26-may). Al cierre ya iba ISP1 96 / ISP3 96 Mbps.
+4. Riesgo histórico: ISP3 (Telmex 8688225875) es el que flapea; si cae, el failover de
+   ruta lo saca solo.
