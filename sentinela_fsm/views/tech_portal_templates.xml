@@ -661,10 +661,18 @@
                             </div>
                             <div class="col-6">
                                 <small class="text-muted d-block">Estatus</small>
-                                <span t-attf-class="fw-bold #{'text-danger' if order.service_type == 'patrol' else 'text-primary'}">
-                                    <t t-if="order.service_type == 'patrol'">SentiCar Security by Sentinela</t>
-                                    <t t-else="">SentiCar Service by Sentinela</t>
-                                </span>
+                                <t t-if="order.arrival_date">
+                                    <span class="fw-bold text-success">✅ En sitio</span>
+                                </t>
+                                <t t-elif="order.stage == 'in_progress'">
+                                    <span t-attf-class="fw-bold #{'text-danger' if order.service_type == 'patrol' else 'text-primary'}">
+                                        <t t-if="order.service_type == 'patrol'">🚓 En camino</t>
+                                        <t t-else="">🚚 En camino</t>
+                                    </span>
+                                </t>
+                                <t t-else="">
+                                    <span class="fw-bold text-secondary">🕒 Asignado</span>
+                                </t>
                             </div>
                         </div>
                         
