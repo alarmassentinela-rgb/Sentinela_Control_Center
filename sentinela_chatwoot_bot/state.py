@@ -22,9 +22,13 @@ def _db() -> sqlite3.Connection:
         _conn.execute("""CREATE TABLE IF NOT EXISTS messages (
             conv_id INTEGER, role TEXT, content TEXT, ts REAL)""")
         _conn.execute("""CREATE TABLE IF NOT EXISTS conv_state (
-            conv_id INTEGER PRIMARY KEY, order_folio TEXT, ts REAL)""")
+            conv_id INTEGER PRIMARY KEY, order_folio TEXT, ts REAL, lead_ref TEXT)""")
         _conn.execute("""CREATE TABLE IF NOT EXISTS pending_photos (
             conv_id INTEGER, url TEXT, ts REAL)""")
+        # Migración: la columna lead_ref se añadió después (DBs viejas no la tienen).
+        cols = [r[1] for r in _conn.execute("PRAGMA table_info(conv_state)").fetchall()]
+        if "lead_ref" not in cols:
+            _conn.execute("ALTER TABLE conv_state ADD COLUMN lead_ref TEXT")
         _conn.commit()
     return _conn
 
@@ -57,8 +61,27 @@ def get_order(conv_id: int) -> str | None:
 def set_order(conv_id: int, folio: str):
     with _lock:
         db = _db()
-        db.execute("INSERT OR REPLACE INTO conv_state(conv_id,order_folio,ts) VALUES (?,?,?)",
+        # UPSERT por columna para no pisar lead_ref (una conversación puede tener
+        # primero un lead de ventas y luego una orden de soporte).
+        db.execute("""INSERT INTO conv_state(conv_id,order_folio,ts) VALUES (?,?,?)
+                      ON CONFLICT(conv_id) DO UPDATE SET order_folio=excluded.order_folio, ts=excluded.ts""",
                    (conv_id, folio, time.time()))
+        db.commit()
+
+
+def get_lead(conv_id: int) -> str | None:
+    with _lock:
+        row = _db().execute("SELECT lead_ref FROM conv_state WHERE conv_id=?",
+                            (conv_id,)).fetchone()
+    return row[0] if row else None
+
+
+def set_lead(conv_id: int, lead_ref: str):
+    with _lock:
+        db = _db()
+        db.execute("""INSERT INTO conv_state(conv_id,lead_ref,ts) VALUES (?,?,?)
+                      ON CONFLICT(conv_id) DO UPDATE SET lead_ref=excluded.lead_ref, ts=excluded.ts""",
+                   (conv_id, lead_ref, time.time()))
         db.commit()
 
 

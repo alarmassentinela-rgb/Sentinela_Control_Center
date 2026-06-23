@@ -9,7 +9,7 @@ import config
 logger = logging.getLogger("chatwoot_bot.llm")
 
 
-def chat_completion(messages: list[dict], max_tokens: int = 600,
+def chat_completion(messages: list[dict], max_tokens: int = 800,
                     temperature: float = 0.4, json_mode: bool = False) -> str:
     """Llama a OpenRouter chat/completions. Devuelve el texto o '' si falla.
     json_mode=True fuerza salida JSON (response_format), clave para que el modelo

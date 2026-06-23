@@ -252,6 +252,44 @@ def create_reconcile_fsm_order(phone: str, description: str,
     return res
 
 
+# ── Crear oportunidad CRM (prospecto de ventas) ───────────────────
+
+def create_crm_lead(name: str, description: str, contact_name: str = "",
+                    phone: str = "", email: str = "",
+                    partner_id: int | None = None,
+                    team_id: int | None = None,
+                    user_id: int | None = None) -> dict | None:
+    """Crea una oportunidad de ventas (crm.lead, type=opportunity) en el pipeline
+    del vendedor. Para prospectos que llegan por WhatsApp pidiendo contratar/cotizar
+    o clientes que quieren ampliar/contratar un servicio nuevo.
+
+    Requiere que el api_user tenga el grupo Sales/User: All Documents
+    (sales_team.group_sale_salesman_all_leads) para poder asignar el lead a otro
+    vendedor (user_id). Devuelve {'id', 'name', 'ok'}.
+    """
+    vals = {
+        "name": name or (f"Prospecto WhatsApp {phone}".strip()),
+        "type": "opportunity",
+        "description": description or "",
+    }
+    if contact_name:
+        vals["contact_name"] = contact_name
+    if phone:
+        vals["phone"] = phone
+    if email:
+        vals["email_from"] = email
+    if partner_id:
+        vals["partner_id"] = partner_id
+    if team_id:
+        vals["team_id"] = team_id
+    if user_id:
+        vals["user_id"] = user_id
+    new_id = _call("crm.lead", "create", [vals])
+    if not new_id:
+        return None
+    return {"id": new_id, "name": vals["name"], "ok": True}
+
+
 # ── Búsqueda por nombre (uso administrativo) ─────────────────────
 
 def search_partners_by_name(name: str, limit: int = 5) -> list[dict]:

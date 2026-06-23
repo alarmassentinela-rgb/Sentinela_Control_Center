@@ -1,14 +1,16 @@
-"""Bot de reportes Sentinela — AgentBot de Chatwoot, con IA conversacional.
+"""Bot de primera línea Sentinela — AgentBot de Chatwoot, con IA conversacional.
 
 Flujo: WhatsApp (8688225875) → EvoApi → inbox "Reportes Sentinela" → Chatwoot
 reenvía cada mensaje entrante a este webhook. El bot mantiene la conversación con
-un LLM (OpenRouter): saluda, pregunta, junta el detalle de la falla, confirma y
-SOLO entonces levanta la orden FSM en Odoo. Luego hace handoff a soporte.
+un LLM (OpenRouter). Su PRIMERA tarea es un TRIAGE de intención (soporte / ventas /
+administración) y atiende cada carril distinto, ruteando el seguimiento a la persona
+correcta.
 
-El LLM responde un JSON {action, message, summary}:
+El LLM responde un JSON {action, topic, message, ...}:
   - reply         → solo le responde al cliente.
-  - create_ticket → crea la orden con `summary`, confirma el folio, handoff a soporte.
-  - handoff       → pasa la conversación a un humano (sin crear orden).
+  - create_ticket → SOPORTE: crea la orden FSM con `summary`, da el folio, sigue activo.
+  - create_lead   → VENTAS: crea una oportunidad CRM (a Enrique Garza Bedolla) y rutea.
+  - handoff       → pasa la conversación a un humano por tema (admin → Irma, etc.).
 
 Seguridad: el contenedor NO publica puerto; solo el rails de Chatwoot lo alcanza.
 """
@@ -70,8 +72,21 @@ MSG_ERROR = (
     "No te preocupes: ya avisé a un asesor para que lo levante a mano."
 )
 MSG_LLM_FALLBACK = (
-    "¡Hola! 👋 Soy el asistente de *Sentinela*. Cuéntame por favor qué problema tienes "
-    "con tu servicio y con gusto levanto tu reporte."
+    "¡Hola! 👋 Soy el asistente de *Sentinela*. Cuéntame por favor en qué te puedo ayudar: "
+    "¿es una falla de tu servicio, quieres contratar/cotizar algo, o es un tema de tu cuenta?"
+)
+# Ventas: se registró la oportunidad y un asesor de ventas dará seguimiento.
+MSG_LEAD_OFFICE = (
+    "✅ Listo{name}, registramos tu solicitud. Un asesor de ventas te contactará en breve "
+    "para confirmarte cobertura y precio. 🙌"
+)
+MSG_LEAD_AFTERHOURS = (
+    "✅ Listo{name}, registramos tu solicitud de información. En este momento estamos fuera de "
+    "horario ({hours}); un asesor de ventas te contactará {when}. 🙏"
+)
+MSG_ERROR_LEAD = (
+    "Recibí tu interés pero tuve un problema al registrarlo en el sistema. No te preocupes: "
+    "ya avisé a un asesor de ventas para que te contacte."
 )
 
 
@@ -165,8 +180,22 @@ def _parse_llm(raw: str) -> dict:
     return {}
 
 
+def _salvage_message(raw: str) -> str:
+    """Rescata el valor de `message` de una respuesta JSON malformada/truncada del
+    LLM, para NUNCA reenviarle JSON crudo (ni un '{') al cliente. '' si no se puede."""
+    if not raw:
+        return ""
+    m = re.search(r'"message"\s*:\s*"((?:[^"\\]|\\.)*)"', raw, flags=re.DOTALL)
+    if not m:
+        return ""
+    try:
+        return json.loads('"' + m.group(1) + '"')
+    except Exception:
+        return m.group(1).strip()
+
+
 def _llm_decide(conv_id: int, name: str, ficha: str, order_folio: str | None = None,
-                verified: bool = True) -> dict:
+                verified: bool = True, lead_ref: str | None = None) -> dict:
     """Arma el contexto (system + historial) y pide la decisión al LLM.
     verified=False (número no encontrado en Odoo) → prompt restringido: NO da info de
     cuenta, solo recaba datos para un reporte interno (VERIFICAR IDENTIDAD)."""
@@ -187,10 +216,20 @@ def _llm_decide(conv_id: int, name: str, ficha: str, order_folio: str | None = N
         # Ya hay reporte: el bot atiende follow-ups, NO crea otra orden.
         system += (
             f"\n\nIMPORTANTE: Ya se levantó el reporte de este cliente con folio {order_folio}. "
-            "NO uses create_ticket otra vez. Responde sus dudas o follow-ups de forma breve y "
-            "útil (p.ej. que un técnico revisará el reporte y lo contactará para coordinar la "
-            "visita; NO des tiempos exactos de llegada). Si pide hablar con una persona, o "
-            "necesita algo que tú no puedes resolver, usa handoff."
+            "NO uses create_ticket otra vez para la MISMA falla. Responde sus dudas o follow-ups de "
+            "forma breve y útil (p.ej. que un técnico revisará el reporte y lo contactará para "
+            "coordinar la visita; NO des tiempos exactos de llegada). Si pide hablar con una "
+            "persona, o necesita algo que tú no puedes resolver, usa handoff."
+        )
+    if lead_ref:
+        # Ya se registró un lead de ventas: no dupliques, pero SÍ atiende otros temas.
+        system += (
+            "\n\nIMPORTANTE: Ya registraste una solicitud de VENTAS de este cliente. NO uses "
+            "create_lead otra vez para lo mismo; un asesor de ventas le dará seguimiento de precio "
+            "y cobertura. Si insiste en precios, recuérdale con amabilidad que el asesor lo "
+            "contactará. PERO si ahora te plantea OTRA cosa (una FALLA de un servicio que ya tiene, "
+            "o un tema de cuenta/pago), atiéndela con normalidad según su carril (soporte / "
+            "administración)."
         )
     messages = [{"role": "system", "content": system}]
     messages += state.get_history(conv_id, config.HISTORY_LIMIT)
@@ -198,10 +237,13 @@ def _llm_decide(conv_id: int, name: str, ficha: str, order_folio: str | None = N
     data = _parse_llm(raw)
     if data and data.get("action"):
         return data
-    # No parseó como JSON: si el modelo dijo algo, relévalo como respuesta (evita el
-    # bucle del mensaje robótico); si vino vacío, usa el fallback.
-    if raw:
-        return {"action": "reply", "message": raw}
+    # El JSON no parseó (malformado/truncado o un '{' degenerado). NUNCA reenviar el
+    # crudo al cliente: rescata el texto de `message` si está, y si no, fallback seguro.
+    salvaged = _salvage_message(raw)
+    if salvaged:
+        logger.warning("conv %s: JSON LLM no parseable; rescatado message", conv_id)
+        return {"action": "reply", "message": salvaged}
+    logger.warning("conv %s: respuesta LLM no usable (%r); fallback", conv_id, (raw or "")[:80])
     return {"action": "reply", "message": MSG_LLM_FALLBACK}
 
 
@@ -253,6 +295,47 @@ def _create_order(d: dict, partner, decision: dict) -> dict | None:
         sub_id = odoo.get_single_active_subscription_id(partner["id"])
     desc = f"Reporte por WhatsApp (tel: {d['phone']}).\n---\n{body}"
     return odoo.create_fsm_order(partner["id"], desc, "repair", sub_id, addr_id)
+
+
+def _create_lead(d: dict, partner, decision: dict) -> dict | None:
+    """Crea una oportunidad CRM de ventas con lo que juntó el bot (qué quiere + zona +
+    contacto), asignada al equipo/vendedor de ventas. Sirve para prospectos nuevos
+    (sin cuenta) y para clientes existentes que quieren ampliar/contratar."""
+    interest = (decision.get("interest") or "").strip()
+    summary = (decision.get("summary") or d["content"]).strip()
+    alt_phone = (decision.get("alt_phone") or "").strip()
+    pname = (decision.get("prospect_name") or "").strip() or d.get("name") or ""
+
+    if partner:
+        contact_name = partner.get("name") or pname
+        title = f"{partner.get('name','Cliente')} — {interest or 'servicio nuevo'} (WhatsApp)"
+        email = partner.get("email") or ""
+    else:
+        contact_name = pname
+        title = f"Prospecto WhatsApp — {interest}" if interest else "Prospecto WhatsApp"
+        email = ""
+
+    lines = [f"Prospecto/solicitud vía WhatsApp (tel: {d['phone']})."]
+    if not partner:
+        lines.append("⚠ Número NO registrado en Odoo (prospecto nuevo).")
+    if interest:
+        lines.append(f"Interés: {interest}")
+    if alt_phone:
+        lines.append(f"Teléfono de contacto: {alt_phone}")
+    if pname and not partner:
+        lines.append(f"Nombre declarado: {pname}")
+    lines += ["---", summary]
+
+    return odoo.create_crm_lead(
+        name=title,
+        description="\n".join(lines),
+        contact_name=contact_name,
+        phone=alt_phone or d["phone"],
+        email=email,
+        partner_id=(partner["id"] if partner else None),
+        team_id=config.CRM_VENTAS_TEAM_ID,
+        user_id=config.CRM_VENTAS_USER_ID,
+    )
 
 
 def _attach_pending_photos(conv_id: int, order_id: int):
@@ -367,14 +450,49 @@ def _process(payload: dict):
     # Contexto del cliente (Odoo) + decisión del LLM. Si ya hay folio, el bot sigue
     # activo para follow-ups (no creó handoff al crear el ticket).
     existing_folio = state.get_order(conv_id)
+    existing_lead = state.get_lead(conv_id)
     partner, ficha, name = _resolve_client(d["phone"])
-    decision = _llm_decide(conv_id, name, ficha, existing_folio, verified=bool(partner))
+    decision = _llm_decide(conv_id, name, ficha, existing_folio,
+                           verified=bool(partner), lead_ref=existing_lead)
     action = (decision.get("action") or "reply").lower()
     message = decision.get("message") or ""
     topic = (decision.get("topic") or config.DEFAULT_TOPIC).lower()
 
+    # ── CREATE_LEAD (ventas: registra la oportunidad y rutea a un vendedor) ──
+    if action == "create_lead":
+        if existing_lead:  # ya se registró un lead en esta conversación; no duplicar
+            reply = message or "Tu solicitud ya quedó registrada; un asesor de ventas te contactará. 🙌"
+            chatwoot.send_message(conv_id, reply)
+            state.add_message(conv_id, "assistant", reply)
+            return
+        res = _create_lead(d, partner, decision)
+        if not res or not res.get("ok"):
+            logger.error("conv %s: fallo al crear lead CRM", conv_id)
+            chatwoot.send_message(conv_id, MSG_ERROR_LEAD)
+            _do_handoff(conv_id, "ventas")
+            return
+        state.set_lead(conv_id, f"LEAD-{res['id']}")  # anti-duplicado (slot propio del lead)
+        greet = f" {name}" if name else ""
+        tmpl = MSG_LEAD_OFFICE if _office_hours_now() else MSG_LEAD_AFTERHOURS
+        lead_msg = tmpl.format(name=greet, hours=config.OFFICE_HOURS_TEXT, when=_next_office_open())
+        chatwoot.send_message(conv_id, lead_msg)
+        state.add_message(conv_id, "assistant", lead_msg)
+        _post_lead_note(conv_id, d, partner, decision)
+        # Rutea a ventas (equipo + vendedor, para que le llegue la notificación) pero NO
+        # suelta a humano: igual que soporte, el bot queda en 'pending' y sigue activo
+        # (puede atender follow-ups o si el cliente pivota a una falla). El vendedor toma
+        # la conversación al responder (ahí Chatwoot la pasa a 'open' y el bot calla).
+        route = _assign_route(conv_id, "ventas")
+        logger.info("conv %s: lead %s creado (match=%s) → ventas team=%s assignee=%s; bot sigue activo",
+                    conv_id, res.get("name"), bool(partner), route["team"], route.get("assignee"))
+        return
+
     # ── HANDOFF (sí suelta a humano: cliente lo pide o el bot no puede resolver) ──
     if action == "handoff":
+        # Para temas administrativos de un cliente identificado, deja la ficha como nota
+        # interna para quien lo atienda (cobranza/facturación → Irma).
+        if partner and topic in ("cobranza", "facturacion"):
+            _post_client_note(conv_id, d["phone"])
         _do_handoff(conv_id, topic)
         logger.info("conv %s: handoff (IA) topic=%s", conv_id, topic)
         return
@@ -412,6 +530,29 @@ def _process(payload: dict):
     reply = message or MSG_LLM_FALLBACK
     chatwoot.send_message(conv_id, reply)
     state.add_message(conv_id, "assistant", reply)
+
+
+def _post_lead_note(conv_id: int, d: dict, partner, decision: dict):
+    """Nota interna para el vendedor con el resumen del prospecto/solicitud."""
+    interest = (decision.get("interest") or "").strip()
+    summary = (decision.get("summary") or "").strip()
+    alt_phone = (decision.get("alt_phone") or "").strip()
+    pname = (decision.get("prospect_name") or "").strip() or d.get("name") or ""
+    lines = ["🟢 *Oportunidad de ventas (WhatsApp)*"]
+    if partner:
+        lines.append(f"Cliente Odoo: {partner.get('name','')}")
+    else:
+        lines.append("⚠ Número NO registrado (prospecto nuevo).")
+        if pname:
+            lines.append(f"Nombre declarado: {pname}")
+    if interest:
+        lines.append(f"Interés: {interest}")
+    lines.append(f"Teléfono WhatsApp: {d['phone']}")
+    if alt_phone:
+        lines.append(f"Tel. contacto: {alt_phone}")
+    if summary:
+        lines.append(f"Solicita: {summary}")
+    chatwoot.send_message(conv_id, "\n".join(lines), private=True)
 
 
 def _post_client_note(conv_id: int, phone: str):
