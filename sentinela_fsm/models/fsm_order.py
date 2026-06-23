@@ -50,6 +50,13 @@ class FsmOrder(models.Model):
     days_open = fields.Integer(string='Días abiertos', compute='_compute_days_open',
                                help="Días desde que se creó la orden mientras sigue abierta "
                                     "(para detectar pendientes que se están añejando).")
+    kanban_state = fields.Selection([
+        ('normal', 'En curso'),
+        ('blocked', 'Bloqueada'),
+        ('done', 'Lista para cerrar'),
+    ], string='Avance', default='normal', tracking=True,
+       help="Semáforo de despacho, independiente de la etapa: Bloqueada = atorada "
+            "(espera material, cliente no contesta); Lista = todo listo para finalizar.")
     pause_reason_id = fields.Many2one('sentinela.fsm.pause.reason', string='Última Causa de Pausa', readonly=True, tracking=True)
     pause_notes = fields.Text(string='Notas de Pausa', readonly=True, tracking=True)
     
@@ -509,10 +516,33 @@ class FsmOrder(models.Model):
 
         return True
 
+    def _check_finish_requirements(self):
+        """Quality gate de cierre, configurable por ir.config_parameter (default ON):
+        - sentinela_fsm.require_checklist_on_finish: todas las tareas del checklist marcadas.
+        - sentinela_fsm.require_evidence_on_finish: al menos una evidencia (foto/firma).
+        El patrullaje se exime (no lleva checklist/evidencia de instalación)."""
+        self.ensure_one()
+        if self.service_type == 'patrol':
+            return
+        ICP = self.env['ir.config_parameter'].sudo()
+        if ICP.get_param('sentinela_fsm.require_checklist_on_finish', '1') == '1':
+            pendientes = self.checklist_ids.filtered(lambda l: not l.is_done)
+            if pendientes:
+                detalle = "\n".join("• " + (l.name or '') for l in pendientes[:8])
+                raise models.ValidationError(_(
+                    "No se puede finalizar: faltan %d tarea(s) del checklist por completar:\n%s"
+                ) % (len(pendientes), detalle))
+        if ICP.get_param('sentinela_fsm.require_evidence_on_finish', '1') == '1':
+            if not self.evidence_ids:
+                raise models.ValidationError(_(
+                    "No se puede finalizar: adjunta al menos una evidencia (foto/firma) del trabajo realizado."))
+
     def action_finish(self):
         # BLOQUEO DE SEGURIDAD: Validar firma antes de permitir el cierre
         if not self.customer_signature:
             raise models.ValidationError(_("No se puede finalizar la orden sin la firma de conformidad del cliente."))
+        # Quality gate configurable: checklist completo + evidencia
+        self._check_finish_requirements()
 
         # Registrar el avance final en la bitácora
         self.env['sentinela.fsm.work.log'].create({
@@ -976,7 +1006,13 @@ class FsmOrder(models.Model):
         si no hay, el celular configurado en el patrullero (compatibilidad).
         """
         self.ensure_one()
+        # Prioridad del dispositivo a rastrear:
+        # 1) la unidad elegida explícitamente en la orden (patrullaje o servicio);
+        # 2) el celular PERSONAL asignado al técnico (Opción C: default por técnico);
+        # 3) el GPS pegado al contacto del técnico (compatibilidad histórica).
+        tech_unit = self.env['sentinela.patrol.unit']._get_tracking_unit_for_technician(self.technician_id)
         traccar_id = (self.patrol_unit_id.traccar_device_id
+                      or tech_unit.traccar_device_id
                       or self.technician_id.partner_id.traccar_device_id)
         if not traccar_id:
             return False

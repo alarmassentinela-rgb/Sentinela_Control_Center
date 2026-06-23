@@ -15,6 +15,8 @@
                 <field name="service_category"/>
                 <field name="partner_id"/>
                 <field name="days_open"/>
+                <field name="kanban_state"/>
+                <progressbar field="priority" colors='{"3": "danger", "2": "warning", "1": "info"}'/>
                 <templates>
                     <t t-name="card">
                         <div class="oe_kanban_global_click">
@@ -56,6 +58,7 @@
                                 </div>
                                 <div class="o_kanban_record_bottom">
                                     <div class="oe_kanban_bottom_left">
+                                        <field name="kanban_state" widget="state_selection"/>
                                         <field name="activity_ids" widget="kanban_activity"/>
                                     </div>
                                     <div class="oe_kanban_bottom_right">
@@ -156,6 +159,8 @@
                         domain="[('stage','=','new')]"/>
                 <filter name="f_sin_programar" string="Sin programar"
                         domain="[('scheduled_date','=',False), ('stage','not in',('done','cancel'))]"/>
+                <filter name="f_bloqueadas" string="Bloqueadas"
+                        domain="[('kanban_state','=','blocked'), ('stage','not in',('done','cancel'))]"/>
                 <filter name="f_vivos" string="En proceso (vivos)"
                         domain="[('stage','=','in_progress')]"/>
                 <filter name="f_pausados" string="Pausados"
@@ -200,6 +205,7 @@
                     <button name="%(action_fsm_order_pause_wizard)d" string="Pausar" type="action" class="btn-warning" invisible="stage != 'in_progress'"/>
                     <button name="action_resume" string="Reanudar" type="object" class="oe_highlight" invisible="stage != 'paused'"/>
                     <button name="action_finish" string="Finalizar" type="object" class="btn-success" invisible="stage != 'in_progress'"/>
+                    <field name="kanban_state" widget="state_selection" invisible="stage in ('done','cancel')"/>
                     <field name="stage" widget="statusbar" statusbar_visible="new,assigned,in_progress,paused,done"/>
                 </header>
                 <sheet>
@@ -223,8 +229,8 @@
                             <field name="service_type" readonly="not is_fsm_manager and stage != 'new'"/>
                             <field name="service_category" readonly="not is_fsm_manager and stage != 'new'"/>
                             <field name="technician_id" readonly="not is_fsm_manager"/>
-                            <field name="patrol_unit_id" readonly="not is_fsm_manager"
-                                   invisible="service_type != 'patrol'"
+                            <field name="patrol_unit_id" string="Unidad a rastrear" readonly="not is_fsm_manager"
+                                   placeholder="Default: celular del técnico"
                                    options="{'no_create': True, 'no_open': True}"/>
                             <field name="scheduled_date" readonly="not is_fsm_manager"/>
                             <field name="priority" widget="priority" readonly="not is_fsm_manager and stage != 'new'"/>
