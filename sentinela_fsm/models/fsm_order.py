@@ -46,7 +46,7 @@ class FsmOrder(models.Model):
         ('paused', 'Pausado'),
         ('done', 'Finalizado'),
         ('cancel', 'Cancelado')
-    ], string='Etapa', default='new', tracking=True)
+    ], string='Etapa', default='new', tracking=True, group_expand='_expand_stage')
     pause_reason_id = fields.Many2one('sentinela.fsm.pause.reason', string='Última Causa de Pausa', readonly=True, tracking=True)
     pause_notes = fields.Text(string='Notas de Pausa', readonly=True, tracking=True)
     
@@ -377,6 +377,15 @@ class FsmOrder(models.Model):
             })
 
         return True
+
+    @api.model
+    def _expand_stage(self, stages, domain):
+        """Fija el orden y la presencia de las columnas del kanban de despacho.
+        Sin esto Odoo ordena las columnas alfabéticamente por la CLAVE almacenada
+        (assigned < in_progress < new < paused), no por el orden del Selection.
+        Devuelve el flujo lógico: Nuevo → Asignado → En Proceso → Pausado →
+        Finalizado → Cancelado."""
+        return ['new', 'assigned', 'in_progress', 'paused', 'done', 'cancel']
 
     def action_open_schedule_wizard(self):
         """Abre el wizard de programación rápida desde la tarjeta del tablero, sin
