@@ -221,3 +221,53 @@ ya saldrán con ícono; enlaces viejos ya mostrados pueden seguir cacheados un r
 1. **Regenerar el PDF de credenciales CON el logo** de Sentinela y reenviarlo (regla
    `feedback_logo_documentos_sentinela`). Quedó sin logo en el primer envío.
 2. (Opcional) Disparar una orden de prueba para ver en vivo la miniatura del Telegram con el ícono.
+
+---
+
+# Parte 5 — Auto-suspensión por mora: crones de cobranza estaban apagados
+
+## Investigación: ¿por qué SUB-0305 no se suspendió con 7 días de mora?
+Disparador: Enrique preguntó por qué SUB-0305 seguía activa pese a >5 días de factura
+vencida (política = suspender a los 5 días).
+
+**Hallazgo:** la sub cumplía TODAS las condiciones de `_cron_auto_suspend_overdue`
+(`subscription.py`): `state=active`, `billing_mode=normal`, `days_to_suspend=5`, sin
+prórroga, factura `INV/2026/00090` `posted`/`not_paid` vencida 15-jun (residual $550).
+Debió suspenderse el 20-jun. **No era la sub ni la lógica.**
+
+**Causa raíz:** los 4 crones de cobranza quedaron `active=False` desde el **26-may**
+(`lastcall 2026-05-26`, se apagaron para el arranque de facturación) y **nunca se
+reencendieron** → todo junio sin enforcement: cero auto-suspensiones, cero recordatorios.
+
+## Acción: reactivar los crones de cobranza (NO los de timbrado)
+A petición de Enrique ("activa los crones, solo el que timbra las facturas no"):
+- Reactivados vía `odoo shell` en prod (api_user NO puede escribir `ir.cron`; XML-RPC de
+  egarza no autentica → `docker exec -i odoo18-migration-web-1 odoo shell -d Sentinela_V18`):
+  - **55** Auto-Suspender por Facturas Vencidas
+  - **56** Enviar Recordatorios de Cobranza
+  - **40** Revisar Prórrogas Vencidas
+  - **57** Revisar Fin de Leasing
+- **NO se tocaron** los de generación/timbrado (39 Pre-Facturas, 31 recurrentes, 34).
+
+## Resultado verificado
+- El `nextcall` quedó en el pasado → el cron 55 disparó en el siguiente barrido
+  (`lastcall 2026-06-23 00:11:47`) y **suspendió 20 suscripciones**.
+- **Verificado 20/20** en estado `suspension` / `technical_state=suspended`.
+- **Alcance real = solo INTERNET** (corta PPPoE/walled-garden en CCRsentinela). Alarmas
+  no provisiona en prod (monitoring en desarrollo) y GPS no tiene SIMs ligadas a cuentas
+  → no corta ningún SIM/GPS. (Confirmado por Enrique.)
+- Lista de las 20 enviada al Telegram de Enrique (bot facturación `8373567654`).
+
+Suscripciones suspendidas: SUB-0117, 0158, 0185, 0199, 0200, 0201, 0211, 0225, 0226,
+0229, 0230, 0231, 0237, 0288, 0305, 0306, 0316, 0358, 0363, 0365.
+(Víctor Manuel García ×4, Divisas Frontera Longoria ×4.)
+
+## Memoria actualizada
+- `project_subscriptions_arranque_facturacion.md` — nueva sección "Crones de cobranza
+  apagados todo el 1er ciclo — REACTIVADOS 22-jun-2026" (causa raíz + cómo se reactivó +
+  alcance real).
+
+## Pendientes (parte 5)
+1. Vigilar que el cron 56 (recordatorios) no mande correos atrasados en masa de todo junio.
+2. Revisar mañana si alguna de las 20 ya pagó para reactivación automática.
+3. Confirmar que ninguna de las 20 era cliente que debiera ir en prórroga/cortesía.
