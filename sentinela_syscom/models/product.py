@@ -167,6 +167,7 @@ class ProductTemplate(models.Model):
         stats['unresolved'] = unresolved
         wiz = self.env['syscom.import.wizard'].create({})
         Product = self.with_context(active_test=False)
+        since_commit = 0
         for fparam, fval, flabel in filters:
             page, pages = 1, 1
             while page <= pages:
@@ -205,9 +206,25 @@ class ProductTemplate(models.Model):
                         prod = wiz._import_single_product(detail)
                         if prod:
                             stats['new'] += 1
+                            since_commit += 1
                     except Exception:
                         stats['errors'] += 1
+                    # v18.0.1.6.0: commit por lotes + liberar caché (las fichas traen
+                    # HTML/imágenes pesadas; sin esto la RAM crece sin techo y un corte
+                    # tira todo lo importado en la transacción).
+                    if since_commit >= 25:
+                        self.env.cr.commit()
+                        self.env.invalidate_all()
+                        wiz = self.env['syscom.import.wizard'].create({})
+                        Product = self.with_context(active_test=False)
+                        since_commit = 0
                 page += 1
+            # cerrar lote al terminar cada marca/categoría
+            self.env.cr.commit()
+            self.env.invalidate_all()
+            wiz = self.env['syscom.import.wizard'].create({})
+            Product = self.with_context(active_test=False)
+            since_commit = 0
 
     def _syscom_cleanup_discontinued(self, stats):
         """Fase C (v18.0.1.5.0): depura los descontinuados detectados. Borra los que
@@ -283,7 +300,7 @@ class ProductTemplate(models.Model):
                 if tc_val: tc = float(tc_val)
             except: pass
 
-            for p in products:
+            for idx, p in enumerate(products, 1):
                 try:
                     sys_id = p.syscom_id
                     if not sys_id:
@@ -344,6 +361,12 @@ class ProductTemplate(models.Model):
                         stats['success'] += 1
                     else: stats['errors'] += 1
                 except: stats['errors'] += 1
+                # v18.0.1.6.0: commit por lotes + liberar caché ORM. Una corrida completa
+                # son ~11k productos / horas; sin esto, un corte (SSH/OOM/reinicio) tira
+                # TODO el avance (corre en 1 sola transacción) y la RAM se dispara.
+                if idx % 200 == 0:
+                    self.env.cr.commit()
+                    self.env.invalidate_all()
 
             # Fase B: importar SKUs nuevos de marcas/categorías configuradas
             try:

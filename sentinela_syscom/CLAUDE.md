@@ -4,7 +4,7 @@ Integración con el proveedor/distribuidor **Syscom** (API `developers.syscom.mx
 
 > Este archivo se auto-carga al trabajar en el módulo. Documenta el **cómo es el código** (arquitectura, trampas). El **estado/decisiones** del proyecto vive en la memoria (`MEMORY.md`), no aquí. Si cambias algo estructural, actualiza este archivo.
 
-- **Versión actual:** ver `__manifest__.py` (`version`). Hoy `18.0.1.5.0`.
+- **Versión actual:** ver `__manifest__.py` (`version`). Hoy `18.0.1.6.0`.
 - **Odoo:** 18 Community. **DB prod:** V18 · **DB lab:** Sentinela_STAGING (`odoo-lab` :8075).
 - **Deploy:** usar skill `release-modulo` (bump `version` + commit + tag + push) y luego `deploy-modulo` (rsync local→server → `-u` en STAGING → `-u` en V18 → verificar). El server (192.168.3.2) NO es git working tree; **sin rsync el `-u` corre código viejo**.
 
@@ -42,6 +42,8 @@ Integración con el proveedor/distribuidor **Syscom** (API `developers.syscom.mx
 **Un solo cron activo.** El cron `Syscom: Sync Order Logistics` fue eliminado en v18.0.1.2.0 (apuntaba a un método inexistente). Detección+limpieza de descontinuados e importación de nuevos ocurren DENTRO de este mismo cron nocturno (no son crones aparte).
 
 > ⚠️ **El cron solo actualiza/importa lo ya ligado o lo de las marcas/categorías configuradas — NO mirrorea todo Syscom** (decenas de miles de SKUs). La "lista en Ajustes" (`sync_brands`/`sync_categories`, **una por línea**: hay marcas con coma `TELEWAVE, INC` y con `&amp;` → NO separar por `,`/`;`) define el alcance de la importación de nuevos. `_syscom_has_movement` (en `product.template`) es la lógica compartida cron↔wizard de limpieza. (23-jun: el cron llevaba un mes DESACTIVADO; reactivado.)
+
+> ⚠️ **v18.0.1.6.0 — commits por lote (NO quitar):** la corrida completa son ~11k productos / horas en UNA transacción. Sin commits intermedios, un corte (SSH/OOM/reinicio) tira TODO el avance y la RAM se dispara. El cron commitea + `invalidate_all()` cada 200 (Fase A) y cada 25 / por marca (Fase B). **TRAMPA de ejecución manual:** NO usar `method_direct_trigger` ni el scheduler para la primera corrida grande — el framework de cron + los commits intermedios chocan (lock `ir_cron`, conexión idle-in-tx atorada, `UserError "esta tarea de cron se está ejecutando"`). Para correr a mano: `active=False` el cron y llamar el MÉTODO directo en un `odoo shell` detached (`env['product.template']._cron_update_syscom_products()`), luego re-`active=True`. La primera corrida es un catch-up grande; las nocturnas son incrementales y rápidas.
 
 ## Flujos importantes
 - **Importación de catálogo (wizard):** `syscom.import.wizard` → `action_search_and_import()` consulta `/productos?busqueda=` y **por cada producto pide la ficha de detalle `/productos/{id}`** (la búsqueda NO trae `descripcion`/`caracteristicas`/`recursos`/`unidad_de_medida`), mapea JSON Syscom → `product.template` (`_import_single_product`), crea/actualiza jerarquía de categorías (`_get_or_create_category`, ordenada por `nivel`, vincula por `syscom_category_id`), descarga imagen **solo al crear** (`img_portada`→`image_1920`), setea `type='consu'` y `l10n_mx_edi_code_sat`.
