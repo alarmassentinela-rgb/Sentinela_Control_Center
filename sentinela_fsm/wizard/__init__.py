@@ -4,3 +4,4 @@ from . import fsm_chat_send_message_wizard
 from . import fsm_create_route_wizard
 from . import fsm_generate_order_wizard
 from . import fsm_raffle_draw_wizard
+from . import fsm_schedule_wizard

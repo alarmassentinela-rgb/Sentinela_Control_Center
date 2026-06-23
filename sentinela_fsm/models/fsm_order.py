@@ -378,6 +378,23 @@ class FsmOrder(models.Model):
 
         return True
 
+    def action_open_schedule_wizard(self):
+        """Abre el wizard de programación rápida desde la tarjeta del tablero, sin
+        tener que entrar al formulario completo de la orden."""
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _("Programar orden %s") % (self.name or ''),
+            'res_model': 'sentinela.fsm.schedule.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_order_id': self.id,
+                'default_scheduled_date': self.scheduled_date,
+                'default_technician_id': self.technician_id.id,
+            },
+        }
+
     def action_assign(self):
         # No se puede programar sin técnico ni fecha: la tarea no le aparecería
         # a nadie en su lista de pendientes.

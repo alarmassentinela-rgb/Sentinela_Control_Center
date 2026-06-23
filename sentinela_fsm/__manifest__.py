@@ -1,6 +1,6 @@
 {
     'name': 'Gestion de Servicios',
-    'version': '18.0.1.11.3',
+    'version': '18.0.1.12.0',
     'category': 'Services/Field Service',
     'summary': 'Gestión de órdenes de servicio en campo (Instalaciones, Reparaciones).',
     'description': """
@@ -37,6 +37,7 @@
         'wizard/fsm_chat_send_message_wizard_views.xml',
         'wizard/fsm_create_route_wizard_views.xml',
         'wizard/fsm_generate_order_wizard_views.xml',
+        'wizard/fsm_schedule_wizard_views.xml',
         'data/ir_sequence_data.xml',
         'data/fsm_demo_data.xml',
         'data/fsm_checklist_templates.xml',
