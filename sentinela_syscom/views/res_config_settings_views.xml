@@ -32,6 +32,9 @@
                         <setting string="Categorías a sincronizar (nuevos)" help="Opcional. SKUs nuevos de estas categorías, UNA POR LÍNEA. ⚠️ Una categoría grande trae miles de productos.">
                             <field name="syscom_sync_categories" placeholder="Videovigilancia&#10;Redes e IT"/>
                         </setting>
+                        <setting string="Máx. peticiones/min a Syscom" help="Tope de ritmo a la API (límite real ~300/min). El cron se auto-regula bajo este número.">
+                            <field name="syscom_max_rpm"/>
+                        </setting>
                         <setting string="Depurar descontinuados automáticamente" help="Borra descontinuados SIN movimiento; archiva los que SÍ tienen (preserva historia).">
                             <field name="syscom_autodelete_discontinued"/>
                         </setting>

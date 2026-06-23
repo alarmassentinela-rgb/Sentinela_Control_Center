@@ -1,9 +1,36 @@
 from odoo import models, fields, api
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import logging
+import time
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
 _logger = logging.getLogger(__name__)
+
+
+class _SyscomRateLimiter:
+    """P3 (v18.0.1.7.0): regula el ritmo GLOBAL de peticiones a Syscom (thread-safe).
+    El límite real de la API es 300/min (header x-ratelimit-limit); usamos un colchón.
+    Como `wait()` retiene el lock mientras duerme, también serializa el arranque de
+    los hilos del ThreadPoolExecutor al ritmo permitido."""
+
+    def __init__(self, max_per_min=280):
+        self._min_interval = 60.0 / max(1, max_per_min)
+        self._lock = threading.Lock()
+        self._next = 0.0
+
+    def wait(self):
+        with self._lock:
+            now = time.monotonic()
+            delay = self._next - now
+            if delay > 0:
+                time.sleep(delay)
+                now = time.monotonic()
+            self._next = now + self._min_interval
+
 
 class ProductTemplate(models.Model):
     _inherit = 'product.template'
@@ -36,7 +63,6 @@ class ProductTemplate(models.Model):
         readonly=True,
     )
 
-    @api.model
     @api.model
     def _syscom_extract_enrichment(self, payload):
         """Extrae datos de enriquecimiento de la ficha Syscom (/productos/{id}):
@@ -83,6 +109,24 @@ class ProductTemplate(models.Model):
         return self.env['ir.config_parameter'].sudo().get_param(
             'sentinela_syscom.api_url', 'https://developers.syscom.mx/api/v1')
 
+    @api.model
+    def _syscom_session(self, token):
+        """P2 (v18.0.1.7.0): requests.Session con keep-alive (pooling) + reintentos con
+        backoff que respetan Retry-After (429/5xx). Mejora robustez y velocidad de la
+        conexión (sin handshake TCP/TLS por llamada, reintenta baches de red/limite)."""
+        s = requests.Session()
+        retry = Retry(
+            total=5, backoff_factor=1.5,
+            status_forcelist=[429, 500, 502, 503, 504],
+            raise_on_status=False,
+        )
+        adapter = HTTPAdapter(max_retries=retry, pool_connections=16, pool_maxsize=16)
+        s.mount('https://', adapter)
+        s.mount('http://', adapter)
+        if token:
+            s.headers.update({'Authorization': f'Bearer {token}'})
+        return s
+
     def _syscom_has_movement(self):
         """¿El producto tiene movimiento contable/logístico? (insumo de la limpieza
         de descontinuados; usado por el cron y por el wizard de limpieza)."""
@@ -115,71 +159,142 @@ class ProductTemplate(models.Model):
             return True
         return False
 
-    def _syscom_sync_new_products(self, headers, api_base, stats):
-        """Fase B (v18.0.1.5.0): trae a Odoo los SKUs NUEVOS de las marcas y/o
-        categorías configuradas en Ajustes (`sync_brands` / `sync_categories`),
-        para mantener el catálogo 'a la par' con Syscom. Solo crea los que aún no
-        existen (match por syscom_id O default_code, incluidos archivados → NO se
-        re-importan descontinuados ya depurados)."""
+    # ------------------------------------------------------------------
+    # Sincronización de catálogo (v18.0.1.7.0: P1 barrido por listado)
+    # ------------------------------------------------------------------
+    def _syscom_resolve_scopes(self, session, api_base, stats):
+        """Resuelve sync_brands/sync_categories (una por línea) a filtros de la API
+        [(param, id, label)]. Acepta nombre o id. Reporta los no resueltos.
+        NO separar por coma/';': hay marcas con coma ('TELEWAVE, INC') y con '&amp;'."""
         params = self.env['ir.config_parameter'].sudo()
-        # Separar SOLO por salto de línea: hay marcas con coma ("TELEWAVE, INC") y
-        # hasta con ';' embebido ("W&amp;W") en el nombre, así que coma/';' no sirven.
+
         def _split(raw):
             return [x.strip() for x in (raw or '').splitlines() if x.strip()]
+
         brand_names = _split(params.get_param('sentinela_syscom.sync_brands'))
         cat_names = _split(params.get_param('sentinela_syscom.sync_categories'))
-        if not brand_names and not cat_names:
-            return
+        scopes, unresolved = [], []
 
-        filters = []   # (param, value, label_legible)
-        unresolved = []
-        # Resolver marcas (acepta nombre o id) contra /marcas
         if brand_names:
             try:
-                marcas = requests.get(f'{api_base}/marcas', headers=headers, timeout=20).json()
+                marcas = session.get(f'{api_base}/marcas', timeout=20).json()
             except Exception:
                 marcas = []
             by_name = {str(m.get('nombre', '')).strip().lower(): str(m.get('id')) for m in marcas if isinstance(m, dict)}
             ids_set = {str(m.get('id')) for m in marcas if isinstance(m, dict)}
             for name in brand_names:
                 if name in ids_set:
-                    filters.append(('marca', name, name))
+                    scopes.append(('marca', name, name))
                 elif name.lower() in by_name:
-                    filters.append(('marca', by_name[name.lower()], name))
+                    scopes.append(('marca', by_name[name.lower()], name))
                 else:
                     unresolved.append('marca:%s' % name)
-        # Resolver categorías (acepta nombre o id) contra /categorias
+
         if cat_names:
             try:
-                cats = requests.get(f'{api_base}/categorias', headers=headers, timeout=20).json()
+                cats = session.get(f'{api_base}/categorias', timeout=20).json()
             except Exception:
                 cats = []
-            cby_name = {str(c.get('nombre', '')).strip().lower(): str(c.get('id')) for c in cats if isinstance(c, dict)}
-            cids_set = {str(c.get('id')) for c in cats if isinstance(c, dict)}
+            by_name = {str(c.get('nombre', '')).strip().lower(): str(c.get('id')) for c in cats if isinstance(c, dict)}
+            ids_set = {str(c.get('id')) for c in cats if isinstance(c, dict)}
             for name in cat_names:
-                if name in cids_set:
-                    filters.append(('categoria', name, name))
-                elif name.lower() in cby_name:
-                    filters.append(('categoria', cby_name[name.lower()], name))
+                if name in ids_set:
+                    scopes.append(('categoria', name, name))
+                elif name.lower() in by_name:
+                    scopes.append(('categoria', by_name[name.lower()], name))
                 else:
                     unresolved.append('categoria:%s' % name)
 
         stats['unresolved'] = unresolved
-        wiz = self.env['syscom.import.wizard'].create({})
-        Product = self.with_context(active_test=False)
-        since_commit = 0
-        for fparam, fval, flabel in filters:
+        return scopes
+
+    def _syscom_fetch_details(self, session, api_base, pids, limiter, max_workers=8):
+        """P3: descarga /productos/{id} en PARALELO (SOLO red, sin ORM — el ORM no es
+        thread-safe). Devuelve {pid: ('ok', json) | ('404', None) | ('err', None)}."""
+        results = {}
+        if not pids:
+            return results
+
+        def _fetch(pid):
+            limiter.wait()
+            try:
+                r = session.get(f'{api_base}/productos/{pid}', timeout=25)
+                if r.status_code == 404:
+                    return ('404', None)
+                if r.status_code == 200:
+                    return ('ok', r.json())
+                return ('err', None)
+            except Exception:
+                return ('err', None)
+
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            futs = {ex.submit(_fetch, pid): pid for pid in pids}
+            for fut in as_completed(futs):
+                results[futs[fut]] = fut.result()
+        return results
+
+    def _syscom_sync_catalog(self, session, api_base, tc, limiter, stats):
+        """P1 (v18.0.1.7.0): BARRIDO POR LISTADO. Por cada marca/categoría configurada,
+        pagina /productos (60/pág; el listado YA trae precio+stock+SAT) y en UNA pasada
+        actualiza existentes SIN llamada de detalle y junta los nuevos. Los nuevos se
+        enriquecen con /productos/{id} EN PARALELO y se crean.
+        Esto sustituye las ~11k llamadas de detalle por noche por ~cientos de listados.
+        Devuelve el set de IDs de plantilla 'barridos' (para el refresh de sobrantes)."""
+        scopes = self._syscom_resolve_scopes(session, api_base, stats)
+        swept = set()
+        if not scopes:
+            return swept
+
+        # P6: precargar índice de existentes en 1 sola query (evita search_count por item)
+        recs = self.with_context(active_test=False).search_read(
+            ['|', ('syscom_id', '!=', False), ('default_code', '!=', False)],
+            ['syscom_id', 'default_code', 'list_price', 'active'])
+        by_sid = {r['syscom_id']: r['id'] for r in recs if r.get('syscom_id')}
+        by_code = {r['default_code']: r['id'] for r in recs if r.get('default_code')}
+        meta = {r['id']: (r['list_price'], r['active']) for r in recs}
+
+        def _vals_from_list(p, pid):
+            precios = p.get('precios') or {}
+            costo = float(precios.get('precio_descuento') or 0)
+            msrp = float(precios.get('precio_lista') or 0)
+            exist = p.get('total_existencia')
+            if exist is None:
+                exist = (p.get('existencia') or {}).get('nuevo', 0)
+            v = {
+                'syscom_id': pid,
+                'syscom_price_usd': costo,
+                'syscom_list_price_usd': msrp,
+                'syscom_stock': float(exist or 0),
+                'syscom_last_update': fields.Datetime.now(),
+            }
+            if costo > 0:
+                v['standard_price'] = costo * tc
+            # SAT viene en el listado; NO tocamos caracteristicas/datasheet (solo el
+            # detalle los trae; sobrescribirlos con vacío borraría lo enriquecido).
+            if p.get('sat_description'):
+                v['syscom_sat_description'] = p['sat_description']
+            um = p.get('unidad_de_medida') or {}
+            if isinstance(um, dict) and um.get('clave_unidad_sat'):
+                v['syscom_sat_unit_key'] = um['clave_unidad_sat']
+            return v, costo, msrp
+
+        new_items = {}   # pid -> payload del listado (dedup por pid)
+        processed = 0
+
+        for sparam, sval, slabel in scopes:
             page, pages = 1, 1
             while page <= pages:
+                limiter.wait()
                 try:
-                    r = requests.get(f'{api_base}/productos', headers=headers,
-                                     params={fparam: fval, 'pagina': page}, timeout=30).json()
+                    r = session.get(f'{api_base}/productos',
+                                    params={sparam: sval, 'pagina': page}, timeout=30).json()
                 except Exception:
+                    stats['errors'] += 1
                     break
                 if not isinstance(r, dict):
                     break
                 pages = int(r.get('paginas') or 1)
-                prods = r.get('productos', [])
+                prods = r.get('productos') or []
                 if not prods:
                     break
                 for p in prods:
@@ -187,48 +302,134 @@ class ProductTemplate(models.Model):
                     modelo = p.get('modelo')
                     if not pid:
                         continue
-                    # ¿ya existe? (incluye archivados, para no re-crear descontinuados)
-                    if modelo:
-                        dom = ['|', ('syscom_id', '=', pid), ('default_code', '=', modelo)]
+                    tid = by_sid.get(pid) or (by_code.get(modelo) if modelo else None)
+                    if tid:
+                        swept.add(tid)
+                        lp, active = meta.get(tid, (0.0, True))
+                        if not active:
+                            continue  # no resucitar archivados (ya quedan marcados swept)
+                        v, costo, msrp = _vals_from_list(p, pid)
+                        if costo <= 0:
+                            stats['errors'] += 1
+                            continue
+                        # Opción B: list_price solo en rescate (<=1.0)
+                        if (lp or 0.0) <= 1.0:
+                            v['list_price'] = (msrp * tc) if msrp > 0 else (costo * tc * 1.30)
+                        try:
+                            self.browse(tid).write(v)
+                            stats['updated'] += 1
+                        except Exception:
+                            stats['errors'] += 1
                     else:
-                        dom = [('syscom_id', '=', pid)]
-                    if Product.search_count(dom):
-                        continue
-                    # ficha de detalle (descripción/características/SAT); si falla, usa el de búsqueda
-                    detail = p
-                    try:
-                        rd = requests.get(f'{api_base}/productos/{pid}', headers=headers, timeout=25)
-                        if rd.status_code == 200:
-                            detail = rd.json()
-                    except Exception:
-                        pass
-                    try:
-                        prod = wiz._import_single_product(detail)
-                        if prod:
-                            stats['new'] += 1
-                            since_commit += 1
-                    except Exception:
-                        stats['errors'] += 1
-                    # v18.0.1.6.0: commit por lotes + liberar caché (las fichas traen
-                    # HTML/imágenes pesadas; sin esto la RAM crece sin techo y un corte
-                    # tira todo lo importado en la transacción).
-                    if since_commit >= 25:
+                        new_items.setdefault(pid, p)
+                    processed += 1
+                    if processed % 200 == 0:
                         self.env.cr.commit()
                         self.env.invalidate_all()
-                        wiz = self.env['syscom.import.wizard'].create({})
-                        Product = self.with_context(active_test=False)
-                        since_commit = 0
                 page += 1
-            # cerrar lote al terminar cada marca/categoría
             self.env.cr.commit()
             self.env.invalidate_all()
+
+        # NUEVOS: enriquecer en paralelo (red) y crear (ORM en el hilo principal)
+        if new_items:
+            details = self._syscom_fetch_details(session, api_base, list(new_items.keys()), limiter)
             wiz = self.env['syscom.import.wizard'].create({})
-            Product = self.with_context(active_test=False)
-            since_commit = 0
+            since = 0
+            for pid, payload in new_items.items():
+                status, dj = details.get(pid, ('err', None))
+                detail = dj if (status == 'ok' and isinstance(dj, dict)) else payload
+                try:
+                    prod = wiz._import_single_product(detail)
+                    if prod:
+                        swept.add(prod.id)
+                        stats['created'] += 1
+                        since += 1
+                except Exception:
+                    stats['errors'] += 1
+                if since >= 25:
+                    self.env.cr.commit()
+                    self.env.invalidate_all()
+                    wiz = self.env['syscom.import.wizard'].create({})
+                    since = 0
+            self.env.cr.commit()
+            self.env.invalidate_all()
+        return swept
+
+    def _syscom_refresh_unswept(self, session, api_base, tc, swept, limiter, stats):
+        """Sobrantes: productos activos ligados a Syscom (o en 'rescate' list_price<=1.0)
+        que el barrido por listado NO tocó — p. ej. marcas no configuradas o productos
+        retirados de Syscom. Se actualizan por detalle (1 llamada c/u, en paralelo) y,
+        de paso, se detectan descontinuados (404 / flag). Con todas las marcas
+        configuradas, este conjunto son básicamente los descontinuados."""
+        base = self.search([
+            '|', ('syscom_id', '!=', False), ('list_price', '<=', 1.0),
+            ('active', '=', True), ('default_code', '!=', False),
+        ])
+        leftover = base.filtered(lambda r: r.id not in swept)
+        stats['leftover'] = len(leftover)
+        if not leftover:
+            return
+
+        # Resolver syscom_id faltante (rescate) por búsqueda — secuencial, suelen ser pocos
+        sid_by_tid = {}
+        for r in leftover:
+            sid = r.syscom_id
+            if not sid and r.default_code:
+                limiter.wait()
+                try:
+                    rs = session.get(f'{api_base}/productos', params={'busqueda': r.default_code}, timeout=15).json()
+                    pl = (rs or {}).get('productos') or []
+                    if pl:
+                        sid = str(pl[0].get('producto_id'))
+                except Exception:
+                    sid = None
+            if sid:
+                sid_by_tid[r.id] = sid
+
+        details = self._syscom_fetch_details(session, api_base, list(set(sid_by_tid.values())), limiter)
+        since = 0
+        for tid, sid in sid_by_tid.items():
+            status, dj = details.get(sid, ('err', None))
+            rec = self.browse(tid)
+            try:
+                if status == '404':
+                    if not rec.syscom_discontinued:
+                        rec.write({'syscom_discontinued': True, 'syscom_discontinued_date': fields.Date.today()})
+                    stats['discontinued'] += 1
+                elif status == 'ok' and isinstance(dj, dict):
+                    if dj.get('descontinuado') is True and not rec.syscom_discontinued:
+                        rec.write({'syscom_discontinued': True, 'syscom_discontinued_date': fields.Date.today()})
+                        stats['discontinued'] += 1
+                    precios = dj.get('precios') or {}
+                    costo = float(precios.get('precio_descuento') or 0)
+                    msrp = float(precios.get('precio_lista') or 0)
+                    if costo > 0:
+                        v = {
+                            'syscom_id': sid,
+                            'syscom_price_usd': costo, 'syscom_list_price_usd': msrp,
+                            'standard_price': costo * tc,
+                            'syscom_stock': float((dj.get('existencia') or {}).get('nuevo', 0)),
+                            'syscom_last_update': fields.Datetime.now(),
+                        }
+                        v.update(self._syscom_extract_enrichment(dj))
+                        if (rec.list_price or 0.0) <= 1.0:
+                            v['list_price'] = (msrp * tc) if msrp > 0 else (costo * tc * 1.30)
+                        rec.write(v)
+                        stats['updated'] += 1
+                else:
+                    stats['errors'] += 1
+            except Exception:
+                stats['errors'] += 1
+            since += 1
+            if since % 200 == 0:
+                self.env.cr.commit()
+                self.env.invalidate_all()
+        self.env.cr.commit()
+        self.env.invalidate_all()
 
     def _syscom_cleanup_discontinued(self, stats):
-        """Fase C (v18.0.1.5.0): depura los descontinuados detectados. Borra los que
-        NO tienen movimiento; archiva (active=False) los que SÍ (preserva historia)."""
+        """Fase de limpieza: depura los descontinuados detectados. Borra los que NO
+        tienen movimiento; archiva (active=False) los que SÍ (preserva historia)."""
         discontinued = self.search([
             ('syscom_discontinued', '=', True), ('active', '=', True),
         ])
@@ -253,129 +454,60 @@ class ProductTemplate(models.Model):
                 stats['archived'] += cnt
 
     def _cron_update_syscom_products(self):
-        """Robot Nocturno con Reporte a Telegram.
-        Fase A: actualiza precio/stock/enriquecimiento de productos ya ligados + detecta
-                descontinuados (404 o flag).
-        Fase B (v18.0.1.5.0): importa SKUs nuevos de marcas/categorías configuradas.
-        Fase C (v18.0.1.5.0): depura descontinuados (borra sin movimiento / archiva con)."""
+        """Robot nocturno (v18.0.1.7.0) — sincronización EFICIENTE del catálogo Syscom.
+        P1 barrido por listado (actualiza+crea sin las ~11k llamadas de detalle) ·
+        P2 Session con reintentos/backoff · P3 ritmo auto-regulado + detalle en paralelo.
+        Fases: (1) barrido por marcas/categorías de Ajustes; (2) refresh de sobrantes +
+        detección de descontinuados (404/flag); (3) depuración de descontinuados.
+        Commitea por lote en cada fase (resiliencia ante cortes + RAM acotada)."""
         start_time = datetime.now()
         params = self.env['ir.config_parameter'].sudo()
-        client_id = params.get_param('sentinela_syscom.client_id')
-        client_secret = params.get_param('sentinela_syscom.client_secret')
-        # v18.0.1.2.0: credenciales Telegram leídas desde ir.config_parameter
         telegram_token = params.get_param('sentinela_syscom.telegram_token')
         chat_id = params.get_param('sentinela_syscom.telegram_chat_id')
-
-        stats = {'total': 0, 'success': 0, 'errors': 0, 'new': 0, 'archived': 0, 'deleted': 0, 'unresolved': []}
+        stats = {'updated': 0, 'created': 0, 'discontinued': 0, 'archived': 0,
+                 'deleted': 0, 'errors': 0, 'leftover': 0, 'unresolved': []}
 
         def send_telegram(msg):
             if not telegram_token or not chat_id:
-                return  # Telegram opcional: si no hay config, no envía
+                return  # Telegram opcional
             try:
-                url = f"https://api.telegram.org/bot{telegram_token}/sendMessage"
-                requests.post(url, data={'chat_id': chat_id, 'text': msg, 'parse_mode': 'Markdown'}, timeout=10)
-            except: pass
+                requests.post(f"https://api.telegram.org/bot{telegram_token}/sendMessage",
+                              data={'chat_id': chat_id, 'text': msg, 'parse_mode': 'Markdown'}, timeout=10)
+            except Exception:
+                pass
 
         try:
-            res_token = requests.post('https://developers.syscom.mx/oauth/token', data={
-                'client_id': client_id, 'client_secret': client_secret, 'grant_type': 'client_credentials'
-            }, timeout=15)
-            token = res_token.json().get('access_token')
-            if not token: return
+            token = self._syscom_get_token()
+            if not token:
+                send_telegram("🚨 *Robot Syscom:* sin credenciales / token. Abortado.")
+                return
+            api_base = self._syscom_api_base()
+            session = self._syscom_session(token)
+            try:
+                rpm = int(params.get_param('sentinela_syscom.max_requests_per_min') or 280)
+            except Exception:
+                rpm = 280
+            limiter = _SyscomRateLimiter(rpm)
 
-            headers = {'Authorization': f'Bearer {token}'}
-            # Search for linked products OR products with price <= 1.0 to rescue them
-            products = self.search([
-                '|', ('syscom_id', '!=', False), ('list_price', '<=', 1.0),
-                ('active', '=', True),
-                ('default_code', '!=', False)
-            ])
-            stats['total'] = len(products)
+            # Tipo de cambio (fallback 17.26)
             tc = 17.26
-            
-            # Fetch actual TC if possible
             try:
-                res_tc = requests.get('https://developers.syscom.mx/api/v1/tipocambio', headers=headers, timeout=10)
-                tc_val = res_tc.json().get('normal')
-                if tc_val: tc = float(tc_val)
-            except: pass
+                tcj = session.get(f'{api_base}/tipocambio', timeout=10).json()
+                if tcj.get('normal'):
+                    tc = float(tcj['normal'])
+            except Exception:
+                pass
 
-            for idx, p in enumerate(products, 1):
-                try:
-                    sys_id = p.syscom_id
-                    if not sys_id:
-                        search_url = f'https://developers.syscom.mx/api/v1/productos?busqueda={p.default_code}'
-                        res_search = requests.get(search_url, headers=headers, timeout=10).json()
-                        prods = res_search.get('productos', [])
-                        if prods:
-                            sys_id = str(prods[0].get('producto_id'))
-                        else:
-                            continue
+            # Fase 1: barrido por listado (eficiente: actualiza + crea)
+            swept = self._syscom_sync_catalog(session, api_base, tc, limiter, stats)
 
-                    url_prod = f'https://developers.syscom.mx/api/v1/productos/{sys_id}'
-                    res_raw = requests.get(url_prod, headers=headers, timeout=10)
-                    # v18.0.1.3.0: detección automática de descontinuados
-                    if res_raw.status_code == 404:
-                        if not p.syscom_discontinued:
-                            p.write({
-                                'syscom_discontinued': True,
-                                'syscom_discontinued_date': fields.Date.today(),
-                            })
-                        stats['errors'] += 1
-                        continue
-                    res_prod = res_raw.json()
-                    # Si Syscom marca explícitamente como descontinuado en el payload
-                    if res_prod.get('descontinuado') is True:
-                        if not p.syscom_discontinued:
-                            p.write({
-                                'syscom_discontinued': True,
-                                'syscom_discontinued_date': fields.Date.today(),
-                            })
-
-                    precios = res_prod.get('precios', {})
-                    # MSRP / Precio al Público
-                    msrp_usd = float(precios.get('precio_lista') or res_prod.get('precio_lista', 0))
-                    # Tu Costo / Precio Distribuidor
-                    costo_usd = float(precios.get('precio_descuento') or res_prod.get('precio_descuento', 0))
-                    
-                    if costo_usd > 0:
-                        vals = {
-                            'syscom_id': sys_id,
-                            'syscom_price_usd': costo_usd,
-                            'syscom_list_price_usd': msrp_usd,
-                            'standard_price': costo_usd * tc,
-                            'syscom_stock': float(res_prod.get('existencia', {}).get('nuevo', 0)),
-                            'syscom_last_update': fields.Datetime.now(),
-                        }
-                        # v18.0.1.4.0: enriquecimiento (SAT, características, ficha técnica)
-                        vals.update(self._syscom_extract_enrichment(res_prod))
-                        # Opción B: el precio de venta SOLO se fija si el producto
-                        # nunca tuvo precio real (<=1.0, "rescate"). Si ya tiene precio
-                        # de venta capturado, se respeta y no se sobre-escribe.
-                        if (p.list_price or 0.0) <= 1.0:
-                            if msrp_usd > 0:
-                                vals['list_price'] = msrp_usd * tc
-                            else:
-                                vals['list_price'] = (costo_usd * tc) * 1.30
-                        p.write(vals)
-                        stats['success'] += 1
-                    else: stats['errors'] += 1
-                except: stats['errors'] += 1
-                # v18.0.1.6.0: commit por lotes + liberar caché ORM. Una corrida completa
-                # son ~11k productos / horas; sin esto, un corte (SSH/OOM/reinicio) tira
-                # TODO el avance (corre en 1 sola transacción) y la RAM se dispara.
-                if idx % 200 == 0:
-                    self.env.cr.commit()
-                    self.env.invalidate_all()
-
-            # Fase B: importar SKUs nuevos de marcas/categorías configuradas
+            # Fase 2: sobrantes + descontinuados
             try:
-                self._syscom_sync_new_products(headers, self._syscom_api_base(), stats)
+                self._syscom_refresh_unswept(session, api_base, tc, swept, limiter, stats)
             except Exception as e:
-                _logger.exception("SYSCOM: fallo importando productos nuevos: %s", e)
+                _logger.exception("SYSCOM: fallo refresh de sobrantes: %s", e)
 
-            # Fase C: depurar descontinuados (borrar sin movimiento / archivar con)
-            # Activo por defecto; se apaga con el toggle en Ajustes.
+            # Fase 3: depurar descontinuados (toggle en Ajustes, ON por defecto)
             autodel = params.get_param('sentinela_syscom.autodelete_discontinued')
             if (autodel or 'True') != 'False':
                 try:
@@ -383,17 +515,22 @@ class ProductTemplate(models.Model):
                 except Exception as e:
                     _logger.exception("SYSCOM: fallo depurando descontinuados: %s", e)
 
+            mins = (datetime.now() - start_time).total_seconds() / 60.0
             msg = (
-                f"🤖 *Reporte Robot Syscom*\n✅ *Estado:* Finalizado\n"
-                f"📦 *Procesados:* {stats['total']}\n💰 *Actualizados:* {stats['success']}\n"
-                f"🆕 *Nuevos importados:* {stats['new']}\n"
-                f"🗑️ *Borrados (descontinuados sin mov.):* {stats['deleted']}\n"
-                f"📁 *Archivados (descontinuados con mov.):* {stats['archived']}"
+                f"🤖 *Robot Syscom* ✅ Finalizado en {mins:.1f} min\n"
+                f"💰 Actualizados: {stats['updated']}\n"
+                f"🆕 Nuevos: {stats['created']}\n"
+                f"⛔ Descontinuados detectados: {stats['discontinued']}\n"
+                f"🗑️ Borrados: {stats['deleted']} · 📁 Archivados: {stats['archived']}\n"
+                f"↩️ Sobrantes revisados: {stats['leftover']} · ⚠️ Errores: {stats['errors']}"
             )
-            if stats.get('unresolved'):
-                msg += f"\n⚠️ *Sin resolver en Ajustes:* {', '.join(stats['unresolved'])}"
+            if stats['unresolved']:
+                msg += f"\n⚠️ Sin resolver en Ajustes: {', '.join(stats['unresolved'])}"
             send_telegram(msg)
-        except Exception as e: send_telegram(f"🚨 *ERROR ROBOT:* {str(e)}")
+        except Exception as e:
+            _logger.exception("SYSCOM: error fatal en el cron: %s", e)
+            send_telegram(f"🚨 *ERROR ROBOT:* {str(e)}")
+
 
 class AccountMove(models.Model):
     _inherit = 'account.move'
@@ -405,17 +542,17 @@ class AccountMove(models.Model):
         params = self.env['ir.config_parameter'].sudo()
         client_id = params.get_param('sentinela_syscom.client_id')
         client_secret = params.get_param('sentinela_syscom.client_secret')
-        
+
         res_token = requests.post('https://developers.syscom.mx/oauth/token', data={
             'client_id': client_id, 'client_secret': client_secret, 'grant_type': 'client_credentials'
         }, timeout=15)
         token = res_token.json().get('access_token')
         if not token: return
-        
+
         headers = {'Authorization': f'Bearer {token}'}
         res_f = requests.get('https://developers.syscom.mx/api/v1/facturas', headers=headers, timeout=15).json()
         facturas = res_f.get('facturas', [])
-        
+
         syscom_partner = self.env['res.partner'].search([('ref', '=', 'PROV-SYSCOM')], limit=1)
         if not syscom_partner: return
 
@@ -423,9 +560,9 @@ class AccountMove(models.Model):
         for f in facturas:
             folio = f.get('folio_factura')
             if self.search_count([('syscom_folio', '=', folio)]): continue
-            
+
             res_d = requests.get(f'https://developers.syscom.mx/api/v1/facturas/{folio}', headers=headers, timeout=15).json()
-            
+
             invoice_vals = {
                 'move_type': 'in_invoice',
                 'partner_id': syscom_partner.id,
@@ -434,7 +571,7 @@ class AccountMove(models.Model):
                 'invoice_date': f.get('fecha'),
                 'invoice_line_ids': [],
             }
-            
+
             for item in res_d.get('productos', []):
                 product = self.env['product.product'].search([('default_code', '=', item.get('cod_art'))], limit=1)
                 line_vals = {
@@ -444,10 +581,10 @@ class AccountMove(models.Model):
                     'product_id': product.id if product else False,
                 }
                 invoice_vals['invoice_line_ids'].append((0, 0, line_vals))
-            
+
             self.create(invoice_vals)
             count += 1
-            
+
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',

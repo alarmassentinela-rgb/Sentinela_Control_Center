@@ -36,6 +36,14 @@ class ResConfigSettings(models.TransientModel):
              '⚠️ Una categoría grande puede traer miles de productos. '
              'Vacío = no importa nuevos por categoría.',
     )
+    syscom_max_rpm = fields.Integer(
+        string='Máx. peticiones/min a Syscom',
+        default=280,
+        config_parameter='sentinela_syscom.max_requests_per_min',
+        help='Tope de peticiones por minuto a la API de Syscom (el límite real es ~300). '
+             'El cron se auto-regula bajo este número y paraleliza las llamadas de '
+             'detalle sin pasarse. Bájalo si Syscom devuelve 429.',
+    )
     syscom_autodelete_discontinued = fields.Boolean(
         string='Depurar descontinuados automáticamente',
         config_parameter='sentinela_syscom.autodelete_discontinued',
