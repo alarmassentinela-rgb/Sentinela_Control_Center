@@ -4,7 +4,7 @@ class FsmOrder(models.Model):
     _name = 'sentinela.fsm.order'
     _description = 'Field Service Order'
     _inherit = ['portal.mixin', 'mail.thread', 'mail.activity.mixin']
-    _order = 'priority desc, scheduled_date asc'
+    _order = 'priority desc, scheduled_date asc, create_date asc'
 
     name = fields.Char(string='Folio', required=True, copy=False, readonly=True, default='Nuevo')
     
@@ -47,6 +47,9 @@ class FsmOrder(models.Model):
         ('done', 'Finalizado'),
         ('cancel', 'Cancelado')
     ], string='Etapa', default='new', tracking=True, group_expand='_expand_stage')
+    days_open = fields.Integer(string='Días abiertos', compute='_compute_days_open',
+                               help="Días desde que se creó la orden mientras sigue abierta "
+                                    "(para detectar pendientes que se están añejando).")
     pause_reason_id = fields.Many2one('sentinela.fsm.pause.reason', string='Última Causa de Pausa', readonly=True, tracking=True)
     pause_notes = fields.Text(string='Notas de Pausa', readonly=True, tracking=True)
     
@@ -378,14 +381,25 @@ class FsmOrder(models.Model):
 
         return True
 
+    @api.depends('create_date', 'stage')
+    def _compute_days_open(self):
+        today = fields.Date.context_today(self)
+        for o in self:
+            if o.stage in ('done', 'cancel') or not o.create_date:
+                o.days_open = 0
+            else:
+                o.days_open = (today - o.create_date.date()).days
+
     @api.model
     def _expand_stage(self, stages, domain):
         """Fija el orden y la presencia de las columnas del kanban de despacho.
         Sin esto Odoo ordena las columnas alfabéticamente por la CLAVE almacenada
         (assigned < in_progress < new < paused), no por el orden del Selection.
         Devuelve el flujo lógico: Nuevo → Asignado → En Proceso → Pausado →
-        Finalizado → Cancelado."""
-        return ['new', 'assigned', 'in_progress', 'paused', 'done', 'cancel']
+        Finalizado → Cancelado. Solo las etapas ABIERTAS se fuerzan como columnas;
+        Finalizado/Cancelado aparecen únicamente cuando hay registros (al quitar el
+        filtro 'Pendientes'), para mantener la bandeja de despacho limpia."""
+        return ['new', 'assigned', 'in_progress', 'paused']
 
     def action_open_schedule_wizard(self):
         """Abre el wizard de programación rápida desde la tarjeta del tablero, sin

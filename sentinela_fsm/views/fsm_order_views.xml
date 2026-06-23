@@ -5,7 +5,8 @@
         <field name="name">sentinela.fsm.order.kanban</field>
         <field name="model">sentinela.fsm.order</field>
         <field name="arch" type="xml">
-            <kanban default_group_by="stage" class="o_kanban_small_column" sample="1">
+            <kanban default_group_by="stage" class="o_kanban_small_column" sample="1"
+                    records_draggable="0">
                 <field name="stage"/>
                 <field name="priority"/>
                 <field name="technician_id"/>
@@ -13,6 +14,7 @@
                 <field name="service_type"/>
                 <field name="service_category"/>
                 <field name="partner_id"/>
+                <field name="days_open"/>
                 <templates>
                     <t t-name="card">
                         <div class="oe_kanban_global_click">
@@ -31,6 +33,14 @@
                                 <div class="text-muted small">
                                     <field name="service_type"/>
                                     <t t-if="record.service_category.raw_value"> · <field name="service_category"/></t>
+                                </div>
+                                <div t-if="record.days_open.raw_value >= 1" class="mt-1">
+                                    <t t-if="record.days_open.raw_value >= 3">
+                                        <span class="badge text-bg-danger" title="Días sin cerrar">⏳ <t t-esc="record.days_open.value"/> días sin atender</span>
+                                    </t>
+                                    <t t-else="">
+                                        <span class="badge text-bg-warning" title="Días sin cerrar">⏳ <t t-esc="record.days_open.value"/> día(s)</span>
+                                    </t>
                                 </div>
                                 <div class="mt-1">
                                     <t t-if="record.scheduled_date.raw_value">
@@ -120,7 +130,7 @@
                 <field name="service_category"/>
                 <field name="technician_id" widget="many2one_avatar_user"/>
                 <field name="priority" widget="priority"/>
-                <field name="stage" widget="badge"
+                <field name="stage" widget="badge" readonly="1"
                        decoration-success="stage == 'in_progress'"
                        decoration-info="stage == 'assigned'"
                        decoration-warning="stage in ('new','paused')"
@@ -190,7 +200,7 @@
                     <button name="%(action_fsm_order_pause_wizard)d" string="Pausar" type="action" class="btn-warning" invisible="stage != 'in_progress'"/>
                     <button name="action_resume" string="Reanudar" type="object" class="oe_highlight" invisible="stage != 'paused'"/>
                     <button name="action_finish" string="Finalizar" type="object" class="btn-success" invisible="stage != 'in_progress'"/>
-                    <field name="stage" widget="statusbar" options="{'clickable': '1'}" statusbar_visible="new,assigned,in_progress,paused,done"/>
+                    <field name="stage" widget="statusbar" statusbar_visible="new,assigned,in_progress,paused,done"/>
                 </header>
                 <sheet>
                     <div class="oe_title">
