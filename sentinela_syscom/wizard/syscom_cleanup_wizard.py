@@ -56,38 +56,9 @@ class SyscomCleanupWizard(models.TransientModel):
         }
 
     def _has_movement(self, product):
-        """Determina si un producto tiene movimiento contable/logístico."""
-        variant_ids = product.product_variant_ids.ids
-        if not variant_ids:
-            return False
-        # 1. Inventario actual > 0 en cualquier almacén
-        if any(v.qty_available > 0 for v in product.product_variant_ids):
-            return True
-        # 2. Líneas en facturas posted (cliente o proveedor)
-        if self.env['account.move.line'].search_count([
-            ('product_id', 'in', variant_ids),
-            ('move_id.state', '=', 'posted'),
-        ]):
-            return True
-        # 3. Líneas de venta no canceladas
-        if self.env['sale.order.line'].search_count([
-            ('product_id', 'in', variant_ids),
-            ('state', 'not in', ('cancel',)),
-        ]):
-            return True
-        # 4. Líneas de compra no canceladas
-        if self.env['purchase.order.line'].search_count([
-            ('product_id', 'in', variant_ids),
-            ('state', 'not in', ('cancel',)),
-        ]):
-            return True
-        # 5. Movimientos de inventario no cancelados
-        if self.env['stock.move'].search_count([
-            ('product_id', 'in', variant_ids),
-            ('state', 'not in', ('cancel', 'draft')),
-        ]):
-            return True
-        return False
+        """Determina si un producto tiene movimiento contable/logístico.
+        Delega en product.template._syscom_has_movement (lógica compartida con el cron)."""
+        return product._syscom_has_movement()
 
     def action_execute(self):
         """Ejecuta la limpieza: elimina sin movimiento, archiva con movimiento."""

@@ -19,6 +19,31 @@ class ResConfigSettings(models.TransientModel):
         config_parameter='sentinela_syscom.telegram_chat_id',
         help='ID del chat (usuario o grupo) que recibe el reporte diario.',
     )
+    # v18.0.1.5.0: sincronización de productos NUEVOS + depuración de descontinuados
+    syscom_sync_brands = fields.Text(
+        string='Marcas a sincronizar (nuevos)',
+        config_parameter='sentinela_syscom.sync_brands',
+        help='Lista de MARCAS, UNA POR LÍNEA. El cron nocturno trae a Odoo los SKUs '
+             'nuevos de estas marcas (los que aún no existen). Usa el nombre tal como '
+             'aparece en Syscom (ej. "HiLook by HIKVISION"). Vacío = no importa nuevos '
+             'por marca.',
+    )
+    syscom_sync_categories = fields.Text(
+        string='Categorías a sincronizar (nuevos)',
+        config_parameter='sentinela_syscom.sync_categories',
+        help='Lista de CATEGORÍAS de Syscom, UNA POR LÍNEA (nombre o id, ej. '
+             '"Videovigilancia"). El cron trae los SKUs nuevos de estas categorías. '
+             '⚠️ Una categoría grande puede traer miles de productos. '
+             'Vacío = no importa nuevos por categoría.',
+    )
+    syscom_autodelete_discontinued = fields.Boolean(
+        string='Depurar descontinuados automáticamente',
+        config_parameter='sentinela_syscom.autodelete_discontinued',
+        default=True,
+        help='Si está activo, el cron nocturno BORRA los productos descontinuados que no '
+             'tengan movimiento (ventas/compras/stock/facturas) y ARCHIVA los que sí, '
+             'preservando la historia contable.',
+    )
 
     def action_test_syscom_connection(self):
         """ Tests the connection to Syscom API using the provided credentials """

@@ -25,6 +25,17 @@
                             </div>
                         </setting>
                     </block>
+                    <block title="Sincronización de Catálogo (Cron Nocturno)" help="El cron diario, además de actualizar precio/stock, trae los SKUs NUEVOS de las marcas/categorías de abajo y depura los descontinuados.">
+                        <setting string="Marcas a sincronizar (nuevos)" help="SKUs nuevos de estas marcas se importan solos. UNA POR LÍNEA, nombre tal como aparece en Syscom.">
+                            <field name="syscom_sync_brands" placeholder="HiLook by HIKVISION&#10;HIKVISION&#10;UBIQUITI"/>
+                        </setting>
+                        <setting string="Categorías a sincronizar (nuevos)" help="Opcional. SKUs nuevos de estas categorías, UNA POR LÍNEA. ⚠️ Una categoría grande trae miles de productos.">
+                            <field name="syscom_sync_categories" placeholder="Videovigilancia&#10;Redes e IT"/>
+                        </setting>
+                        <setting string="Depurar descontinuados automáticamente" help="Borra descontinuados SIN movimiento; archiva los que SÍ tienen (preserva historia).">
+                            <field name="syscom_autodelete_discontinued"/>
+                        </setting>
+                    </block>
                     <block title="Reporte Telegram (Cron Nocturno)" help="Opcional. Si se configura, el cron diario envía un resumen al chat indicado.">
                         <setting>
                             <div class="content-group">
