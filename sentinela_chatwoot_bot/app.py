@@ -143,6 +143,10 @@ def _extract(payload: dict) -> dict:
         "has_attachment": bool(payload.get("attachments")),
         "image_urls": [a.get("data_url") for a in (payload.get("attachments") or [])
                        if a.get("data_url") and (a.get("file_type") in ("image", 0))],
+        "private": bool(payload.get("private")),
+        # Tipo de remitente: 'contact' (cliente), 'user' (agente humano), 'agent_bot' (este bot).
+        "sender_type": (payload.get("sender_type")
+                        or (payload.get("sender") or {}).get("type") or "").lower(),
     }
 
 
@@ -411,8 +415,7 @@ def _do_handoff(conv_id: int, topic: str | None = None):
 def _process(payload: dict):
     d = _extract(payload)
 
-    # Solo mensajes ENTRANTES de cliente.
-    if d["event"] != "message_created" or d["message_type"] != "incoming":
+    if d["event"] != "message_created":
         return
     conv_id = d["conv_id"]
     if not conv_id:
@@ -420,10 +423,30 @@ def _process(payload: dict):
     if config.CHATWOOT_INBOX_ID and d["inbox_id"] and d["inbox_id"] != config.CHATWOOT_INBOX_ID:
         return
 
-    # Idempotencia: tras el handoff la conversación queda 'open'/'resolved' → bot calla.
-    if conv_id in _handled or d["status"] in ("open", "resolved"):
+    # ── Un AGENTE HUMANO tomó el chat → el bot se retira para no encimarse ──
+    # Saliente público de un 'user' (humano). El bot manda como 'agent_bot', así que sus
+    # propios mensajes NO disparan esto. Las notas privadas (ficha) se ignoran.
+    if d["message_type"] == "outgoing":
+        if not d["private"] and d["sender_type"] in ("user", "agent"):
+            _handled.add(conv_id)
+            if d["status"] not in ("open", "resolved"):
+                chatwoot.toggle_status(conv_id, "open")
+            logger.info("conv %s: respondió un humano (sender=%s) → bot en silencio",
+                        conv_id, d["sender_type"])
+        return  # cualquier saliente (humano o del propio bot) NO dispara al bot
+
+    # De aquí en adelante, solo mensajes ENTRANTES de cliente.
+    if d["message_type"] != "incoming":
+        return
+
+    # El STATUS de la conversación es la fuente de verdad: si un humano tomó el chat (o el
+    # bot hizo handoff), Chatwoot la deja 'open'/'resolved' → el bot calla.
+    if d["status"] in ("open", "resolved", "snoozed"):
         logger.info("conv %s status=%s ya atendida; bot en silencio", conv_id, d["status"])
         return
+    # status == 'pending' = modo bot. Si la regresaron a 'pending' (devolver el control al
+    # bot tras un handoff), el bot retoma: el status pesa más que la marca en memoria.
+    _handled.discard(conv_id)
 
     content = d["content"]
     if not content:
