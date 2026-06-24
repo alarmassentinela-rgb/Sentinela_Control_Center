@@ -89,18 +89,36 @@ class ProductTemplate(models.Model):
     # Helpers compartidos (cron + wizards)
     # ------------------------------------------------------------------
     @api.model
-    def _syscom_get_token(self):
-        """OAuth client_credentials → access_token (o None si no hay credenciales/falla)."""
+    def _syscom_get_token(self, force_refresh=False):
+        """OAuth client_credentials → access_token (o None si no hay credenciales/falla).
+        v18.0.1.8.0: cachea el token en ir.config_parameter y lo REUTILIZA mientras siga
+        vigente (el token de Syscom vale ~365 días), evitando re-autenticar en cada uso.
+        `force_refresh=True` ignora la caché (p. ej. si la API devolvió 401)."""
         params = self.env['ir.config_parameter'].sudo()
         cid = params.get_param('sentinela_syscom.client_id')
         sec = params.get_param('sentinela_syscom.client_secret')
         if not cid or not sec:
             return None
+        # Reutilizar el token cacheado si aún tiene margen (colchón de 1 día)
+        if not force_refresh:
+            cached = params.get_param('sentinela_syscom.token_cache')
+            try:
+                expiry = float(params.get_param('sentinela_syscom.token_expiry') or 0)
+            except (TypeError, ValueError):
+                expiry = 0.0
+            if cached and (expiry - time.time()) > 86400:
+                return cached
         try:
             r = requests.post('https://developers.syscom.mx/oauth/token', data={
                 'client_id': cid, 'client_secret': sec, 'grant_type': 'client_credentials',
             }, timeout=15)
-            return r.json().get('access_token')
+            data = r.json()
+            token = data.get('access_token')
+            if token:
+                expires_in = float(data.get('expires_in') or 3600)
+                params.set_param('sentinela_syscom.token_cache', token)
+                params.set_param('sentinela_syscom.token_expiry', str(time.time() + expires_in))
+            return token
         except Exception:
             return None
 
@@ -489,12 +507,19 @@ class ProductTemplate(models.Model):
                 rpm = 280
             limiter = _SyscomRateLimiter(rpm)
 
-            # Tipo de cambio (fallback 17.26)
+            # Tipo de cambio (fallback 17.26). Sirve además para validar el token
+            # cacheado: si Syscom lo revocó (401/403), se refresca y se rehace la sesión.
             tc = 17.26
             try:
-                tcj = session.get(f'{api_base}/tipocambio', timeout=10).json()
-                if tcj.get('normal'):
-                    tc = float(tcj['normal'])
+                resp = session.get(f'{api_base}/tipocambio', timeout=10)
+                if resp.status_code in (401, 403):
+                    token = self._syscom_get_token(force_refresh=True)
+                    session = self._syscom_session(token)
+                    resp = session.get(f'{api_base}/tipocambio', timeout=10)
+                if resp.ok:
+                    tcj = resp.json()
+                    if tcj.get('normal'):
+                        tc = float(tcj['normal'])
             except Exception:
                 pass
 

@@ -4,7 +4,7 @@ Integración con el proveedor/distribuidor **Syscom** (API `developers.syscom.mx
 
 > Este archivo se auto-carga al trabajar en el módulo. Documenta el **cómo es el código** (arquitectura, trampas). El **estado/decisiones** del proyecto vive en la memoria (`MEMORY.md`), no aquí. Si cambias algo estructural, actualiza este archivo.
 
-- **Versión actual:** ver `__manifest__.py` (`version`). Hoy `18.0.1.7.0`.
+- **Versión actual:** ver `__manifest__.py` (`version`). Hoy `18.0.1.8.0`.
 - **Odoo:** 18 Community. **DB prod:** V18 · **DB lab:** Sentinela_STAGING (`odoo-lab` :8075).
 - **Deploy:** usar skill `release-modulo` (bump `version` + commit + tag + push) y luego `deploy-modulo` (rsync local→server → `-u` en STAGING → `-u` en V18 → verificar). El server (192.168.3.2) NO es git working tree; **sin rsync el `-u` corre código viejo**.
 
@@ -61,6 +61,7 @@ Integración con el proveedor/distribuidor **Syscom** (API `developers.syscom.mx
 - **`except: pass` / `except: ...` silenciosos** en el cron (`_cron_update_syscom_products`): errores por producto se cuentan como `errors` pero no se loguean. Telegram es opcional (si no hay token/chat_id, no envía).
 - **Tipo de cambio:** el cron tiene fallback hardcoded `tc = 17.26` si `/tipocambio` falla. El wizard hace su propia conversión vía `base.USD.rate` (lógica distinta a la del cron — no comparten función).
 - **Credenciales en `ir.config_parameter`** (`sentinela_syscom.client_id/client_secret/api_url/telegram_token/telegram_chat_id`), configurables desde Ajustes. El Telegram fue movido de hardcoded a parámetros en v18.0.1.2.0.
+- **Caché de token (v18.0.1.8.0):** `_syscom_get_token()` guarda el token en `sentinela_syscom.token_cache` + `token_expiry` y lo reutiliza mientras le quede >1 día (el token de Syscom vale ~365 días) → no re-autentica en cada uso. `force_refresh=True` lo ignora; el cron valida con `/tipocambio` y si da 401/403 refresca y rehace la `Session`. Ritmo configurable en `sentinela_syscom.max_requests_per_min` (default 280).
 - **El cron también "rescata"** productos con `list_price <= 1.0` aunque no tengan `syscom_id`, buscándolos por `default_code` en la API.
 
 ## Wizards / Controllers / Tests
