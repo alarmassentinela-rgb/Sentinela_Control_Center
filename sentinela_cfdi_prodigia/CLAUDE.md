@@ -45,8 +45,14 @@ Timbrado de CFDI 4.0 para Odoo 18 Community a través del PAC **Prodigia** (PADE
 - **Manejo de errores:** todo el flujo va en `try/except`; cualquier fallo (HTTP ≠200/202, sin TFD, excepción) escribe `cfdi_status='error'` + `cfdi_message`. NO relanza excepción al usuario (salvo las validaciones previas de RFC/régimen, que sí son `UserError`).
 - **Cancelación / consulta:** NO implementadas. No hay método que llame al PAC para cancelar ni consultar estatus.
 
-## Crones (data/...)
-— Ninguno. El módulo no tiene `ir.cron` ni carpeta `data/`. El timbrado es 100% manual (botón en la factura).
+## Crones (data/ir_cron_data.xml)
+- **`ir_cron_auto_stamp_prodigia`** → `account.move._cron_auto_stamp_prodigia()` (cada 1h). **Nace DESACTIVADO** (`active=False`, `noupdate="1"` para que activarlo no se revierta en `-u`). Auto-timbra facturas **nuevas** con triple salvaguarda:
+  1. Gate global: solo corre si `ir.config_parameter` `sentinela_cfdi_prodigia.auto_stamp_enabled == '1'` (default `0`).
+  2. Corte por fecha: dominio `invoice_date >= sentinela_cfdi_prodigia.auto_stamp_cutoff` (default `2026-06-25`) → NO toca facturas anteriores.
+  3. Dominio: `out_invoice` + `state='posted'` + `cfdi_status='pending'` + `cfdi_uuid=False` (las remisiones de clientes 'no timbrar' nacen `cfdi_status='draft'` y nunca entran).
+  - Lote `auto_stamp_batch` (default 50), `order='invoice_date, id'`, **commit por factura** (un error deja esa en `error` y sigue con el resto; no reintenta las que quedan en `error`).
+  - El modo prueba/real lo sigue rigiendo `test_mode` (NO lo cambia el cron).
+  - **Para activarlo:** poner `auto_stamp_enabled=1` y activar el cron. El timbrado MANUAL (`action_cfdi_stamp_prodigia`) sigue disponible siempre.
 
 ## Reporte factura/remisión
 - **`report_invoice.xml`** (cargado en manifest): paperformat carta + `report.action account.account_invoices` reasignada + plantilla **`report_invoice_cfdi_section`** que `inherit_id="account.report_invoice_document"` y **reemplaza** el layout (`web.external_layout` → `web.basic_layout`).
