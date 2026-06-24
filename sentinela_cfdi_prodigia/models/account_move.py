@@ -5,7 +5,7 @@ import requests
 from lxml import etree
 from datetime import datetime, timedelta
 
-from odoo import fields, models, _
+from odoo import api, fields, models, _
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
@@ -222,6 +222,57 @@ class AccountMove(models.Model):
 
         xml_str = etree.tostring(root, xml_declaration=True, encoding='UTF-8', pretty_print=True)
         return xml_str
+
+    @api.model
+    def _cron_auto_stamp_prodigia(self):
+        """Cron: timbra automáticamente SOLO facturas NUEVAS pendientes.
+
+        Salvaguardas (para NO tocar facturas anteriores):
+        - Deshabilitado por defecto: requiere `sentinela_cfdi_prodigia.auto_stamp_enabled` = '1'.
+        - Corte por fecha: solo `invoice_date >= sentinela_cfdi_prodigia.auto_stamp_cutoff`
+          (default 2026-06-25). Así las pendientes previas quedan fuera.
+        - Solo facturas de cliente publicadas, en estado 'pending' y SIN UUID
+          (las remisiones de clientes 'no timbrar' nacen en 'draft' y nunca entran).
+        - Lote acotado y commit por factura: un error no detiene al resto.
+        El modo prueba/real lo sigue rigiendo `sentinela_cfdi_prodigia.test_mode`.
+        """
+        ICP = self.env['ir.config_parameter'].sudo()
+        if ICP.get_param('sentinela_cfdi_prodigia.auto_stamp_enabled', '0') != '1':
+            _logger.info("Auto-timbrado CFDI: deshabilitado (auto_stamp_enabled != '1').")
+            return False
+        cutoff = ICP.get_param('sentinela_cfdi_prodigia.auto_stamp_cutoff', '2026-06-25')
+        try:
+            batch = int(ICP.get_param('sentinela_cfdi_prodigia.auto_stamp_batch', '50') or 50)
+        except (TypeError, ValueError):
+            batch = 50
+        domain = [
+            ('move_type', '=', 'out_invoice'),
+            ('state', '=', 'posted'),
+            ('cfdi_status', '=', 'pending'),
+            ('cfdi_uuid', '=', False),
+            ('invoice_date', '>=', cutoff),
+        ]
+        moves = self.search(domain, limit=batch, order='invoice_date, id')
+        _logger.info("Auto-timbrado CFDI: %s factura(s) candidata(s) (corte >= %s, lote %s).",
+                     len(moves), cutoff, batch)
+        timbradas = errores = 0
+        for move in moves:
+            try:
+                move.action_cfdi_stamp_prodigia()
+                self.env.cr.commit()
+                if move.cfdi_status == 'valid':
+                    timbradas += 1
+                else:
+                    errores += 1
+                    _logger.warning("Auto-timbrado CFDI: %s quedó en '%s' (%s).",
+                                    move.name, move.cfdi_status, move.cfdi_message)
+            except Exception as e:
+                self.env.cr.rollback()
+                errores += 1
+                _logger.exception("Auto-timbrado CFDI: excepción en %s: %s", move.name, e)
+        _logger.info("Auto-timbrado CFDI terminó: %s timbrada(s), %s con error/pendiente.",
+                     timbradas, errores)
+        return True
 
     def action_cfdi_stamp_prodigia(self):
         for move in self:

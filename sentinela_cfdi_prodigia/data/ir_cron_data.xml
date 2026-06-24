@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+
+        <!-- Parámetros de auto-timbrado. Deshabilitado por defecto; corte 25-jun-2026
+             para NO tocar facturas anteriores. Editables en Ajustes > Técnico > Parámetros. -->
+        <record id="param_auto_stamp_enabled" model="ir.config_parameter">
+            <field name="key">sentinela_cfdi_prodigia.auto_stamp_enabled</field>
+            <field name="value">0</field>
+        </record>
+        <record id="param_auto_stamp_cutoff" model="ir.config_parameter">
+            <field name="key">sentinela_cfdi_prodigia.auto_stamp_cutoff</field>
+            <field name="value">2026-06-25</field>
+        </record>
+        <record id="param_auto_stamp_batch" model="ir.config_parameter">
+            <field name="key">sentinela_cfdi_prodigia.auto_stamp_batch</field>
+            <field name="value">50</field>
+        </record>
+
+        <!-- Cron de auto-timbrado: NACE DESACTIVADO. Activar a mano cuando se valide.
+             Timbra solo facturas nuevas (ver _cron_auto_stamp_prodigia). -->
+        <record id="ir_cron_auto_stamp_prodigia" model="ir.cron">
+            <field name="name">CFDI: Auto-Timbrar Facturas Nuevas (Prodigia)</field>
+            <field name="model_id" ref="account.model_account_move"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_auto_stamp_prodigia()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">hours</field>
+            <field name="active" eval="False"/>
+            <field name="nextcall">2026-06-26 08:00:00</field>
+        </record>
+
+    </data>
+</odoo>
