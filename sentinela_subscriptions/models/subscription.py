@@ -982,7 +982,11 @@ class SentinelaSubscription(models.Model):
         move = Move.create(move_vals)
         move.action_post()  # genera el saldo por cobrar
 
-        if any(s.auto_send_mail for s in subs_list) and partner.email:
+        # Envío de correo al GENERAR: SOLO remisiones (cliente NO requiere factura).
+        # Los clientes que requieren FACTURA se envían DESPUÉS de timbrar (con el CFDI
+        # pegado), vía account.move._cfdi_send_invoice_email() que dispara el cron de
+        # auto-timbrado. Así el cliente nunca recibe el PDF sin timbre.
+        if any(s.auto_send_mail for s in subs_list) and partner.email and not partner.requiere_factura:
             template = self.env.ref('account.email_template_edi_invoice', raise_if_not_found=False)
             if template:
                 # Destinatarios adicionales en COPIA (CC). Se combinan dos fuentes:

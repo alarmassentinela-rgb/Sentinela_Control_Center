@@ -262,6 +262,13 @@ class AccountMove(models.Model):
                 self.env.cr.commit()
                 if move.cfdi_status == 'valid':
                     timbradas += 1
+                    # Enviar la factura al cliente YA TIMBRADA (con el CFDI pegado).
+                    try:
+                        move._cfdi_send_invoice_email()
+                        self.env.cr.commit()
+                    except Exception as e:
+                        _logger.warning("Auto-timbrado CFDI: %s timbró OK pero falló el envío de correo: %s",
+                                        move.name, e)
                 else:
                     errores += 1
                     _logger.warning("Auto-timbrado CFDI: %s quedó en '%s' (%s).",
@@ -272,6 +279,30 @@ class AccountMove(models.Model):
                 _logger.exception("Auto-timbrado CFDI: excepción en %s: %s", move.name, e)
         _logger.info("Auto-timbrado CFDI terminó: %s timbrada(s), %s con error/pendiente.",
                      timbradas, errores)
+        return True
+
+    def _cfdi_send_invoice_email(self):
+        """Envía la factura por correo al cliente (con el CFDI ya pegado).
+
+        Pensado para llamarse DESPUÉS de timbrar (desde el cron de auto-timbrado),
+        de modo que el cliente reciba el PDF como FACTURA y no como remisión. Reproduce
+        el CC del flujo de generación: a nivel cliente (`invoice_cc_partner_ids`) +
+        a nivel suscripción (`subscription_ids.extra_invoice_partner_ids`)."""
+        self.ensure_one()
+        if not self.partner_id.email:
+            _logger.info("CFDI mail: %s sin correo de cliente, no se envía.", self.name)
+            return False
+        template = self.env.ref('account.email_template_edi_invoice', raise_if_not_found=False)
+        if not template:
+            return False
+        empty = self.env['res.partner']
+        cc_cli = getattr(self.partner_id, 'invoice_cc_partner_ids', empty)
+        cc_sub = self.subscription_ids.mapped('extra_invoice_partner_ids') if 'subscription_ids' in self._fields else empty
+        cc_partners = (cc_sub | cc_cli).filtered(lambda p: p.email and p.id != self.partner_id.id)
+        email_values = {'email_cc': ','.join(cc_partners.mapped('email'))} if cc_partners else None
+        template.send_mail(self.id, force_send=True, email_values=email_values)
+        _logger.info("CFDI mail: factura %s enviada a %s%s.", self.name, self.partner_id.email,
+                     (" (CC: %s)" % email_values['email_cc']) if email_values else "")
         return True
 
     def action_cfdi_stamp_prodigia(self):
