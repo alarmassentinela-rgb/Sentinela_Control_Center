@@ -4,25 +4,61 @@
             <field name="name">Suscripción: Aviso de Prórroga</field>
             <field name="model_id" ref="model_sentinela_subscription"/>
             <field name="subject">Reactivación Temporal de Servicio - {{ object.name }}</field>
-            <field name="email_from">{{ (user.email_formatted or user.company_id.email) }}</field>
+            <field name="email_from">Cobranza Sentinela &lt;cobranza@sentinela.com.mx&gt;</field>
             <field name="partner_to">{{ object.partner_id.id }}</field>
             <field name="body_html" type="html">
-                <div style="margin: 0px; padding: 0px;">
-                    <p style="margin: 0px; padding: 0px; font-size: 13px;">
-                        Hola <strong><t t-out="object.partner_id.name or ''"/></strong>,
-                        <br/><br/>
-                        Le informamos que se ha aplicado una <strong>prórroga de servicio</strong> a su contrato <strong><t t-out="object.name"/></strong>.
-                        <br/><br/>
-                        Su servicio (<t t-out="object.product_id.name"/>) se ha reactivado y permanecerá operativo hasta el día:
-                        <br/>
-                        <h3><t t-out="object.extension_end_date"/></h3>
-                        <br/>
-                        Le solicitamos realizar su pago antes de esta fecha para evitar una nueva suspensión automática del servicio.
-                        <br/><br/>
-                        Atentamente,
-                        <br/>
-                        El equipo de Sentinela
-                    </p>
+                <div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; font-size: 13px; color: #333;">
+                    <div style="text-align: center; padding: 16px 0; border-bottom: 2px solid #eee;">
+                        <img t-att-src="object.get_base_url() + '/logo.png'" style="max-height: 64px;" alt="Sentinela"/>
+                    </div>
+                    <div style="padding: 20px;">
+                        <p>Hola <strong><t t-out="object.partner_id.name or ''"/></strong>,</p>
+                        <p>Le informamos que se ha aplicado una <strong>prórroga de servicio</strong> a su contrato <strong><t t-out="object.name"/></strong>.</p>
+                        <p>Su servicio (<t t-out="object.product_id.name"/>) se ha reactivado y permanecerá operativo hasta el día:</p>
+                        <h3 style="text-align: center; color: #ff9800;"><t t-out="object.extension_due_date"/></h3>
+                        <p>Le solicitamos realizar su pago antes de esta fecha para evitar una nueva suspensión automática del servicio.</p>
+
+                        <div style="border: 1px solid #e0e0e0; border-radius: 8px; margin: 22px 0; overflow: hidden;">
+                            <div style="background: #0d2c4b; color: #ffffff; padding: 10px 16px; font-size: 14px; font-weight: bold; letter-spacing: .5px;">FORMAS DE PAGO</div>
+                            <div style="padding: 16px;">
+                                <t t-set="inv" t-value="object.invoice_ids.filtered(lambda i: i.move_type=='out_invoice' and i.state=='posted' and i.payment_state in ('not_paid','partial')).sorted('invoice_date_due')[:1]"/>
+                                <t t-set="pay_url" t-value="(inv.get_base_url() + inv.get_portal_url()) if inv else (object.get_base_url() + '/my/invoices')"/>
+                                <p style="margin: 0 0 6px; font-weight: bold; color: #198754;">💳 Pago en línea (tarjeta)</p>
+                                <div style="margin: 0 0 18px;">
+                                    <a t-att-href="pay_url" style="display: inline-block; background: #198754; color: #ffffff; text-decoration: none; padding: 11px 26px; border-radius: 6px; font-size: 14px; font-weight: bold;">Pagar ahora</a>
+                                    <span style="font-size: 11px; color: #888; margin-left: 8px;">seguro vía Stripe</span>
+                                </div>
+                                <p style="margin: 0 0 6px; font-weight: bold; color: #0d2c4b;">🏦 Transferencia o depósito en tienda</p>
+                                <t t-if="object.partner_id.requiere_factura">
+                                    <table style="font-size: 13px; border-collapse: collapse; margin: 2px 0 0;">
+                                        <tr><td style="color: #888; padding: 2px 12px 2px 0;">Banco</td><td><strong>BANORTE</strong></td></tr>
+                                        <tr><td style="color: #888; padding: 2px 12px 2px 0;">CLABE</td><td><strong>072818006680599252</strong></td></tr>
+                                        <tr><td style="color: #888; padding: 2px 12px 2px 0;">Cuenta</td><td><strong>0668059925</strong></td></tr>
+                                        <tr><td style="color: #888; padding: 2px 12px 2px 0;">Titular</td><td><strong>ENRIQUE GARZA CANTU</strong></td></tr>
+                                    </table>
+                                    <p style="font-size: 12px; color: #555; margin: 8px 0 0;">🏪 Depósito en <strong>7-Eleven</strong> con el número de cuenta <strong>0668059925</strong>.</p>
+                                </t>
+                                <t t-else="">
+                                    <table style="font-size: 13px; border-collapse: collapse; margin: 2px 0 0;">
+                                        <tr><td style="color: #888; padding: 2px 12px 2px 0;">Banco</td><td><strong>HSBC</strong></td></tr>
+                                        <tr><td style="color: #888; padding: 2px 12px 2px 0;">CLABE</td><td><strong>021818064871565017</strong></td></tr>
+                                        <tr><td style="color: #888; padding: 2px 12px 2px 0;">Cuenta</td><td><strong>6487156501</strong></td></tr>
+                                        <tr><td style="color: #888; padding: 2px 12px 2px 0;">Titular</td><td><strong>ENRIQUE GARZA CANTU</strong></td></tr>
+                                    </table>
+                                    <p style="font-size: 12px; color: #555; margin: 8px 0 0;">🏪 Depósito en <strong>OXXO</strong> con la tarjeta <strong>4213 1660 4133 2655</strong>.</p>
+                                </t>
+                                <div style="margin: 18px 0 0; text-align: center;">
+                                    <a t-att-href="'https://wa.me/528681254500?text=Hola%2C%20env%C3%ADo%20mi%20comprobante%20de%20pago%20del%20contrato%20' + object.name" style="display: inline-block; background: #25D366; color: #ffffff; text-decoration: none; padding: 11px 26px; border-radius: 6px; font-size: 14px; font-weight: bold;">📲 Enviar comprobante por WhatsApp</a>
+                                    <p style="font-size: 11px; color: #888; margin: 6px 0 0;">868 125 4500 · ✅ una vez validado, tu servicio se reactiva.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <p>Atentamente,<br/>El equipo de <strong>Sentinela</strong></p>
+                    </div>
+                    <div style="border-top: 1px solid #eee; margin-top: 8px; padding: 12px 20px; text-align: center; color: #888; font-size: 11px;">
+                        Sentinela — Seguridad y Conectividad · cobranza@sentinela.com.mx
+                    </div>
                 </div>
             </field>
         </record>
