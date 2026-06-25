@@ -295,14 +295,40 @@ class AccountMove(models.Model):
         template = self.env.ref('account.email_template_edi_invoice', raise_if_not_found=False)
         if not template:
             return False
+        Att = self.env['ir.attachment']
+        att_ids = []
+        # 1) PDF de la factura (el reporte CFDI reasignado en account.account_invoices).
+        #    El template account.email_template_edi_invoice NO trae reporte adjunto, así que
+        #    el PDF se genera y adjunta explícitamente para garantizar la entrega.
+        try:
+            pdf_content, _ctype = self.env['ir.actions.report']._render_qweb_pdf('account.account_invoices', self.ids)
+            pdf_att = Att.create({
+                'name': ("Factura_%s.pdf" % (self.name or 'CFDI')).replace('/', '_'),
+                'datas': base64.b64encode(pdf_content),
+                'res_model': 'account.move', 'res_id': self.id, 'mimetype': 'application/pdf',
+            })
+            att_ids.append(pdf_att.id)
+        except Exception as e:
+            _logger.warning("CFDI mail: no se pudo generar el PDF de %s: %s", self.name, e)
+        # 2) XML del CFDI timbrado (entrega fiscal completa).
+        if self.cfdi_xml:
+            xml_name = self.cfdi_xml_filename or ("CFDI_%s.xml" % (self.cfdi_uuid or self.name)).replace('/', '_')
+            xml_att = Att.create({
+                'name': xml_name, 'datas': self.cfdi_xml,
+                'res_model': 'account.move', 'res_id': self.id, 'mimetype': 'application/xml',
+            })
+            att_ids.append(xml_att.id)
+        # CC: a nivel cliente (invoice_cc_partner_ids) + a nivel suscripción.
         empty = self.env['res.partner']
         cc_cli = getattr(self.partner_id, 'invoice_cc_partner_ids', empty)
         cc_sub = self.subscription_ids.mapped('extra_invoice_partner_ids') if 'subscription_ids' in self._fields else empty
         cc_partners = (cc_sub | cc_cli).filtered(lambda p: p.email and p.id != self.partner_id.id)
-        email_values = {'email_cc': ','.join(cc_partners.mapped('email'))} if cc_partners else None
+        email_values = {'attachment_ids': att_ids}
+        if cc_partners:
+            email_values['email_cc'] = ','.join(cc_partners.mapped('email'))
         template.send_mail(self.id, force_send=True, email_values=email_values)
-        _logger.info("CFDI mail: factura %s enviada a %s%s.", self.name, self.partner_id.email,
-                     (" (CC: %s)" % email_values['email_cc']) if email_values else "")
+        _logger.info("CFDI mail: factura %s enviada a %s (adjuntos: %s%s).", self.name, self.partner_id.email,
+                     att_ids, (" CC: %s" % email_values['email_cc']) if email_values.get('email_cc') else "")
         return True
 
     def action_cfdi_stamp_prodigia(self):
