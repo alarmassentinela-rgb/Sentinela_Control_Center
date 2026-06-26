@@ -37,6 +37,25 @@
                 </group>
             </page>
             
+            <!-- Extensión al lado del teléfono principal -->
+            <xpath expr="//field[@name='phone']" position="after">
+                <field name="phone_extension" class="oe_inline" placeholder="ext."/>
+            </xpath>
+            <!-- Teléfonos / celulares adicionales (lista, agrega los que quieras) -->
+            <xpath expr="//notebook" position="inside">
+                <page string="📞 Teléfonos" name="phones_extra">
+                    <field name="phone_line_ids">
+                        <list editable="bottom">
+                            <field name="sequence" widget="handle"/>
+                            <field name="name" placeholder="Oficina / Casa / Celular / WhatsApp"/>
+                            <field name="phone" widget="phone"/>
+                            <field name="extension"/>
+                            <field name="note"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
+
             <!-- Force translations for standard fields if missing -->
             <xpath expr="//field[@name='user_id']" position="attributes">
                 <attribute name="string">Vendedor</attribute>

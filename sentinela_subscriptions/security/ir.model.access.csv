@@ -1,4 +1,5 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_res_partner_phone_user,res.partner.phone.user,model_res_partner_phone,base.group_user,1,1,1,1
 access_subscription_user,sentinela.subscription.user,model_sentinela_subscription,group_subscription_user,1,1,1,0
 access_subscription_manager,sentinela.subscription.manager,model_sentinela_subscription,group_subscription_manager,1,1,1,1
 access_service_definition_user,sentinela.service.definition.user,model_sentinela_service_definition,group_subscription_user,1,0,0,0

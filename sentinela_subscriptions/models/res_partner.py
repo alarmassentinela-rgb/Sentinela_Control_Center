@@ -8,6 +8,10 @@ _logger = logging.getLogger(__name__)
 class ResPartner(models.Model):
     _inherit = 'res.partner'
 
+    # --- Teléfonos: extensión del principal + lista de números adicionales ---
+    phone_extension = fields.Char(string='Ext.', help='Extensión del teléfono principal.')
+    phone_line_ids = fields.One2many('res.partner.phone', 'partner_id', string='Teléfonos adicionales')
+
     # --- SentiCar / Traccar (usuario del cliente en la plataforma propia) ---
     senticar_user_id = fields.Integer(string='ID Usuario SentiCar', copy=False,
         help="Identificador del usuario de este cliente en SentiCar/Traccar. Se crea al dar de alta su primer GPS.")
@@ -161,3 +165,16 @@ class ResPartner(models.Model):
                 partner.display_name = partner.name
         else:
             super()._compute_display_name()
+
+
+class ResPartnerPhone(models.Model):
+    _name = 'res.partner.phone'
+    _description = 'Teléfono adicional del contacto'
+    _order = 'sequence, id'
+
+    partner_id = fields.Many2one('res.partner', string='Contacto', required=True, ondelete='cascade', index=True)
+    sequence = fields.Integer(default=10)
+    name = fields.Char(string='Etiqueta', help='Ej: Oficina, Casa, Celular, WhatsApp, Recepción…')
+    phone = fields.Char(string='Número', required=True)
+    extension = fields.Char(string='Ext.')
+    note = fields.Char(string='Nota')
