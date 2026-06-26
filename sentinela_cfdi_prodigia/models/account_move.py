@@ -350,6 +350,26 @@ class AccountMove(models.Model):
                      (" CC %s" % email_cc) if email_cc else "")
         return True
 
+    def action_cfdi_send_email_button(self):
+        """Botón 'Enviar al cliente': manda el correo branded (logo, banco, pago en tienda,
+        WhatsApp, Telegram botón+QR, PDF+XML). USAR ESTE, no el 'Enviar e imprimir' nativo de
+        Odoo (que envuelve el correo en su layout, agrega su propio botón de portal y NO trae
+        el QR inline)."""
+        self.ensure_one()
+        if not self.partner_id.email:
+            raise UserError(_('El cliente no tiene correo configurado.'))
+        self._cfdi_send_invoice_email()
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Correo enviado'),
+                'message': _('Enviada a %s.') % self.partner_id.email,
+                'type': 'success',
+                'sticky': False,
+            },
+        }
+
     def action_cfdi_stamp_prodigia(self):
         for move in self:
             if move.state != 'posted':

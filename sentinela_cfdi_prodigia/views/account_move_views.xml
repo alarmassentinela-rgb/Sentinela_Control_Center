@@ -16,6 +16,11 @@
                         type="object"
                         class="btn-danger"
                         invisible="cfdi_status != 'valid'"/>
+                <button name="action_cfdi_send_email_button"
+                        string="Enviar al cliente"
+                        type="object"
+                        class="btn-primary"
+                        invisible="state != 'posted' or move_type not in ('out_invoice', 'out_refund')"/>
             </xpath>
             <xpath expr="//notebook" position="inside">
                 <page string="Facturación Mexicana (Prodigia)" name="prodigia_mx">
