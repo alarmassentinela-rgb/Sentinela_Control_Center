@@ -2,7 +2,7 @@
 
 Sesión enfocada en **facturación CFDI**: por qué no se timbró la factura de Rocío Calderón, función de **cancelación ante el SAT**, rediseño del **formato de factura/remisión**, y **correo branded** de facturas/remisiones. (Ese día hubo también commits del Portal COC — WS-2 aislamiento/record rules y runbook deploy — que son otra línea de trabajo, no cubierta aquí.)
 
-**Versiones finales:** `sentinela_cfdi_prodigia 18.0.1.3.8` · `sentinela_subscriptions 18.0.1.4.10`
+**Versiones finales:** `sentinela_cfdi_prodigia 18.0.1.3.14` · `sentinela_subscriptions 18.0.1.4.10` · `sentinela_syscom 18.0.1.8.5`
 
 ---
 
@@ -62,17 +62,53 @@ Servicio corregido en la sub: producto **1966 "PLAN INTERNET 20MB/7MB" $509.26**
 
 ---
 
+## Continuación de la sesión (cambios posteriores al primer corte)
+
+### A. Envío de factura/remisión por correo (cfdi 18.0.1.3.9 → .3.14)
+- **Timbrar = timbrar + enviar:** `action_cfdi_stamp_prodigia` ahora, tras timbrar OK, manda el correo branded al cliente (manual y lote). Se quitó el envío duplicado del cron. Context `skip_cfdi_email=True` para omitir.
+- **Botón "Timbrar" ya muestra el error del PAC** (antes lo atrapaba en silencio → "no hacía nada"): si queda en `error`, devuelve una notificación roja con el `cfdi_message`.
+- **Botón propio "Enviar al cliente"** (correo branded) + **se OCULTÓ el "Enviar e imprimir" nativo de Odoo** (`action_invoice_sent`, 2 variantes → `invisible=1`). El nativo envolvía en su layout, metía su propio "Ver Factura" al portal y NO traía el QR.
+- **Botón "Ver Factura (PDF)"** en el correo → abre/descarga el PDF directo (portal `report_type=pdf` + token); además del "Ver y Pagar en Línea".
+- **Wizard de envío** (`sentinela.cfdi.send.wizard`): "Enviar al cliente" abre ventana para ELEGIR a qué correos enviar (contactos del cliente precargados, con nombre+correo) y/o capturar **correos manuales**. `_cfdi_send_invoice_email` acepta `force_recipients`/`force_to`/`extra_bcc`.
+- `_cfdi_send_invoice_email` reescrito: envía por `ir.mail_server` con **QR Telegram inline (cid)** (Gmail bloquea base64), PDF+XML, CC/BCC. Remisiones unificadas a este método.
+
+### B. INV/2026/00169 no timbraba + Clave SAT en el cron de Syscom (syscom 18.0.1.8.2)
+- **Causa:** la batería LK5.512 no tenía Clave SAT (`l10n_mx_edi_code_sat`) → el XML salía con `01010101` → el SAT rechaza el 8% frontera (`[CFDI40999]`). El "no hacía nada" del botón era el error silencioso (ya corregido, ver A).
+- **Hueco encontrado:** el cron de Syscom solo guardaba `syscom_sat_description`/`syscom_sat_unit_key` (informativos); **NO** llenaba `l10n_mx_edi_code_sat` (solo el wizard de import lo hacía). La API SÍ trae `sat_key` (ej. 26111701) en listado y detalle.
+- **Fix:** el cron ahora llena `l10n_mx_edi_code_sat`/`l10n_mx_edi_um_code_sat` desde `sat_key`/`clave_unidad_sat` en Fase 1 y Fase 2, **solo si están vacías**. ~9,752 productos vendibles sin clave se irán llenando en las nocturnas.
+- **00169 timbrada:** clave 26111701 al producto, UUID **B39769F4-54DA-494F-9BA6-9A61F0F8ABA3**.
+
+### C. Bobinas de cable: vender por metro Y por bobina (syscom 18.0.1.8.3, migración de datos)
+- Modelo del cliente: **compra solo por bobina; vende por metro y también bobina completa.**
+- Solución UdM: cada bobina con **UdM venta = Metro** y **UdM compra = Bobina{N}** (misma categoría Length → en la línea de venta eliges "m" o "Bobina{N}"). UdM creadas: Bobina100/152/305/500/1000 (factor 1/metros).
+- **Precio y costo por metro** = precio/costo de bobina ÷ metros (los metros se parsean del nombre). Vender bobina completa da el mismo total (±centavos por redondeo).
+- Corrido en **STAGING (207/209)** y **PROD (208/210)**. 2 excepciones: id 4939 "Bobina o Solenoide" (no es cable) y id 927 (tiene movimientos de stock → Odoo bloquea cambio de UdM).
+- **Cron parcheado** (`_syscom_cost_to_uom`): cuando `uom_po_id != uom_id` (misma categoría), guarda `standard_price` **por metro** (costo ÷ metros) → la nocturna no regresa el costo a "por bobina".
+
+### D. Búsqueda de productos tolerante a guiones (syscom 18.0.1.8.4 → .8.5)
+- Problema: `default_code` con guiones (`PRO-CAT-5E`) no se encontraba al teclear `procat5e`.
+- Fix: campo **`code_normalized`** (código sin guiones/espacios, minúsculas, indexado) en `product.template` y `product.product` + override `name_search` que mezcla los resultados normalizados con el buscador nativo. Verificado en prod.
+
+### E. Otra línea de trabajo (NO de esta sesión, en paralelo)
+Hay commits `feat(coc)`/`docs(releases)` del **Portal COC Sprint-02** (WS-5 auth: handshake sesión efímera, OTP desacoplado, contraseñas Argon2, sesiones/dispositivos/magic links, integración EvoApi como proveedor OTP real). Workstream aparte; ver `releases/`.
+
+---
+
 ## Pendientes para la próxima sesión
 1. **Botón "Ver y Pagar en Línea":** no hay pasarela de pago activa. Decidir: activar una (Mercado Pago / Stripe / Conekta, con credenciales) **o** relabelar a "Ver factura en línea" mientras tanto.
-2. **Verificar el QR de Telegram inline en Gmail** (cliente real). Si saliera como adjunto en vez de inline, pasar el correo a estructura `multipart/related`.
-3. **Folio 00171 reusado / acuse perdido:** si se necesita el acuse de cancelación de 12458E1C, descargarlo del portal Prodigia. Evaluar política para no borrar facturas con CFDI (aunque sea cancelado).
+2. **Verificar el QR de Telegram inline en Gmail** (prueba enviada a alarmassentinela@gmail.com). Si sale como adjunto, pasar el correo a `multipart/related`.
+3. **Folio 00171 reusado / acuse perdido:** acuse de cancelación de 12458E1C solo en portal Prodigia. Evaluar política para no borrar facturas con CFDI (aunque sea cancelado).
 4. **Go-live facturación (≈1-jul):** reactivar crones id 39/55/56 (ver [[project_email_freeze_migracion]]).
-5. **Limpieza opcional** de los 163 mail.mail en `cancel`.
-6. **Warning menor:** `sentinela_subscriptions/__manifest__.py` sin clave `license` (Odoo asume LGPL-3).
+5. **Bobina id 927** (305m Cat5e, con stock): migrar a metro = archivar + crear nueva, o limpiar su historial de inventario. Y **bobinas nuevas de Syscom** entran como "Units" (correr esta migración periódicamente o configurar auto).
+6. **Decimales del precio de bobina:** si quieren que vender bobina completa dé el total EXACTO, subir decimales del precio por metro.
+7. **Lista de facturas:** el "Send" nativo masivo de Odoo (en la vista lista) sigue visible — ocultarlo si se quiere.
+8. **Limpieza opcional** de los 163 mail.mail en `cancel`; `sentinela_subscriptions/__manifest__.py` sin clave `license` (warning menor).
 
 ## Verificaciones reales hechas
 - Cancelación de Rocío: confirmada por respuesta del SAT (statusOk/201/cancelados=1).
-- Timbre 404: XML con Total 550.00, MetodoPago PPD, descripción por mes.
-- Formato: render HTML confirmó cobranza@/régimen/uso/condiciones(Crédito)/banco(Banorte vs HSBC)/notas en banda/sin referencia.
-- Correo: envíos por `ir.mail_server` con message-id devuelto; QR disponible en el método real.
-- **Sin validar:** render inline del QR específicamente en Gmail (cliente real).
+- Timbre 404 (Rocío) y 399 (00169): timbrados válidos, XML correcto (PPD, total, descripción por mes / clave 26111701).
+- Formato: render HTML confirmó cobranza@/régimen/uso(G03-desc)/condiciones(Crédito)/banco(Banorte vs HSBC)/notas en banda/sin referencia/botones PDF+pago.
+- Envíos por `ir.mail_server` con message-id; wizard de envío probado (a egarza@) con destinatarios manuales.
+- Bobinas: UdM y precio/costo por metro verificados en prod (ej. 152 m → $52.21/m, costo $29.99/m); helper del cron convierte costo/metro OK.
+- Búsqueda sin guiones verificada en prod (000-15641-001 ← "00015641001").
+- **Sin validar:** render inline del QR específicamente en Gmail (cliente real); el botón "pago en línea" sin pasarela activa.
