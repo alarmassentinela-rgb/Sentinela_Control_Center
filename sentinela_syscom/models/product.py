@@ -1,4 +1,5 @@
 from odoo import models, fields, api
+import re
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -32,8 +33,35 @@ class _SyscomRateLimiter:
             self._next = now + self._min_interval
 
 
+def _normalize_code(value):
+    """Deja solo letras y dígitos en minúscula. 'PRO-CAT-5E' -> 'procat5e'."""
+    return re.sub(r'[^a-z0-9]', '', (value or '').lower()) or False
+
+
 class ProductTemplate(models.Model):
     _inherit = 'product.template'
+
+    # Búsqueda tolerante a guiones/espacios: 'procat5e' encuentra 'PRO-CAT-5E'.
+    code_normalized = fields.Char(string='Código (búsqueda)', compute='_compute_code_normalized',
+                                  store=True, index=True)
+
+    @api.depends('default_code')
+    def _compute_code_normalized(self):
+        for p in self:
+            p.code_normalized = _normalize_code(p.default_code)
+
+    @api.model
+    def name_search(self, name='', args=None, operator='ilike', limit=100):
+        res = super().name_search(name, args, operator, limit)
+        if name and isinstance(name, str) and operator in ('ilike', 'like', '=ilike', '='):
+            norm = _normalize_code(name)
+            if norm:
+                seen = {r[0] for r in res}
+                extra = self.search((args or []) + [('code_normalized', operator, norm)], limit=limit or None)
+                res = res + [(p.id, p.display_name) for p in extra if p.id not in seen]
+                if limit:
+                    res = res[:limit]
+        return res
 
     syscom_id = fields.Char(string='ID de Producto Syscom')
     syscom_model = fields.Char(string='Modelo Syscom')
@@ -590,6 +618,32 @@ class ProductTemplate(models.Model):
         except Exception as e:
             _logger.exception("SYSCOM: error fatal en el cron: %s", e)
             send_telegram(f"🚨 *ERROR ROBOT:* {str(e)}")
+
+
+class ProductProduct(models.Model):
+    _inherit = 'product.product'
+
+    # Búsqueda tolerante a guiones/espacios en la variante (la que se busca al facturar/comprar).
+    code_normalized = fields.Char(string='Código (búsqueda)', compute='_compute_code_normalized',
+                                  store=True, index=True)
+
+    @api.depends('default_code')
+    def _compute_code_normalized(self):
+        for p in self:
+            p.code_normalized = _normalize_code(p.default_code)
+
+    @api.model
+    def name_search(self, name='', args=None, operator='ilike', limit=100):
+        res = super().name_search(name, args, operator, limit)
+        if name and isinstance(name, str) and operator in ('ilike', 'like', '=ilike', '='):
+            norm = _normalize_code(name)
+            if norm:
+                seen = {r[0] for r in res}
+                extra = self.search((args or []) + [('code_normalized', operator, norm)], limit=limit or None)
+                res = res + [(p.id, p.display_name) for p in extra if p.id not in seen]
+                if limit:
+                    res = res[:limit]
+        return res
 
 
 class AccountMove(models.Model):
