@@ -19,3 +19,11 @@ def record(db, event_type, *, success=True, partner_id=None, identity_id=None,
     _logger.info("auth_event type=%s ok=%s phone=%s ip=%s device=%s detail=%s",
                  event_type, success, phone, ip, device, detail)
     return ev
+
+
+def list_history(db, partner_id, limit=50, offset=0):
+    """Historial de accesos del cliente (login/refresh/logout/new_device/...)."""
+    return (db.query(AuthAuditEvent)
+            .filter(AuthAuditEvent.partner_id == partner_id)
+            .order_by(AuthAuditEvent.created_at.desc())
+            .limit(limit).offset(offset).all())

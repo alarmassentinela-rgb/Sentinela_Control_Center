@@ -55,8 +55,10 @@ def otp_request(body: OtpRequestIn, request: Request, response: Response,
 
 @router.post("/otp/verify")
 def otp_verify(body: OtpVerifyIn, request: Request, response: Response,
-               db=Depends(deps.get_db), odoo=Depends(deps.get_odoo_client)):
-    r = otp_service.verify_otp(db, odoo, body.phone, body.code, _ip(request), _device(request, body.device), _ua(request))
+               db=Depends(deps.get_db), odoo=Depends(deps.get_odoo_client),
+               notifier=Depends(deps.get_notifier)):
+    r = otp_service.verify_otp(db, odoo, body.phone, body.code, _ip(request),
+                               _device(request, body.device), _ua(request), notifier=notifier)
     if r.get("ok"):
         return {k: v for k, v in r.items() if k != "ok"}
     response.status_code = (status.HTTP_429_TOO_MANY_REQUESTS if r.get("error") == "rate"

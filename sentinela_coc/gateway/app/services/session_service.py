@@ -9,7 +9,7 @@ from ..clock import utcnow
 from sqlalchemy import update
 
 from ..config import settings
-from ..models import PortalIdentity, PortalSession, RefreshToken
+from ..models import Device, PortalIdentity, PortalSession, RefreshToken
 from ..security.hashing import gen_token, hash_secret
 from ..security.tokens import make_access_token
 from . import audit
@@ -48,7 +48,25 @@ def _tokens(db, sess):
             "expires_in": settings.jwt_access_ttl_min * 60, "session_id": sess.id}
 
 
-def create_session(db, odoo, identity, partner_id, ip, device, ua):
+def _touch_device(db, identity_id, device_id, label, ip, ua):
+    """Upsert del dispositivo. Devuelve (device, es_nuevo)."""
+    if not device_id:
+        return None, False
+    dev = db.query(Device).filter_by(identity_id=identity_id, device_id=device_id).one_or_none()
+    is_new = dev is None
+    if is_new:
+        dev = Device(identity_id=identity_id, device_id=device_id, label=label or device_id,
+                     last_ip=ip, last_user_agent=(ua or "")[:400] or None)
+        db.add(dev)
+    else:
+        dev.last_seen = utcnow()
+        dev.last_ip = ip
+        dev.last_user_agent = (ua or "")[:400] or None
+    db.flush()
+    return dev, is_new
+
+
+def create_session(db, odoo, identity, partner_id, ip, device, ua, notifier=None):
     res = odoo.open_session(partner_id, settings.jwt_access_ttl_min * 60, device, ip, ua)
     if not res or not res.get("ok"):
         return None
@@ -56,12 +74,66 @@ def create_session(db, odoo, identity, partner_id, ip, device, ua):
     sess = PortalSession(
         identity_id=identity.id, partner_id=partner_id,
         odoo_uid=res.get("uid"), odoo_session_id=res.get("session_id"),
-        device_label=device, ip=ip, user_agent=(ua or "")[:400] or None,
+        device_id=device, device_label=device, ip=ip, user_agent=(ua or "")[:400] or None,
         last_seen_at=now, expires_at=now + timedelta(days=settings.jwt_refresh_ttl_days),
     )
     db.add(sess)
     db.flush()
+    _dev, is_new_device = _touch_device(db, identity.id, device, device, ip, ua)
+    if is_new_device:
+        audit.record(db, "login_new_device", success=True, identity_id=identity.id,
+                     partner_id=partner_id, session_id=sess.id, device=device, ip=ip, user_agent=ua)
+        if notifier:
+            try:
+                notifier.notify_new_login(identity, device or "desconocido", ip)
+            except Exception:
+                pass
     return _tokens(db, sess)
+
+
+def serialize_session(s, current_sid=None):
+    return {
+        "id": s.id,
+        "device": s.device_label or s.device_id,
+        "ip": s.ip,
+        "created_at": s.created_at.isoformat() if s.created_at else None,
+        "last_seen_at": s.last_seen_at.isoformat() if s.last_seen_at else None,
+        "current": s.id == current_sid,
+    }
+
+
+def list_active_sessions(db, partner_id):
+    return (db.query(PortalSession)
+            .filter(PortalSession.partner_id == partner_id, PortalSession.revoked.is_(False))
+            .order_by(PortalSession.created_at.desc()).all())
+
+
+def close_session_by_id(db, odoo, partner_id, sid, ip=None, ua=None):
+    s = get_session(db, sid)
+    if not s or s.partner_id != partner_id:   # ownership check
+        return False
+    return revoke_session(db, odoo, s, event="logout", ip=ip, ua=ua)
+
+
+def close_all_for_partner(db, odoo, partner_id, except_sid=None, ip=None, ua=None):
+    n = 0
+    for s in db.query(PortalSession).filter_by(partner_id=partner_id, revoked=False).all():
+        if except_sid and s.id == except_sid:
+            continue
+        if revoke_session(db, odoo, s, event="revoke_all", ip=ip, ua=ua):
+            n += 1
+    return n
+
+
+def revoke_all_on_credential_change(db, odoo, identity_id, keep_session_id=None, ip=None, ua=None):
+    """Llamado por W5.8 al cambiar credenciales críticas (contraseña, etc.)."""
+    n = 0
+    for s in db.query(PortalSession).filter_by(identity_id=identity_id, revoked=False).all():
+        if keep_session_id and s.id == keep_session_id:
+            continue
+        if revoke_session(db, odoo, s, event="revoke_credentials_change", ip=ip, ua=ua):
+            n += 1
+    return n
 
 
 def _revoke_family(db, odoo, family):

@@ -37,7 +37,7 @@ def request_otp(db, provider, phone, ip, device, channel="whatsapp"):
     return {"ok": True}
 
 
-def verify_otp(db, odoo, phone, code, ip, device, ua):
+def verify_otp(db, odoo, phone, code, ip, device, ua, notifier=None):
     allowed, reason = rate_limit.check_otp_verify_allowed(db, phone, ip)
     if not allowed:
         audit.record(db, "otp_verify", success=False, phone=phone, ip=ip, device=device, detail="rate:" + reason)
@@ -73,7 +73,7 @@ def verify_otp(db, odoo, phone, code, ip, device, ua):
         return {"ok": False, "error": "invalid"}
 
     identity = session_service.get_or_create_identity(db, phone, partner_id)
-    tokens = session_service.create_session(db, odoo, identity, partner_id, ip, device, ua)
+    tokens = session_service.create_session(db, odoo, identity, partner_id, ip, device, ua, notifier=notifier)
     if not tokens:
         audit.record(db, "login", success=False, phone=phone, ip=ip, device=device,
                      partner_id=partner_id, detail="odoo_open_failed")

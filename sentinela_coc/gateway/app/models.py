@@ -6,7 +6,7 @@ Fechas en UTC naïve (datetime.utcnow) para portabilidad SQLite(tests)↔Postgre
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .clock import utcnow
@@ -45,6 +45,7 @@ class PortalSession(Base):
     access_jti: Mapped[str | None] = mapped_column(String(32), index=True)
     refresh_family: Mapped[str] = mapped_column(String(32), default=_uuid, index=True)
 
+    device_id: Mapped[str | None] = mapped_column(String(120), index=True)   # fingerprint del cliente
     device_label: Mapped[str | None] = mapped_column(String(120))
     ip: Mapped[str | None] = mapped_column(String(64))
     user_agent: Mapped[str | None] = mapped_column(String(400))
@@ -68,6 +69,21 @@ class RefreshToken(Base):
     used: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class Device(Base):
+    __tablename__ = "trusted_device"
+    __table_args__ = (UniqueConstraint("identity_id", "device_id", name="uq_identity_device"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    identity_id: Mapped[str] = mapped_column(ForeignKey("portal_identity.id", ondelete="CASCADE"), index=True)
+    device_id: Mapped[str] = mapped_column(String(120), index=True)   # fingerprint del cliente
+    label: Mapped[str | None] = mapped_column(String(120))
+    trusted: Mapped[bool] = mapped_column(Boolean, default=False)
+    first_seen: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    last_seen: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    last_ip: Mapped[str | None] = mapped_column(String(64))
+    last_user_agent: Mapped[str | None] = mapped_column(String(400))
 
 
 class OtpChallenge(Base):
