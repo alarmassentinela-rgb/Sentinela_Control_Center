@@ -22,6 +22,15 @@
                         class="btn-primary"
                         invisible="state != 'posted' or move_type not in ('out_invoice', 'out_refund')"/>
             </xpath>
+            <!-- Ocultar el "Enviar" nativo de Odoo (action_invoice_sent, 2 variantes por estado):
+                 confunde porque envuelve el correo en el layout de Odoo y NO trae el QR.
+                 Dejamos solo nuestro botón "Enviar al cliente". -->
+            <xpath expr="(//button[@name='action_invoice_sent'])[1]" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="(//button[@name='action_invoice_sent'])[2]" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
             <xpath expr="//notebook" position="inside">
                 <page string="Facturación Mexicana (Prodigia)" name="prodigia_mx">
                     <group>
