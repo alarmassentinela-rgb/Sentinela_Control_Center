@@ -334,7 +334,15 @@ class ProductTemplate(models.Model):
                         if (lp or 0.0) <= 1.0:
                             v['list_price'] = (msrp * tc) if msrp > 0 else (costo * tc * 1.30)
                         try:
-                            self.browse(tid).write(v)
+                            rec = self.browse(tid)
+                            # ClaveProdServ/ClaveUnidad SAT: llenar SOLO si están vacías (no pisar lo manual).
+                            if 'l10n_mx_edi_code_sat' in rec._fields:
+                                if p.get('sat_key') and not rec.l10n_mx_edi_code_sat:
+                                    v['l10n_mx_edi_code_sat'] = p['sat_key']
+                                _um = (p.get('unidad_de_medida') or {}).get('clave_unidad_sat')
+                                if _um and not rec.l10n_mx_edi_um_code_sat:
+                                    v['l10n_mx_edi_um_code_sat'] = _um
+                            rec.write(v)
                             stats['updated'] += 1
                         except Exception:
                             stats['errors'] += 1
@@ -430,6 +438,13 @@ class ProductTemplate(models.Model):
                             'syscom_last_update': fields.Datetime.now(),
                         }
                         v.update(self._syscom_extract_enrichment(dj))
+                        # ClaveProdServ/ClaveUnidad SAT: llenar SOLO si están vacías.
+                        if 'l10n_mx_edi_code_sat' in rec._fields:
+                            if dj.get('sat_key') and not rec.l10n_mx_edi_code_sat:
+                                v['l10n_mx_edi_code_sat'] = dj['sat_key']
+                            _um = (dj.get('unidad_de_medida') or {}).get('clave_unidad_sat')
+                            if _um and not rec.l10n_mx_edi_um_code_sat:
+                                v['l10n_mx_edi_um_code_sat'] = _um
                         if (rec.list_price or 0.0) <= 1.0:
                             v['list_price'] = (msrp * tc) if msrp > 0 else (costo * tc * 1.30)
                         rec.write(v)
