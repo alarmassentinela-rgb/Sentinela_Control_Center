@@ -16,7 +16,8 @@
 - [x] Sin secretos/OTP en logs ✅
 - [x] Magic links un-solo-uso; refresh rotativo + reuse ✅
 - [x] Hallazgo `sign.document` corregido + test de regresión ✅
-- [ ] `/coc/internal/*` confirmado restringido a LAN en Producción ⏳
+- [x] **Restricción LAN** de `/coc/internal/*`: allowlist CIDR implementado y **validado** (enforcement OK) ✅; en Producción se fija `coc_internal_allowed_cidrs` a la red del Gateway ⏳
+- [x] Robustez: `session_id` malformado → `not_found` (sin 500) ✅
 
 ## C. Rendimiento
 - [x] Record rules sobre volumen real: 0.006 s ✅
@@ -26,7 +27,7 @@
 ## D. Observabilidad
 - [x] Logs estructurados + `request_id` ✅
 - [x] `/metrics`, `/v1/providers/health`, `/health` ✅
-- [ ] Alertas configuradas en el monitoreo (proveedor down, error-rate, reuse) ⏳
+- [x] **Alert checker → Telegram** entregado (`sentinela_coc/infra/alerts/`) ✅; programar en cron de Producción ⏳
 
 ## E. Documentación
 - [x] Release Notes ✅
