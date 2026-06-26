@@ -13,6 +13,7 @@ Garantías del modelo de confianza:
 - Seguro ante reinicios: la sesión vive en el FilesystemSessionStore (persistente).
 """
 import hmac
+import ipaddress
 import logging
 import re
 from datetime import timedelta
@@ -64,6 +65,28 @@ class CocSessionService(models.AbstractModel):
             _logger.exception('COC: fallo al escribir auditoría')
         _logger.info('COC auth event=%s ok=%s partner=%s user=%s ip=%s detail=%s',
                      event_type, success, partner and partner.id, user and user.id, ip, detail)
+
+    # ---- restricción de origen (LAN) — defensa en profundidad ----
+    @api.model
+    def _check_origin(self, remote_addr):
+        """Allowlist de CIDRs (param `sentinela_api.coc_internal_allowed_cidrs`).
+        Vacío = sin restricción (el secreto protege). En PROD se configura a la
+        red/IP del Gateway para que /coc/internal/* solo se acepte desde la LAN."""
+        raw = self.env["ir.config_parameter"].sudo().get_param("sentinela_api.coc_internal_allowed_cidrs") or ""
+        cidrs = [c.strip() for c in raw.split(",") if c.strip()]
+        if not cidrs:
+            return True
+        try:
+            ip = ipaddress.ip_address(remote_addr or "")
+        except ValueError:
+            return False
+        for c in cidrs:
+            try:
+                if ip in ipaddress.ip_network(c, strict=False):
+                    return True
+            except ValueError:
+                continue
+        return False
 
     # ---- secreto compartido (fail-closed, comparación constante) ----
     @api.model
@@ -143,7 +166,10 @@ class CocSessionService(models.AbstractModel):
     @api.model
     def check_portal_session(self, session_id):
         store = root.session_store
-        sess = store.get(session_id or '')
+        try:
+            sess = store.get(session_id or '')
+        except Exception:
+            return {'ok': False, 'error': 'not_found'}   # sid malformado
         if not sess or not sess.get('uid') or not sess.get('coc_managed'):
             return {'ok': False, 'error': 'not_found'}
         user = self.env['res.users'].sudo().browse(sess['uid'])
@@ -161,7 +187,10 @@ class CocSessionService(models.AbstractModel):
     @api.model
     def close_portal_session(self, session_id):
         store = root.session_store
-        sess = store.get(session_id or '')
+        try:
+            sess = store.get(session_id or '')
+        except Exception:
+            return {'ok': False, 'error': 'not_found'}   # sid malformado
         if sess and sess.get('uid') and sess.get('coc_managed'):
             uid = sess.get('uid')
             store.delete(sess)
