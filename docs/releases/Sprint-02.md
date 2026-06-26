@@ -12,6 +12,7 @@ Construir la identidad del Portal: el cliente se autentica por **OTP WhatsApp** 
 - **W5.2 — Proveedor OTP DESACOPLADO:** interfaz `OtpProvider` + `MockOtpProvider` (dev/test) + `EvoApiOtpProvider` (stub, se cablea por config). Cliente Odoo desacoplado (`HttpOdooClient` + `FakeOdooClient`).
 - **W5.3 — Flujo OTP completo:** OTP **solo como hash** (pepper), **TTL 5 min**, **3 intentos**, **cooldown**, **rate limiting por IP/teléfono/dispositivo**, **auditoría completa**. Endpoints `/v1/auth/otp/request|verify`.
 - **W5.4 (parcial) — Sesiones cortas:** access JWT corto + **refresh rotativo de un solo uso** con **detección de reuse** (revoca familia) + `/refresh` + `/logout`. Autorización sigue en Odoo (sesión efímera del handshake).
+- **W5.7 — E2E Gateway↔Odoo con datos reales (STAGING):** endpoint Odoo `/coc/internal/identity/resolve` (teléfono→partner); `HttpOdooClient` real cableado; **refresh endurecido contra concurrencia** (claim atómico `UPDATE..WHERE used=false`). EvoApi sigue intercambiable (Mock OTP en pruebas).
 
 ## Commits
 | Hash | Fecha | Descripción |
@@ -20,6 +21,7 @@ Construir la identidad del Portal: el cliente se autentica por **OTP WhatsApp** 
 | `5b4bc1a` | 26-jun | feat(coc): WS-5 plan (sesiones cortas, sin API keys) + **W5.1 capa de datos gateway** |
 | `4bf6c19` | 26-jun | feat(coc): **W5.6 handshake** — sesión Odoo efímera del usuario portal (sin API keys) |
 | `f4be940` | 26-jun | feat(coc): **W5.2/W5.3** — OTP desacoplado (interfaz+Mock) + flujo + sesiones cortas |
+| `0e739c1` | 26-jun | feat(coc): **W5.7** — flujo auth E2E Gateway↔Odoo validado en STAGING (datos reales) |
 
 ## Riesgos
 - 🔴 Suplantación de `partner_id` en el handshake → mitigación: endpoint interno con **secreto compartido**, solo LAN; el `partner_id` lo fija Odoo tras la verificación OTP.
@@ -46,6 +48,7 @@ Construir la identidad del Portal: el cliente se autentica por **OTP WhatsApp** 
   Escenarios de error: partner inexistente ✅ · usuario deshabilitado ✅ · partner sin usuario portal (lazy) ✅ · sesión expirada ✅ · secreto inválido (forbidden) ✅ · intentos repetidos ✅ · **concurrentes (5 opens → 1 usuario)** ✅.
 - **Suite automatizada Odoo:** 19/19 verde (incluye `test_coc_session`). Reinicio del Gateway: cubierto por diseño (el `odoo_session_id` vive en `portal_session`, gateway stateless).
 - **W5.2/W5.3 — Suite automatizada del Gateway (SQLite + Mock OTP + Odoo Fake, SIN servicios externos): 12/12 verde.** Cubre: login end-to-end (access+refresh), OTP solo-hash, bloqueo tras 3 intentos, expiración, cooldown, rate-limit por teléfono, rotación de refresh + **detección de reuse** (revoca familia), logout, teléfono no-cliente (respuesta **neutra**), auditoría completa.
+- **W5.7 — E2E contra STAGING real (Mock OTP + `HttpOdooClient` real): 8/8 verde.** Perfiles validados con datos reales: cliente **nuevo** (creación lazy del usuario portal), **existente**, **empresarial** (25742), **multi-servicio** (25619), **suspendido** (25216, login OK), **usuario portal preexistente** (25757). Más: **concurrencia** de creación lazy (5 opens → sin duplicados), **refresh single-use + reuse** (revoca familia), **logout durante sesiones activas** (cierra la suya, las demás siguen). En cada login la **sesión Odoo real** devuelve el partner correcto en `/v1/me` (record rules WS-2). Datos de prueba creados y limpiados (rollback de teléfonos + borrado de temporales).
 
 ## Bugs
 - Ninguno en la lógica. (Nota: un falso-fallo inicial del Bloque 3 fue **timing del harness** —odoo-lab aún cargaba tras el restart—; resuelto con espera robusta `--retry-all-errors`.)
@@ -57,4 +60,4 @@ Construir la identidad del Portal: el cliente se autentica por **OTP WhatsApp** 
 - No toca datos de negocio de Odoo.
 
 ## Estado
-🚧 **En curso.** Hecho: W5.1 (capa de datos) · **W5.6 handshake validado en STAGING** · **W5.2/W5.3 OTP desacoplado + flujo + sesiones cortas (12/12 verde con Mock)**. Siguiente: **W5.5** (cerrar-todas / gestión de sesiones) · **W5.7** (cablear `HttpOdooClient` al handshake real + endpoint `/coc/internal/identity/resolve` en Odoo) · **W5.8** (contraseña/recuperación/biométrico) · **W5.9/W5.10** (dispositivos + magic links) · y al final **integrar EvoApi** como primer proveedor real. Se desarrolla y valida 100% en STAGING.
+🚧 **En curso.** Hecho: W5.1 (datos) · **W5.6 handshake** · **W5.2/W5.3 OTP+flujo (12/12)** · **W5.7 E2E Gateway↔Odoo con datos reales (8/8 en STAGING)**. El flujo de autenticación completo está validado punta a punta. Siguiente: **W5.5** (cerrar-todas / gestión de dispositivos/sesiones) · **W5.8** (contraseña/recuperación/biométrico) · **W5.9/W5.10** (centro de dispositivos + magic links de un solo uso) · y al final **integrar EvoApi** (solo config: el flujo ya está probado) para **cerrar WS-5**. Se desarrolla y valida 100% en STAGING.
