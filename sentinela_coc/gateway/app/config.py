@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     jwt_access_ttl_min: int = 15                   # access JWT corto
     jwt_refresh_ttl_days: int = 30                 # refresh independiente
 
+    # Política de contraseñas
+    password_min_length: int = 8
+
     # OTP
     otp_provider: str = "mock"                     # mock | evoapi
     otp_length: int = 6

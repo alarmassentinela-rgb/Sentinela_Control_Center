@@ -33,6 +33,13 @@ class CocInternalSession(http.Controller):
             return {'ok': False, 'error': 'forbidden'}
         return svc.resolve_phone(phone)
 
+    @http.route('/coc/internal/identity/set_phone', type='json', auth='public', methods=['POST'], csrf=False)
+    def set_phone(self, partner_id=None, phone=None, **kw):
+        svc = self._svc()
+        if not svc._check_secret(self._secret()):
+            return {'ok': False, 'error': 'forbidden'}
+        return svc.set_partner_phone(partner_id, phone)
+
     @http.route('/coc/internal/session/open', type='json', auth='public', methods=['POST'], csrf=False)
     def open(self, partner_id=None, ttl_seconds=900, device=None, **kw):
         svc = self._svc()

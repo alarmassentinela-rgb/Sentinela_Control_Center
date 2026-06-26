@@ -37,11 +37,13 @@ def request_otp(db, provider, phone, ip, device, channel="whatsapp"):
     return {"ok": True}
 
 
-def verify_otp(db, odoo, phone, code, ip, device, ua, notifier=None):
+def consume_otp(db, phone, code, ip, device):
+    """Valida y CONSUME un OTP (sin crear sesión). Reutilizado por login, recuperación
+    de contraseña y cambio de teléfono. Devuelve (ok: bool, reason: str|None)."""
     allowed, reason = rate_limit.check_otp_verify_allowed(db, phone, ip)
     if not allowed:
         audit.record(db, "otp_verify", success=False, phone=phone, ip=ip, device=device, detail="rate:" + reason)
-        return {"ok": False, "error": "rate"}
+        return False, "rate"
 
     now = utcnow()
     ch = (db.query(OtpChallenge)
@@ -52,7 +54,7 @@ def verify_otp(db, odoo, phone, code, ip, device, ua, notifier=None):
           .first())
     if not ch:
         audit.record(db, "otp_verify", success=False, phone=phone, ip=ip, device=device, detail="no_challenge")
-        return {"ok": False, "error": "invalid"}
+        return False, "invalid"
 
     ch.attempts += 1
     if not constant_eq(hash_secret(code, settings.jwt_secret), ch.code_hash):
@@ -61,10 +63,17 @@ def verify_otp(db, odoo, phone, code, ip, device, ua, notifier=None):
         audit.record(db, "otp_verify", success=False, phone=phone, ip=ip, device=device,
                      detail="mismatch %d/%d" % (ch.attempts, ch.max_attempts))
         db.flush()
-        return {"ok": False, "error": "invalid"}
+        return False, "invalid"
 
     ch.consumed = True  # single-use
     audit.record(db, "otp_verify", success=True, phone=phone, ip=ip, device=device)
+    return True, None
+
+
+def verify_otp(db, odoo, phone, code, ip, device, ua, notifier=None):
+    ok, reason = consume_otp(db, phone, code, ip, device)
+    if not ok:
+        return {"ok": False, "error": "rate" if reason == "rate" else "invalid"}
 
     partner_id = odoo.resolve_phone(phone)
     if not partner_id:

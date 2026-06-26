@@ -87,6 +87,16 @@ class CocSessionService(models.AbstractModel):
             return {"ok": False, "error": "not_found"}
         return {"ok": True, "partner_id": p.id}
 
+    # ---- cambio seguro de teléfono (lo verifica el Gateway con doble OTP) ----
+    @api.model
+    def set_partner_phone(self, partner_id, phone):
+        p = self.env["res.partner"].sudo().browse(int(partner_id)).exists()
+        if not p:
+            return {"ok": False, "error": "partner_not_found"}
+        p.phone = phone
+        self._audit("phone_change", True, partner=p, detail="phone actualizado por Gateway")
+        return {"ok": True}
+
     # ---- abrir sesión efímera ----
     @api.model
     def open_portal_session(self, partner_id, ttl_seconds=900, device=None, ip=None, user_agent=None):

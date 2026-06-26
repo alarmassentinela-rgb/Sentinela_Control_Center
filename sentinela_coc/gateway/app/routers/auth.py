@@ -9,8 +9,9 @@ from pydantic import BaseModel
 
 from .. import deps
 from ..config import settings
+from ..models import PortalIdentity
 from ..security.tokens import decode_access_token
-from ..services import otp_service, session_service
+from ..services import otp_service, password_service, phone_change_service, session_service
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
 
@@ -90,3 +91,100 @@ def logout(request: Request, response: Response, db=Depends(deps.get_db),
     sess = session_service.get_session(db, claims.get("sid"))
     session_service.revoke_session(db, odoo, sess, event="logout", ip=_ip(request), ua=_ua(request))
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# W5.8 — contraseña, recuperación y cambio de teléfono
+# ---------------------------------------------------------------------------
+class PasswordSetIn(BaseModel):
+    new_password: str
+    current_password: str | None = None
+
+
+class PasswordLoginIn(BaseModel):
+    phone: str
+    password: str
+    device: str | None = None
+
+
+class RecoverRequestIn(BaseModel):
+    phone: str
+    device: str | None = None
+
+
+class RecoverConfirmIn(BaseModel):
+    phone: str
+    code: str
+    new_password: str
+    device: str | None = None
+
+
+class PhoneChangeRequestIn(BaseModel):
+    new_phone: str
+
+
+class PhoneChangeConfirmIn(BaseModel):
+    new_phone: str
+    code_new: str
+    code_current: str | None = None
+
+
+def _identity(db, sess):
+    return db.query(PortalIdentity).filter_by(id=sess.identity_id).one_or_none()
+
+
+@router.post("/password")
+def set_password(body: PasswordSetIn, request: Request, response: Response,
+                 sess=Depends(deps.current_session), db=Depends(deps.get_db), odoo=Depends(deps.get_odoo_client)):
+    r = password_service.set_or_change_password(
+        db, odoo, _identity(db, sess), body.new_password, body.current_password,
+        keep_session_id=sess.id, ip=_ip(request), ua=_ua(request))
+    if not r.get("ok"):
+        response.status_code = status.HTTP_400_BAD_REQUEST
+    return r
+
+
+@router.post("/password/login")
+def password_login(body: PasswordLoginIn, request: Request, response: Response,
+                   db=Depends(deps.get_db), odoo=Depends(deps.get_odoo_client), notifier=Depends(deps.get_notifier)):
+    r = password_service.login_password(db, odoo, body.phone, body.password, _ip(request),
+                                        _device(request, body.device), _ua(request), notifier=notifier)
+    if r.get("ok"):
+        return {k: v for k, v in r.items() if k != "ok"}
+    response.status_code = status.HTTP_401_UNAUTHORIZED
+    return {"ok": False, "error": r.get("error", "invalid")}
+
+
+@router.post("/recover/request")
+def recover_request(body: RecoverRequestIn, request: Request,
+                    db=Depends(deps.get_db), provider=Depends(deps.get_otp_provider)):
+    password_service.recover_request(db, provider, body.phone, _ip(request), _device(request, body.device))
+    return {"ok": True}   # neutral
+
+
+@router.post("/recover/confirm")
+def recover_confirm(body: RecoverConfirmIn, request: Request, response: Response,
+                    db=Depends(deps.get_db), odoo=Depends(deps.get_odoo_client)):
+    r = password_service.recover_confirm(db, odoo, body.phone, body.code, body.new_password,
+                                         _ip(request), _device(request, body.device), _ua(request))
+    if not r.get("ok"):
+        response.status_code = status.HTTP_400_BAD_REQUEST
+    return r
+
+
+@router.post("/phone/change/request")
+def phone_change_request(body: PhoneChangeRequestIn, request: Request,
+                         sess=Depends(deps.current_session), db=Depends(deps.get_db),
+                         provider=Depends(deps.get_otp_provider)):
+    return phone_change_service.request_change(db, provider, _identity(db, sess), body.new_phone, _ip(request), None)
+
+
+@router.post("/phone/change/confirm")
+def phone_change_confirm(body: PhoneChangeConfirmIn, request: Request, response: Response,
+                         sess=Depends(deps.current_session), db=Depends(deps.get_db),
+                         odoo=Depends(deps.get_odoo_client)):
+    r = phone_change_service.confirm_change(db, odoo, _identity(db, sess), body.new_phone,
+                                            body.code_new, body.code_current, _ip(request), None, _ua(request))
+    if not r.get("ok"):
+        response.status_code = status.HTTP_400_BAD_REQUEST
+    return r

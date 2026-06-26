@@ -24,6 +24,10 @@ class OdooClient(ABC):
     def close_session(self, odoo_session_id: str) -> dict:
         ...
 
+    @abstractmethod
+    def set_phone(self, partner_id: int, phone: str) -> dict:
+        ...
+
 
 class HttpOdooClient(OdooClient):
     def __init__(self, base_url: str, shared_secret: str):
@@ -49,6 +53,9 @@ class HttpOdooClient(OdooClient):
     def close_session(self, odoo_session_id: str) -> dict:
         return self._call("/coc/internal/session/close", {"session_id": odoo_session_id})
 
+    def set_phone(self, partner_id: int, phone: str) -> dict:
+        return self._call("/coc/internal/identity/set_phone", {"partner_id": partner_id, "phone": phone})
+
 
 class FakeOdooClient(OdooClient):
     """Para pruebas: mapea teléfonos a partners y simula sesiones efímeras."""
@@ -68,4 +75,10 @@ class FakeOdooClient(OdooClient):
 
     def close_session(self, odoo_session_id: str) -> dict:
         self.open_sessions.discard(odoo_session_id)
+        return {"ok": True}
+
+    def set_phone(self, partner_id: int, phone: str) -> dict:
+        # refleja el cambio en el mapa teléfono->partner
+        self.phone_map = {p: pid for p, pid in self.phone_map.items() if pid != partner_id}
+        self.phone_map[phone] = partner_id
         return {"ok": True}
