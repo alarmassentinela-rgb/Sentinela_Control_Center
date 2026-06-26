@@ -21,6 +21,12 @@ Dejar listo el **Release Candidate (RC1)** de WS-2 + WS-5 + EvoApi para una **ve
 | 6 | Validación de rendimiento | `PERFORMANCE_COC.md` | ✅ |
 | 7 | Observabilidad (logs/métricas/alertas) | `OBSERVABILITY_COC.md` | ✅ |
 | 8 | Checklist final de aceptación | `ACCEPTANCE_CHECKLIST_COC_RC1.md` | ⏳ (gate del go-live) |
+| 9 | Manual de operación 24×7 | `OPERACION_24x7.md` | ✅ |
+| 10 | Arquitectura final (diagramas) | `ARQUITECTURA_COC.md` | ✅ |
+| 11 | Inventario componentes/versiones/deps | `INVENTARIO_COMPONENTES_COC.md` | ✅ |
+| 12 | ADRs (decisiones de arquitectura) | `docs/adr/` (11 ADR) | ✅ |
+| 13 | Documento de cierre (plantilla) | `CIERRE_RC1_COC.md` | ⏳ (post Go-Live) |
+| 14 | Plan Sprint 1 (sin iniciar) | `SPRINT_1_PLAN_COC.md` | ✅ |
 
 ## Avance del cierre (26-jun)
 - ✅ **Item 2 — Restricción LAN:** allowlist CIDR en `/coc/internal/*` (param `coc_internal_allowed_cidrs`), validado en STAGING (enforcement OK) + fix robustez sid malformado. Commit `cd02875`.
