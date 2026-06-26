@@ -1,6 +1,6 @@
 {
     'name': 'Sentinela Subscriptions',
-    'version': '18.0.1.4.8',
+    'version': '18.0.1.4.9',
     'category': 'Sales/Subscriptions',
     'depends': ['base', 'mail', 'product', 'account', 'sale', 'sentinela_digital_sign', 'sentinela_cfdi_prodigia', 'om_account_followup'],
     'data': [

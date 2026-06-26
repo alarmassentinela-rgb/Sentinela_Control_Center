@@ -901,6 +901,20 @@ class SentinelaSubscription(models.Model):
             except Exception as e:
                 _logger.error(f"BILLING: Falló la generación para grupo {key}: {str(e)}")
 
+    def _billing_period_label(self):
+        """Etiqueta del periodo para la línea de factura: 'CORRESPONDIENTE AL MES DE <MES> <AÑO>'
+        (o rango de meses si el ciclo es multi-mes). La usan la descripción de la línea Y el
+        candado anti-duplicado, así que AMBOS deben llamar a este mismo método para no desincronizar."""
+        self.ensure_one()
+        meses = ['', 'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO',
+                 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE']
+        nb = self.next_billing_date
+        months = int(self.recurring_interval or 1)
+        if months <= 1:
+            return "CORRESPONDIENTE AL MES DE %s %s" % (meses[nb.month], nb.year)
+        period_end = nb + relativedelta(months=months) - timedelta(days=1)
+        return "CORRESPONDIENTE DE %s %s A %s %s" % (meses[nb.month], nb.year, meses[period_end.month], period_end.year)
+
     def _billing_generate_invoice(self, subs_list):
         """ Crea y publica UNA factura (account.move) para el grupo de suscripciones dado,
         envía por correo si alguna tiene auto_send_mail, y avanza su next_billing_date al
@@ -923,7 +937,7 @@ class SentinelaSubscription(models.Model):
                 ('move_type', '=', 'out_invoice'),
                 ('state', '!=', 'cancel'),
                 '|', ('subscription_ids', 'in', sub.id), ('subscription_id', '=', sub.id),
-                ('invoice_line_ids.name', 'ilike', 'Periodo: %s' % sub.next_billing_date),
+                ('invoice_line_ids.name', 'ilike', sub._billing_period_label()),
             ])
             if dup:
                 omitidas.append(sub.name)
@@ -956,7 +970,7 @@ class SentinelaSubscription(models.Model):
                 n_dev = max(1, len(sub.gps_device_ids.filtered(lambda d: d.device_state != 'suspended')))
                 qty = months * n_dev
                 dev_suffix = f" - {n_dev} equipo(s)"
-            desc = f"Servicio: {sub.product_id.name} - Contrato: {sub.name}{dev_suffix} - Periodo: {sub.next_billing_date} al {period_end}"
+            desc = f"Servicio: {sub.product_id.name} - Contrato: {sub.name}{dev_suffix} - {sub._billing_period_label()}"
             line_cmds.append((0, 0, {
                 'product_id': sub.product_id.id,
                 'name': desc,
