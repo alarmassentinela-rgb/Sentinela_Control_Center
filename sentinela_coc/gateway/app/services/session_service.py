@@ -6,6 +6,8 @@ La autorización vive en Odoo (sesión efímera del usuario portal vía OdooClie
 from datetime import timedelta
 from ..clock import utcnow
 
+from sqlalchemy import update
+
 from ..config import settings
 from ..models import PortalIdentity, PortalSession, RefreshToken
 from ..security.hashing import gen_token, hash_secret
@@ -84,8 +86,15 @@ def refresh_session(db, odoo, refresh_raw, ip=None, ua=None):
         return {"ok": False, "error": "invalid"}
     sess = get_session(db, rt.session_id)
     now = utcnow()
-    if rt.used:
-        # Reuse de un refresh ya rotado -> robo: revoca toda la familia.
+    # Claim ATÓMICO del refresh: seguro ante refresh CONCURRENTE (solo uno gana
+    # la carrera; el UPDATE..WHERE used=false bloquea la fila en Postgres).
+    claimed = db.execute(
+        update(RefreshToken)
+        .where(RefreshToken.id == rt.id, RefreshToken.used.is_(False))
+        .values(used=True)
+    ).rowcount
+    if not claimed:
+        # Ya consumido -> reuse (posible robo): revoca toda la familia.
         _revoke_family(db, odoo, rt.family)
         audit.record(db, "refresh_reuse", success=False, session_id=rt.session_id,
                      partner_id=sess.partner_id if sess else None, ip=ip, user_agent=ua,
@@ -93,7 +102,6 @@ def refresh_session(db, odoo, refresh_raw, ip=None, ua=None):
         return {"ok": False, "error": "reuse"}
     if not sess or sess.revoked or rt.expires_at <= now:
         return {"ok": False, "error": "invalid"}
-    rt.used = True
     # Renovar la sesión Odoo efímera (mantenerla corta).
     new = odoo.open_session(sess.partner_id, settings.jwt_access_ttl_min * 60, sess.device_label, ip, ua)
     if new and new.get("ok"):

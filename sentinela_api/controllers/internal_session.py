@@ -26,6 +26,13 @@ class CocInternalSession(http.Controller):
     def _ua(self):
         return request.httprequest.headers.get('User-Agent')
 
+    @http.route('/coc/internal/identity/resolve', type='json', auth='public', methods=['POST'], csrf=False)
+    def resolve(self, phone=None, **kw):
+        svc = self._svc()
+        if not svc._check_secret(self._secret()):
+            return {'ok': False, 'error': 'forbidden'}
+        return svc.resolve_phone(phone)
+
     @http.route('/coc/internal/session/open', type='json', auth='public', methods=['POST'], csrf=False)
     def open(self, partner_id=None, ttl_seconds=900, device=None, **kw):
         svc = self._svc()

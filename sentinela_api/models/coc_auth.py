@@ -14,6 +14,7 @@ Garantías del modelo de confianza:
 """
 import hmac
 import logging
+import re
 from datetime import timedelta
 
 from psycopg2 import IntegrityError
@@ -72,6 +73,19 @@ class CocSessionService(models.AbstractModel):
             _logger.error('COC: %s no configurado — rechazando (fail closed)', PARAM_SECRET)
             return False
         return bool(provided) and hmac.compare_digest(str(provided), str(expected))
+
+    # ---- resolver teléfono -> partner (el Gateway no decide el partner) ----
+    @api.model
+    def resolve_phone(self, phone):
+        digits = re.sub(r"\D", "", phone or "")
+        last10 = digits[-10:]
+        if len(last10) < 10:
+            return {"ok": False, "error": "bad_phone"}
+        Partner = self.env["res.partner"].sudo()
+        p = Partner.search(["|", ("phone", "like", last10), ("mobile", "like", last10)], limit=1)
+        if not p:
+            return {"ok": False, "error": "not_found"}
+        return {"ok": True, "partner_id": p.id}
 
     # ---- abrir sesión efímera ----
     @api.model
