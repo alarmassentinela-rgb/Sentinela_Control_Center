@@ -31,6 +31,8 @@
                 <t t-set="iva_rate" t-value="int(round(_taxed_lines[0].tax_ids[0].amount)) if _taxed_lines else 16"/>
                 <!-- Emisor: razón social fiscal (persona física = nombre legal). La marca "Sentinela" queda en el logo. -->
                 <t t-set="emisor_name" t-value="o.company_id.l10n_mx_edi_fiscal_name or o.company_id.name"/>
+                <!-- Solo es timbre de PRUEBA si el PAC está en modo prueba; en producción real NO debe aparecer la leyenda -->
+                <t t-set="is_test" t-value="o.env['ir.config_parameter'].sudo().get_param('sentinela_cfdi_prodigia.test_mode', 'True').lower() == 'true'"/>
                 <div class="page" style="font-family: Arial, sans-serif; font-size: 12px; color: #222;">
 
                     <!-- ENCABEZADO (divs display:table para evitar bordes por defecto del <table>) -->
@@ -234,7 +236,7 @@
                             </div>
                             <div style="background:#1a3a5c; color:#aac4e0; font-size:9px; text-align:center; padding:3px 10px;">
                                 Representacion impresa de un CFDI.
-                                <span style="color:#f0c040; font-weight:bold;"> DOCUMENTO DE PRUEBA - Sin validez fiscal</span>
+                                <span t-if="is_test" style="color:#f0c040; font-weight:bold;"> DOCUMENTO DE PRUEBA - Sin validez fiscal</span>
                             </div>
                         </div>
                     </t>
