@@ -9,6 +9,8 @@ identidad), vinculado al res.partner del cliente. Asi:
 """
 import logging
 
+from psycopg2 import IntegrityError
+
 from odoo import api, models
 
 _logger = logging.getLogger('sentinela_api.security')
@@ -52,8 +54,21 @@ class ResUsers(models.Model):
             'groups_id': [(6, 0, [group_portal.id, group_coc.id])],
             'active': True,
         }
-        user = Users.with_context(no_reset_password=True).create(vals)
-        # Auditoria de seguridad (WS-3 ampliara con IP/origen desde el Gateway).
+        # Robusto ante reintentos CONCURRENTES: si dos requests crean el usuario
+        # a la vez, uno falla por login unico -> se re-busca (savepoint para no
+        # abortar la transaccion externa).
+        try:
+            with self.env.cr.savepoint():
+                user = Users.with_context(no_reset_password=True).create(vals)
+        except IntegrityError:
+            user = Users.search(
+                [('partner_id', '=', partner.id), ('share', '=', True)], limit=1
+            )
+            if not user:
+                raise
+            if group_coc not in user.groups_id:
+                user.write({'groups_id': [(4, group_coc.id)]})
+            return user
         _logger.info(
             "COC: usuario portal creado uid=%s login=%s partner_id=%s",
             user.id, user.login, partner.id,
