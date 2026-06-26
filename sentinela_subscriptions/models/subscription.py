@@ -1004,22 +1004,13 @@ class SentinelaSubscription(models.Model):
         # Los clientes que requieren FACTURA se envían DESPUÉS de timbrar (con el CFDI
         # pegado), vía account.move._cfdi_send_invoice_email() que dispara el cron de
         # auto-timbrado. Así el cliente nunca recibe el PDF sin timbre.
+        # Se usa el MISMO método branded (logo + datos bancarios + QR Telegram + PDF) para
+        # que remisión y factura se vean igual; el método ya maneja el CC interno.
         if any(s.auto_send_mail for s in subs_list) and partner.email and not partner.requiere_factura:
-            template = self.env.ref('account.email_template_edi_invoice', raise_if_not_found=False)
-            if template:
-                # Destinatarios adicionales en COPIA (CC). Se combinan dos fuentes:
-                #  - CC a nivel CLIENTE (partner.invoice_cc_partner_ids): aplica a TODAS sus
-                #    facturas, ideal para agrupación global/por-sucursal (se configura 1 vez).
-                #  - CC a nivel SUSCRIPCIÓN (extra_invoice_partner_ids): por contrato puntual.
-                # La unión de recordset deduplica; se excluye el partner principal (ya es el
-                # destinatario directo) y los contactos sin correo.
-                cc_partners = (
-                    subs_list.mapped('extra_invoice_partner_ids') | partner.invoice_cc_partner_ids
-                ).filtered(lambda p: p.email and p.id != partner.id)
-                email_values = None
-                if cc_partners:
-                    email_values = {'email_cc': ','.join(cc_partners.mapped('email'))}
-                template.send_mail(move.id, force_send=True, email_values=email_values)
+            try:
+                move._cfdi_send_invoice_email()
+            except Exception as e:
+                _logger.warning("BILLING: remisión %s no se pudo enviar por correo: %s", move.name, e)
 
         for sub in subs_list:
             sub.next_billing_date = sub.next_billing_date + relativedelta(months=int(sub.recurring_interval))
