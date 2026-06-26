@@ -185,7 +185,9 @@
                                 <t t-set="_mp" t-value="o.partner_id.invoice_payment_method or 'PUE'"/>
                                 <t t-set="_mp_desc" t-value="{'PUE': 'Pago en una sola exhibición', 'PPD': 'Pago en parcialidades o diferido'}.get(_mp, '')"/>
                                 <tr>
-                                    <td style="width:34%; vertical-align:top;"><strong>Condiciones de Pago:</strong> <t t-esc="o.invoice_payment_term_id.name or o.partner_id.property_payment_term_id.name or 'Pago Inmediato'"/></td>
+                                    <t t-set="_cond_raw" t-value="o.partner_id.invoice_payment_condition or 'contado'"/>
+                                    <t t-set="_cond" t-value="(o.partner_id.invoice_payment_condition_text or 'Otro') if _cond_raw == 'otro' else {'contado': 'Contado', 'credito': 'Crédito'}.get(_cond_raw, _cond_raw)"/>
+                                    <td style="width:34%; vertical-align:top;"><strong>Condiciones de Pago:</strong> <t t-esc="_cond"/></td>
                                     <td style="width:33%; vertical-align:top;"><strong>Método de Pago:</strong> <t t-esc="_mp"/> - <t t-esc="_mp_desc"/></td>
                                     <td style="width:33%; vertical-align:top;"><strong>Forma de Pago:</strong> <span t-field="o.l10n_mx_edi_payment_method_id_code"/></td>
                                 </tr>
