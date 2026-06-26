@@ -271,17 +271,11 @@ class AccountMove(models.Model):
         timbradas = errores = 0
         for move in moves:
             try:
+                # action_cfdi_stamp_prodigia ya TIMBRA Y ENVÍA el correo al cliente (timbrar=timbrar+enviar).
                 move.action_cfdi_stamp_prodigia()
                 self.env.cr.commit()
                 if move.cfdi_status == 'valid':
                     timbradas += 1
-                    # Enviar la factura al cliente YA TIMBRADA (con el CFDI pegado).
-                    try:
-                        move._cfdi_send_invoice_email()
-                        self.env.cr.commit()
-                    except Exception as e:
-                        _logger.warning("Auto-timbrado CFDI: %s timbró OK pero falló el envío de correo: %s",
-                                        move.name, e)
                 else:
                     errores += 1
                     _logger.warning("Auto-timbrado CFDI: %s quedó en '%s' (%s).",
@@ -440,6 +434,14 @@ class AccountMove(models.Model):
                                 'l10n_mx_edi_cfdi_sat_seal': sello_sat,
                                 'l10n_mx_edi_cfdi_original_chain': cadena_original,
                             })
+                            # Timbrar = timbrar + enviar: manda la factura al cliente (PDF+XML+branded).
+                            # Se puede saltar con context skip_cfdi_email=True. El fallo de correo NO
+                            # revierte el timbre (ya es válido); solo se registra.
+                            if not self.env.context.get('skip_cfdi_email'):
+                                try:
+                                    move._cfdi_send_invoice_email()
+                                except Exception as e:
+                                    _logger.warning("Timbrado OK pero falló el envío de correo de %s: %s", move.name, e)
                         else:
                             move.write({'cfdi_status': 'error', 'cfdi_message': 'No se encontró el Timbre Fiscal Digital en el XML de respuesta.'})
                     else:
