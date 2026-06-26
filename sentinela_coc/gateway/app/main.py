@@ -1,32 +1,44 @@
 # -*- coding: utf-8 -*-
-"""COC Gateway (BFF) — base Sprint 0.
+"""COC Gateway (BFF). Health/observabilidad + autenticación (OTP + sesiones cortas).
 
-Expone health/observabilidad y la base de la API `/v1`. La identidad (OTP WhatsApp,
-JWT), la agregación y el handshake con Odoo (`sentinela_api`) se agregan en WS-5.
-OpenAPI/Swagger en /docs (WS-8).
+La identidad vive aquí; la autorización en Odoo (record rules) vía sesión efímera.
+OpenAPI/Swagger en /docs.
 """
 import uuid
+from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI, Request
 
+from . import models  # noqa: F401  (registra modelos en Base)
 from .config import settings
-from .logging_setup import configure_logging, bind_request_id
+from .db import Base, engine
+from .logging_setup import bind_request_id, configure_logging
+from .routers import auth as auth_router
 
 configure_logging(settings.log_level)
 log = structlog.get_logger("coc.gateway")
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        Base.metadata.create_all(bind=engine)
+        log.info("db_ready")
+    except Exception as e:  # en pruebas se usa un engine de test (override)
+        log.warning("db_init_skipped", error=str(e))
+    yield
+
+
 app = FastAPI(
     title="COC Sentinela — Gateway API",
-    version="0.1.0",
+    version="0.2.0",
     description=(
-        "Backend-for-Frontend del Centro de Operaciones del Cliente. "
-        "Identidad/OTP/JWT, agregación y orquestación sobre sentinela_api (Odoo). "
-        "Odoo es la fuente de verdad; el gateway nunca sustituye las record rules de Odoo."
+        "Backend-for-Frontend del Centro de Operaciones del Cliente. Identidad "
+        "(OTP + sesiones cortas) en el gateway; autorización en Odoo (record rules)."
     ),
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
+    docs_url="/docs", redoc_url="/redoc", openapi_url="/openapi.json",
+    lifespan=lifespan,
 )
 
 
@@ -48,9 +60,7 @@ async def health():
 
 @app.get("/readyz", tags=["infra"], summary="Readiness")
 async def readyz():
-    # WS-5/WS-8: verificar conexión a Odoo (sentinela_api) y a la DB del gateway.
     return {"status": "ready"}
 
 
-# WS-5: routers de /v1/auth/* y passthrough /v1/me se montan aquí.
-# WS-8: /metrics (prometheus) se monta aquí.
+app.include_router(auth_router.router)
