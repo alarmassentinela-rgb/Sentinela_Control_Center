@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_cfdi_cancel_wizard_form" model="ir.ui.view">
+        <field name="name">sentinela.cfdi.cancel.wizard.form</field>
+        <field name="model">sentinela.cfdi.cancel.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Cancelar CFDI ante el SAT">
+                <div class="alert alert-warning" role="alert">
+                    Vas a solicitar al SAT (vía Prodigia) la cancelación de este timbre fiscal.
+                    El XML timbrado original se conserva como respaldo, pero el comprobante quedará cancelado.
+                </div>
+                <group>
+                    <field name="move_id" invisible="1"/>
+                    <field name="cfdi_uuid" readonly="1"/>
+                    <field name="motivo"/>
+                    <field name="folio_sustitucion"
+                           invisible="motivo != '01'"
+                           required="motivo == '01'"/>
+                </group>
+                <footer>
+                    <button name="action_confirm_cancel" string="Cancelar ante el SAT"
+                            type="object" class="btn-danger"/>
+                    <button string="Cerrar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

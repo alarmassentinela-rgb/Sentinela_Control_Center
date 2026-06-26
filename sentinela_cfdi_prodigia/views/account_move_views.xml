@@ -6,11 +6,16 @@
         <field name="inherit_id" ref="account.view_move_form"/>
         <field name="arch" type="xml">
             <xpath expr="//header" position="inside">
-                <button name="action_cfdi_stamp_prodigia" 
-                        string="Timbrar con Prodigia" 
-                        type="object" 
+                <button name="action_cfdi_stamp_prodigia"
+                        string="Timbrar con Prodigia"
+                        type="object"
                         class="oe_highlight"
                         invisible="cfdi_status == 'valid' or move_type not in ('out_invoice', 'out_refund')"/>
+                <button name="action_open_cfdi_cancel_wizard"
+                        string="Cancelar ante el SAT"
+                        type="object"
+                        class="btn-danger"
+                        invisible="cfdi_status != 'valid'"/>
             </xpath>
             <xpath expr="//notebook" position="inside">
                 <page string="Facturación Mexicana (Prodigia)" name="prodigia_mx">
@@ -22,6 +27,12 @@
                         </group>
                         <group string="Logs del Sistema">
                             <field name="cfdi_message" readonly="1"/>
+                        </group>
+                        <group string="Cancelación SAT" invisible="cfdi_status != 'cancel' and not cfdi_cancel_date">
+                            <field name="cfdi_cancel_motivo" readonly="1"/>
+                            <field name="cfdi_cancel_date" readonly="1"/>
+                            <field name="cfdi_cancel_acuse" filename="cfdi_cancel_acuse_filename" readonly="1"/>
+                            <field name="cfdi_cancel_acuse_filename" invisible="1"/>
                         </group>
                     </group>
                 </page>

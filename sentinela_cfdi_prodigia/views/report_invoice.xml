@@ -54,7 +54,7 @@
                             <div><strong>RFC:</strong> <t t-esc="o.company_id.vat or ''"/></div>
                             <div><strong>Régimen Fiscal:</strong> <t t-esc="o.company_id.l10n_mx_edi_fiscal_regime or ''"/></div>
                             <div t-if="o.company_id.phone"><strong>Tel:</strong> <t t-esc="o.company_id.phone"/></div>
-                            <div t-if="o.company_id.email"><strong>Email:</strong> <t t-esc="o.company_id.email"/></div>
+                            <div><strong>Email:</strong> cobranza@sentinela.com.mx</div>
                         </div>
                         <!-- Caja del documento -->
                         <div style="display:table-cell; width:36%; vertical-align:middle; text-align:right;">
@@ -90,7 +90,7 @@
                                 </td>
                                 <td style="width:50%; font-size:11px; line-height:1.6; vertical-align:top;">
                                     <div><strong>RFC:</strong> <t t-esc="o.partner_id.vat or 'XAXX010101000'"/></div>
-                                    <div><strong>Regimen Fiscal:</strong> <t t-esc="o.partner_id.l10n_mx_edi_fiscal_regime or ''"/></div>
+                                    <div><strong>Regimen Fiscal:</strong> <span t-field="o.partner_id.l10n_mx_edi_fiscal_regime"/></div>
                                     <div t-if="o.partner_id.phone or o.partner_id.mobile"><strong>Tel:</strong> <t t-esc="o.partner_id.phone or o.partner_id.mobile"/></div>
                                     <div t-if="o.partner_id.email"><strong>Email:</strong> <t t-esc="o.partner_id.email"/></div>
                                 </td>
@@ -144,10 +144,11 @@
                     <table style="width:100%; margin-bottom:8px;">
                         <tr>
                             <td style="width:55%; vertical-align:top; font-size:11px; color:#555;">
-                                <t t-if="o.narration">
+                                <t t-set="_sub_notes" t-value="o.subscription_id.invoice_notes if o.subscription_id else False"/>
+                                <t t-if="_sub_notes">
                                     <div style="border:1px solid #e0e0e0; padding:6px; border-radius:3px;">
                                         <strong>Notas:</strong><br/>
-                                        <span t-field="o.narration"/>
+                                        <span t-field="o.subscription_id.invoice_notes"/>
                                     </div>
                                 </t>
                                 <div style="margin-top:6px; font-size:11px; color:#333;">
@@ -181,9 +182,11 @@
                         <div style="background:#1a3a5c; color:white; padding:4px 10px; font-size:11px; font-weight:bold;">CONDICIONES DE LA VENTA</div>
                         <div style="padding:6px 10px; font-size:11px; line-height:1.7; background:#f7fafd;">
                             <table style="width:100%;">
+                                <t t-set="_mp" t-value="o.partner_id.invoice_payment_method or 'PUE'"/>
+                                <t t-set="_mp_desc" t-value="{'PUE': 'Pago en una sola exhibición', 'PPD': 'Pago en parcialidades o diferido'}.get(_mp, '')"/>
                                 <tr>
-                                    <td style="width:34%; vertical-align:top;"><strong>Condiciones de Pago:</strong> <t t-esc="o.invoice_payment_term_id.name or 'Contado'"/></td>
-                                    <td style="width:33%; vertical-align:top;"><strong>Método de Pago:</strong> PUE</td>
+                                    <td style="width:34%; vertical-align:top;"><strong>Condiciones de Pago:</strong> <t t-esc="o.invoice_payment_term_id.name or o.partner_id.property_payment_term_id.name or 'Pago Inmediato'"/></td>
+                                    <td style="width:33%; vertical-align:top;"><strong>Método de Pago:</strong> <t t-esc="_mp"/> - <t t-esc="_mp_desc"/></td>
                                     <td style="width:33%; vertical-align:top;"><strong>Forma de Pago:</strong> <span t-field="o.l10n_mx_edi_payment_method_id_code"/></td>
                                 </tr>
                                 <tr>
@@ -199,6 +202,24 @@
                             </table>
                         </div>
                     </div>
+
+                    <!-- DATOS BANCARIOS (cuenta fiscal Banorte) -->
+                    <t t-set="_bank" t-value="o._get_emisor_bank_info()"/>
+                    <t t-if="_bank">
+                        <div style="border:1px solid #1a3a5c; border-radius:3px; margin-bottom:8px; overflow:hidden;">
+                            <div style="background:#1a3a5c; color:white; padding:4px 10px; font-size:11px; font-weight:bold;">DATOS PARA PAGO (DEPÓSITO O TRANSFERENCIA)</div>
+                            <div style="padding:6px 10px; font-size:11px; line-height:1.7; background:#f7fafd;">
+                                <table style="width:100%;">
+                                    <tr>
+                                        <td style="width:25%;"><strong>Banco:</strong> <t t-esc="_bank.get('banco')"/></td>
+                                        <td style="width:25%;"><strong>Titular:</strong> <t t-esc="_bank.get('titular')"/></td>
+                                        <td style="width:22%;"><strong>Cuenta:</strong> <t t-esc="_bank.get('cuenta')"/></td>
+                                        <td style="width:28%;"><strong>CLABE:</strong> <t t-esc="_bank.get('clabe')"/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </t>
 
                     <!-- SECCION CFDI -->
                     <t t-if="o.cfdi_uuid">

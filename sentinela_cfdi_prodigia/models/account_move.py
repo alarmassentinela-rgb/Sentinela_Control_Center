@@ -28,6 +28,17 @@ class AccountMove(models.Model):
     ], string='Estado CFDI', default='draft', copy=False, readonly=True, tracking=True)
     cfdi_message = fields.Text(string='Mensaje CFDI', copy=False, readonly=True)
 
+    # == Cancelación ante el SAT (Prodigia) ==
+    cfdi_cancel_motivo = fields.Selection([
+        ('01', '01 - Comprobante emitido con errores con relación'),
+        ('02', '02 - Comprobante emitido con errores sin relación'),
+        ('03', '03 - No se llevó a cabo la operación'),
+        ('04', '04 - Operación nominativa relacionada en factura global'),
+    ], string='Motivo de Cancelación', copy=False, readonly=True)
+    cfdi_cancel_date = fields.Char(string='Fecha de Cancelación', copy=False, readonly=True)
+    cfdi_cancel_acuse = fields.Binary(string='Acuse de Cancelación (XML)', copy=False, attachment=True, readonly=True)
+    cfdi_cancel_acuse_filename = fields.Char(copy=False)
+
     # Campo de forma de pago SAT (usado en vista y en _generate_cfdi_xml)
     l10n_mx_edi_payment_method_id_code = fields.Selection([
         ('01', '01 - Efectivo'),
@@ -89,6 +100,8 @@ class AccountMove(models.Model):
         get_param = self.env['ir.config_parameter'].sudo().get_param
         return {
             'url': get_param('sentinela_cfdi_prodigia.api_url'),
+            'cancel_url': get_param('sentinela_cfdi_prodigia.cancel_url',
+                                    'https://timbrado.pade.mx/servicio/rest/cancelacion/cancelar'),
             'user': get_param('sentinela_cfdi_prodigia.user'),
             'password': get_param('sentinela_cfdi_prodigia.password'),
             'contract': get_param('sentinela_cfdi_prodigia.contract'),
@@ -336,6 +349,12 @@ class AccountMove(models.Model):
             if move.state != 'posted':
                 raise UserError(_('La factura debe estar publicada para poder timbrarla.'))
 
+            # Candado: nunca re-timbrar una factura que ya tiene timbre vivo (evita CFDI duplicado).
+            if move.cfdi_uuid and move.cfdi_status == 'valid':
+                raise UserError(_(
+                    'Esta factura YA está timbrada (UUID %s). Para volver a timbrar, primero '
+                    'cancélala ante el SAT con el botón "Cancelar ante el SAT".') % move.cfdi_uuid)
+
             config = self._get_prodigia_config()
             if not all([config['url'], config['user'], config['password'], config['contract']]):
                 raise UserError(_('Por favor, configure las credenciales y el CONTRATO de Prodigia en los Ajustes.'))
@@ -423,6 +442,111 @@ class AccountMove(models.Model):
     # Alias para compatibilidad con vistas existentes en DB
     def action_prodigia_stamp(self):
         return self.action_cfdi_stamp_prodigia()
+
+    # === CANCELACIÓN ANTE EL SAT (Prodigia/PADE) ===
+    def action_open_cfdi_cancel_wizard(self):
+        """Abre el asistente de cancelación (pide motivo SAT y folio sustitución)."""
+        self.ensure_one()
+        if not self.cfdi_uuid or self.cfdi_status != 'valid':
+            raise UserError(_('Solo se pueden cancelar facturas con timbre válido (UUID).'))
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Cancelar CFDI ante el SAT'),
+            'res_model': 'sentinela.cfdi.cancel.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {'default_move_id': self.id},
+        }
+
+    def action_cfdi_cancel_prodigia(self, motivo='02', folio_sustitucion=None):
+        """Cancela el CFDI ante el SAT vía Prodigia/PADE.
+
+        Endpoint REST `cancelacion/cancelar` (POST, Basic auth, query params). Parámetros:
+        `contrato`, `rfcEmisor`, `arregloUUID`='UUID|motivo|folioSustitucion' y
+        `opciones=CERT_DEFAULT` (usa el CSD del contrato). Respuesta XML <servicioCancel>:
+        `statusOk` + `<cancelacion><codigo>` por UUID (201/202 OK) + `acuseCancelBase64`.
+        Guarda el acuse y marca `cfdi_status='cancel'` si el SAT acepta. NO borra el XML original.
+        """
+        for move in self:
+            if not move.cfdi_uuid:
+                raise UserError(_('La factura no tiene UUID; no hay nada que cancelar ante el SAT.'))
+            if move.cfdi_status == 'cancel':
+                raise UserError(_('Esta factura ya está marcada como cancelada.'))
+            if motivo == '01' and not folio_sustitucion:
+                raise UserError(_('El motivo 01 requiere el Folio Fiscal (UUID) que sustituye al cancelado.'))
+
+            config = move._get_prodigia_config()
+            if not all([config['cancel_url'], config['user'], config['password'], config['contract']]):
+                raise UserError(_('Configure las credenciales y el CONTRATO de Prodigia en los Ajustes.'))
+
+            # Endpoint cancelacion/cancelar (POST, query params). arregloUUID = 'UUID|motivo|folioSustitucion'.
+            # opciones=CERT_DEFAULT → usa el CSD ya configurado en el contrato (sin enviar cert/llave/clave).
+            arreglo = '%s|%s|%s' % (move.cfdi_uuid, motivo, (folio_sustitucion or '').strip())
+            params = {
+                'contrato': config['contract'],
+                'rfcEmisor': move.company_id.vat or '',
+                'arregloUUID': arreglo,
+                'opciones': 'CERT_DEFAULT',
+            }
+            try:
+                _logger.info("--- CFDI CANCELAR --- UUID=%s motivo=%s params=%s", move.cfdi_uuid, motivo, params)
+                response = requests.post(config['cancel_url'], params=params,
+                                         auth=(config['user'], config['password']), timeout=60)
+                _logger.info("RESPUESTA CANCEL STATUS: %s", response.status_code)
+                _logger.info("RESPUESTA CANCEL BODY: %s", response.text)
+
+                if response.status_code not in (200, 202):
+                    move.write({'cfdi_message': _('Error PAC al cancelar (%s): %s') % (response.status_code, response.text[:500])})
+                    raise UserError(_('El PAC devolvió un error al cancelar (%s). Revisa el mensaje en la factura.') % response.status_code)
+
+                tree = etree.fromstring(response.content)
+                status_ok = (tree.findtext('statusOk') or '').strip().lower() == 'true'
+                cancelados = (tree.findtext('cancelados') or '0').strip()
+                acuse_b64 = (tree.findtext('acuseCancelBase64') or '').strip()
+                # Resultado por-UUID: codigo 201 = aceptada, 202 = ya estaba cancelada, 205 = no existe, etc.
+                canc = tree.find('.//cancelacion')
+                uuid_codigo = ((canc.findtext('codigo') if canc is not None else '') or '').strip()
+                uuid_mensaje = ((canc.findtext('mensaje') if canc is not None else '') or '').strip()
+
+                aceptada = status_ok and (uuid_codigo in ('201', '202') or cancelados not in ('0', ''))
+                vals = {
+                    'cfdi_cancel_motivo': motivo,
+                    'cfdi_message': _('Cancelación SAT: statusOk=%s, estatus UUID=%s %s (cancelados=%s)') % (
+                        status_ok, uuid_codigo or '-', uuid_mensaje, cancelados),
+                }
+                if acuse_b64:
+                    vals.update({
+                        'cfdi_cancel_acuse': acuse_b64,
+                        'cfdi_cancel_acuse_filename': ('Acuse_Cancelacion_%s.xml' % move.name).replace('/', '_'),
+                    })
+                if aceptada:
+                    fecha = (datetime.now() - timedelta(hours=6)).strftime('%Y-%m-%d %H:%M:%S')
+                    vals.update({'cfdi_status': 'cancel', 'cfdi_cancel_date': fecha})
+                move.write(vals)
+                if not aceptada:
+                    raise UserError(_('El SAT no confirmó la cancelación (estatus UUID=%s: %s). '
+                                      'Revisa el mensaje en la factura.') % (uuid_codigo or '-', uuid_mensaje))
+            except UserError:
+                raise
+            except Exception as e:
+                move.write({'cfdi_message': _('Error de proceso al cancelar: %s') % str(e)})
+                raise UserError(_('Error al cancelar el CFDI: %s') % str(e))
+        return True
+
+    def _get_emisor_bank_info(self):
+        """Cuenta bancaria FISCAL del emisor (Banorte) para el PDF. Devuelve dict o {}."""
+        self.ensure_one()
+        Bank = self.env['res.partner.bank'].sudo()
+        acc = Bank.search([('l10n_mx_edi_clabe', '!=', False),
+                           ('bank_id.name', 'ilike', 'banorte')], order='id', limit=1)
+        if not acc:
+            return {}
+        return {
+            'banco': acc.bank_id.name or 'BANORTE',
+            'cuenta': acc.acc_number or '',
+            'clabe': acc.l10n_mx_edi_clabe or '',
+            'titular': acc.acc_holder_name or '',
+        }
 
     # === Métodos helper para el reporte PDF CFDI ===
 

@@ -1,2 +1,4 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_res_config_settings_sentinela_cfdi_prodigia,access_res_config_settings_sentinela_cfdi_prodigia,base.model_res_config_settings,base.group_system,1,1,1,1
+access_cfdi_cancel_wizard_user,access_cfdi_cancel_wizard_user,model_sentinela_cfdi_cancel_wizard,account.group_account_invoice,1,1,1,1
+access_cfdi_cancel_wizard_billing,access_cfdi_cancel_wizard_billing,model_sentinela_cfdi_cancel_wizard,account.group_account_user,1,1,1,1
