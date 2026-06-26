@@ -191,7 +191,7 @@
                                 </tr>
                                 <tr>
                                     <td style="vertical-align:top;"><strong>Lugar de Expedición:</strong> <t t-esc="o.company_id.zip or ''"/></td>
-                                    <td style="vertical-align:top;"><strong>Uso de CFDI:</strong> <t t-esc="o.partner_id.l10n_mx_edi_usage or 'G03'"/></td>
+                                    <td style="vertical-align:top;"><strong>Uso de CFDI:</strong> <t t-if="o.partner_id.l10n_mx_edi_usage"><span t-field="o.partner_id.l10n_mx_edi_usage"/></t><t t-else="">G03 - Gastos en general</t></td>
                                     <td style="vertical-align:top;"><strong>Tipo de Comprobante:</strong> <t t-esc="'E - Egreso' if o.move_type == 'out_refund' else 'I - Ingreso'"/></td>
                                 </tr>
                                 <tr>
