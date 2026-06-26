@@ -449,6 +449,20 @@ class AccountMove(models.Model):
 
             except Exception as e:
                 move.write({'cfdi_status': 'error', 'cfdi_message': f'Error de proceso: {str(e)}'})
+        # UX: si fue UNA factura y quedó en error, mostrar el motivo al usuario (el flujo
+        # atrapa el error y NO lanza, por eso el botón "parecía no hacer nada"). El cron
+        # ignora este return, así que no le afecta.
+        if len(self) == 1 and self.cfdi_status == 'error':
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': _('No se pudo timbrar'),
+                    'message': self.cfdi_message or _('Error del PAC.'),
+                    'type': 'danger',
+                    'sticky': True,
+                },
+            }
         return True
 
     # Alias para compatibilidad con vistas existentes en DB
