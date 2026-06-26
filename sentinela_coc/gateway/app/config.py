@@ -35,10 +35,16 @@ class Settings(BaseSettings):
     otp_max_per_ip: int = 10
     otp_max_per_device: int = 5
 
-    # Driver WhatsApp (EvoApi) — se usa cuando otp_provider=evoapi
+    # Driver WhatsApp (EvoApi) — se usa cuando otp_provider=evoapi. TODO por entorno.
     wa_base_url: str = ""
     wa_api_key: str = ""
     wa_instance: str = ""
+    wa_timeout_sec: float = 8.0
+    wa_retries: int = 2
+    wa_backoff_sec: float = 0.5
+    wa_cb_fail_threshold: int = 5
+    wa_cb_cooldown_sec: int = 30
+    otp_message_template: str = ""   # vacío = plantilla por defecto del driver
 
 
 settings = Settings()

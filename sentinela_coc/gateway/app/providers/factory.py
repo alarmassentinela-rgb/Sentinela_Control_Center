@@ -17,8 +17,16 @@ def get_otp_provider() -> OtpProvider:
     if _singleton is not None:
         return _singleton
     if settings.otp_provider == "evoapi":
+        from .circuit_breaker import CircuitBreaker
         from .otp_evoapi import EvoApiOtpProvider
-        _singleton = EvoApiOtpProvider(settings.wa_base_url, settings.wa_api_key, settings.wa_instance)
+        breaker = CircuitBreaker(fail_threshold=settings.wa_cb_fail_threshold,
+                                 cooldown_sec=settings.wa_cb_cooldown_sec)
+        _singleton = EvoApiOtpProvider(
+            settings.wa_base_url, settings.wa_api_key, settings.wa_instance,
+            template=settings.otp_message_template or None,
+            timeout=settings.wa_timeout_sec, retries=settings.wa_retries,
+            backoff=settings.wa_backoff_sec, breaker=breaker,
+        )
     else:
         _singleton = MockOtpProvider()
     return _singleton

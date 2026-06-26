@@ -17,6 +17,7 @@ from .logging_setup import bind_request_id, configure_logging
 from .routers import auth as auth_router
 from .routers import devices as devices_router
 from .routers import magic as magic_router
+from .routers import providers as providers_router
 from .routers import sessions as sessions_router
 
 configure_logging(settings.log_level)
@@ -71,3 +72,4 @@ app.include_router(sessions_router.router)
 app.include_router(devices_router.router)
 app.include_router(magic_router.public)
 app.include_router(magic_router.internal)
+app.include_router(providers_router.router)

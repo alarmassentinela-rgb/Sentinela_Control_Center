@@ -17,3 +17,7 @@ class OtpProvider(ABC):
     def send(self, phone: str, code: str, channel: str = "whatsapp") -> bool:
         """Entrega el código. Devuelve True si se aceptó para envío."""
         raise NotImplementedError
+
+    def health(self) -> dict:
+        """Estado del proveedor (sobrescrito por implementaciones reales)."""
+        return {"provider": self.name, "healthy": True}
