@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ============================================================
+         Grupo de cliente del Portal COC.
+         Implica base.group_portal (hereda accesos/ reglas estandar del portal).
+         Ancla las record rules de aislamiento entre clientes.
+         ============================================================ -->
+    <record id="group_coc_portal" model="res.groups">
+        <field name="name">Portal COC — Cliente</field>
+        <field name="implied_ids" eval="[(4, ref('base.group_portal'))]"/>
+        <field name="comment">Cliente del Centro de Operaciones del Cliente (COC). El aislamiento de datos entre clientes lo garantizan las record rules de este grupo (primera linea de defensa). El Gateway las complementa, nunca las sustituye.</field>
+    </record>
+
+    <!-- ============================================================
+         RECORD RULES — aislamiento por entidad comercial.
+         Dominio: el cliente solo ve registros cuyo partner cuelga de su
+         commercial_partner_id (cubre titular + sucursales del empresarial;
+         para residencial = solo su propio partner).
+         El alcance fino por sucursal/rol lo aplica el Gateway ENCIMA de este techo.
+         ============================================================ -->
+
+    <record id="rule_coc_subscription" model="ir.rule">
+        <field name="name">COC: el cliente solo ve sus suscripciones</field>
+        <field name="model_id" ref="sentinela_subscriptions.model_sentinela_subscription"/>
+        <field name="groups" eval="[(4, ref('group_coc_portal'))]"/>
+        <field name="domain_force">[('partner_id','child_of',user.partner_id.commercial_partner_id.id)]</field>
+    </record>
+
+    <record id="rule_coc_alarm_event" model="ir.rule">
+        <field name="name">COC: el cliente solo ve sus eventos de alarma</field>
+        <field name="model_id" ref="sentinela_monitoring.model_sentinela_alarm_event"/>
+        <field name="groups" eval="[(4, ref('group_coc_portal'))]"/>
+        <field name="domain_force">[('partner_id','child_of',user.partner_id.commercial_partner_id.id)]</field>
+    </record>
+
+    <record id="rule_coc_monitoring_device" model="ir.rule">
+        <field name="name">COC: el cliente solo ve sus dispositivos de monitoreo</field>
+        <field name="model_id" ref="sentinela_monitoring.model_sentinela_monitoring_device"/>
+        <field name="groups" eval="[(4, ref('group_coc_portal'))]"/>
+        <field name="domain_force">[('partner_id','child_of',user.partner_id.commercial_partner_id.id)]</field>
+    </record>
+
+    <record id="rule_coc_fsm_order" model="ir.rule">
+        <field name="name">COC: el cliente solo ve sus ordenes de servicio</field>
+        <field name="model_id" ref="sentinela_fsm.model_sentinela_fsm_order"/>
+        <field name="groups" eval="[(4, ref('group_coc_portal'))]"/>
+        <field name="domain_force">[('partner_id','child_of',user.partner_id.commercial_partner_id.id)]</field>
+    </record>
+
+    <record id="rule_coc_sign_document" model="ir.rule">
+        <field name="name">COC: el cliente solo ve sus documentos a firmar</field>
+        <field name="model_id" ref="sentinela_digital_sign.model_sentinela_sign_document"/>
+        <field name="groups" eval="[(4, ref('group_coc_portal'))]"/>
+        <field name="domain_force">[('partner_id','child_of',user.partner_id.commercial_partner_id.id)]</field>
+    </record>
+
+    <record id="rule_coc_account_move" model="ir.rule">
+        <field name="name">COC: el cliente solo ve sus facturas (ventas)</field>
+        <field name="model_id" ref="account.model_account_move"/>
+        <field name="groups" eval="[(4, ref('group_coc_portal'))]"/>
+        <field name="domain_force">['&amp;',('move_type','in',['out_invoice','out_refund','out_receipt']),('partner_id','child_of',user.partner_id.commercial_partner_id.id)]</field>
+    </record>
+</odoo>

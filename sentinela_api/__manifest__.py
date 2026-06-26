@@ -15,9 +15,8 @@
         'sentinela_digital_sign',
     ],
     'data': [
-        # WS-2 (record rules + ACL del portal) se agregan tras validar en STAGING:
-        # 'security/portal_security.xml',
-        # 'security/ir.model.access.csv',
+        'security/portal_security.xml',
+        'security/ir.model.access.csv',
     ],
     'installable': True,
     'application': False,
