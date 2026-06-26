@@ -47,10 +47,14 @@
         <field name="domain_force">[('partner_id','child_of',user.partner_id.commercial_partner_id.id)]</field>
     </record>
 
+    <!-- sign.document: digital_sign concede lectura a base.group_portal SIN record rule
+         (hueco pre-existente). Atamos la regla a base.group_portal para proteger a
+         TODOS los usuarios portal (no solo a los del grupo COC). El flujo de firma por
+         magic link usa sudo, asi que no se ve afectado. -->
     <record id="rule_coc_sign_document" model="ir.rule">
-        <field name="name">COC: el cliente solo ve sus documentos a firmar</field>
+        <field name="name">Portal: el cliente solo ve sus documentos a firmar</field>
         <field name="model_id" ref="sentinela_digital_sign.model_sentinela_sign_document"/>
-        <field name="groups" eval="[(4, ref('group_coc_portal'))]"/>
+        <field name="groups" eval="[(4, ref('base.group_portal'))]"/>
         <field name="domain_force">[('partner_id','child_of',user.partner_id.commercial_partner_id.id)]</field>
     </record>
 

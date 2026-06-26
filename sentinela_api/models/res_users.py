@@ -27,15 +27,21 @@ class ResUsers(models.Model):
         """
         partner = partner.sudo()
         Users = self.sudo().with_context(active_test=False)
+        group_portal = self.env.ref('base.group_portal')
+        group_coc = self.env.ref('sentinela_api.group_coc_portal')
 
         existing = Users.search(
             [('partner_id', '=', partner.id), ('share', '=', True)], limit=1
         )
         if existing:
+            # Un usuario portal preexistente (creado por otro flujo) DEBE tener el
+            # grupo COC para que apliquen sus record rules de aislamiento.
+            if group_coc not in existing.groups_id:
+                existing.write({'groups_id': [(4, group_coc.id)]})
+                _logger.info(
+                    "COC: grupo COC asegurado en usuario portal existente uid=%s", existing.id
+                )
             return existing
-
-        group_portal = self.env.ref('base.group_portal')
-        group_coc = self.env.ref('sentinela_api.group_coc_portal')
         login = 'coc.partner.%d@portal.sentinela.mx' % partner.id
 
         vals = {

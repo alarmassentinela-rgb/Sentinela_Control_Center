@@ -126,3 +126,27 @@ class TestPortalIsolation(TransactionCase):
                     a.perm_write or a.perm_create or a.perm_unlink,
                     "El ACL COC de %s debe ser solo lectura" % model,
                 )
+
+    # ---- Regresion del hueco real detectado en STAGING (sign.document) ----
+    def test_preexisting_portal_user_is_isolated(self):
+        """Un usuario SOLO en base.group_portal (creado por otro flujo, sin grupo COC)
+        NO debe ver documentos de otro cliente. Reproduce la fuga detectada en STAGING."""
+        pc = self.env['res.partner'].create({'name': 'Cliente C COC'})
+        pd = self.env['res.partner'].create({'name': 'Cliente D COC'})
+        portal_only = self.env['res.users'].with_context(no_reset_password=True).create({
+            'name': 'Portal Solo C',
+            'login': 'portalonly.c@portal.test',
+            'partner_id': pc.id,
+            'groups_id': [(6, 0, [self.env.ref('base.group_portal').id])],
+        })
+        pdf = base64.b64encode(b'%PDF-1.4 t')
+        Doc = self.env['sentinela.sign.document'].sudo()
+        doc_c = Doc.create({'partner_id': pc.id, 'file': pdf})
+        doc_d = Doc.create({'partner_id': pd.id, 'file': pdf})
+
+        seen = self.env['sentinela.sign.document'].with_user(portal_only).search([])
+        self.assertIn(doc_c, seen)
+        self.assertNotIn(
+            doc_d, seen,
+            "FUGA: un usuario solo-portal no debe ver documentos de otro cliente",
+        )

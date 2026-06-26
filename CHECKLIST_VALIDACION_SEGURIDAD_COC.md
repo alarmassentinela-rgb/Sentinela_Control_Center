@@ -11,20 +11,30 @@ Leyenda estado: ✅ pasa · ❌ falla · ⏳ pendiente · ⛔ bloqueante.
 
 ## Resultados de ejecución (STAGING `Sentinela_STAGING`, 2026-06-26)
 
-**Instalación + suite automatizada (contenedor `odoo-lab`):**
-- Instalación de `sentinela_api` limpia: 138 módulos, `sentinela_api` cargado, Registry OK, **exit 0**.
-- **Suite: `0 failed, 0 error(s) of 11 tests`** → A2–A5, B1, B2, C-N2(IDOR), C-N7/N8(BAC), E1 ✅.
+**Instalación + actualización:** `-i` y `-u` de `sentinela_api` limpios (138 módulos, registry OK, **exit 0**). Sin warnings/errores propios del módulo (2 warnings pre-existentes ajenos: license de `sentinela_subscriptions`, traducción de `om_account_followup`).
 
-**Validación funcional con datos reales (242 suscripciones, con rollback):**
-| Ítem | Resultado |
-|---|---|
-| C-P1 | Cliente A ve **1** sub, solo su entidad (`True`), en **0.006 s** ✅ |
-| C-N1 | A ve **0** subs de B (sin fuga) ✅ |
-| C-P2 | A ve solo sus facturas ✅ |
-| D | Admin interno ve **242** (== total, sin regresión) ✅ |
-| E2 | Búsqueda portal sobre volumen real: **0.006 s** ✅ |
+**Suite automatizada:** **`0 failed, 0 error(s) of 12 tests`** ✅ (incluye IDOR, BAC, aislamiento ±, estructurales, identidad lazy, rendimiento y la regresión del hueco real).
 
-**Pendiente (no bloqueante del núcleo):** recorrido manual por navegador (empresarial multi-sucursal, C-P7), revisión de índices `EXPLAIN` (E4), auditoría WS-3 (F4).
+**🐞 Problema encontrado y corregido (gracias a la validación con datos reales):**
+- **Fuga en `sentinela.sign.document`:** un usuario portal **preexistente** (solo `base.group_portal`, que `digital_sign` dejaba con lectura SIN record rule) veía **142/142** documentos (incl. de otros clientes). La regla atada solo a `group_coc_portal` no lo cubría, y `_coc_ensure_portal_user` no añadía el grupo a usuarios existentes.
+- **Corrección:** (1) record rule de `sign.document` atada a **`base.group_portal`** (protege a TODO usuario portal); (2) `_coc_ensure_portal_user` ahora **asegura el grupo COC** en usuarios preexistentes; (3) **test de regresión** que reproduce el caso.
+- **Re-validado:** `sign.document` → ve **1**, `solo_suyo=True`, fuga **0**. Usuario preexistente solo-portal → ve **1** de 142.
+
+**Validación funcional por modelo (datos reales, con rollback) — FINAL:**
+| Modelo | Portal ve | solo suyo | fuga | admin total |
+|---|---|---|---|---|
+| sentinela.subscription | 1 | ✅ | 0 | 242 |
+| account.move (out_*) | 1 | ✅ | 0 | 108 |
+| sentinela.alarm.event | 315 | ✅ | 0 | 382 |
+| sentinela.monitoring.device | 2 | ✅ | 0 | 265 |
+| sentinela.fsm.order | 2 | ✅ | 0 | 17 |
+| sentinela.sign.document | 1 | ✅ | 0 | 142 |
+
+- **C-P7 empresarial:** empresa "DIVISAS FRONTERA LONGORIA" ve la sub de su sucursal (`child_of`) ✅.
+- **D regresión interna:** admin ve los totales completos por modelo ✅.
+- **E2 rendimiento real:** búsqueda portal **0.006 s** ✅.
+
+**Pendiente (no bloqueante):** revisión de índices `EXPLAIN` (E4), auditoría completa WS-3 (F4), walkthrough opcional por navegador.
 
 ---
 
