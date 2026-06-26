@@ -24,7 +24,6 @@ Integración con el proveedor/distribuidor **Syscom** (API `developers.syscom.mx
 | `_inherit product.category` (`ProductCategory`) | `models/product_category.py` | Campo `syscom_category_id` (mapeo de jerarquía) |
 | `_inherit purchase.order` (`PurchaseOrder`) | `models/purchase_order.py` | Campos `is_syscom_order`, `syscom_order_*`, envíos O2M |
 | `sentinela.syscom.shipment` (`SyscomShipment`) | `models/purchase_order.py` | Guías de rastreo de envíos Syscom (datos manuales) |
-| `syscom.import.queue` (`SyscomImportQueue`) | `models/syscom_queue.py` | Cola de import por categorías con `process_queue()` — ⚠️ ver Trampas |
 | `syscom.import.wizard` (TransientModel) | `wizard/syscom_import_wizard.py` | Importar productos por modelo/marca desde la API |
 | `syscom.cleanup.wizard` (TransientModel) | `wizard/syscom_cleanup_wizard.py` | Depurar descontinuados (elimina sin movimiento / archiva con movimiento) |
 | `_inherit res.config.settings` | `models/res_config_settings.py` | Credenciales API + Telegram + botón "Test connection" |
@@ -56,7 +55,7 @@ Integración con el proveedor/distribuidor **Syscom** (API `developers.syscom.mx
 - **Importación de facturas de compra (manual):** `account.move.action_sync_syscom_invoices()` (botón en vista) trae `/facturas`, crea `in_invoice` contra el partner `ref='PROV-SYSCOM'`, evitando duplicados por `syscom_folio`.
 
 ## Trampas conocidas
-- ⚠️ **`syscom.import.queue` está roto / huérfano:** `process_queue()` llama a `product.template.import_from_syscom_categories(...)` que **no existe en ningún archivo del módulo** → falla siempre. Además **ningún cron** invoca `process_queue` y **no hay entrada en `ir.model.access.csv`** para este modelo. Es código muerto; no usarlo sin implementar el método y los permisos.
+- 🧹 **`syscom.import.queue` ELIMINADO (v18.0.1.8.1):** era código muerto (`process_queue()` llamaba a un método inexistente, sin cron, sin ACL). Removido en la higiene del Sprint 0 del Portal COC. Requiere `-u` del módulo para limpiar el `ir.model` huérfano en DB.
 - **Órdenes a Syscom no implementadas:** `purchase.order.action_send_to_syscom()` y `action_sync_syscom_status()` lanzan `UserError` a propósito (antes "fingían éxito"; limpiados en v18.0.1.2.0). Los campos `syscom_order_*` y los envíos se capturan a mano.
 - **`except: pass` / `except: ...` silenciosos** en el cron (`_cron_update_syscom_products`): errores por producto se cuentan como `errors` pero no se loguean. Telegram es opcional (si no hay token/chat_id, no envía).
 - **Tipo de cambio:** el cron tiene fallback hardcoded `tc = 17.26` si `/tipocambio` falla. El wizard hace su propia conversión vía `base.USD.rate` (lógica distinta a la del cron — no comparten función).

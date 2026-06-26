@@ -20,7 +20,7 @@ El server `192.168.3.2` **NO es un git working tree**. Editar local no cambia na
 | `sentinela_syscom` | 18.0.1.3.0 | ✅ | [CLAUDE.md](sentinela_syscom/CLAUDE.md) | Integración catálogo/proveedor Syscom. |
 | `sentinela_cfdi_prodigia` | 18.0.1.1.14 | dep | [CLAUDE.md](sentinela_cfdi_prodigia/CLAUDE.md) | Timbrado CFDI 4.0 vía Prodigia + diseño factura/remisión. Dependencia de subscriptions. |
 | `sentinela_digital_sign` | 18.0.1.0.0 | dep | [CLAUDE.md](sentinela_digital_sign/CLAUDE.md) | Firma de PDF desde el portal del cliente. Dependencia de subscriptions. |
-| `sentinela_contract_builder` | ⚠️ sin `__manifest__.py` | — | — | Tiene `models/security/views` pero **no es instalable** (falta manifest). Verificar si es legacy antes de tocar. |
+| `sentinela_api` | 18.0.0.1.0 | dep | [CLAUDE.md](sentinela_api/CLAUDE.md) | **Portal COC.** Capa REST/JSON que expone los `sentinela_*` al portal web y app móvil. No duplica lógica. Esqueleto (Sprint 0). |
 
 ## Apps standalone (NO son módulos Odoo)
 | Proyecto | Stack | Dónde / dominio | Doc |
@@ -28,6 +28,7 @@ El server `192.168.3.2` **NO es un git working tree**. Editar local no cambia na
 | `sentinela_netwatch` | Flask + gunicorn + Docker + TimescaleDB | "Vigilante WISP": ping a antenas, dashboard NOC `:8090`, Telegram. Deploy = rsync + `docker compose restart`. | [CLAUDE.md](sentinela_netwatch/CLAUDE.md) |
 | `sentinela_receiver` | Python + systemd | Receptor TCP de señales de alarma (alimenta `sentinela_monitoring`). Reemplaza la familia `receiver_v*.py` legacy. | `sentinela_receiver/README.md` |
 | `sentinela_chatwoot_bot` | FastAPI + Docker | AgentBot de Chatwoot (inbox "Reportes Sentinela"): convierte WhatsApp entrante en orden FSM (Odoo XML-RPC) + handoff a soporte. Server `/opt/sentinela_chatwoot_bot`, red `chatwoot_default`. Deploy = rsync + `docker compose up -d --build`. | [CLAUDE.md](sentinela_chatwoot_bot/CLAUDE.md) |
+| `sentinela_coc` | FastAPI gateway + Next.js SPA + Docker | **Portal Centro de Operaciones del Cliente (COC).** Gateway BFF (`api.sentinela.mx`) + SPA (`portal.sentinela.mx`); consume el addon `sentinela_api`. Deploy = rsync + `docker compose`. STAGING primero. | [README](sentinela_coc/README.md) |
 | `proyecto golfbookvip` | FastAPI + PostgreSQL + Redis | **golfbookvip.com** — reservas/torneos de golf. En server `/opt/golfbookvip`. ⚠️ deploy frontend: `.next` bind-mount → `docker cp` tras build. | `proyecto golfbookvip/README.md` |
 | `proyecto aleasystem` | Next.js 15 | Sitio corporativo AleaSystem.io. Deploy Docker puerto 8300. | — |
 | **SentiCar** (no hay carpeta de fuente en el repo) | Traccar branded | **radar.senticar.com** (GPS, Traccar en `192.168.3.2:8082` LAN, expuesto vía Cloudflare Tunnel). Fuente de la app Android en `~/senticar-app`; los scripts `*_senticar_*.py` de la raíz administran el sitio/portal. | — |
