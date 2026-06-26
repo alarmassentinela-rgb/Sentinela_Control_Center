@@ -140,18 +140,19 @@
                         </tbody>
                     </table>
 
+                    <!-- NOTAS (banda de ancho completo, debajo de conceptos y arriba de totales) -->
+                    <t t-set="_sub_notes" t-value="(o.subscription_id.invoice_notes if o.subscription_id else False) or (o.subscription_ids.filtered(lambda s: s.invoice_notes)[:1].invoice_notes if o.subscription_ids else False)"/>
+                    <t t-if="_sub_notes">
+                        <div style="border:1px solid #e0e0e0; padding:6px 10px; border-radius:3px; margin-bottom:8px; font-size:11px; color:#555;">
+                            <strong>Notas:</strong> <span style="white-space:pre-wrap;"><t t-esc="_sub_notes"/></span>
+                        </div>
+                    </t>
+
                     <!-- TOTALES -->
                     <table style="width:100%; margin-bottom:8px;">
                         <tr>
                             <td style="width:55%; vertical-align:top; font-size:11px; color:#555;">
-                                <t t-set="_sub_notes" t-value="(o.subscription_id.invoice_notes if o.subscription_id else False) or (o.subscription_ids.filtered(lambda s: s.invoice_notes)[:1].invoice_notes if o.subscription_ids else False)"/>
-                                <t t-if="_sub_notes">
-                                    <div style="border:1px solid #e0e0e0; padding:6px; border-radius:3px;">
-                                        <strong>Notas:</strong><br/>
-                                        <span style="white-space:pre-wrap;"><t t-esc="_sub_notes"/></span>
-                                    </div>
-                                </t>
-                                <div style="margin-top:6px; font-size:11px; color:#333;">
+                                <div style="font-size:11px; color:#333;">
                                     <strong>Importe con letra:</strong> <t t-esc="o.currency_id.amount_to_text(o.amount_total)"/> <t t-esc="'%02d/100 M.N.' % int(round((o.amount_total % 1) * 100))"/>
                                     <br/><strong>Moneda:</strong> <t t-esc="o.currency_id.name"/> Pesos Mexicanos
                                 </div>
