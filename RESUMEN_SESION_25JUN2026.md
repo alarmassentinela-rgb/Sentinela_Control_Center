@@ -42,3 +42,45 @@ Cloud no alcanza 192.168.3.2 → todo corre como cron en el propio server + Tele
 5. (Pendientes previos siguen: TAOS/Mercedez GPS fijar posición, filtro zeroCoordinates Traccar.)
 
 > Nota: en el repo aparecen también `b12edfb` (remitente cobranza@ en plantillas) y `b63e11f` (manual PDF de envío de correos) — trabajo de correos ajeno a esta sesión de timbrado.
+
+---
+
+# Sesión vespertina — Migración GPS KAWAC CONSTRUCCIONES → SentiCar
+
+Operación de datos en PROD (sin cambios de código): mover la flota GPS de **KAWAC
+CONSTRUCCIONES** de la plataforma **Smake** a **SentiCar** (Traccar). "Kawac" resultó ser
+el **cliente**, no una plataforma.
+
+## 1. Consolidación en Odoo (52 equipos)
+- **SUB-0395** (KAWAC, plataforma Smake, draft) tenía los **52 GPS reales** (revolvedoras, volteos, trailers…), todos `senticar_id=0/pending`.
+- **SUB-0436** (KAWAC, mismo partner 21517, plataforma SentiCar, active) solo tenía 3 equipos de prueba.
+- Se **reasignó `subscription_id`** de los 52 equipos: SUB-0395 → SUB-0436 (vía XML-RPC, `api_user`). Como `gps_platform` del equipo es `related` de la sub, quedaron en `senticar` solos. SUB-0436 quedó con **55** (52 + 3 prueba).
+- **SUB-0395 cerrada** (`state=cancelled`, `technical_state=cut`, con nota de migración). Quedó vacía.
+- ⚠️ El wizard `transfer_to_subscription` NO sirve aquí: bloquea a propósito mover entre plataformas distintas (smake→senticar). Por eso se reasignó el `subscription_id` directo.
+
+## 2. Alta en Traccar/SentiCar
+- `action_register_senticar` sobre los 52 → **55/55 registrados**, ids únicos, sin duplicados.
+- ⚠️ Trampa: el alta lanza un `Fault` XML-RPC al final del request, **pero el `senticar_device_id` ya commitea** (los servicios SentiCar hacen commit interno) → quedó OK. Verificado por separado: 55 ids, `senticar_sync_msg='Registrado y activo'`.
+- Cliente con visibilidad: usuario `kawac.construcciones@gmail.com` (senticar_user_id 21), grupo compartido.
+
+## 3. Cutover físico por SMS (floLIVE)
+- Comando GT06/Concox: **`SERVER,1,gps.senticar.com,5023,0#`** (modo 1=dominio, puerto Traccar GT06=5023). Plantilla `sentinela.gps.command.template` brand=concox_gt06/set_server.
+- **Piloto** (Revolvedora #11): conectó a SentiCar en **~1 min** (status offline→online en Traccar). Comando validado end-to-end.
+- **Lote:** de 45 equipos reales con SIM nuestra → **39 SMS enviados OK**. Verificado en Traccar: **32 ya reportando** (online) al cierre. Los 7 restantes enviados aterrizarán al encender.
+
+## 4. Diagnóstico de las 6 SIMs con error + 7 sin ICCID
+- **4× error 403 floLIVE = SIM en estado `SUSPEND`** (confirmado con `get_sim_diagnostics`; floLIVE rechaza SMS a SIM suspendida): REVOLVEDORA #10 (~20 meses sin conectar, prob. muerta), BOMBA #3, "No vehiculo.", Volteo #14 (suspendida apenas 12-jun, prob. viva).
+- **2× SIM no hallada en floLIVE** = ICCID malformado/corto en Odoo (17–18 díg vs 19): Volteo #37, "No vehiculo".
+- **7× sin ICCID** (SIM del cliente o no registrada): no se reconfiguran por SMS desde aquí.
+- **Decisión de Enrique:** NO reactivar ninguna SIM por ahora.
+
+## Verificación
+- Traccar API directo: `http://192.168.3.2:8082` (user `odoo@sentinela.com.mx`, pass en `ir.config_parameter sentinela.traccar_api_password`). 32 KAWAC online confirmados.
+
+## Pendientes (migración KAWAC)
+1. **4 SIMs suspendidas** — decidir reactivación (re-genera cobro de datos). REVOLVEDORA #10 casi seguro retirada.
+2. **2 ICCID malformados** — corregir el ICCID en Odoo y reenviar SMS.
+3. **7 sin ICCID** — capturar SIM/reconfigurar a mano en campo.
+4. Las 7 unidades enviadas que aún no reportan: confirmar que entran al encender.
+
+> Memoria: `project_kawac_migracion_senticar.md` (nueva) + línea en `MEMORY.md`. Sin cambios de código → no hubo release ni deploy de módulo.
