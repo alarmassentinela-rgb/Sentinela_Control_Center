@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_cfdi_send_wizard_form" model="ir.ui.view">
+        <field name="name">sentinela.cfdi.send.wizard.form</field>
+        <field name="model">sentinela.cfdi.send.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Enviar al cliente">
+                <div class="alert alert-info" role="alert">
+                    Selecciona a qué correos del cliente enviar la factura/remisión (con PDF, XML y los enlaces).
+                    Quita los que no quieras y/o agrega otros en "Otros correos".
+                </div>
+                <group>
+                    <field name="move_id" invisible="1"/>
+                    <field name="partner_ids" widget="many2many">
+                        <list editable="bottom" create="true">
+                            <field name="name"/>
+                            <field name="email"/>
+                        </list>
+                    </field>
+                    <field name="extra_emails" placeholder="juan@correo.com, otro@correo.com"/>
+                </group>
+                <footer>
+                    <button name="action_send" string="Enviar" type="object" class="btn-primary"/>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

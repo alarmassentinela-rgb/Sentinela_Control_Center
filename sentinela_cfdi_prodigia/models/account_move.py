@@ -288,7 +288,7 @@ class AccountMove(models.Model):
                      timbradas, errores)
         return True
 
-    def _cfdi_send_invoice_email(self, extra_bcc=None, force_to=None):
+    def _cfdi_send_invoice_email(self, extra_bcc=None, force_to=None, force_recipients=None):
         """Envía la factura/remisión por correo al cliente con el cuerpo branded.
 
         Construye el correo a mano (ir.mail_server) para poder incrustar el **QR de
@@ -297,8 +297,12 @@ class AccountMove(models.Model):
         reproduce el CC: cliente (`invoice_cc_partner_ids`) + suscripción
         (`subscription_ids.extra_invoice_partner_ids`). `extra_bcc`/`force_to` son para pruebas."""
         self.ensure_one()
-        recipient = force_to or self.partner_id.email
-        if not recipient:
+        # Destinatarios: lista explícita (wizard) o el correo del cliente.
+        if force_recipients:
+            to_list = [e for e in force_recipients if e]
+        else:
+            to_list = [e for e in [force_to or self.partner_id.email] if e]
+        if not to_list:
             _logger.info("CFDI mail: %s sin correo de cliente, no se envía.", self.name)
             return False
         template = self.env.ref('account.email_template_edi_invoice', raise_if_not_found=False)
@@ -320,17 +324,20 @@ class AccountMove(models.Model):
             xml_name = self.cfdi_xml_filename or ("CFDI_%s.xml" % (self.cfdi_uuid or self.name)).replace('/', '_')
             attachments.append((xml_name, base64.b64decode(self.cfdi_xml), 'application/xml'))
 
-        # CC: a nivel cliente + a nivel suscripción.
-        empty = self.env['res.partner']
-        cc_cli = getattr(self.partner_id, 'invoice_cc_partner_ids', empty)
-        cc_sub = self.subscription_ids.mapped('extra_invoice_partner_ids') if 'subscription_ids' in self._fields else empty
-        cc_partners = (cc_sub | cc_cli).filtered(lambda p: p.email and p.id != self.partner_id.id)
-        email_cc = cc_partners.mapped('email') or None
+        # CC automático (cliente + suscripción) SOLO cuando no se eligieron destinatarios a mano;
+        # si el wizard pasó force_recipients, se respeta esa lista tal cual (sin CC extra).
+        email_cc = None
+        if not force_recipients:
+            empty = self.env['res.partner']
+            cc_cli = getattr(self.partner_id, 'invoice_cc_partner_ids', empty)
+            cc_sub = self.subscription_ids.mapped('extra_invoice_partner_ids') if 'subscription_ids' in self._fields else empty
+            cc_partners = (cc_sub | cc_cli).filtered(lambda p: p.email and p.id != self.partner_id.id)
+            email_cc = cc_partners.mapped('email') or None
         email_bcc = [extra_bcc] if extra_bcc else None
 
         IrMailServer = self.env['ir.mail_server']
         msg = IrMailServer.build_email(
-            email_from=email_from, email_to=[recipient], subject=subject, body=body,
+            email_from=email_from, email_to=to_list, subject=subject, body=body,
             email_cc=email_cc, email_bcc=email_bcc, attachments=attachments, subtype='html',
         )
         # QR de Telegram inline (cid:telegram_qr) — solo si el cliente NO está vinculado.
@@ -346,27 +353,32 @@ class AccountMove(models.Model):
             _logger.warning("CFDI mail: no se pudo adjuntar QR Telegram de %s: %s", self.name, e)
 
         IrMailServer.send_email(msg)
-        _logger.info("CFDI mail: %s enviada a %s%s", self.name, recipient,
+        _logger.info("CFDI mail: %s enviada a %s%s", self.name, ', '.join(to_list),
                      (" CC %s" % email_cc) if email_cc else "")
         return True
 
     def action_cfdi_send_email_button(self):
-        """Botón 'Enviar al cliente': manda el correo branded (logo, banco, pago en tienda,
-        WhatsApp, Telegram botón+QR, PDF+XML). USAR ESTE, no el 'Enviar e imprimir' nativo de
-        Odoo (que envuelve el correo en su layout, agrega su propio botón de portal y NO trae
-        el QR inline)."""
+        """Botón 'Enviar al cliente': abre el asistente para ELEGIR a qué correos enviar
+        (contactos registrados del cliente) y/o capturar correos manuales. El correo es el
+        branded (logo, banco, pago en tienda, WhatsApp, Telegram botón+QR, PDF+XML)."""
         self.ensure_one()
-        if not self.partner_id.email:
-            raise UserError(_('El cliente no tiene correo configurado.'))
-        self._cfdi_send_invoice_email()
+        # Candidatos: cliente + sus contactos con correo + CC configurados (cliente y suscripción).
+        empty = self.env['res.partner']
+        cands = self.partner_id
+        cands |= self.partner_id.child_ids
+        cands |= getattr(self.partner_id, 'invoice_cc_partner_ids', empty)
+        if 'subscription_ids' in self._fields:
+            cands |= self.subscription_ids.mapped('extra_invoice_partner_ids')
+        cands = cands.filtered(lambda p: p.email)
         return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': _('Correo enviado'),
-                'message': _('Enviada a %s.') % self.partner_id.email,
-                'type': 'success',
-                'sticky': False,
+            'type': 'ir.actions.act_window',
+            'name': _('Enviar al cliente'),
+            'res_model': 'sentinela.cfdi.send.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_move_id': self.id,
+                'default_partner_ids': [(6, 0, cands.ids)],
             },
         }
 
