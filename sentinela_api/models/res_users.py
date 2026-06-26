@@ -7,7 +7,11 @@ identidad), vinculado al res.partner del cliente. Asi:
   - Las RECORD RULES de Odoo (basadas en user.partner_id) son la PRIMERA linea de
     defensa del aislamiento entre clientes; el Gateway nunca las sustituye.
 """
+import logging
+
 from odoo import api, models
+
+_logger = logging.getLogger('sentinela_api.security')
 
 
 class ResUsers(models.Model):
@@ -42,4 +46,10 @@ class ResUsers(models.Model):
             'groups_id': [(6, 0, [group_portal.id, group_coc.id])],
             'active': True,
         }
-        return Users.with_context(no_reset_password=True).create(vals)
+        user = Users.with_context(no_reset_password=True).create(vals)
+        # Auditoria de seguridad (WS-3 ampliara con IP/origen desde el Gateway).
+        _logger.info(
+            "COC: usuario portal creado uid=%s login=%s partner_id=%s",
+            user.id, user.login, partner.id,
+        )
+        return user
