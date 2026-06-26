@@ -85,6 +85,24 @@ class ProductTemplate(models.Model):
             'syscom_datasheet_url': datasheet,
         }
 
+    def _syscom_cost_to_uom(self, rec, vals):
+        """Caso bobina (compra=Bobina, venta=metro): el costo de Syscom es por la UdM de
+        COMPRA (1 bobina), pero standard_price debe ir por la UdM de inventario/venta (metro).
+        Si uom_po_id != uom_id (misma categoría), divide vals['standard_price'] entre la
+        cantidad de uom_id que hay en 1 uom_po_id (los metros de la bobina). General: sirve
+        para cualquier producto con UdM de compra distinta a la de venta."""
+        if vals.get('standard_price') and rec.uom_po_id and rec.uom_id \
+           and rec.uom_po_id != rec.uom_id \
+           and rec.uom_po_id.category_id == rec.uom_id.category_id:
+            try:
+                qty = rec.uom_po_id._compute_quantity(1.0, rec.uom_id)
+                if qty:
+                    vals = dict(vals)
+                    vals['standard_price'] = vals['standard_price'] / qty
+            except Exception:
+                pass
+        return vals
+
     # ------------------------------------------------------------------
     # Helpers compartidos (cron + wizards)
     # ------------------------------------------------------------------
@@ -342,6 +360,7 @@ class ProductTemplate(models.Model):
                                 _um = (p.get('unidad_de_medida') or {}).get('clave_unidad_sat')
                                 if _um and not rec.l10n_mx_edi_um_code_sat:
                                     v['l10n_mx_edi_um_code_sat'] = _um
+                            v = self._syscom_cost_to_uom(rec, v)
                             rec.write(v)
                             stats['updated'] += 1
                         except Exception:
@@ -447,6 +466,7 @@ class ProductTemplate(models.Model):
                                 v['l10n_mx_edi_um_code_sat'] = _um
                         if (rec.list_price or 0.0) <= 1.0:
                             v['list_price'] = (msrp * tc) if msrp > 0 else (costo * tc * 1.30)
+                        v = self._syscom_cost_to_uom(rec, v)
                         rec.write(v)
                         stats['updated'] += 1
                 else:
