@@ -294,54 +294,66 @@ class AccountMove(models.Model):
                      timbradas, errores)
         return True
 
-    def _cfdi_send_invoice_email(self):
-        """Envía la factura por correo al cliente (con el CFDI ya pegado).
+    def _cfdi_send_invoice_email(self, extra_bcc=None, force_to=None):
+        """Envía la factura/remisión por correo al cliente con el cuerpo branded.
 
-        Pensado para llamarse DESPUÉS de timbrar (desde el cron de auto-timbrado),
-        de modo que el cliente reciba el PDF como FACTURA y no como remisión. Reproduce
-        el CC del flujo de generación: a nivel cliente (`invoice_cc_partner_ids`) +
-        a nivel suscripción (`subscription_ids.extra_invoice_partner_ids`)."""
+        Construye el correo a mano (ir.mail_server) para poder incrustar el **QR de
+        Telegram inline (cid)** — Gmail bloquea las imágenes base64 del cuerpo, por eso
+        va como adjunto inline con Content-ID. Adjunta PDF + (si hay) XML del CFDI, y
+        reproduce el CC: cliente (`invoice_cc_partner_ids`) + suscripción
+        (`subscription_ids.extra_invoice_partner_ids`). `extra_bcc`/`force_to` son para pruebas."""
         self.ensure_one()
-        if not self.partner_id.email:
+        recipient = force_to or self.partner_id.email
+        if not recipient:
             _logger.info("CFDI mail: %s sin correo de cliente, no se envía.", self.name)
             return False
         template = self.env.ref('account.email_template_edi_invoice', raise_if_not_found=False)
         if not template:
             return False
-        Att = self.env['ir.attachment']
-        att_ids = []
-        # 1) PDF de la factura (el reporte CFDI reasignado en account.account_invoices).
-        #    El template account.email_template_edi_invoice NO trae reporte adjunto, así que
-        #    el PDF se genera y adjunta explícitamente para garantizar la entrega.
+        subject = template._render_field('subject', self.ids)[self.id]
+        body = template._render_field('body_html', self.ids)[self.id]
+        email_from = template._render_field('email_from', self.ids)[self.id] or self.company_id.email
+
+        # Adjuntos: PDF (Factura/Remisión según timbre) + XML del CFDI si existe.
+        label = 'Factura' if self.cfdi_uuid else 'Remision'
+        attachments = []
         try:
             pdf_content, _ctype = self.env['ir.actions.report']._render_qweb_pdf('account.account_invoices', self.ids)
-            pdf_att = Att.create({
-                'name': ("Factura_%s.pdf" % (self.name or 'CFDI')).replace('/', '_'),
-                'datas': base64.b64encode(pdf_content),
-                'res_model': 'account.move', 'res_id': self.id, 'mimetype': 'application/pdf',
-            })
-            att_ids.append(pdf_att.id)
+            attachments.append((("%s_%s.pdf" % (label, self.name or 'CFDI')).replace('/', '_'), pdf_content, 'application/pdf'))
         except Exception as e:
             _logger.warning("CFDI mail: no se pudo generar el PDF de %s: %s", self.name, e)
-        # 2) XML del CFDI timbrado (entrega fiscal completa).
         if self.cfdi_xml:
             xml_name = self.cfdi_xml_filename or ("CFDI_%s.xml" % (self.cfdi_uuid or self.name)).replace('/', '_')
-            xml_att = Att.create({
-                'name': xml_name, 'datas': self.cfdi_xml,
-                'res_model': 'account.move', 'res_id': self.id, 'mimetype': 'application/xml',
-            })
-            att_ids.append(xml_att.id)
-        # CC: a nivel cliente (invoice_cc_partner_ids) + a nivel suscripción.
+            attachments.append((xml_name, base64.b64decode(self.cfdi_xml), 'application/xml'))
+
+        # CC: a nivel cliente + a nivel suscripción.
         empty = self.env['res.partner']
         cc_cli = getattr(self.partner_id, 'invoice_cc_partner_ids', empty)
         cc_sub = self.subscription_ids.mapped('extra_invoice_partner_ids') if 'subscription_ids' in self._fields else empty
         cc_partners = (cc_sub | cc_cli).filtered(lambda p: p.email and p.id != self.partner_id.id)
-        email_values = {'attachment_ids': att_ids}
-        if cc_partners:
-            email_values['email_cc'] = ','.join(cc_partners.mapped('email'))
-        template.send_mail(self.id, force_send=True, email_values=email_values)
-        _logger.info("CFDI mail: factura %s enviada a %s (adjuntos: %s%s).", self.name, self.partner_id.email,
-                     att_ids, (" CC: %s" % email_values['email_cc']) if email_values.get('email_cc') else "")
+        email_cc = cc_partners.mapped('email') or None
+        email_bcc = [extra_bcc] if extra_bcc else None
+
+        IrMailServer = self.env['ir.mail_server']
+        msg = IrMailServer.build_email(
+            email_from=email_from, email_to=[recipient], subject=subject, body=body,
+            email_cc=email_cc, email_bcc=email_bcc, attachments=attachments, subtype='html',
+        )
+        # QR de Telegram inline (cid:telegram_qr) — solo si el cliente NO está vinculado.
+        try:
+            qr_b64 = self.partner_id._telegram_qr_for_report() if hasattr(self.partner_id, '_telegram_qr_for_report') else False
+            if qr_b64:
+                from email.mime.image import MIMEImage
+                img = MIMEImage(base64.b64decode(qr_b64), _subtype='png')
+                img.add_header('Content-ID', '<telegram_qr>')
+                img.add_header('Content-Disposition', 'inline', filename='telegram_qr.png')
+                msg.attach(img)
+        except Exception as e:
+            _logger.warning("CFDI mail: no se pudo adjuntar QR Telegram de %s: %s", self.name, e)
+
+        IrMailServer.send_email(msg)
+        _logger.info("CFDI mail: %s enviada a %s%s", self.name, recipient,
+                     (" CC %s" % email_cc) if email_cc else "")
         return True
 
     def action_cfdi_stamp_prodigia(self):
