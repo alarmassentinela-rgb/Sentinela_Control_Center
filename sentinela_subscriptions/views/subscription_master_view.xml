@@ -185,6 +185,9 @@
                             <group string="Notas Internas">
                                 <field name="description" readonly="is_contract_locked" nolabel="1"/>
                             </group>
+                            <group string="Notas para Factura (visible al cliente)">
+                                <field name="invoice_notes" nolabel="1" placeholder="Texto que aparece en el recuadro Notas de la factura PDF del cliente."/>
+                            </group>
                         </page>
                     </notebook>
                 </sheet>

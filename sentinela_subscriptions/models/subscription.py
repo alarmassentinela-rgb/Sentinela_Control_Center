@@ -161,6 +161,10 @@ class SentinelaSubscription(models.Model):
         return [('state', '=', 'suspension'), ('technical_state_date', op_map[operator], cutoff_date)]
 
     description = fields.Html(string='Notas Internas')
+    invoice_notes = fields.Text(
+        string='Notas para Factura',
+        help='Texto que aparece en el recuadro "Notas" de la factura/remisión PDF del cliente. '
+             'A diferencia de las Notas Internas, ESTE sí lo ve el cliente.')
 
     # --- Ubicación Técnica (Categoría 1: dirección de INSTALACIÓN, fija) ---
     # NO confundir con gps_sim_lat/lon (Categoría 2: ubicación móvil del rastreador GPS/SIM).
