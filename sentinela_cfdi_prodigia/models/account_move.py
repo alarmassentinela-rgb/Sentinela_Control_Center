@@ -534,15 +534,20 @@ class AccountMove(models.Model):
         return True
 
     def _get_emisor_bank_info(self):
-        """Cuenta bancaria FISCAL del emisor (Banorte) para el PDF. Devuelve dict o {}."""
+        """Cuenta bancaria del emisor para el PDF, según el tipo de cliente:
+        - Cliente que REQUIERE FACTURA (CFDI) -> Banorte (cuenta fiscal).
+        - Cliente de solo REMISIÓN (`requiere_factura`=False) -> HSBC.
+        Devuelve dict o {}."""
         self.ensure_one()
         Bank = self.env['res.partner.bank'].sudo()
+        requiere = getattr(self.partner_id, 'requiere_factura', True)
+        banco_pref = 'banorte' if requiere else 'hsbc'
         acc = Bank.search([('l10n_mx_edi_clabe', '!=', False),
-                           ('bank_id.name', 'ilike', 'banorte')], order='id', limit=1)
+                           ('bank_id.name', 'ilike', banco_pref)], order='id', limit=1)
         if not acc:
             return {}
         return {
-            'banco': acc.bank_id.name or 'BANORTE',
+            'banco': acc.bank_id.name or banco_pref.upper(),
             'cuenta': acc.acc_number or '',
             'clabe': acc.l10n_mx_edi_clabe or '',
             'titular': acc.acc_holder_name or '',
