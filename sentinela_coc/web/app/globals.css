@@ -17,7 +17,8 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Mobile-first: el contenido vive en una columna centrada tipo app. */
+/* Mobile-first: columna tipo app en teléfono; se ensancha por breakpoints en
+   tablet (md) y escritorio (xl) hasta ~1520px, manteniendo una sola SPA. */
 .app-shell {
-  @apply mx-auto w-full max-w-app min-h-dvh bg-slate-50 flex flex-col;
+  @apply mx-auto w-full max-w-app md:max-w-3xl lg:max-w-5xl xl:max-w-desktop min-h-dvh bg-slate-50 flex flex-col;
 }

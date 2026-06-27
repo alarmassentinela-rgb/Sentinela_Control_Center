@@ -39,15 +39,17 @@ export default function FacturacionPage() {
 
       <h2 className="px-1 text-sm font-semibold text-muted">Historial</h2>
       {list.loading && (
-        <>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <SkeletonCard />
           <SkeletonCard />
-        </>
+        </div>
       )}
       {list.error && <ErrorState message={list.error} onRetry={list.reload} />}
       {list.data &&
         (list.data.items.length ? (
-          list.data.items.map((inv) => <InvoiceRow key={inv.id} inv={inv} />)
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {list.data.items.map((inv) => <InvoiceRow key={inv.id} inv={inv} />)}
+          </div>
         ) : (
           <EmptyState icon="🧾" title="Sin facturas todavía" />
         ))}

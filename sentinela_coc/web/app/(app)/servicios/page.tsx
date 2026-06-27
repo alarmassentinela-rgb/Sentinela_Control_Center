@@ -14,19 +14,21 @@ export default function ServiciosPage() {
   );
 
   return (
-    <div className="space-y-3 px-4 pb-4">
+    <div className="px-4 pb-4">
       <PageHeader title="Mis Servicios" />
-      {loading && (
-        <>
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
-        </>
-      )}
       {error && <ErrorState message={error} onRetry={reload} />}
+      {loading && (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+      )}
       {data &&
         (data.items.length ? (
-          data.items.map((s) => <ServiceCard key={s.id} s={s} />)
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {data.items.map((s) => <ServiceCard key={s.id} s={s} />)}
+          </div>
         ) : (
           <EmptyState icon="🧩" title="Aún no tienes servicios" hint="Cuando contrates un servicio aparecerá aquí." />
         ))}

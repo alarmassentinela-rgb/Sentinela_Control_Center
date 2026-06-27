@@ -43,7 +43,7 @@ export default function FacturaDetallePage() {
   const label = data?.doc_type === "factura" ? "Factura" : "Remisión";
 
   return (
-    <div className="space-y-3 px-4 pb-4">
+    <div className="space-y-3 px-4 pb-4 lg:mx-auto lg:max-w-2xl">
       <PageHeader title={label} />
       {loading && (
         <Card>

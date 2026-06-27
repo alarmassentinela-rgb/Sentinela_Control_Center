@@ -14,7 +14,7 @@ const config: Config = {
         ink: "#0f172a",
         muted: "#64748b",
       },
-      maxWidth: { app: "480px" },
+      maxWidth: { app: "480px", desktop: "1520px" },
       borderRadius: { xl2: "1.25rem" },
     },
   },

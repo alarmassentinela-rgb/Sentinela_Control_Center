@@ -48,7 +48,7 @@ export default function LoginPage() {
 
   return (
     <main className="app-shell justify-center px-6">
-      <div className="space-y-6 pb-16">
+      <div className="mx-auto w-full max-w-sm space-y-6 pb-16">
         <div className="text-center">
           <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand text-2xl text-white">🛡️</div>
           <h1 className="text-2xl font-bold text-ink">Sentinela</h1>

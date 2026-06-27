@@ -26,7 +26,7 @@ export default function ServicioDetallePage() {
   const { data, loading, error, reload } = useQuery(() => apiGet<Service>(`/v1/services/${id}`), [id]);
 
   return (
-    <div className="space-y-3 px-4 pb-4">
+    <div className="space-y-3 px-4 pb-4 lg:mx-auto lg:max-w-2xl">
       <PageHeader title="Servicio" />
       {loading && (
         <Card>
