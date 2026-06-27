@@ -49,6 +49,25 @@ def _proxy(odoo, sess, path, request, params=None):
     raise HTTPException(status_code=502, detail="odoo_unavailable")
 
 
+# ---------------- Config / branding (público) ----------------
+_THEME_FALLBACK = {
+    "app_name": "Sentinela", "logo_url": "", "primary_color": "#0B5FFF",
+    "support_phone": "", "support_whatsapp": "",
+}
+
+
+@router.get("/config/theme", summary="Branding del portal (público)")
+def config_theme(odoo=Depends(deps.get_odoo_client)):
+    # Endpoint público de Odoo (no requiere sesión). Cache corto + fallback de marca.
+    hit = cache.get("theme")
+    if hit:
+        return hit[0]
+    status, body = odoo.get_json_as("", "/v1/config/theme")
+    theme = body if (status == 200 and isinstance(body, dict)) else _THEME_FALLBACK
+    cache.set("theme", theme, DASHBOARD_TTL_SEC)
+    return theme
+
+
 # ---------------- Mis Servicios ----------------
 @router.get("/services", summary="Lista de servicios del cliente")
 def services(request: Request, sess=Depends(deps.current_session), odoo=Depends(deps.get_odoo_client)):

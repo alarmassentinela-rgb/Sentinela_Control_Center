@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand-primary: #0b5fff;
+  --brand-primary-dark: #0846c2;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-slate-50 text-ink antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Mobile-first: el contenido vive en una columna centrada tipo app. */
+.app-shell {
+  @apply mx-auto w-full max-w-app min-h-dvh bg-slate-50 flex flex-col;
+}
