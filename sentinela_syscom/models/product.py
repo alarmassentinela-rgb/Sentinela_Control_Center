@@ -379,8 +379,8 @@ class ProductTemplate(models.Model):
                         # Opción B: list_price solo en rescate (<=1.0)
                         if (lp or 0.0) <= 1.0:
                             v['list_price'] = (msrp * tc) if msrp > 0 else (costo * tc * 1.30)
+                        rec = self.browse(tid)
                         try:
-                            rec = self.browse(tid)
                             # ClaveProdServ/ClaveUnidad SAT: llenar SOLO si están vacías (no pisar lo manual).
                             if 'l10n_mx_edi_code_sat' in rec._fields:
                                 if p.get('sat_key') and not rec.l10n_mx_edi_code_sat:
@@ -389,10 +389,18 @@ class ProductTemplate(models.Model):
                                 if _um and not rec.l10n_mx_edi_um_code_sat:
                                     v['l10n_mx_edi_um_code_sat'] = _um
                             v = self._syscom_cost_to_uom(rec, v)
-                            rec.write(v)
+                            # savepoint + flush: si UN write tiene dato malo, se revierte SOLO ese
+                            # producto. Sin esto, el error deja el cursor abortado y todo lo que sigue
+                            # (commits, demás writes, hasta el nextcall del cron) truena con
+                            # "current transaction is aborted" → el "ERROR ROBOT" en cascada.
+                            with self.env.cr.savepoint():
+                                rec.write(v)
+                                rec.flush_recordset()
                             stats['updated'] += 1
-                        except Exception:
+                        except Exception as e:
                             stats['errors'] += 1
+                            _logger.warning("SYSCOM Fase1 write FALLÓ id=%s code=%s pid=%s: %s",
+                                            tid, rec.default_code or '?', pid, e)
                     else:
                         new_items.setdefault(pid, p)
                     processed += 1
@@ -412,13 +420,16 @@ class ProductTemplate(models.Model):
                 status, dj = details.get(pid, ('err', None))
                 detail = dj if (status == 'ok' and isinstance(dj, dict)) else payload
                 try:
-                    prod = wiz._import_single_product(detail)
+                    with self.env.cr.savepoint():
+                        prod = wiz._import_single_product(detail)
+                        self.env.flush_all()
                     if prod:
                         swept.add(prod.id)
                         stats['created'] += 1
                         since += 1
-                except Exception:
+                except Exception as e:
                     stats['errors'] += 1
+                    _logger.warning("SYSCOM alta NUEVO FALLÓ pid=%s: %s", pid, e)
                 if since >= 25:
                     self.env.cr.commit()
                     self.env.invalidate_all()
@@ -465,42 +476,46 @@ class ProductTemplate(models.Model):
             status, dj = details.get(sid, ('err', None))
             rec = self.browse(tid)
             try:
-                if status == '404':
-                    if not rec.syscom_discontinued:
-                        rec.write({'syscom_discontinued': True, 'syscom_discontinued_date': fields.Date.today()})
-                    stats['discontinued'] += 1
-                elif status == 'ok' and isinstance(dj, dict):
-                    if dj.get('descontinuado') is True and not rec.syscom_discontinued:
-                        rec.write({'syscom_discontinued': True, 'syscom_discontinued_date': fields.Date.today()})
+                with self.env.cr.savepoint():
+                    if status == '404':
+                        if not rec.syscom_discontinued:
+                            rec.write({'syscom_discontinued': True, 'syscom_discontinued_date': fields.Date.today()})
                         stats['discontinued'] += 1
-                    precios = dj.get('precios') or {}
-                    costo = float(precios.get('precio_descuento') or 0)
-                    msrp = float(precios.get('precio_lista') or 0)
-                    if costo > 0:
-                        v = {
-                            'syscom_id': sid,
-                            'syscom_price_usd': costo, 'syscom_list_price_usd': msrp,
-                            'standard_price': costo * tc,
-                            'syscom_stock': float((dj.get('existencia') or {}).get('nuevo', 0)),
-                            'syscom_last_update': fields.Datetime.now(),
-                        }
-                        v.update(self._syscom_extract_enrichment(dj))
-                        # ClaveProdServ/ClaveUnidad SAT: llenar SOLO si están vacías.
-                        if 'l10n_mx_edi_code_sat' in rec._fields:
-                            if dj.get('sat_key') and not rec.l10n_mx_edi_code_sat:
-                                v['l10n_mx_edi_code_sat'] = dj['sat_key']
-                            _um = (dj.get('unidad_de_medida') or {}).get('clave_unidad_sat')
-                            if _um and not rec.l10n_mx_edi_um_code_sat:
-                                v['l10n_mx_edi_um_code_sat'] = _um
-                        if (rec.list_price or 0.0) <= 1.0:
-                            v['list_price'] = (msrp * tc) if msrp > 0 else (costo * tc * 1.30)
-                        v = self._syscom_cost_to_uom(rec, v)
-                        rec.write(v)
-                        stats['updated'] += 1
-                else:
-                    stats['errors'] += 1
-            except Exception:
+                    elif status == 'ok' and isinstance(dj, dict):
+                        if dj.get('descontinuado') is True and not rec.syscom_discontinued:
+                            rec.write({'syscom_discontinued': True, 'syscom_discontinued_date': fields.Date.today()})
+                            stats['discontinued'] += 1
+                        precios = dj.get('precios') or {}
+                        costo = float(precios.get('precio_descuento') or 0)
+                        msrp = float(precios.get('precio_lista') or 0)
+                        if costo > 0:
+                            v = {
+                                'syscom_id': sid,
+                                'syscom_price_usd': costo, 'syscom_list_price_usd': msrp,
+                                'standard_price': costo * tc,
+                                'syscom_stock': float((dj.get('existencia') or {}).get('nuevo', 0)),
+                                'syscom_last_update': fields.Datetime.now(),
+                            }
+                            v.update(self._syscom_extract_enrichment(dj))
+                            # ClaveProdServ/ClaveUnidad SAT: llenar SOLO si están vacías.
+                            if 'l10n_mx_edi_code_sat' in rec._fields:
+                                if dj.get('sat_key') and not rec.l10n_mx_edi_code_sat:
+                                    v['l10n_mx_edi_code_sat'] = dj['sat_key']
+                                _um = (dj.get('unidad_de_medida') or {}).get('clave_unidad_sat')
+                                if _um and not rec.l10n_mx_edi_um_code_sat:
+                                    v['l10n_mx_edi_um_code_sat'] = _um
+                            if (rec.list_price or 0.0) <= 1.0:
+                                v['list_price'] = (msrp * tc) if msrp > 0 else (costo * tc * 1.30)
+                            v = self._syscom_cost_to_uom(rec, v)
+                            rec.write(v)
+                            stats['updated'] += 1
+                    else:
+                        stats['errors'] += 1
+                    rec.flush_recordset()
+            except Exception as e:
                 stats['errors'] += 1
+                _logger.warning("SYSCOM Fase2 FALLÓ id=%s code=%s sid=%s: %s",
+                                rec.id, rec.default_code or '?', sid, e)
             since += 1
             if since % 200 == 0:
                 self.env.cr.commit()
