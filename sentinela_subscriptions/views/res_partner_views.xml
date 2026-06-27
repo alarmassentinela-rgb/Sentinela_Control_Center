@@ -43,19 +43,32 @@
                 <div class="o_row">
                     <field name="phone" class="oe_inline"/>
                     <span class="mx-1 text-muted">ext.</span>
-                    <field name="phone_extension" class="oe_inline" placeholder="0000"/>
+                    <field name="phone_extension" class="oe_inline" placeholder="0000" style="max-width:48px;"/>
                 </div>
             </xpath>
-            <!-- Teléfonos / celulares adicionales (pestaña; lista editable simple, sin handle) -->
+            <!-- Celular sin widget phone (quita el llamar/SMS al pasar el cursor) -->
+            <xpath expr="//field[@name='mobile']" position="attributes">
+                <attribute name="widget"></attribute>
+            </xpath>
+            <!-- Teléfonos / celulares adicionales (pestaña). Lista NO editable + formulario emergente
+                 para agregar (vía más robusta que la edición inline). -->
             <xpath expr="//notebook" position="inside">
                 <page string="📞 Teléfonos" name="phones_extra">
                     <field name="phone_line_ids">
-                        <list editable="bottom">
-                            <field name="label" placeholder="Oficina / Casa / Celular / WhatsApp"/>
-                            <field name="number" placeholder="Número telefónico o celular"/>
+                        <list>
+                            <field name="label"/>
+                            <field name="number"/>
                             <field name="extension"/>
                             <field name="note"/>
                         </list>
+                        <form>
+                            <group>
+                                <field name="label" placeholder="Oficina / Casa / Celular / WhatsApp"/>
+                                <field name="number" placeholder="Número telefónico o celular"/>
+                                <field name="extension" placeholder="ext. (4 díg.)"/>
+                                <field name="note"/>
+                            </group>
+                        </form>
                     </field>
                 </page>
             </xpath>

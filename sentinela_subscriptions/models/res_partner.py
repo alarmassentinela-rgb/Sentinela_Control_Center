@@ -9,7 +9,7 @@ class ResPartner(models.Model):
     _inherit = 'res.partner'
 
     # --- Teléfonos: extensión del principal + lista de números adicionales ---
-    phone_extension = fields.Char(string='Ext.', help='Extensión del teléfono principal.')
+    phone_extension = fields.Char(string='Ext.', size=4, help='Extensión del teléfono principal (máx 4 dígitos).')
     phone_line_ids = fields.One2many('res.partner.phone', 'partner_id', string='Teléfonos adicionales')
 
     # --- SentiCar / Traccar (usuario del cliente en la plataforma propia) ---
@@ -177,5 +177,5 @@ class ResPartnerPhone(models.Model):
     sequence = fields.Integer(default=10)
     label = fields.Char(string='Etiqueta', help='Ej: Oficina, Casa, Celular, WhatsApp, Recepción…')
     number = fields.Char(string='Número', required=True)
-    extension = fields.Char(string='Ext.')
+    extension = fields.Char(string='Ext.', size=4)
     note = fields.Char(string='Nota')
