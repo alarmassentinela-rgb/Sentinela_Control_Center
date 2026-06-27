@@ -988,7 +988,7 @@ class SentinelaSubscription(models.Model):
                     suc_txt = " | Sucursales (%d): %s" % (
                         len(gsubs), ", ".join((s.service_address_id.name or s.name) for s in gsubs))
                 else:
-                    suc_txt = " (%d servicios)" % len(gsubs)
+                    suc_txt = " (%d servicio%s)" % (len(gsubs), '' if len(gsubs) == 1 else 's')
                 per_txt = "" if single_period else (" - %s" % gsubs[0]._billing_period_label())
                 desc = "Servicio: %s%s%s" % (prod.name, per_txt, suc_txt)
                 line_cmds.append((0, 0, {
