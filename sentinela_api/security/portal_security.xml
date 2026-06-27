@@ -64,4 +64,12 @@
         <field name="groups" eval="[(4, ref('group_coc_portal'))]"/>
         <field name="domain_force">['&amp;',('move_type','in',['out_invoice','out_refund','out_receipt']),('partner_id','child_of',user.partner_id.commercial_partner_id.id)]</field>
     </record>
+
+    <!-- Sprint 1: historial de pagos (solo lectura). Mismo techo por entidad comercial. -->
+    <record id="rule_coc_account_payment" model="ir.rule">
+        <field name="name">COC: el cliente solo ve sus pagos</field>
+        <field name="model_id" ref="account.model_account_payment"/>
+        <field name="groups" eval="[(4, ref('group_coc_portal'))]"/>
+        <field name="domain_force">[('partner_id','child_of',user.partner_id.commercial_partner_id.id)]</field>
+    </record>
 </odoo>

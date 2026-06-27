@@ -5,4 +5,5 @@ access_coc_monitoring_device,coc.monitoring.device.read,sentinela_monitoring.mod
 access_coc_fsm_order,coc.fsm.order.read,sentinela_fsm.model_sentinela_fsm_order,sentinela_api.group_coc_portal,1,0,0,0
 access_coc_sign_document,coc.sign.document.read,sentinela_digital_sign.model_sentinela_sign_document,sentinela_api.group_coc_portal,1,0,0,0
 access_coc_account_move,coc.account.move.read,account.model_account_move,sentinela_api.group_coc_portal,1,0,0,0
+access_coc_account_payment,coc.account.payment.read,account.model_account_payment,sentinela_api.group_coc_portal,1,0,0,0
 access_coc_auth_log_admin,coc.auth.log.admin,model_sentinela_coc_auth_log,base.group_system,1,0,0,0
