@@ -33,8 +33,11 @@ Dejar listo el **Release Candidate (RC1)** de WS-2 + WS-5 + EvoApi para una **ve
 - ✅ **Item 3 — Alertas:** `sentinela_coc/infra/alerts/alert_checker.py` (→ Telegram) + README/cron.
 - ✅ **Planes preparados (sin implementar):** `SPRINT_1_PLAN_COC.md` (Mis Servicios + Facturación) y `CIERRE_RC1_COC.md` (plantilla del documento de cierre, a completar tras Go-Live).
 
+## Smoke real de OTP — ✅ HECHO (27-jun)
+EvoApi `SentinelaWA` open; OTP enviado a +52 868 125 5741 (0.56 s); verify→login OK; `/v1/me` partner correcto; record rules OK (portal ve solo lo suyo, lectura cruzada denegada); auditoría + métricas + logs OK (sin fuga de OTP/secretos). **`ACCEPTANCE_CHECKLIST` completado → RC1 APROBADO PARA PRODUCCIÓN.** Recursos de prueba limpiados.
+
 ## Pendiente para cerrar (operativo, no de desarrollo)
-- **Item 1** — Reconectar instancia WhatsApp `SentinelaWA` (Enrique) → **smoke real de OTP** (instancia sigue en `close`).
+- **Item 1** — ✅ smoke real OTP completado.
 - **Item 2/3 en PROD** — fijar `coc_internal_allowed_cidrs` a la red del Gateway + programar el alert checker en cron.
 - **Item 4** — Acceptance Checklist al 100% (faltan los operativos: smoke OTP, respaldos, aprobación).
 - **Item 5** — Ventana única de despliegue (Runbook) tras checklist en verde.

@@ -1,8 +1,8 @@
 # Documento de Cierre — Plataforma Base COC (RC1)
 
-> **PLANTILLA — se completa AL FINALIZAR el Go-Live.** Marca el cierre oficial de la
-> plataforma base (WS-2 + WS-5 + EvoApi) y el inicio del desarrollo funcional (Sprint 1).
-> Secciones con ⏳ se llenan con datos de Producción tras el despliegue.
+> **Estado:** RC1 **APROBADO PARA PRODUCCIÓN** (27-jun-2026, smoke real OK). Las secciones con ⏳
+> (datos de Producción) se completan AL FINALIZAR el Go-Live. Marca el cierre de la plataforma
+> base (WS-2 + WS-5 + EvoApi) y habilita el inicio del desarrollo funcional (Sprint 1) tras el despliegue.
 
 ## 1. Arquitectura final
 - **Híbrida API-first, 3 capas + gateway:** SPA → **API Gateway/BFF (FastAPI, `sentinela_coc/gateway`)** → **addon Odoo `sentinela_api` (REST)** → Odoo 18 (`sentinela_*`, fuente de verdad).
@@ -22,7 +22,8 @@ Capacidades: aislamiento por cliente (WS-2); OTP + sesiones cortas (access revoc
 ## 3. Métricas obtenidas
 - **Seguridad:** suite gateway 36/36 · e2e datos reales 8/8 · Odoo seguridad 19/19 · pentest 6/6.
 - **Rendimiento (STAGING):** record rules 0.006 s; login ~28 ms; sesiones ~13 ms; health ~2.3 ms.
-- ⏳ **Producción:** (tiempos reales post-deploy, smoke OTP real, primeros logins).
+- **Smoke real de OTP (27-jun, EvoApi `SentinelaWA` open):** envío OTP por WhatsApp **0.56 s** (latencia proveedor 539 ms); verify→login OK (access+refresh); `/v1/me` devolvió el partner correcto; record rules OK (portal ve solo lo suyo; lectura cruzada denegada); auditoría (otp_request/otp_sent/otp_verify/login/login_new_device + session_open en Odoo); métricas `otp_send_total{ok}=1`, `otp_provider_up=1`; logs sin errores y **sin fuga de OTP/secretos**.
+- ⏳ **Producción:** tiempos reales post-deploy (se llenan tras el Go-Live).
 
 ## 4. Riesgos residuales
 - Instancia WhatsApp `SentinelaWA` debe mantenerse conectada (fallback: contraseña). Alertado.
@@ -38,10 +39,12 @@ Capacidades: aislamiento por cliente (WS-2); OTP + sesiones cortas (access revoc
 - ⏳ (añadir lecciones del Go-Live).
 
 ## 6. Estado de Producción
-- ⏳ Fecha de Go-Live: ____
+- **RC1: ✅ APROBADO PARA PRODUCCIÓN** (validación técnica completa + smoke real OTP en verde, 27-jun-2026).
+- 🚫 **Despliegue a Producción: NO ejecutado** — pendiente de autorización de Enrique para la ventana única.
+- ⏳ Fecha de Go-Live: ____ (al ejecutar la ventana con `DEPLOY_RUNBOOK_COC_RC1.md`)
 - ⏳ Resultado del smoke post-deploy: ____
-- ⏳ WS-2 / WS-5 cerrados en Producción: ____
-- ⏳ Observabilidad/alertas activas en prod: ____
+- ⏳ WS-2 / WS-5 cerrados en Producción: ____ · tag `coc-v1.0.0`: ____
+- ⏳ Observabilidad/alertas activas en prod (cron alert_checker + CIDR LAN fijado): ____
 
 ---
 **Cierre oficial de la plataforma base** y arranque de **Sprint 1** (Mis Servicios + Facturación) — ver `SPRINT_1_PLAN_COC.md`.

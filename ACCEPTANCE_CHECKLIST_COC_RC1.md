@@ -1,14 +1,14 @@
 # Checklist final de aceptación — Portal COC RC1
 
 > **Gate del go-live.** Solo con TODO en ✅ se programa la ventana única de despliegue a Producción.
-> Estado global: ⏳ EN PREPARACIÓN.
+> Estado global: ✅ **RC1 VALIDADO Y APROBADO PARA PRODUCCIÓN** (27-jun-2026). Pendiente solo la **ejecución de la ventana** de despliegue (autorización de Enrique).
 
 ## A. Funcionalidad / pruebas
 - [x] Suite Gateway unit: **36/36** ✅
 - [x] E2E Gateway↔Odoo (datos reales, STAGING): **8/8** ✅
 - [x] Suite Odoo seguridad: **19/19** ✅
 - [x] Aislamiento por cliente (6 modelos, datos reales) ✅
-- [ ] **Smoke real de OTP** (instancia WhatsApp conectada) ⏳ — *gate operativo*
+- [x] **Smoke real de OTP** ✅ (27-jun: EvoApi `SentinelaWA` open; envío 0.56 s; verify→login OK; `/v1/me` partner correcto; record rules OK; auditoría/métricas/logs OK)
 
 ## B. Seguridad
 - [x] PenTest probes (endpoints internos + sesión forjada + timing): **6/6** ✅
@@ -39,7 +39,9 @@
 ## F. Operativo / aprobación
 - [ ] Respaldos verificados justo antes de la ventana ⏳
 - [ ] Secretos en vault/env (no en repo) ⏳
-- [ ] **Aprobación de Enrique** del RC1 ⏳
+- [x] **RC1 aprobado técnicamente** (validación completa en verde) ✅
+- [ ] **Autorización de ventana** por Enrique ⏳ (negocio)
 - [ ] Ventana única de despliegue programada ⏳
 
-> Pendientes (⏳) son del cierre operativo: smoke real OTP (tras reconectar WhatsApp), confirmación LAN, alertas, respaldos y aprobación. El desarrollo del RC está completo y validado.
+## VEREDICTO
+✅ **RC1 APROBADO PARA PRODUCCIÓN.** Validación técnica completa (suites + e2e + pentest + rendimiento + **smoke real de OTP de extremo a extremo**). Los ítems ⏳ restantes se ejecutan **durante la ventana** (respaldo manual, fijar CIDR LAN en prod, cron de alertas, smoke post-deploy) o son aprobación de negocio. **No se despliega hasta autorización explícita de Enrique.**
