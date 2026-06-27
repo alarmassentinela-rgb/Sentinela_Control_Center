@@ -28,6 +28,17 @@ class OdooClient(ABC):
     def set_phone(self, partner_id: int, phone: str) -> dict:
         ...
 
+    # --- Sprint 1: recursos de negocio "act-as" (la peticion corre como el
+    #     usuario portal usando SU sesion efimera; el aislamiento lo dan las
+    #     record rules de Odoo, igual que en WS-2). ---
+    @abstractmethod
+    def get_json_as(self, odoo_session_id: str, path: str, params: dict | None = None) -> tuple[int, object]:
+        ...
+
+    @abstractmethod
+    def get_raw_as(self, odoo_session_id: str, path: str) -> tuple[int, bytes, str | None, str | None]:
+        ...
+
 
 class HttpOdooClient(OdooClient):
     def __init__(self, base_url: str, shared_secret: str):
@@ -56,6 +67,21 @@ class HttpOdooClient(OdooClient):
     def set_phone(self, partner_id: int, phone: str) -> dict:
         return self._call("/coc/internal/identity/set_phone", {"partner_id": partner_id, "phone": phone})
 
+    def get_json_as(self, odoo_session_id, path, params=None):
+        r = httpx.get(f"{self.base_url}{path}", params=params or {},
+                      cookies={"session_id": odoo_session_id}, timeout=20, follow_redirects=False)
+        try:
+            body = r.json()
+        except Exception:
+            body = None
+        return r.status_code, body
+
+    def get_raw_as(self, odoo_session_id, path):
+        r = httpx.get(f"{self.base_url}{path}", cookies={"session_id": odoo_session_id},
+                      timeout=30, follow_redirects=False)
+        return (r.status_code, r.content,
+                r.headers.get("content-type"), r.headers.get("content-disposition"))
+
 
 class FakeOdooClient(OdooClient):
     """Para pruebas: mapea teléfonos a partners y simula sesiones efímeras."""
@@ -63,6 +89,9 @@ class FakeOdooClient(OdooClient):
         self.phone_map = phone_map or {}
         self._seq = 0
         self.open_sessions: set[str] = set()
+        # Respuestas de negocio canned para pruebas: path -> (status, body) / (status, bytes, ctype, cdisp)
+        self.json_responses: dict[str, tuple] = {}
+        self.raw_responses: dict[str, tuple] = {}
 
     def resolve_phone(self, phone: str) -> int | None:
         return self.phone_map.get(phone)
@@ -82,3 +111,9 @@ class FakeOdooClient(OdooClient):
         self.phone_map = {p: pid for p, pid in self.phone_map.items() if pid != partner_id}
         self.phone_map[phone] = partner_id
         return {"ok": True}
+
+    def get_json_as(self, odoo_session_id, path, params=None):
+        return self.json_responses.get(path, (404, {"title": "not_found", "status": 404}))
+
+    def get_raw_as(self, odoo_session_id, path):
+        return self.raw_responses.get(path, (404, b"", None, None))

@@ -17,6 +17,7 @@ from .logging_setup import bind_request_id, configure_logging
 from .routers import auth as auth_router
 from .routers import devices as devices_router
 from .routers import magic as magic_router
+from .routers import portal as portal_router
 from .routers import providers as providers_router
 from .routers import sessions as sessions_router
 
@@ -36,7 +37,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="COC Sentinela — Gateway API",
-    version="0.2.0",
+    version="0.3.0",
     description=(
         "Backend-for-Frontend del Centro de Operaciones del Cliente. Identidad "
         "(OTP + sesiones cortas) en el gateway; autorización en Odoo (record rules)."
@@ -49,6 +50,7 @@ app = FastAPI(
 @app.middleware("http")
 async def request_id_middleware(request: Request, call_next):
     rid = request.headers.get("X-Request-Id") or uuid.uuid4().hex
+    request.state.request_id = rid
     bind_request_id(rid)
     log.info("request.start", method=request.method, path=request.url.path)
     response = await call_next(request)
@@ -73,3 +75,4 @@ app.include_router(devices_router.router)
 app.include_router(magic_router.public)
 app.include_router(magic_router.internal)
 app.include_router(providers_router.router)
+app.include_router(portal_router.router)
