@@ -37,34 +37,51 @@ export function AppHeader() {
 
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
-      {/* Barra COMPACTA (py-1.5). Identidad = Odoo (logo con proporción intacta);
-          "Portal del Cliente" como título principal; bloque de cliente cohesivo a la
-          derecha con el estado destacado. La zona derecha deja espacio para crecer
-          (notificaciones · perfil · IA · cambio de sucursal) sin romper el diseño. */}
-      <div className="flex items-center gap-3 px-4 py-1.5">
+      {/* Barra COMPACTA (py-1). Identidad = Odoo (logo con proporción intacta) + título
+          principal alineados como una sola unidad. Derecha: acciones reservadas (visual)
+          + bloque de cliente cohesivo con el estado destacado + avatar de perfil. */}
+      <div className="flex items-center gap-3 px-4 py-1">
         <div className="flex min-w-0 items-center gap-2.5">
           {theme?.logo_url && !logoFailed ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={theme.logo_url} alt={appName} onError={() => setLogoFailed(true)} className="h-10 w-auto shrink-0 object-contain" />
+            <img src={theme.logo_url} alt={appName} onError={() => setLogoFailed(true)} className="h-10 w-auto shrink-0 object-contain sm:h-11" />
           ) : (
             <span className="shrink-0 text-base font-bold text-ink">{appName}</span>
           )}
-          <span className="truncate text-base font-bold tracking-tight text-ink sm:text-lg">Portal del Cliente</span>
+          <span className="truncate text-base font-bold leading-none tracking-tight text-ink sm:text-lg">Portal del Cliente</span>
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          {/* Reservado para futuras acciones del encabezado (campana, perfil, IA, sucursal). */}
+          {/* Acciones reservadas (visual, sin función aún) — solo tablet/escritorio. */}
+          <div className="hidden items-center gap-0.5 text-slate-400 sm:flex">
+            <span className="grid h-8 w-8 place-items-center rounded-full text-base" title="Notificaciones (próximamente)" aria-hidden>🔔</span>
+            <span className="grid h-8 w-8 place-items-center rounded-full text-base" title="Asistente IA (próximamente)" aria-hidden>✨</span>
+          </div>
           {me.data && (
-            <div className="flex items-center gap-2.5 rounded-full sm:bg-slate-50 sm:px-3 sm:py-1">
-              {/* Bloque de cliente cohesivo en tablet/escritorio; en móvil se condensa al badge. */}
-              <div className="hidden text-right leading-tight sm:block">
-                <p className="whitespace-nowrap text-xs font-semibold text-ink">Hola, {firstName}</p>
-                <p className="whitespace-nowrap text-[10px] text-muted">
-                  Cliente #{me.data.id}{updated ? ` · Actualizado ${updated}` : ""}
-                </p>
+            <>
+              {/* Bloque de cliente cohesivo en tablet/escritorio; en móvil solo el estado. */}
+              <div className="flex items-center gap-2.5 rounded-full sm:bg-slate-50 sm:px-3 sm:py-1">
+                <div className="hidden text-right leading-tight sm:block">
+                  <p className="whitespace-nowrap text-xs font-semibold text-ink">Hola, {firstName}</p>
+                  <p className="whitespace-nowrap text-[10px] text-muted">
+                    Cliente #{me.data.id}{updated ? ` · Actualizado ${updated}` : ""}
+                  </p>
+                </div>
+                {st && (
+                  <span className={cn("inline-flex justify-center rounded-full px-2.5 py-1 text-xs font-bold sm:min-w-[5.5rem]", st.cls)}>
+                    {st.label}
+                  </span>
+                )}
               </div>
-              {st && <span className={cn("rounded-full px-2.5 py-1 text-xs font-bold", st.cls)}>{st.label}</span>}
-            </div>
+              {/* Avatar de perfil (reservado) — tablet/escritorio. */}
+              <div
+                className="hidden h-8 w-8 shrink-0 place-items-center rounded-full bg-slate-200 text-xs font-bold text-slate-600 sm:grid"
+                title="Perfil (próximamente)"
+                aria-hidden
+              >
+                {(firstName?.[0] || "·").toUpperCase()}
+              </div>
+            </>
           )}
         </div>
       </div>
