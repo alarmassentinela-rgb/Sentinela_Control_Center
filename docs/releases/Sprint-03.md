@@ -46,9 +46,6 @@ EvoApi `SentinelaWA` open; OTP enviado a +52 868 125 5741 (0.56 s); verify→log
 - Pendiente menor (no bloquea): ingreso público `api.sentinela.mx` (con la SPA en Sprint 1) + token Telegram para alertas.
 
 **PLATAFORMA BASE CERRADA.** Habilita Sprint 1.
-- **Item 2/3 en PROD** — fijar `coc_internal_allowed_cidrs` a la red del Gateway + programar el alert checker en cron.
-- **Item 4** — Acceptance Checklist al 100% (faltan los operativos: smoke OTP, respaldos, aprobación).
-- **Item 5** — Ventana única de despliegue (Runbook) tras checklist en verde.
 
 ## Commits
 Ver tabla de cada documento + bitácora. Versión RC: `sentinela_api 18.0.0.1.0`, `coc-gateway 0.2.0`.
