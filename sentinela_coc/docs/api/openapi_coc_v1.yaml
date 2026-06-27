@@ -1,0 +1,532 @@
+openapi: 3.1.0
+info:
+  title: COC Sentinela — API del Portal (v1)
+  version: "1.0.0"
+  description: >
+    Contrato REST del Portal Centro de Operaciones del Cliente (COC), Sprint 1:
+    autenticación (OTP + sesiones cortas), Dashboard, Mis Servicios y Facturación
+    (solo consulta). Todas las respuestas de datos usan la envoltura `{data, meta}`.
+    `meta` incluye `server_time` y `request_id` (y `last_refresh`/`cache_ttl_sec` en
+    el Dashboard) para soporte y diagnóstico. Versionado bajo `/v1` sin cambios
+    incompatibles. Esta documentación es suficiente para desarrollar la SPA.
+servers:
+  - url: https://api.sentinela.mx
+    description: Producción
+  - url: http://127.0.0.1:8400
+    description: Local / pruebas
+
+tags:
+  - name: auth
+    description: Autenticación (OTP por WhatsApp + sesiones cortas)
+  - name: portal
+    description: Dashboard, Mis Servicios y Facturación (solo lectura)
+  - name: config
+    description: Branding / configuración pública
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ----------------------------- AUTH -----------------------------
+  /v1/auth/otp/request:
+    post:
+      tags: [auth]
+      summary: Solicitar OTP por WhatsApp
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OtpRequest' }
+            example: { phone: "+528681234567", device: "web-abc123" }
+      responses:
+        "200":
+          description: OTP enviado (respuesta neutra; no revela si el número existe)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+              example: { ok: true }
+        "429":
+          description: Límite de envíos alcanzado (rate limit / cooldown)
+          content:
+            application/json:
+              example: { ok: false, error: "rate_limited" }
+
+  /v1/auth/otp/verify:
+    post:
+      tags: [auth]
+      summary: Verificar OTP e iniciar sesión
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OtpVerify' }
+            example: { phone: "+528681234567", code: "542535", device: "web-abc123" }
+      responses:
+        "200":
+          description: Sesión iniciada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenResponse' }
+              example:
+                access_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6..."
+                refresh_token: "f3a1c0d2e4b5...."
+                token_type: "bearer"
+                expires_in: 900
+                session_id: "fb0baa97e2314e79aea3dfc9e650100d"
+        "401":
+          description: Código inválido o expirado
+          content:
+            application/json:
+              example: { ok: false, error: "invalid" }
+
+  /v1/auth/refresh:
+    post:
+      tags: [auth]
+      summary: Rotar el access token usando el refresh
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefreshRequest' }
+            example: { refresh_token: "f3a1c0d2e4b5...." }
+      responses:
+        "200":
+          description: Nuevos tokens (el refresh es de un solo uso, rotativo)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenResponse' }
+              example:
+                access_token: "eyJhbGciOiJIUzI1NiI..."
+                refresh_token: "9bd7c1aa2f33...."
+                token_type: "bearer"
+                expires_in: 900
+                session_id: "fb0baa97e2314e79aea3dfc9e650100d"
+        "401":
+          description: Refresh inválido/reusado (la familia queda revocada)
+
+  /v1/auth/logout:
+    post:
+      tags: [auth]
+      summary: Cerrar la sesión actual
+      responses:
+        "200":
+          description: Sesión cerrada
+          content:
+            application/json:
+              example: { ok: true }
+
+  # ----------------------------- CONFIG -----------------------------
+  /v1/config/theme:
+    get:
+      tags: [config]
+      summary: Branding del portal
+      security: []
+      responses:
+        "200":
+          description: Branding
+          content:
+            application/json:
+              example:
+                app_name: "Sentinela"
+                logo_url: "https://.../logo.png"
+                primary_color: "#0B5FFF"
+                support_phone: "8681254500"
+                support_whatsapp: "5218681254500"
+
+  /v1/me:
+    get:
+      tags: [portal]
+      summary: Perfil del cliente autenticado
+      responses:
+        "200":
+          description: Perfil
+          content:
+            application/json:
+              example:
+                id: 25757
+                name: "LOURDES RIVERA GOMEZ"
+                email: "cliente@example.com"
+                phone: "+528681234567"
+                is_company: false
+                commercial_partner_id: 25757
+
+  # ----------------------------- DASHBOARD -----------------------------
+  /v1/dashboard:
+    get:
+      tags: [portal]
+      summary: Dashboard agregado (un solo endpoint; cache 30s)
+      responses:
+        "200":
+          description: Dashboard
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DashboardEnvelope' }
+              example:
+                data:
+                  peace_of_mind: { status: "atencion", label: "Requiere tu atención" }
+                  services:
+                    total: 3
+                    active: 1
+                    suspended: 1
+                    items:
+                      - { id: 1, reference: "SUB-0216", service_type: "internet", service_type_label: "Internet", status: "suspended", plan: "[100M] Internet 100 Megas" }
+                      - { id: 2, reference: "SUB-0301", service_type: "alarm", service_type_label: "Alarma", status: "active", plan: "Monitoreo 24/7" }
+                      - { id: 3, reference: "SUB-0404", service_type: "gps", service_type_label: "GPS", status: "pending_signature", plan: "Rastreo Flotilla" }
+                  billing:
+                    total_due: 1180.00
+                    overdue_amount: 590.00
+                    currency: "MXN"
+                    upcoming:
+                      - { id: 144, number: "INV/2026/00104", date: "2026-06-12", due_date: "2026-06-12", amount_total: 590.00, amount_due: 590.00, currency: "MXN", payment_state: "not_paid", doc_type: "remision", cfdi_status: "draft", cfdi_uuid: null, has_pdf: true, has_xml: false }
+                  next_actions:
+                    - { key: "pago_vencido", type: "payment_overdue", severity: "high", title: "Tienes un saldo vencido", detail: "Adeudo vencido por $590.00", amount: 590.00, target: "/billing" }
+                    - { key: "susp_1", type: "service_suspended", severity: "high", title: "Servicio suspendido", detail: "Internet — SUB-0216", target: "/services/1" }
+                    - { key: "factura_144", type: "invoice_due", severity: "medium", title: "Factura INV/2026/00104 por pagar", detail: "Vence 2026-06-12 · $590.00", amount: 590.00, target: "/billing/invoices/144" }
+                    - { key: "firma_3", type: "contract_pending_signature", severity: "medium", title: "Contrato por firmar", detail: "Rastreo Flotilla", target: "/services/3" }
+                meta:
+                  server_time: "2026-06-27T14:05:31.120Z"
+                  request_id: "9f1c2a8b7d6e4f10"
+                  last_refresh: "2026-06-27T14:05:20.004Z"
+                  cache_ttl_sec: 30
+        "401": { $ref: '#/components/responses/Unauthorized' }
+
+  # ----------------------------- SERVICIOS -----------------------------
+  /v1/services:
+    get:
+      tags: [portal]
+      summary: Lista de servicios (suscripciones) del cliente
+      responses:
+        "200":
+          description: Servicios
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ServiceListEnvelope' }
+              example:
+                data:
+                  count: 1
+                  items:
+                    - id: 1013
+                      reference: "SUB-0216"
+                      service_type: "alarm"
+                      service_type_label: "Alarma"
+                      plan: "[MESTANDAR-6] MEMBRESIA ESTANDAR MONITOREO 24/7 SEMESTRAL"
+                      status: "suspended"
+                      state: "suspension"
+                      technical_state: "active"
+                      monthly_total: 3544.44
+                      currency: "MXN"
+                      billing_interval: "1"
+                      billing_interval_label: "Mensual"
+                      next_billing_date: "2026-07-01"
+                      service_address: "LAGUNA LEONA #716, COL. BUENA VISTA, MATAMOROS"
+                meta: { server_time: "2026-06-27T14:05:31.120Z", request_id: "9f1c2a8b7d6e4f10" }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/services/{service_id}:
+    get:
+      tags: [portal]
+      summary: Detalle de un servicio
+      parameters:
+        - { name: service_id, in: path, required: true, schema: { type: integer }, example: 1013 }
+      responses:
+        "200":
+          description: Servicio
+          content:
+            application/json:
+              example:
+                data:
+                  id: 1013
+                  reference: "SUB-0216"
+                  service_type: "alarm"
+                  service_type_label: "Alarma"
+                  plan: "MEMBRESIA ESTANDAR MONITOREO 24/7"
+                  status: "active"
+                  state: "active"
+                  technical_state: "active"
+                  monthly_total: 590.74
+                  currency: "MXN"
+                  billing_interval: "1"
+                  billing_interval_label: "Mensual"
+                  next_billing_date: "2026-07-01"
+                  service_address: "CALLE 5 #123, COL. CENTRO"
+                meta: { server_time: "2026-06-27T14:05:31.120Z", request_id: "9f1c2a8b7d6e4f10" }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+
+  # ----------------------------- FACTURACIÓN -----------------------------
+  /v1/billing/summary:
+    get:
+      tags: [portal]
+      summary: Estado de cuenta (resumen)
+      responses:
+        "200":
+          description: Resumen
+          content:
+            application/json:
+              example:
+                data:
+                  currency: "MXN"
+                  total_due: 1180.00
+                  overdue_amount: 590.00
+                  open_count: 2
+                  upcoming:
+                    - { id: 144, number: "INV/2026/00104", date: "2026-06-12", due_date: "2026-06-12", amount_total: 590.00, amount_due: 590.00, currency: "MXN", payment_state: "not_paid", doc_type: "remision", cfdi_status: "draft", cfdi_uuid: null, has_pdf: true, has_xml: false }
+                meta: { server_time: "2026-06-27T14:05:31.120Z", request_id: "9f1c2a8b7d6e4f10" }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/billing/invoices:
+    get:
+      tags: [portal]
+      summary: Lista de facturas/remisiones (paginada)
+      parameters:
+        - { name: page, in: query, schema: { type: integer, default: 1 }, example: 1 }
+        - { name: limit, in: query, schema: { type: integer, default: 20, maximum: 100 }, example: 20 }
+      responses:
+        "200":
+          description: Facturas
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvoiceListEnvelope' }
+              example:
+                data:
+                  count: 12
+                  page: 1
+                  limit: 20
+                  items:
+                    - { id: 144, number: "INV/2026/00104", date: "2026-06-12", due_date: "2026-06-12", amount_total: 590.00, amount_due: 590.00, currency: "MXN", payment_state: "not_paid", doc_type: "factura", cfdi_status: "valid", cfdi_uuid: "A1B2C3D4-1234-5678-9ABC-DEF012345678", has_pdf: true, has_xml: true }
+                meta: { server_time: "2026-06-27T14:05:31.120Z", request_id: "9f1c2a8b7d6e4f10" }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/billing/invoices/{invoice_id}:
+    get:
+      tags: [portal]
+      summary: Detalle de una factura (incluye líneas)
+      parameters:
+        - { name: invoice_id, in: path, required: true, schema: { type: integer }, example: 144 }
+      responses:
+        "200":
+          description: Factura
+          content:
+            application/json:
+              example:
+                data:
+                  id: 144
+                  number: "INV/2026/00104"
+                  date: "2026-06-12"
+                  due_date: "2026-06-12"
+                  amount_total: 590.00
+                  amount_due: 590.00
+                  currency: "MXN"
+                  payment_state: "not_paid"
+                  doc_type: "factura"
+                  cfdi_status: "valid"
+                  cfdi_uuid: "A1B2C3D4-1234-5678-9ABC-DEF012345678"
+                  has_pdf: true
+                  has_xml: true
+                  cfdi_timestamp: "2026-06-12T10:14:03"
+                  lines:
+                    - { name: "Servicio: MEMBRESIA ESTANDAR MONITOREO 24/7 - Periodo: 2026-06-12 al 2026-07-11", quantity: 1.0, price_subtotal: 508.62 }
+                meta: { server_time: "2026-06-27T14:05:31.120Z", request_id: "9f1c2a8b7d6e4f10" }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+
+  /v1/billing/invoices/{invoice_id}/pdf:
+    get:
+      tags: [portal]
+      summary: PDF de la factura (CFDI). Binario; cache 300s.
+      parameters:
+        - { name: invoice_id, in: path, required: true, schema: { type: integer }, example: 144 }
+      responses:
+        "200":
+          description: PDF
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+
+  /v1/billing/invoices/{invoice_id}/xml:
+    get:
+      tags: [portal]
+      summary: XML del CFDI (si está timbrada). Binario; cache 300s.
+      parameters:
+        - { name: invoice_id, in: path, required: true, schema: { type: integer }, example: 144 }
+      responses:
+        "200":
+          description: XML del CFDI
+          content:
+            application/xml:
+              schema: { type: string, format: binary }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404":
+          description: La factura no existe o no tiene XML disponible
+
+  /v1/billing/payments:
+    get:
+      tags: [portal]
+      summary: Historial de pagos (paginado)
+      parameters:
+        - { name: page, in: query, schema: { type: integer, default: 1 }, example: 1 }
+        - { name: limit, in: query, schema: { type: integer, default: 20, maximum: 100 }, example: 20 }
+      responses:
+        "200":
+          description: Pagos
+          content:
+            application/json:
+              example:
+                data:
+                  count: 5
+                  page: 1
+                  limit: 20
+                  items:
+                    - { id: 31, date: "2026-06-01", amount: 590.00, currency: "MXN", reference: "PAY/2026/0031" }
+                meta: { server_time: "2026-06-27T14:05:31.120Z", request_id: "9f1c2a8b7d6e4f10" }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    Unauthorized:
+      description: Token ausente/ inválido o sesión revocada/expirada
+      content:
+        application/json:
+          example: { detail: "session_expired" }
+    NotFound:
+      description: Recurso no encontrado (o ajeno al cliente — anti-IDOR)
+      content:
+        application/json:
+          example: { detail: "not_found" }
+  schemas:
+    Meta:
+      type: object
+      properties:
+        server_time: { type: string, format: date-time, example: "2026-06-27T14:05:31.120Z" }
+        request_id: { type: string, example: "9f1c2a8b7d6e4f10" }
+        last_refresh: { type: string, format: date-time, description: "Solo Dashboard: cuándo se computó la data cacheada" }
+        cache_ttl_sec: { type: integer, description: "Solo Dashboard: TTL del caché en segundos", example: 30 }
+    OkResponse:
+      type: object
+      properties: { ok: { type: boolean, example: true } }
+    OtpRequest:
+      type: object
+      required: [phone]
+      properties:
+        phone: { type: string, example: "+528681234567" }
+        device: { type: string, example: "web-abc123" }
+    OtpVerify:
+      type: object
+      required: [phone, code]
+      properties:
+        phone: { type: string }
+        code: { type: string, example: "542535" }
+        device: { type: string }
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties: { refresh_token: { type: string } }
+    TokenResponse:
+      type: object
+      properties:
+        access_token: { type: string }
+        refresh_token: { type: string }
+        token_type: { type: string, example: "bearer" }
+        expires_in: { type: integer, example: 900 }
+        session_id: { type: string }
+    Service:
+      type: object
+      properties:
+        id: { type: integer }
+        reference: { type: string }
+        service_type: { type: string, enum: [internet, alarm, gps, maintenance, domain] }
+        service_type_label: { type: string }
+        plan: { type: string, nullable: true }
+        status: { type: string, enum: [active, suspended, pending_signature, inactive], description: "Estatus simple derivado de state+technical_state" }
+        state: { type: string }
+        technical_state: { type: string }
+        monthly_total: { type: number }
+        currency: { type: string }
+        billing_interval: { type: string }
+        billing_interval_label: { type: string }
+        next_billing_date: { type: string, format: date, nullable: true }
+        service_address: { type: string, nullable: true }
+    ServiceListEnvelope:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            count: { type: integer }
+            items: { type: array, items: { $ref: '#/components/schemas/Service' } }
+        meta: { $ref: '#/components/schemas/Meta' }
+    Invoice:
+      type: object
+      properties:
+        id: { type: integer }
+        number: { type: string, nullable: true }
+        date: { type: string, format: date, nullable: true }
+        due_date: { type: string, format: date, nullable: true }
+        amount_total: { type: number }
+        amount_due: { type: number }
+        currency: { type: string }
+        payment_state: { type: string, example: "not_paid" }
+        doc_type: { type: string, enum: [factura, remision], description: "factura si tiene CFDI timbrado; si no, remision" }
+        cfdi_status: { type: string, nullable: true }
+        cfdi_uuid: { type: string, nullable: true }
+        has_pdf: { type: boolean }
+        has_xml: { type: boolean }
+    InvoiceListEnvelope:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            count: { type: integer }
+            page: { type: integer }
+            limit: { type: integer }
+            items: { type: array, items: { $ref: '#/components/schemas/Invoice' } }
+        meta: { $ref: '#/components/schemas/Meta' }
+    DashboardEnvelope:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            peace_of_mind:
+              type: object
+              properties:
+                status: { type: string, enum: [tranquilo, atencion], description: "Agregación simple en Sprint 1 (se enriquece con Alarmas/Internet/GPS después)" }
+                label: { type: string }
+            services:
+              type: object
+              properties:
+                total: { type: integer }
+                active: { type: integer }
+                suspended: { type: integer }
+                items: { type: array, items: { type: object } }
+            billing:
+              type: object
+              properties:
+                total_due: { type: number }
+                overdue_amount: { type: number }
+                currency: { type: string }
+                upcoming: { type: array, items: { $ref: '#/components/schemas/Invoice' } }
+            next_actions:
+              type: array
+              items:
+                type: object
+                properties:
+                  key: { type: string }
+                  type: { type: string, enum: [payment_overdue, invoice_due, contract_pending_signature, service_suspended] }
+                  severity: { type: string, enum: [high, medium, low] }
+                  title: { type: string }
+                  detail: { type: string }
+                  amount: { type: number, nullable: true }
+                  target: { type: string, description: "Ruta interna de la SPA para la acción" }
+        meta: { $ref: '#/components/schemas/Meta' }
