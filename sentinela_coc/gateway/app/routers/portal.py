@@ -167,23 +167,23 @@ def _build_dashboard(services_body, billing_body):
     if overdue > 0:
         actions.append({"key": "pago_vencido", "type": "payment_overdue", "severity": "high",
                         "title": "Tienes un saldo vencido", "detail": "Adeudo vencido por %s" % _money(overdue),
-                        "amount": overdue, "target": "/billing"})
+                        "amount": overdue, "target": "/facturacion"})
     for inv in upcoming:
         if (inv.get("amount_due") or 0) > 0:
             actions.append({"key": "factura_%s" % inv.get("id"), "type": "invoice_due", "severity": "medium",
                             "title": "Factura %s por pagar" % (inv.get("number") or ""),
                             "detail": "Vence %s · %s" % (inv.get("due_date") or "s/f", _money(inv.get("amount_due"))),
-                            "amount": inv.get("amount_due"), "target": "/billing/invoices/%s" % inv.get("id")})
+                            "amount": inv.get("amount_due"), "target": "/facturacion/%s" % inv.get("id")})
     for s in pending_sign:
         actions.append({"key": "firma_%s" % s.get("id"), "type": "contract_pending_signature", "severity": "medium",
                         "title": "Contrato por firmar", "detail": s.get("plan") or s.get("reference") or "",
-                        "target": "/services/%s" % s.get("id")})
+                        "target": "/servicios/%s" % s.get("id")})
     for s in items:
         if s.get("status") == "suspended":
             actions.append({"key": "susp_%s" % s.get("id"), "type": "service_suspended", "severity": "high",
                             "title": "Servicio suspendido",
                             "detail": "%s — %s" % (s.get("service_type_label") or "", s.get("reference") or ""),
-                            "target": "/services/%s" % s.get("id")})
+                            "target": "/servicios/%s" % s.get("id")})
     actions.sort(key=lambda a: _SEVERITY_RANK.get(a["severity"], 9))
 
     return {

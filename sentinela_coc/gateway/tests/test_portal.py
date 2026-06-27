@@ -5,11 +5,28 @@ Valida envoltura {data, meta}, agregación del dashboard con "Próximas acciones
 caché TTL del dashboard, proxy de PDF y mapeo de sesión expirada. Sin Odoo real
 (FakeOdooClient con respuestas canned).
 """
+import re
+
 import pytest
 
 from app.services.cache import cache
 
 PHONE = "+528680000001"   # -> partner 25757
+
+# Rutas que EXISTEN en la SPA (app router de web/). Si el Gateway emite un target de
+# "Próximas acciones" fuera de este conjunto, la navegación da 404 (UAT #4). Esta lista
+# es la única fuente de verdad de la prueba anti-regresión de targets.
+SPA_ROUTES = [
+    re.compile(r"^/dashboard$"),
+    re.compile(r"^/facturacion$"),
+    re.compile(r"^/facturacion/\d+$"),
+    re.compile(r"^/servicios$"),
+    re.compile(r"^/servicios/\d+$"),
+]
+
+
+def _target_es_ruta_valida(t: str) -> bool:
+    return any(p.match(t) for p in SPA_ROUTES)
 
 
 @pytest.fixture(autouse=True)
@@ -115,3 +132,25 @@ def test_invoice_not_found_maps_404(ctx):
     tok = _login(ctx)
     # sin canned -> FakeOdooClient devuelve 404
     assert ctx.client.get("/v1/billing/invoices/999", headers=_h(tok)).status_code == 404
+
+
+def test_next_actions_targets_existen_en_la_spa(ctx):
+    """Anti-regresión (UAT #4): todo target de Próximas acciones debe ser una ruta real
+    de la SPA. Falla si el Gateway emite una ruta inexistente (p.ej. /billing, /services)."""
+    tok = _login(ctx)
+    ctx.fake.json_responses["/v1/services"] = (200, {"items": [
+        {"id": 1, "reference": "S1", "status": "suspended", "service_type": "internet",
+         "service_type_label": "Internet", "plan": "100M"},
+        {"id": 2, "reference": "S2", "status": "pending_signature", "service_type": "gps",
+         "service_type_label": "GPS", "plan": "Rastreo"},
+    ], "count": 2})
+    ctx.fake.json_responses["/v1/billing/summary"] = (200, {
+        "currency": "MXN", "total_due": 500.0, "overdue_amount": 500.0,
+        "upcoming": [{"id": 9, "number": "INV/1", "due_date": "2026-07-01", "amount_due": 500.0}]})
+    acts = ctx.client.get("/v1/dashboard", headers=_h(tok)).json()["data"]["next_actions"]
+    # se generan los 4 tipos de acción
+    assert {"payment_overdue", "invoice_due", "contract_pending_signature", "service_suspended"} <= {a["type"] for a in acts}
+    # cada target debe ser una ruta existente de la SPA
+    for a in acts:
+        assert _target_es_ruta_valida(a["target"]), \
+            "target inexistente en la SPA: %s -> %s" % (a["type"], a["target"])

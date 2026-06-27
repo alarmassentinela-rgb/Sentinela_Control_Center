@@ -182,10 +182,10 @@ paths:
                     upcoming:
                       - { id: 144, number: "INV/2026/00104", date: "2026-06-12", due_date: "2026-06-12", amount_total: 590.00, amount_due: 590.00, currency: "MXN", payment_state: "not_paid", doc_type: "remision", cfdi_status: "draft", cfdi_uuid: null, has_pdf: true, has_xml: false }
                   next_actions:
-                    - { key: "pago_vencido", type: "payment_overdue", severity: "high", title: "Tienes un saldo vencido", detail: "Adeudo vencido por $590.00", amount: 590.00, target: "/billing" }
-                    - { key: "susp_1", type: "service_suspended", severity: "high", title: "Servicio suspendido", detail: "Internet — SUB-0216", target: "/services/1" }
-                    - { key: "factura_144", type: "invoice_due", severity: "medium", title: "Factura INV/2026/00104 por pagar", detail: "Vence 2026-06-12 · $590.00", amount: 590.00, target: "/billing/invoices/144" }
-                    - { key: "firma_3", type: "contract_pending_signature", severity: "medium", title: "Contrato por firmar", detail: "Rastreo Flotilla", target: "/services/3" }
+                    - { key: "pago_vencido", type: "payment_overdue", severity: "high", title: "Tienes un saldo vencido", detail: "Adeudo vencido por $590.00", amount: 590.00, target: "/facturacion" }
+                    - { key: "susp_1", type: "service_suspended", severity: "high", title: "Servicio suspendido", detail: "Internet — SUB-0216", target: "/servicios/1" }
+                    - { key: "factura_144", type: "invoice_due", severity: "medium", title: "Factura INV/2026/00104 por pagar", detail: "Vence 2026-06-12 · $590.00", amount: 590.00, target: "/facturacion/144" }
+                    - { key: "firma_3", type: "contract_pending_signature", severity: "medium", title: "Contrato por firmar", detail: "Rastreo Flotilla", target: "/servicios/3" }
                 meta:
                   server_time: "2026-06-27T14:05:31.120Z"
                   request_id: "9f1c2a8b7d6e4f10"
@@ -528,5 +528,5 @@ components:
                   title: { type: string }
                   detail: { type: string }
                   amount: { type: number, nullable: true }
-                  target: { type: string, description: "Ruta interna de la SPA para la acción" }
+                  target: { type: string, description: "Ruta interna de la SPA para la acción (debe existir en la SPA: /facturacion, /facturacion/{id}, /servicios, /servicios/{id})" }
         meta: { $ref: '#/components/schemas/Meta' }
