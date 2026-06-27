@@ -9,24 +9,51 @@
             <xpath expr="//form" position="inside">
                 <app data-string="Suscripciones" string="Suscripciones" name="sentinela_subscriptions">
                     <block title="⚙️ Automatización de Facturación y Cobranza" name="billing_crons_config">
+                        <setting id="cron_master" string="Control maestro" help="Enciende o apaga TODOS los procesos de golpe. Cambios al Guardar.">
+                            <field name="auto_cron_master" widget="boolean_toggle"/>
+                        </setting>
                         <setting id="cron_generate" help="Crea las pre-facturas del ciclo (recomendado: diario, 1:00 am).">
                             <field name="auto_cron_generate" widget="boolean_toggle"/>
+                            <div class="content-group mt8" invisible="not auto_cron_generate">
+                                <span>Hora: </span><field name="auto_cron_generate_hour" widget="float_time" class="oe_inline"/>
+                                <span class="ms-3">Cada </span><field name="auto_cron_generate_interval_number" class="oe_inline"/>
+                                <field name="auto_cron_generate_interval_type" class="oe_inline"/>
+                            </div>
                             <div class="text-muted small mt4"><field name="auto_cron_generate_info" nolabel="1" readonly="1"/></div>
                         </setting>
                         <setting id="cron_stamp" help="Timbra las facturas nuevas en Prodigia y se las envía al cliente (cada hora).">
                             <field name="auto_cron_stamp" widget="boolean_toggle"/>
+                            <div class="content-group mt8" invisible="not auto_cron_stamp">
+                                <span>Cada </span><field name="auto_cron_stamp_interval_number" class="oe_inline"/>
+                                <field name="auto_cron_stamp_interval_type" class="oe_inline"/>
+                            </div>
                             <div class="text-muted small mt4"><field name="auto_cron_stamp_info" nolabel="1" readonly="1"/></div>
                         </setting>
                         <setting id="cron_suspend" help="Suspende el servicio a clientes con facturas vencidas (diario).">
                             <field name="auto_cron_suspend" widget="boolean_toggle"/>
+                            <div class="content-group mt8" invisible="not auto_cron_suspend">
+                                <span>Hora: </span><field name="auto_cron_suspend_hour" widget="float_time" class="oe_inline"/>
+                                <span class="ms-3">Cada </span><field name="auto_cron_suspend_interval_number" class="oe_inline"/>
+                                <field name="auto_cron_suspend_interval_type" class="oe_inline"/>
+                            </div>
                             <div class="text-muted small mt4"><field name="auto_cron_suspend_info" nolabel="1" readonly="1"/></div>
                         </setting>
                         <setting id="cron_reminders" help="Envía recordatorios de cobranza al cliente (diario).">
                             <field name="auto_cron_reminders" widget="boolean_toggle"/>
+                            <div class="content-group mt8" invisible="not auto_cron_reminders">
+                                <span>Hora: </span><field name="auto_cron_reminders_hour" widget="float_time" class="oe_inline"/>
+                                <span class="ms-3">Cada </span><field name="auto_cron_reminders_interval_number" class="oe_inline"/>
+                                <field name="auto_cron_reminders_interval_type" class="oe_inline"/>
+                            </div>
                             <div class="text-muted small mt4"><field name="auto_cron_reminders_info" nolabel="1" readonly="1"/></div>
                         </setting>
                         <setting id="cron_leasing" help="Revisa el fin de leasing de equipos (diario).">
                             <field name="auto_cron_leasing" widget="boolean_toggle"/>
+                            <div class="content-group mt8" invisible="not auto_cron_leasing">
+                                <span>Hora: </span><field name="auto_cron_leasing_hour" widget="float_time" class="oe_inline"/>
+                                <span class="ms-3">Cada </span><field name="auto_cron_leasing_interval_number" class="oe_inline"/>
+                                <field name="auto_cron_leasing_interval_type" class="oe_inline"/>
+                            </div>
                             <div class="text-muted small mt4"><field name="auto_cron_leasing_info" nolabel="1" readonly="1"/></div>
                         </setting>
                     </block>
