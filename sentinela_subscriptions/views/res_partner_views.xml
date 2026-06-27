@@ -37,9 +37,14 @@
                 </group>
             </page>
             
-            <!-- Extensión al lado del teléfono principal -->
-            <xpath expr="//field[@name='phone']" position="after">
-                <field name="phone_extension" class="oe_inline" placeholder="ext."/>
+            <!-- Teléfono + Extensión en UN solo renglón (reemplaza el campo phone para no descuadrar el grupo) -->
+            <xpath expr="//field[@name='phone']" position="replace">
+                <label for="phone" string="Teléfono"/>
+                <div class="o_row">
+                    <field name="phone" class="oe_inline"/>
+                    <span class="mx-1 text-muted">ext.</span>
+                    <field name="phone_extension" class="oe_inline" placeholder="0000"/>
+                </div>
             </xpath>
             <!-- Teléfonos / celulares adicionales (pestaña; lista editable simple, sin handle) -->
             <xpath expr="//notebook" position="inside">
