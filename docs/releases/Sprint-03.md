@@ -1,6 +1,6 @@
 # Sprint-03 — Cierre / Release Candidate para Producción
 
-**Fechas:** 2026-06-26 → · **Estado:** 🚧 En curso (RC en preparación)
+**Fechas:** 2026-06-26 → 27 · **Estado:** ✅ **COMPLETADO — RC1 DESPLEGADO EN PRODUCCIÓN (27-jun-2026)** · tag `coc-v1.0.0`
 
 ## Objetivo
 Dejar listo el **Release Candidate (RC1)** de WS-2 + WS-5 + EvoApi para una **ventana única de despliegue a Producción**, con toda la documentación, validaciones de seguridad/rendimiento y observabilidad. **No se despliega** hasta que el RC esté 100% en verde y la instancia WhatsApp esté reconectada (smoke real de OTP).
@@ -36,8 +36,16 @@ Dejar listo el **Release Candidate (RC1)** de WS-2 + WS-5 + EvoApi para una **ve
 ## Smoke real de OTP — ✅ HECHO (27-jun)
 EvoApi `SentinelaWA` open; OTP enviado a +52 868 125 5741 (0.56 s); verify→login OK; `/v1/me` partner correcto; record rules OK (portal ve solo lo suyo, lectura cruzada denegada); auditoría + métricas + logs OK (sin fuga de OTP/secretos). **`ACCEPTANCE_CHECKLIST` completado → RC1 APROBADO PARA PRODUCCIÓN.** Recursos de prueba limpiados.
 
-## Pendiente para cerrar (operativo, no de desarrollo)
-- **Item 1** — ✅ smoke real OTP completado.
+## ✅ Go-Live ejecutado (27-jun) — Runbook DEPLOY_RUNBOOK_COC_RC1
+- Paso 0: prod = `odoo18-migration-web-1` (Sentinela_V18); backup pre-deploy 49M.
+- Paso 1: `sentinela_api -i` en V18 (exit 0, registry OK, grupo+5 rules+ACL+auditoría); secreto sembrado; restart prod; smoke seguridad OK (aislamiento + admin 392 sin regresión).
+- Paso 2: Gateway en `/opt/sentinela_coc` (`docker compose up -d --build`): `/health` ok, EvoApi healthy.
+- Smoke post-deploy OTP real: envío 0.38 s → login → `/v1/me` partner 3 → record rules OK → auditoría/métricas/logs OK (sin fuga).
+- Hardening: allowlist LAN aplicado + verificado; cron de alertas activo.
+- Tag `coc-v1.0.0` creado.
+- Pendiente menor (no bloquea): ingreso público `api.sentinela.mx` (con la SPA en Sprint 1) + token Telegram para alertas.
+
+**PLATAFORMA BASE CERRADA.** Habilita Sprint 1.
 - **Item 2/3 en PROD** — fijar `coc_internal_allowed_cidrs` a la red del Gateway + programar el alert checker en cron.
 - **Item 4** — Acceptance Checklist al 100% (faltan los operativos: smoke OTP, respaldos, aprobación).
 - **Item 5** — Ventana única de despliegue (Runbook) tras checklist en verde.

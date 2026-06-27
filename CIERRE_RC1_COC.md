@@ -1,8 +1,7 @@
 # Documento de Cierre — Plataforma Base COC (RC1)
 
-> **Estado:** RC1 **APROBADO PARA PRODUCCIÓN** (27-jun-2026, smoke real OK). Las secciones con ⏳
-> (datos de Producción) se completan AL FINALIZAR el Go-Live. Marca el cierre de la plataforma
-> base (WS-2 + WS-5 + EvoApi) y habilita el inicio del desarrollo funcional (Sprint 1) tras el despliegue.
+> **Estado:** ✅ **RC1 DESPLEGADO EN PRODUCCIÓN (27-jun-2026)** — smoke post-deploy en verde.
+> Cierre oficial de la plataforma base (WS-2 + WS-5 + EvoApi). Habilita el inicio de Sprint 1.
 
 ## 1. Arquitectura final
 - **Híbrida API-first, 3 capas + gateway:** SPA → **API Gateway/BFF (FastAPI, `sentinela_coc/gateway`)** → **addon Odoo `sentinela_api` (REST)** → Odoo 18 (`sentinela_*`, fuente de verdad).
@@ -39,12 +38,14 @@ Capacidades: aislamiento por cliente (WS-2); OTP + sesiones cortas (access revoc
 - ⏳ (añadir lecciones del Go-Live).
 
 ## 6. Estado de Producción
-- **RC1: ✅ APROBADO PARA PRODUCCIÓN** (validación técnica completa + smoke real OTP en verde, 27-jun-2026).
-- 🚫 **Despliegue a Producción: NO ejecutado** — pendiente de autorización de Enrique para la ventana única.
-- ⏳ Fecha de Go-Live: ____ (al ejecutar la ventana con `DEPLOY_RUNBOOK_COC_RC1.md`)
-- ⏳ Resultado del smoke post-deploy: ____
-- ⏳ WS-2 / WS-5 cerrados en Producción: ____ · tag `coc-v1.0.0`: ____
-- ⏳ Observabilidad/alertas activas en prod (cron alert_checker + CIDR LAN fijado): ____
+- **RC1: ✅ DESPLEGADO EN PRODUCCIÓN** (27-jun-2026).
+- **Componente A** (`sentinela_api` en `Sentinela_V18`): instalado (exit 0, registry OK), grupo + 5 record rules + ACL + auditoría verificados; smoke de aislamiento OK (cliente ve solo lo suyo; admin ve 392; cross-read denegado); **sin regresión interna**.
+- **Componente B** (Gateway en `/opt/sentinela_coc`, contenedor `gateway-gateway-1` + `gateway-gateway-db-1`): `/health` ok, EvoApi `healthy`.
+- **Smoke post-deploy (OTP real):** envío 0.38 s → verify→login OK → `/v1/me` partner correcto (id 3) → record rules OK → auditoría completa (otp_request/otp_sent/otp_verify/login/login_new_device + session_open) → métricas OK → logs sin fuga de OTP/secretos.
+- **Hardening:** allowlist LAN (`coc_internal_allowed_cidrs`) aplicado + verificado (gateway pasa, externo bloqueado); secreto compartido sembrado.
+- **Observabilidad:** `/metrics`, `/v1/providers/health`, `/health`; cron `alert_checker` cada 5 min (logs). *Pendiente menor: token Telegram para envío de alertas.*
+- **Tag:** `coc-v1.0.0`.
+- **Ingreso público `api.sentinela.mx`** (NPM/Cloudflare): pendiente — sin consumidor aún (la SPA llega en Sprint 1); el gateway opera en el servidor (`127.0.0.1:8400`). Recomendado habilitarlo junto con la SPA.
 
 ---
 **Cierre oficial de la plataforma base** y arranque de **Sprint 1** (Mis Servicios + Facturación) — ver `SPRINT_1_PLAN_COC.md`.

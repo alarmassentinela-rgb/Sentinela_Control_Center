@@ -1,7 +1,7 @@
 # Checklist final de aceptación — Portal COC RC1
 
 > **Gate del go-live.** Solo con TODO en ✅ se programa la ventana única de despliegue a Producción.
-> Estado global: ✅ **RC1 VALIDADO Y APROBADO PARA PRODUCCIÓN** (27-jun-2026). Pendiente solo la **ejecución de la ventana** de despliegue (autorización de Enrique).
+> Estado global: ✅ **RC1 DESPLEGADO EN PRODUCCIÓN (27-jun-2026).** Componente A + B en prod, smoke post-deploy verde, hardening LAN aplicado, observabilidad/alertas activas, tag `coc-v1.0.0`. Único pendiente menor: ingreso público `api.sentinela.mx` (con la SPA, Sprint 1) + token Telegram para alertas.
 
 ## A. Funcionalidad / pruebas
 - [x] Suite Gateway unit: **36/36** ✅
