@@ -50,28 +50,10 @@
             <xpath expr="//field[@name='mobile']" position="attributes">
                 <attribute name="widget"></attribute>
             </xpath>
-            <!-- Teléfonos / celulares adicionales (pestaña). Lista NO editable + formulario emergente
-                 para agregar (vía más robusta que la edición inline). -->
-            <xpath expr="//notebook" position="inside">
-                <page string="📞 Teléfonos" name="phones_extra">
-                    <field name="phone_line_ids">
-                        <list>
-                            <field name="label"/>
-                            <field name="number"/>
-                            <field name="extension"/>
-                            <field name="note"/>
-                        </list>
-                        <form>
-                            <group>
-                                <field name="label" placeholder="Oficina / Casa / Celular / WhatsApp"/>
-                                <field name="number" placeholder="Número telefónico o celular"/>
-                                <field name="extension" placeholder="ext. (4 díg.)"/>
-                                <field name="note"/>
-                            </group>
-                        </form>
-                    </field>
-                </page>
-            </xpath>
+            <!-- NOTA: la sección de "Teléfonos adicionales" (phone_line_ids / res.partner.phone)
+                 se retiró de la UI por ahora (no dejaba agregar en el navegador del usuario).
+                 El modelo y el campo siguen en el código, dormidos, para retomarlo después. -->
+
 
             <!-- Force translations for standard fields if missing -->
             <xpath expr="//field[@name='user_id']" position="attributes">
