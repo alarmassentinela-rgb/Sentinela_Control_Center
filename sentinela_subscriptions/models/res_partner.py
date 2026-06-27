@@ -79,6 +79,11 @@ class ResPartner(models.Model):
     ], string='Preferencia de Facturación', default='individual',
     help="Define cómo prefiere el cliente recibir sus facturas de suscripción.")
 
+    invoice_show_branches = fields.Boolean(
+        string='Detallar sucursales en factura', default=True,
+        help="Solo para facturación GLOBAL: si está activo, la factura lista los nombres de las "
+             "sucursales cobradas en cada concepto; si se apaga, solo muestra el número de servicios.")
+
     invoice_cc_partner_ids = fields.Many2many(
         'res.partner',
         'res_partner_invoice_cc_rel',

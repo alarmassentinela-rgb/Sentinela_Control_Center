@@ -16,6 +16,8 @@
                 <group string="Condiciones de Pago y Facturación" name="sentinela_config_global">
                     <group string="Especificaciones de Condiciones de Venta">
                         <field name="invoice_grouping_method"/>
+                        <field name="invoice_show_branches" widget="boolean_toggle"
+                               invisible="invoice_grouping_method != 'global'"/>
                         <label for="invoice_payment_condition"/>
                         <div class="o_row">
                             <field name="invoice_payment_condition"/>

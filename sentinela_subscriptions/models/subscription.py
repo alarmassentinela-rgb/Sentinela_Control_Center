@@ -963,12 +963,17 @@ class SentinelaSubscription(models.Model):
                 q = months * n_dev
             return q
 
+        # Periodo: si TODAS las subs comparten el mismo, va UNA sola vez (renglón de nota al final)
+        # y NO se repite en cada línea. Si hubiera periodos distintos (raro), se deja por línea.
+        period_labels = {s._billing_period_label() for s in subs_list}
+        single_period = list(period_labels)[0] if len(period_labels) == 1 else None
+        # Toggle por cliente: detallar nombres de sucursales en la factura global o solo el conteo.
+        show_branches = getattr(partner, 'invoice_show_branches', True)
+
         line_cmds = []
         if method == 'global' and len(subs_list) > 1:
-            # FACTURACIÓN GLOBAL CONSOLIDADA: una línea por (producto, precio, periodo); la
-            # cantidad es el nº de servicios del grupo y se listan las sucursales en la descripción
-            # (en vez de una línea por suscripción). El periodo va en el nombre para que el
-            # candado anti-duplicado (busca por _billing_period_label) siga funcionando.
+            # FACTURACIÓN GLOBAL CONSOLIDADA: una línea por (producto, precio, periodo); la cantidad
+            # es el nº de servicios del grupo. Sucursales según el toggle del cliente.
             groups, order = {}, []
             for sub in subs_list:
                 key = (sub.product_id.id, round(sub.price_unit, 2), sub._billing_period_label())
@@ -979,9 +984,13 @@ class SentinelaSubscription(models.Model):
             for key in order:
                 gsubs = groups[key]
                 prod = gsubs[0].product_id
-                period = gsubs[0]._billing_period_label()
-                sucursales = ", ".join((s.service_address_id.name or s.name) for s in gsubs)
-                desc = "Servicio: %s - %s | Sucursales (%d): %s" % (prod.name, period, len(gsubs), sucursales)
+                if show_branches:
+                    suc_txt = " | Sucursales (%d): %s" % (
+                        len(gsubs), ", ".join((s.service_address_id.name or s.name) for s in gsubs))
+                else:
+                    suc_txt = " (%d servicios)" % len(gsubs)
+                per_txt = "" if single_period else (" - %s" % gsubs[0]._billing_period_label())
+                desc = "Servicio: %s%s%s" % (prod.name, per_txt, suc_txt)
                 line_cmds.append((0, 0, {
                     'product_id': prod.id,
                     'name': desc,
@@ -994,13 +1003,18 @@ class SentinelaSubscription(models.Model):
                 if sub.service_type == 'gps':
                     n_dev = max(1, len(sub.gps_device_ids.filtered(lambda d: d.device_state != 'suspended')))
                     dev_suffix = f" - {n_dev} equipo(s)"
-                desc = f"Servicio: {sub.product_id.name} - Contrato: {sub.name}{dev_suffix} - {sub._billing_period_label()}"
+                per_txt = "" if single_period else (" - %s" % sub._billing_period_label())
+                desc = f"Servicio: {sub.product_id.name} - Contrato: {sub.name}{dev_suffix}{per_txt}"
                 line_cmds.append((0, 0, {
                     'product_id': sub.product_id.id,
                     'name': desc,
                     'quantity': _line_qty(sub),
                     'price_unit': sub.price_unit,
                 }))
+        # Renglón de NOTA con el periodo (una sola vez). Mantiene el periodo visible y permite que
+        # el candado anti-duplicado lo siga encontrando (busca _billing_period_label en las líneas).
+        if single_period:
+            line_cmds.append((0, 0, {'display_type': 'line_note', 'name': "Periodo facturado: %s" % single_period}))
         move_vals = {
             'move_type': 'out_invoice',
             'partner_id': partner.id,
