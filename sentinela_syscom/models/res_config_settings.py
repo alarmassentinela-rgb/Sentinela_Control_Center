@@ -1,9 +1,18 @@
+import pytz
+from datetime import timedelta
+
 from odoo import models, fields, api
 import requests
 from odoo.exceptions import UserError
 
 class ResConfigSettings(models.TransientModel):
     _inherit = 'res.config.settings'
+
+    _SYSCOM_CRON_XMLID = 'sentinela_syscom.ir_cron_syscom_sync'
+    _SYSCOM_INTERVAL_TYPES = [
+        ('minutes', 'Minutos'), ('hours', 'Horas'), ('days', 'Días'),
+        ('weeks', 'Semanas'), ('months', 'Meses'),
+    ]
 
     syscom_client_id = fields.Char(string='Client ID', config_parameter='sentinela_syscom.client_id')
     syscom_client_secret = fields.Char(string='Client Secret', config_parameter='sentinela_syscom.client_secret')
@@ -54,6 +63,80 @@ class ResConfigSettings(models.TransientModel):
              'tengan movimiento (ventas/compras/stock/facturas) y ARCHIVA los que sí, '
              'preservando la historia contable.',
     )
+
+    # =========================================================================
+    # Control del cron nocturno de sincronización (ON/OFF + hora + intervalo + estado).
+    # Mismo formato que el panel de Suscripciones, pero self-contained en Syscom.
+    # =========================================================================
+    syscom_cron_active = fields.Boolean(string='Sincronización automática (cron nocturno)')
+    syscom_cron_hour = fields.Float(string='Hora')
+    syscom_cron_interval_number = fields.Integer(string='Cada')
+    syscom_cron_interval_type = fields.Selection(_SYSCOM_INTERVAL_TYPES, string='Unidad')
+    syscom_cron_info = fields.Char(compute='_compute_syscom_cron_info')
+
+    def _syscom_cron(self):
+        return self.env.ref(self._SYSCOM_CRON_XMLID, raise_if_not_found=False)
+
+    def _syscom_tz(self):
+        return pytz.timezone(self.env.user.tz or self.env.company.partner_id.tz or 'America/Mexico_City')
+
+    def _syscom_next_run_at_local_hour(self, hour_float):
+        """nextcall (UTC naïve) = próxima ocurrencia de esa hora local."""
+        tz = self._syscom_tz()
+        now_local = pytz.utc.localize(fields.Datetime.now()).astimezone(tz)
+        h = int(hour_float or 0)
+        m = int(round(((hour_float or 0) - h) * 60))
+        if m >= 60:
+            h, m = h + 1, 0
+        target = now_local.replace(hour=min(h, 23), minute=min(m, 59), second=0, microsecond=0)
+        if target <= now_local:
+            target += timedelta(days=1)
+        return target.astimezone(pytz.utc).replace(tzinfo=None)
+
+    def _compute_syscom_cron_info(self):
+        def fmt(rec, dt):
+            return pytz.utc.localize(dt).astimezone(rec._syscom_tz()).strftime('%d/%m/%Y %H:%M') if dt else '—'
+        for s in self:
+            c = s._syscom_cron()
+            if not c:
+                s.syscom_cron_info = 'No encontrado'
+                continue
+            estado = '🟢 Activo' if c.active else '🔴 Apagado'
+            s.syscom_cron_info = '%s · cada %s %s · última: %s · próxima: %s' % (
+                estado, c.interval_number, c.interval_type, fmt(s, c.lastcall), fmt(s, c.nextcall))
+
+    @api.model
+    def get_values(self):
+        res = super().get_values()
+        c = self._syscom_cron()
+        if c:
+            res['syscom_cron_active'] = c.active
+            res['syscom_cron_interval_number'] = c.interval_number
+            res['syscom_cron_interval_type'] = c.interval_type
+            if c.nextcall:
+                loc = pytz.utc.localize(c.nextcall).astimezone(self._syscom_tz())
+                res['syscom_cron_hour'] = loc.hour + loc.minute / 60.0
+        return res
+
+    def set_values(self):
+        super().set_values()
+        c = self._syscom_cron()
+        if not c:
+            return
+        vals = {}
+        if c.active != bool(self.syscom_cron_active):
+            vals['active'] = bool(self.syscom_cron_active)
+        if self.syscom_cron_interval_number and c.interval_number != self.syscom_cron_interval_number:
+            vals['interval_number'] = self.syscom_cron_interval_number
+        if self.syscom_cron_interval_type and c.interval_type != self.syscom_cron_interval_type:
+            vals['interval_type'] = self.syscom_cron_interval_type
+        new_h = self.syscom_cron_hour or 0.0
+        cur = pytz.utc.localize(c.nextcall).astimezone(self._syscom_tz()) if c.nextcall else None
+        cur_h = (cur.hour + cur.minute / 60.0) if cur else None
+        if cur_h is None or abs(new_h - cur_h) > 0.0084:
+            vals['nextcall'] = self._syscom_next_run_at_local_hour(new_h)
+        if vals:
+            c.sudo().write(vals)
 
     def action_test_syscom_connection(self):
         """ Tests the connection to Syscom API using the provided credentials """
