@@ -27,10 +27,10 @@
                     </block>
                     <block title="Sincronización de Catálogo (Cron Nocturno)" help="El cron diario, además de actualizar precio/stock, trae los SKUs NUEVOS de las marcas/categorías de abajo y depura los descontinuados.">
                         <setting string="Marcas a sincronizar (nuevos)" help="SKUs nuevos de estas marcas se importan solos. UNA POR LÍNEA, nombre tal como aparece en Syscom.">
-                            <field name="syscom_sync_brands" placeholder="HiLook by HIKVISION&#10;HIKVISION&#10;UBIQUITI"/>
+                            <field name="syscom_sync_brands" widget="text" placeholder="HiLook by HIKVISION&#10;HIKVISION&#10;UBIQUITI"/>
                         </setting>
                         <setting string="Categorías a sincronizar (nuevos)" help="Opcional. SKUs nuevos de estas categorías, UNA POR LÍNEA. ⚠️ Una categoría grande trae miles de productos.">
-                            <field name="syscom_sync_categories" placeholder="Videovigilancia&#10;Redes e IT"/>
+                            <field name="syscom_sync_categories" widget="text" placeholder="Videovigilancia&#10;Redes e IT"/>
                         </setting>
                         <setting string="Máx. peticiones/min a Syscom" help="Tope de ritmo a la API (límite real ~300/min). El cron se auto-regula bajo este número.">
                             <field name="syscom_max_rpm"/>

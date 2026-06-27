@@ -20,7 +20,9 @@ class ResConfigSettings(models.TransientModel):
         help='ID del chat (usuario o grupo) que recibe el reporte diario.',
     )
     # v18.0.1.5.0: sincronización de productos NUEVOS + depuración de descontinuados
-    syscom_sync_brands = fields.Text(
+    # Char (no Text): res.config.settings NO admite Text en config_parameter (rompe el default_get
+    # de TODA la página de Ajustes). El widget="text" de la vista conserva el multi-línea.
+    syscom_sync_brands = fields.Char(
         string='Marcas a sincronizar (nuevos)',
         config_parameter='sentinela_syscom.sync_brands',
         help='Lista de MARCAS, UNA POR LÍNEA. El cron nocturno trae a Odoo los SKUs '
@@ -28,7 +30,7 @@ class ResConfigSettings(models.TransientModel):
              'aparece en Syscom (ej. "HiLook by HIKVISION"). Vacío = no importa nuevos '
              'por marca.',
     )
-    syscom_sync_categories = fields.Text(
+    syscom_sync_categories = fields.Char(
         string='Categorías a sincronizar (nuevos)',
         config_parameter='sentinela_syscom.sync_categories',
         help='Lista de CATEGORÍAS de Syscom, UNA POR LÍNEA (nombre o id, ej. '

@@ -1,6 +1,6 @@
 {
     'name': 'Sentinela Syscom Integration',
-    'version': '18.0.1.8.5',
+    'version': '18.0.1.8.6',
     'category': 'Inventory/Syscom',
     'summary': 'Integración con API de Syscom para sincronización de catálogo, precios y stock.',
     'depends': [
