@@ -38,17 +38,16 @@ export function AppHeader() {
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="flex items-center justify-between gap-2 px-4 py-2">
-        <div className="flex min-w-0 items-center gap-2">
-          {/* Identidad visual = Odoo (theme.logo_url). Sin logo configurado: solo el
-              nombre (sin emojis ni assets de la SPA) -> la SPA queda 100% white-label. */}
-          {theme?.logo_url && !logoFailed && (
+        <div className="flex min-w-0 items-center gap-3">
+          {/* Identidad visual = Odoo (theme.logo_url). Con logo, este ya lleva la marca,
+              así que NO se repite el nombre. Sin logo -> se muestra el nombre (white-label). */}
+          {theme?.logo_url && !logoFailed ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={theme.logo_url} alt={appName} onError={() => setLogoFailed(true)} className="h-7 w-auto" />
+            <img src={theme.logo_url} alt={appName} onError={() => setLogoFailed(true)} className="h-10 w-auto" />
+          ) : (
+            <span className="text-base font-bold text-ink">{appName}</span>
           )}
-          <div className="leading-tight">
-            <p className="text-sm font-bold text-ink">{appName}</p>
-            <p className="-mt-0.5 text-[10px] text-muted">Portal del Cliente</p>
-          </div>
+          <span className="text-base font-bold text-ink">Portal del Cliente</span>
         </div>
 
         <div className="min-w-0 text-right leading-tight">
