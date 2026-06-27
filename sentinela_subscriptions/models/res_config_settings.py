@@ -75,3 +75,62 @@ class SentinelaSubscriptionSettings(models.TransientModel):
         default='SentiCar',
         help="Nombre del grupo 'paraguas' bajo el que cuelgan los clientes sin distribuidor. "
              "Vacío = sin grupo raíz (clientes al nivel superior).")
+
+    # =========================================================================
+    # Automatización de facturación/cobranza — encender/apagar crones (Capa 1).
+    # Toggle = ir.cron.active. Solo ON/OFF + estado; la hora/intervalo NO se edita aquí.
+    # =========================================================================
+    _BILLING_CRONS = {
+        'auto_cron_generate':  'sentinela_subscriptions.ir_cron_generate_invoices',
+        'auto_cron_stamp':     'sentinela_cfdi_prodigia.ir_cron_auto_stamp_prodigia',
+        'auto_cron_suspend':   'sentinela_subscriptions.ir_cron_auto_suspend_overdue',
+        'auto_cron_reminders': 'sentinela_subscriptions.ir_cron_send_payment_reminders',
+        'auto_cron_leasing':   'sentinela_subscriptions.ir_cron_check_leasing_end',
+    }
+
+    auto_cron_generate = fields.Boolean(string='Generar pre-facturas automáticamente')
+    auto_cron_stamp = fields.Boolean(string='Timbrar facturas automáticamente (Prodigia)')
+    auto_cron_suspend = fields.Boolean(string='Auto-suspender por facturas vencidas')
+    auto_cron_reminders = fields.Boolean(string='Enviar recordatorios de cobranza')
+    auto_cron_leasing = fields.Boolean(string='Revisar fin de leasing')
+
+    auto_cron_generate_info = fields.Char(compute='_compute_billing_cron_info')
+    auto_cron_stamp_info = fields.Char(compute='_compute_billing_cron_info')
+    auto_cron_suspend_info = fields.Char(compute='_compute_billing_cron_info')
+    auto_cron_reminders_info = fields.Char(compute='_compute_billing_cron_info')
+    auto_cron_leasing_info = fields.Char(compute='_compute_billing_cron_info')
+
+    def _bc_cron(self, xmlid):
+        return self.env.ref(xmlid, raise_if_not_found=False)
+
+    def _compute_billing_cron_info(self):
+        def fmt(rec, dt):
+            return fields.Datetime.context_timestamp(rec, dt).strftime('%d/%m/%Y %H:%M') if dt else '—'
+        for s in self:
+            for fld, xmlid in self._BILLING_CRONS.items():
+                c = self._bc_cron(xmlid)
+                if not c:
+                    s[fld + '_info'] = 'No encontrado'
+                    continue
+                estado = '🟢 Activo' if c.active else '🔴 Apagado'
+                s[fld + '_info'] = '%s · cada %s %s · última: %s · próxima: %s' % (
+                    estado, c.interval_number, c.interval_type, fmt(s, c.lastcall), fmt(s, c.nextcall))
+
+    @api.model
+    def get_values(self):
+        res = super().get_values()
+        for fld, xmlid in self._BILLING_CRONS.items():
+            c = self._bc_cron(xmlid)
+            res[fld] = bool(c and c.active)
+        return res
+
+    def set_values(self):
+        super().set_values()
+        for fld, xmlid in self._BILLING_CRONS.items():
+            c = self._bc_cron(xmlid)
+            val = bool(self[fld])
+            if c and c.active != val:
+                c.sudo().active = val
+        # El auto-timbrado tiene doble candado: además del cron, el parámetro auto_stamp_enabled.
+        self.env['ir.config_parameter'].sudo().set_param(
+            'sentinela_cfdi_prodigia.auto_stamp_enabled', '1' if self.auto_cron_stamp else '0')

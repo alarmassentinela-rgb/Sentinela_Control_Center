@@ -8,6 +8,28 @@
         <field name="arch" type="xml">
             <xpath expr="//form" position="inside">
                 <app data-string="Suscripciones" string="Suscripciones" name="sentinela_subscriptions">
+                    <block title="⚙️ Automatización de Facturación y Cobranza" name="billing_crons_config">
+                        <setting id="cron_generate" help="Crea las pre-facturas del ciclo (recomendado: diario, 1:00 am).">
+                            <field name="auto_cron_generate" widget="boolean_toggle"/>
+                            <div class="text-muted small mt4"><field name="auto_cron_generate_info" nolabel="1" readonly="1"/></div>
+                        </setting>
+                        <setting id="cron_stamp" help="Timbra las facturas nuevas en Prodigia y se las envía al cliente (cada hora).">
+                            <field name="auto_cron_stamp" widget="boolean_toggle"/>
+                            <div class="text-muted small mt4"><field name="auto_cron_stamp_info" nolabel="1" readonly="1"/></div>
+                        </setting>
+                        <setting id="cron_suspend" help="Suspende el servicio a clientes con facturas vencidas (diario).">
+                            <field name="auto_cron_suspend" widget="boolean_toggle"/>
+                            <div class="text-muted small mt4"><field name="auto_cron_suspend_info" nolabel="1" readonly="1"/></div>
+                        </setting>
+                        <setting id="cron_reminders" help="Envía recordatorios de cobranza al cliente (diario).">
+                            <field name="auto_cron_reminders" widget="boolean_toggle"/>
+                            <div class="text-muted small mt4"><field name="auto_cron_reminders_info" nolabel="1" readonly="1"/></div>
+                        </setting>
+                        <setting id="cron_leasing" help="Revisa el fin de leasing de equipos (diario).">
+                            <field name="auto_cron_leasing" widget="boolean_toggle"/>
+                            <div class="text-muted small mt4"><field name="auto_cron_leasing_info" nolabel="1" readonly="1"/></div>
+                        </setting>
+                    </block>
                     <block title="Conectividad Connecta / floLIVE" name="connecta_config">
                         <setting string="Credenciales de API" help="Configura el acceso para el monitoreo de tarjetas SIM (GPS).">
                             <div class="content-group">
