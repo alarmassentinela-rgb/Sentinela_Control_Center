@@ -6,15 +6,15 @@
         <field name="inherit_id" ref="base.view_partner_form"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='phone']" position="after">
-                <button name="action_dial_ucm_ami" type="object" 
-                        string="LLAMAR UCM" icon="fa-phone" 
-                        class="btn-primary ms-2"
+                <button name="action_dial_ucm_ami" type="object"
+                        icon="fa-phone" title="Llamar por UCM"
+                        class="btn btn-link p-0 ms-2"
                         invisible="not phone"/>
             </xpath>
             <xpath expr="//field[@name='mobile']" position="after">
                 <button name="action_dial_ucm_ami" type="object"
-                        string="LLAMAR UCM" icon="fa-mobile"
-                        class="btn-primary ms-2"
+                        icon="fa-mobile" title="Llamar por UCM"
+                        class="btn btn-link p-0 ms-2"
                         invisible="not mobile"/>
             </xpath>
             <!-- F3 — Configuración del canal de notificación. Se inserta al final del notebook con position=inside. -->
