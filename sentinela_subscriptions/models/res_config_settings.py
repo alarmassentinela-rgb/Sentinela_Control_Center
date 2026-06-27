@@ -91,8 +91,8 @@ class SentinelaSubscriptionSettings(models.TransientModel):
         'auto_cron_reminders': 'sentinela_subscriptions.ir_cron_send_payment_reminders',
         'auto_cron_leasing':   'sentinela_subscriptions.ir_cron_check_leasing_end',
     }
-    # Crones por intervalo de HORAS (no tienen "hora de ejecución" fija del día).
-    _BILLING_CRONS_HOURLY = {'auto_cron_stamp'}
+    # Todos los crones exponen "hora de ejecución" (ancla de nextcall); ninguno es "solo intervalo".
+    _BILLING_CRONS_HOURLY = set()
     _CRON_INTERVAL_TYPES = [
         ('minutes', 'Minutos'), ('hours', 'Horas'), ('days', 'Días'),
         ('weeks', 'Semanas'), ('months', 'Meses'),
@@ -108,8 +108,9 @@ class SentinelaSubscriptionSettings(models.TransientModel):
     auto_cron_reminders = fields.Boolean(string='Enviar recordatorios de cobranza')
     auto_cron_leasing = fields.Boolean(string='Revisar fin de leasing')
 
-    # Capa 2: hora de ejecución (solo diarios) — Float HH:MM (widget float_time)
+    # Capa 2: hora de ejecución — Float HH:MM (widget float_time)
     auto_cron_generate_hour = fields.Float(string='Hora')
+    auto_cron_stamp_hour = fields.Float(string='Hora')
     auto_cron_suspend_hour = fields.Float(string='Hora')
     auto_cron_reminders_hour = fields.Float(string='Hora')
     auto_cron_leasing_hour = fields.Float(string='Hora')
