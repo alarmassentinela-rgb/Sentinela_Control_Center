@@ -22,6 +22,7 @@ export function AppHeader() {
   const me = useQuery(() => apiGet<Me>("/v1/me"), []);
   const dash = useQuery(() => apiGetEnvelope<Dashboard>("/v1/dashboard"), []);
   const [theme, setTheme] = useState<Theme | null>(null);
+  const [logoFailed, setLogoFailed] = useState(false);
   useEffect(() => {
     loadTheme().then(setTheme);
   }, []);
@@ -38,11 +39,11 @@ export function AppHeader() {
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="flex items-center justify-between gap-2 px-4 py-2">
         <div className="flex min-w-0 items-center gap-2">
-          {theme?.logo_url ? (
+          {/* Identidad visual = Odoo (theme.logo_url). Sin logo configurado: solo el
+              nombre (sin emojis ni assets de la SPA) -> la SPA queda 100% white-label. */}
+          {theme?.logo_url && !logoFailed && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={theme.logo_url} alt={appName} className="h-7 w-auto" />
-          ) : (
-            <div className="grid h-7 w-7 place-items-center rounded-lg bg-brand text-sm text-white" aria-hidden>🛡️</div>
+            <img src={theme.logo_url} alt={appName} onError={() => setLogoFailed(true)} className="h-7 w-auto" />
           )}
           <div className="leading-tight">
             <p className="text-sm font-bold text-ink">{appName}</p>

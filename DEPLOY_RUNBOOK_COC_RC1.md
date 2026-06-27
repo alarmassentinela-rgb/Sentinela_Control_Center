@@ -56,3 +56,11 @@ Ver `SMOKE_TESTS_COC.md` (health, OTP real, /v1/me scoped, métricas).
 
 ## 7. Criterio de éxito del despliegue
 - Smoke post-deploy en verde + no-regresión interna + observabilidad activa (`/metrics`, logs, alertas). Si algo falla → rollback del componente afectado.
+
+## 8. Branding en Odoo (REQUISITO Go-Live)
+La identidad visual del Portal es **Odoo la única fuente de verdad** (la SPA es white-label; sin recompilar por cambios de marca). **Antes del Go-Live** configurar en V18 (`ir.config_parameter`):
+- `sentinela_api.brand_logo_url` → **logo oficial** de Sentinela (URL pública o data URL). *Si no se configura, el header muestra solo el nombre — NUNCA un logo genérico.*
+- `sentinela_api.brand_name` → nombre del portal (p. ej. "Sentinela").
+- `sentinela_api.brand_primary` → color corporativo.
+- **Favicon** del portal (configurar; pendiente de exponer vía theme en sprint posterior).
+> En STAGING se usó un logo **temporal** (data URL desde `logo_sentinela_master.jpg`) solo para la UAT; **no** forma parte del despliegue a Producción.
