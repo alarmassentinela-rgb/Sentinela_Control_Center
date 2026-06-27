@@ -5,7 +5,7 @@ import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { apiPostPublic } from "@/lib/api";
 import { getDeviceId, setTokens, type Tokens } from "@/lib/auth";
-import { friendlyError } from "@/lib/format";
+import { authVerifyError, friendlyError } from "@/lib/format";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -39,8 +39,8 @@ export default function LoginPage() {
       const t = await apiPostPublic<Tokens>("/v1/auth/otp/verify", { phone, code, device: getDeviceId() });
       setTokens(t);
       router.replace("/dashboard");
-    } catch {
-      setError("El código no es válido o expiró. Revísalo e inténtalo de nuevo.");
+    } catch (e) {
+      setError(authVerifyError(e));
     } finally {
       setLoading(false);
     }

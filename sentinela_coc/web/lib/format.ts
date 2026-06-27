@@ -27,6 +27,21 @@ export function friendlyError(e: unknown): string {
   return "Algo salió mal. Inténtalo de nuevo.";
 }
 
+// B1 (UAT): mensaje del paso de verificación de OTP según el error REAL del Gateway.
+// No cambia la lógica ni el contrato: solo mapea el `error`/status a un texto correcto
+// (antes se mostraba un texto fijo "código no válido" para todos los casos).
+// "invalid" sigue cubriendo incorrecto/expirado (B2 queda diferido por decisión de producto).
+export function authVerifyError(e: unknown): string {
+  const err = e as { status?: number; code?: string };
+  if (err?.code === "rate" || err?.status === 429)
+    return "Demasiados intentos. Espera un momento e inténtalo de nuevo.";
+  if (err?.code === "odoo_unavailable" || err?.status === 502 || err?.status === 503)
+    return "Estamos teniendo problemas para conectar. Inténtalo en unos segundos.";
+  if (e instanceof TypeError)
+    return "Sin conexión. Revisa tu internet e inténtalo de nuevo.";
+  return "El código no es válido o expiró. Revísalo e inténtalo de nuevo.";
+}
+
 const SERVICE_ICON: Record<string, string> = {
   internet: "🌐",
   alarm: "🛡️",
