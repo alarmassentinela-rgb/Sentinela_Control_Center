@@ -951,32 +951,56 @@ class SentinelaSubscription(models.Model):
         partner = subs_list[0].partner_id
         first_sub = subs_list[0]
         method = partner.invoice_grouping_method or 'individual'
-        line_cmds = []
-        for sub in subs_list:
-            months = int(sub.recurring_interval)
-            period_end = sub.next_billing_date + relativedelta(months=months) - timedelta(days=1)
-            # Cantidad facturada = nº de meses del ciclo.
-            # EXCEPCIÓN alarmas y dominios: usan productos por periodo (alarma MBASICO-3/-6/-12;
-            # dominio DOMINIO con precio ANUAL) cuyo price_unit YA es el precio del periodo
-            # completo, así que van con cantidad=1 (no multiplicar).
-            # Internet/GPS/Mantenimiento guardan TARIFA MENSUAL → se multiplica por los meses
-            # del ciclo para que "pagar 6 meses por adelantado" cobre 6× la mensualidad.
-            qty = 1 if sub.service_type in ('alarm', 'domain') else months
-            # GPS: 1 sub = N equipos → multiplica por la cantidad de equipos (mín. 1).
-            # Los equipos SUSPENDIDOS (pausa temporal del cliente) NO se facturan: solo cuentan
-            # los activos.
-            dev_suffix = ""
+
+        # Cantidad facturada por sub. Alarmas/dominios: price_unit YA es el precio del periodo
+        # completo (productos MBASICO-3/-6/-12, DOMINIO anual) → qty=1. Internet/GPS/Mantenimiento
+        # guardan TARIFA MENSUAL → qty = nº de meses del ciclo. GPS: × nº de equipos activos.
+        def _line_qty(sub):
+            months = int(sub.recurring_interval or 1)
+            q = 1 if sub.service_type in ('alarm', 'domain') else months
             if sub.service_type == 'gps':
                 n_dev = max(1, len(sub.gps_device_ids.filtered(lambda d: d.device_state != 'suspended')))
-                qty = months * n_dev
-                dev_suffix = f" - {n_dev} equipo(s)"
-            desc = f"Servicio: {sub.product_id.name} - Contrato: {sub.name}{dev_suffix} - {sub._billing_period_label()}"
-            line_cmds.append((0, 0, {
-                'product_id': sub.product_id.id,
-                'name': desc,
-                'quantity': qty,
-                'price_unit': sub.price_unit,
-            }))
+                q = months * n_dev
+            return q
+
+        line_cmds = []
+        if method == 'global' and len(subs_list) > 1:
+            # FACTURACIÓN GLOBAL CONSOLIDADA: una línea por (producto, precio, periodo); la
+            # cantidad es el nº de servicios del grupo y se listan las sucursales en la descripción
+            # (en vez de una línea por suscripción). El periodo va en el nombre para que el
+            # candado anti-duplicado (busca por _billing_period_label) siga funcionando.
+            groups, order = {}, []
+            for sub in subs_list:
+                key = (sub.product_id.id, round(sub.price_unit, 2), sub._billing_period_label())
+                if key not in groups:
+                    groups[key] = []
+                    order.append(key)
+                groups[key].append(sub)
+            for key in order:
+                gsubs = groups[key]
+                prod = gsubs[0].product_id
+                period = gsubs[0]._billing_period_label()
+                sucursales = ", ".join((s.service_address_id.name or s.name) for s in gsubs)
+                desc = "Servicio: %s - %s | Sucursales (%d): %s" % (prod.name, period, len(gsubs), sucursales)
+                line_cmds.append((0, 0, {
+                    'product_id': prod.id,
+                    'name': desc,
+                    'quantity': sum(_line_qty(s) for s in gsubs),
+                    'price_unit': gsubs[0].price_unit,
+                }))
+        else:
+            for sub in subs_list:
+                dev_suffix = ""
+                if sub.service_type == 'gps':
+                    n_dev = max(1, len(sub.gps_device_ids.filtered(lambda d: d.device_state != 'suspended')))
+                    dev_suffix = f" - {n_dev} equipo(s)"
+                desc = f"Servicio: {sub.product_id.name} - Contrato: {sub.name}{dev_suffix} - {sub._billing_period_label()}"
+                line_cmds.append((0, 0, {
+                    'product_id': sub.product_id.id,
+                    'name': desc,
+                    'quantity': _line_qty(sub),
+                    'price_unit': sub.price_unit,
+                }))
         move_vals = {
             'move_type': 'out_invoice',
             'partner_id': partner.id,
