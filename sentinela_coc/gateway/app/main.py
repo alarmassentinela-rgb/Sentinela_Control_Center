@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 
 from . import models  # noqa: F401  (registra modelos en Base)
 from .config import settings
@@ -37,13 +38,23 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="COC Sentinela — Gateway API",
-    version="0.3.0",
+    version="0.3.1",
     description=(
         "Backend-for-Frontend del Centro de Operaciones del Cliente. Identidad "
         "(OTP + sesiones cortas) en el gateway; autorización en Odoo (record rules)."
     ),
     docs_url="/docs", redoc_url="/redoc", openapi_url="/openapi.json",
     lifespan=lifespan,
+)
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
+    allow_credentials=False,  # autenticación por Bearer, no por cookies
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-Id"],
+    expose_headers=["X-Request-Id"],
 )
 
 

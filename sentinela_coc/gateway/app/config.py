@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     odoo_base_url: str = "http://192.168.3.2:8075"
     coc_shared_secret: str = "change-me"          # secreto compartido gateway↔Odoo
 
+    # CORS — orígenes permitidos para la SPA (coma-separados). La SPA vive en otro
+    # origen (portal.sentinela.mx) y consume el gateway (api.sentinela.mx).
+    cors_origins: str = "https://portal.sentinela.mx,http://localhost:3000,http://127.0.0.1:3000"
+
     # Seguridad / tokens
     jwt_secret: str = "change-me"
     jwt_access_ttl_min: int = 15                   # access JWT corto
