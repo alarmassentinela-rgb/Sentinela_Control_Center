@@ -37,28 +37,35 @@ export function AppHeader() {
 
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
-      <div className="flex items-center justify-between gap-2 px-4 py-2">
-        <div className="flex min-w-0 items-center gap-3">
-          {/* Identidad visual = Odoo (theme.logo_url). Con logo, este ya lleva la marca,
-              así que NO se repite el nombre. Sin logo -> se muestra el nombre (white-label). */}
+      {/* Barra COMPACTA (py-1.5). Identidad = Odoo (logo con proporción intacta);
+          "Portal del Cliente" como título principal; bloque de cliente cohesivo a la
+          derecha con el estado destacado. La zona derecha deja espacio para crecer
+          (notificaciones · perfil · IA · cambio de sucursal) sin romper el diseño. */}
+      <div className="flex items-center gap-3 px-4 py-1.5">
+        <div className="flex min-w-0 items-center gap-2.5">
           {theme?.logo_url && !logoFailed ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={theme.logo_url} alt={appName} onError={() => setLogoFailed(true)} className="h-10 w-auto" />
+            <img src={theme.logo_url} alt={appName} onError={() => setLogoFailed(true)} className="h-10 w-auto shrink-0 object-contain" />
           ) : (
-            <span className="text-base font-bold text-ink">{appName}</span>
+            <span className="shrink-0 text-base font-bold text-ink">{appName}</span>
           )}
-          <span className="text-base font-bold text-ink">Portal del Cliente</span>
+          <span className="truncate text-base font-bold tracking-tight text-ink sm:text-lg">Portal del Cliente</span>
         </div>
 
-        <div className="min-w-0 text-right leading-tight">
-          <div className="flex items-center justify-end gap-2">
-            {me.data && <p className="max-w-[42vw] truncate text-xs font-semibold text-ink sm:max-w-none">Hola, {firstName}</p>}
-            {st && <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", st.cls)}>{st.label}</span>}
-          </div>
-          <p className="text-[10px] text-muted">
-            {me.data ? `Cliente #${me.data.id}` : "—"}
-            {updated ? ` · Actualizado ${updated}` : ""}
-          </p>
+        <div className="ml-auto flex items-center gap-2">
+          {/* Reservado para futuras acciones del encabezado (campana, perfil, IA, sucursal). */}
+          {me.data && (
+            <div className="flex items-center gap-2.5 rounded-full sm:bg-slate-50 sm:px-3 sm:py-1">
+              {/* Bloque de cliente cohesivo en tablet/escritorio; en móvil se condensa al badge. */}
+              <div className="hidden text-right leading-tight sm:block">
+                <p className="whitespace-nowrap text-xs font-semibold text-ink">Hola, {firstName}</p>
+                <p className="whitespace-nowrap text-[10px] text-muted">
+                  Cliente #{me.data.id}{updated ? ` · Actualizado ${updated}` : ""}
+                </p>
+              </div>
+              {st && <span className={cn("rounded-full px-2.5 py-1 text-xs font-bold", st.cls)}>{st.label}</span>}
+            </div>
+          )}
         </div>
       </div>
     </header>

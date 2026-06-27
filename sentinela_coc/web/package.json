@@ -1,6 +1,6 @@
 {
   "name": "coc-web",
-  "version": "0.2.2",
+  "version": "0.2.4",
   "private": true,
   "description": "SPA del Portal COC Sentinela (Sprint 1: Dashboard + Mis Servicios + Facturacion)",
   "scripts": {
