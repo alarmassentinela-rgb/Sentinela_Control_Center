@@ -171,10 +171,11 @@ class ResPartnerPhone(models.Model):
     _name = 'res.partner.phone'
     _description = 'Teléfono adicional del contacto'
     _order = 'sequence, id'
+    _rec_name = 'number'
 
     partner_id = fields.Many2one('res.partner', string='Contacto', required=True, ondelete='cascade', index=True)
     sequence = fields.Integer(default=10)
-    name = fields.Char(string='Etiqueta', help='Ej: Oficina, Casa, Celular, WhatsApp, Recepción…')
-    phone = fields.Char(string='Número', required=True)
+    label = fields.Char(string='Etiqueta', help='Ej: Oficina, Casa, Celular, WhatsApp, Recepción…')
+    number = fields.Char(string='Número', required=True)
     extension = fields.Char(string='Ext.')
     note = fields.Char(string='Nota')

@@ -47,8 +47,8 @@
                     <field name="phone_line_ids">
                         <list editable="bottom">
                             <field name="sequence" widget="handle"/>
-                            <field name="name" placeholder="Oficina / Casa / Celular / WhatsApp"/>
-                            <field name="phone" widget="phone"/>
+                            <field name="label" placeholder="Oficina / Casa / Celular / WhatsApp"/>
+                            <field name="number" placeholder="Número telefónico o celular"/>
                             <field name="extension"/>
                             <field name="note"/>
                         </list>
