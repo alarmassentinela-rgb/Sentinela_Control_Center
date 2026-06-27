@@ -1,10 +1,11 @@
 "use client";
+import Link from "next/link";
+
 import { ModulesGrid } from "@/components/ModulesGrid";
 import { NextActions } from "@/components/NextActions";
 import { PeaceOfMind } from "@/components/PeaceOfMind";
 import { ServiceCard } from "@/components/ServiceCard";
 import { Card } from "@/components/ui/Card";
-import { PageHeader } from "@/components/ui/PageHeader";
 import { Skeleton, SkeletonCard } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/States";
 import { useQuery } from "@/hooks/useQuery";
@@ -16,9 +17,7 @@ export default function DashboardPage() {
   const { data, loading, error, reload } = useQuery(() => apiGetEnvelope<Dashboard>("/v1/dashboard"), []);
 
   return (
-    <div className="space-y-4 px-4 pb-4">
-      <PageHeader title="Hola 👋" subtitle="Tu Centro de Operaciones" />
-
+    <div className="space-y-4 px-4 pb-4 pt-4">
       {loading && (
         <>
           <Skeleton className="h-36 w-full rounded-xl2" />
@@ -57,7 +56,17 @@ export default function DashboardPage() {
             <section className="space-y-2">
               <h2 className="px-1 text-sm font-semibold text-muted">Mis servicios</h2>
               {data.data.services.items.length ? (
-                data.data.services.items.map((s) => <ServiceCard key={s.id} s={s} />)
+                <>
+                  {data.data.services.items.slice(0, 3).map((s) => <ServiceCard key={s.id} s={s} />)}
+                  {data.data.services.total > 3 && (
+                    <Link
+                      href="/servicios"
+                      className="block rounded-xl border border-slate-200 bg-white py-2 text-center text-sm font-semibold text-brand"
+                    >
+                      Ver todos los servicios ({data.data.services.total})
+                    </Link>
+                  )}
+                </>
               ) : (
                 <p className="px-1 text-sm text-muted">Aún no tienes servicios.</p>
               )}

@@ -68,6 +68,19 @@ def config_theme(odoo=Depends(deps.get_odoo_client)):
     return theme
 
 
+# ---------------- Perfil ----------------
+@router.get("/me", summary="Perfil del cliente autenticado")
+def me(request: Request, sess=Depends(deps.current_session), odoo=Depends(deps.get_odoo_client)):
+    # Proxy del /v1/me de Odoo (sentinela_api) vía la sesión efímera. Respuesta cruda
+    # (no envuelta) para coincidir con el contrato OpenAPI existente.
+    status, body = odoo.get_json_as(sess.odoo_session_id, "/v1/me")
+    if status == 200:
+        return body
+    if status in (301, 302, 303, 401):
+        raise HTTPException(status_code=401, detail="session_expired")
+    raise HTTPException(status_code=502, detail="odoo_unavailable")
+
+
 # ---------------- Mis Servicios ----------------
 @router.get("/services", summary="Lista de servicios del cliente")
 def services(request: Request, sess=Depends(deps.current_session), odoo=Depends(deps.get_odoo_client)):

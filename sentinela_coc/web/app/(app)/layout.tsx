@@ -2,6 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { AppHeader } from "@/components/AppHeader";
 import { BottomNav } from "@/components/BottomNav";
 import { isAuthed } from "@/lib/auth";
 import { applyTheme, loadTheme } from "@/lib/theme";
@@ -23,6 +24,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="app-shell">
+      <AppHeader />
       <main className="flex-1">{children}</main>
       <BottomNav />
     </div>

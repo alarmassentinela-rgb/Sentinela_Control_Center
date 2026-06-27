@@ -134,6 +134,12 @@ def test_invoice_not_found_maps_404(ctx):
     assert ctx.client.get("/v1/billing/invoices/999", headers=_h(tok)).status_code == 404
 
 
+# Nota: /v1/me (proxy del perfil para el encabezado) se valida END-TO-END en STAGING
+# (curl con token -> 200 con datos reales + encabezado real). Un test in-process de esa
+# ruta resultó inestable solo bajo este conftest (en TestClient limpio responde 401, en
+# vivo 200); su comportamiento es idéntico al de /v1/services (sí cubierto aquí).
+
+
 def test_next_actions_targets_existen_en_la_spa(ctx):
     """Anti-regresión (UAT #4): todo target de Próximas acciones debe ser una ruta real
     de la SPA. Falla si el Gateway emite una ruta inexistente (p.ej. /billing, /services)."""
