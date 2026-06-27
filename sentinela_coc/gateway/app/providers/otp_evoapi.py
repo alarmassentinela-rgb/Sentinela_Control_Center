@@ -6,12 +6,12 @@ métricas (disponibilidad/latencia), circuit breaker, reintentos controlados y
 manejo seguro de errores. NUNCA registra el OTP ni la api_key.
 """
 import logging
-import re
 import time
 
 import httpx
 
 from ..metrics import metrics
+from ..services.phone import to_evoapi_mx
 from .circuit_breaker import CircuitBreaker
 from .otp_base import OtpProvider
 
@@ -68,7 +68,7 @@ class EvoApiOtpProvider(OtpProvider):
             return False
 
         url = f"{self.base_url}/message/sendText/{self.instance}"
-        number = re.sub(r"\D", "", phone or "")           # E.164 sin '+' (formato EvoApi)
+        number = to_evoapi_mx(phone)                       # E.164 MX (52+10) — formato EvoApi
         body = {"number": number, "text": self.template.format(code=code)}   # code NO se loguea
         attempt = 0
         while True:
