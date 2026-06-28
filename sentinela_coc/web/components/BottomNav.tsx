@@ -14,14 +14,14 @@ const ITEMS = [
 export function BottomNav() {
   const path = usePathname() || "";
   return (
-    <nav className="sticky bottom-0 z-10 border-t border-slate-200 bg-white/95 backdrop-blur">
+    <nav className="sticky bottom-0 z-nav border-t border-slate-200 bg-white/95 backdrop-blur">
       <div className="mx-auto flex max-w-app">
         {ITEMS.map((it) => {
           const active = path.startsWith(it.href);
           const content = (
             <div
               className={cn(
-                "flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px]",
+                "flex flex-1 flex-col items-center gap-0.5 py-2 text-caption",
                 active ? "text-brand" : "text-muted",
                 it.soon && "opacity-40",
               )}

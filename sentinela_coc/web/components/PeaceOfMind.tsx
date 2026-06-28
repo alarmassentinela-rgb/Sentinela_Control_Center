@@ -2,31 +2,29 @@ import { StatusIndicator, type StatusTone } from "@/components/ui/StatusIndicato
 import { cn } from "@/lib/cn";
 
 // Elemento CENTRAL del Dashboard: "Estado de Tranquilidad".
-// Composición: columna flex con UN solo gap entre el indicador y el grupo de texto
-// (las dos líneas agrupadas y juntas). El indicador es el componente del Design System
-// <StatusIndicator> (SVG reutilizable, color por tono, tamaño por token) -> apariencia
-// idéntica en todas las plataformas y separación independiente del tamaño del icono.
-// Solo el fondo/anillo de la tarjeta es propio del hero.
-const CARD: Record<string, { bg: string; ring: string; tone: StatusTone }> = {
-  tranquilo: { bg: "bg-green-50", ring: "ring-green-200", tone: "ok" },
-  atencion: { bg: "bg-amber-50", ring: "ring-amber-200", tone: "warn" },
-  alerta: { bg: "bg-red-50", ring: "ring-red-200", tone: "danger" },
+// Mensaje al cliente (voz humana) derivado del `status` en la SPA (no backend), distinto del
+// chip técnico del header. Composición: columna flex con UN solo gap entre el indicador
+// (<StatusIndicator> del DS) y el grupo de texto.
+const CARD: Record<string, { bg: string; ring: string; tone: StatusTone; label: string }> = {
+  tranquilo: { bg: "bg-green-50", ring: "ring-green-200", tone: "ok", label: "Todo en orden" },
+  atencion: { bg: "bg-amber-50", ring: "ring-amber-200", tone: "warn", label: "Requiere tu atención" },
+  alerta: { bg: "bg-red-50", ring: "ring-red-200", tone: "danger", label: "Servicio suspendido" },
 };
 
-export function PeaceOfMind({ status, label }: { status: string; label: string }) {
+export function PeaceOfMind({ status }: { status: string }) {
   const s = CARD[status] || CARD.tranquilo;
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center gap-3 rounded-xl2 p-6 text-center ring-1 lg:h-full lg:gap-5 lg:p-12",
+        "flex flex-col items-center justify-center gap-3 rounded-card p-6 text-center ring-1 lg:h-full lg:gap-5 lg:p-12",
         s.bg,
         s.ring,
       )}
     >
       <StatusIndicator tone={s.tone} size="xl" />
       <div className="flex flex-col gap-0.5">
-        <p className="text-[11px] uppercase tracking-wide text-muted lg:text-sm">Estado de tranquilidad</p>
-        <p className="text-lg font-bold text-ink lg:text-3xl">{label}</p>
+        <p className="text-caption uppercase tracking-wide text-muted lg:text-aux">Estado de tranquilidad</p>
+        <p className="text-subtitle font-bold text-ink lg:text-hero">{s.label}</p>
       </div>
     </div>
   );

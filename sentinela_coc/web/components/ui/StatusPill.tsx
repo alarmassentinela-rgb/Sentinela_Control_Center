@@ -1,17 +1,15 @@
-import { cn } from "@/lib/cn";
+import { Badge, type BadgeTone } from "./Badge";
 import { statusLabel } from "@/lib/format";
 
-const MAP: Record<string, string> = {
-  active: "bg-green-100 text-green-700",
-  suspended: "bg-red-100 text-red-700",
-  pending_signature: "bg-amber-100 text-amber-700",
-  inactive: "bg-slate-100 text-slate-600",
+// Estado de servicio -> tono del Design System. Reutiliza <Badge> (única implementación
+// de chips); aquí solo vive el mapeo de dominio status->tono+etiqueta.
+const TONE: Record<string, BadgeTone> = {
+  active: "ok",
+  suspended: "danger",
+  pending_signature: "warn",
+  inactive: "neutral",
 };
 
 export function StatusPill({ status }: { status?: string }) {
-  return (
-    <span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-semibold", MAP[status || ""] || "bg-slate-100 text-slate-600")}>
-      {statusLabel(status)}
-    </span>
-  );
+  return <Badge tone={TONE[status || ""] || "neutral"}>{statusLabel(status)}</Badge>;
 }

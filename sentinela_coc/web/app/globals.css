@@ -22,3 +22,10 @@ body {
 .app-shell {
   @apply mx-auto w-full max-w-app md:max-w-3xl lg:max-w-5xl xl:max-w-desktop min-h-dvh bg-slate-50 flex flex-col;
 }
+
+@layer components {
+  /* Foco visible HOMOGÉNEO para todo elemento interactivo del portal. */
+  .focus-ring {
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white;
+  }
+}

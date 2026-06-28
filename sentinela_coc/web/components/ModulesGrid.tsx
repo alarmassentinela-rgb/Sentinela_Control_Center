@@ -10,17 +10,17 @@ const MODULES = [
 export function ModulesGrid() {
   return (
     <section className="space-y-2">
-      <h2 className="px-1 text-sm font-semibold text-muted">Más módulos</h2>
+      <h2 className="px-1 text-aux font-semibold text-muted">Más módulos</h2>
       <div className="grid grid-cols-4 gap-2">
         {MODULES.map((m) => (
           <div
             key={m.label}
-            className="flex flex-col items-center gap-1 rounded-xl2 border border-slate-100 bg-white p-3 text-center opacity-70"
+            className="flex flex-col items-center gap-1 rounded-card border border-slate-100 bg-surface p-3 text-center opacity-70"
             title="Próximamente"
           >
             <span className="text-2xl" aria-hidden>{m.icon}</span>
-            <span className="text-[11px] text-muted">{m.label}</span>
-            <span className="text-[9px] font-semibold text-brand">Pronto</span>
+            <span className="text-caption text-muted">{m.label}</span>
+            <span className="text-caption font-semibold text-brand">Pronto</span>
           </div>
         ))}
       </div>

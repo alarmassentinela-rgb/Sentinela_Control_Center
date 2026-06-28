@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import { BrandMark } from "@/components/BrandMark";
 import { Button } from "@/components/ui/Button";
+import { FieldLabel } from "@/components/ui/FieldLabel";
 import { apiPostPublic } from "@/lib/api";
 import { getDeviceId, setTokens, type Tokens } from "@/lib/auth";
 import { authVerifyError, friendlyError } from "@/lib/format";
@@ -60,15 +61,16 @@ export default function LoginPage() {
         <BrandMark layout="login" />
 
         {expired && (
-          <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-800">
+          <p className="rounded-control border border-amber-200 bg-amber-50 px-4 py-3 text-center text-aux text-amber-800">
             Tu sesión expiró. Inicia sesión nuevamente para continuar.
           </p>
         )}
 
         {step === "phone" ? (
           <form onSubmit={requestOtp} className="space-y-3">
-            <label className="block text-sm font-medium text-ink">Tu número de WhatsApp</label>
+            <FieldLabel htmlFor="phone">Tu número de WhatsApp</FieldLabel>
             <input
+              id="phone"
               type="tel"
               inputMode="tel"
               autoComplete="tel"
@@ -76,7 +78,7 @@ export default function LoginPage() {
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="+52 868 123 4567"
-              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base outline-none focus:border-brand"
+              className="focus-ring w-full rounded-control border border-slate-200 bg-white px-4 py-3 text-base"
             />
             <Button type="submit" className="w-full" disabled={loading || !phone}>
               {loading ? "Enviando…" : "Enviar código"}
@@ -84,9 +86,10 @@ export default function LoginPage() {
           </form>
         ) : (
           <form onSubmit={verifyOtp} className="space-y-3">
-            {info && <p className="text-center text-sm text-muted">{info}</p>}
-            <label className="block text-sm font-medium text-ink">Código de 6 dígitos</label>
+            {info && <p className="text-center text-aux text-muted">{info}</p>}
+            <FieldLabel htmlFor="code">Código de 6 dígitos</FieldLabel>
             <input
+              id="code"
               type="text"
               inputMode="numeric"
               autoComplete="one-time-code"
@@ -95,7 +98,7 @@ export default function LoginPage() {
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
               placeholder="••••••"
-              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-2xl tracking-[0.5em] outline-none focus:border-brand"
+              className="focus-ring w-full rounded-control border border-slate-200 bg-white px-4 py-3 text-center text-2xl tracking-[0.5em]"
             />
             <Button type="submit" className="w-full" disabled={loading || code.length < 6}>
               {loading ? "Verificando…" : "Entrar"}
@@ -106,7 +109,7 @@ export default function LoginPage() {
           </form>
         )}
 
-        {error && <p className="text-center text-sm text-danger">{error}</p>}
+        {error && <p className="text-center text-aux text-danger">{error}</p>}
       </div>
     </main>
   );

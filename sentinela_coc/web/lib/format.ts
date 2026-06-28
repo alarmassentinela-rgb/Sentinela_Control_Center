@@ -61,7 +61,7 @@ export function statusLabel(status?: string): string {
     case "suspended":
       return "Suspendido";
     case "pending_signature":
-      return "Por firmar";
+      return "Contrato por firmar";
     case "inactive":
       return "Inactivo";
     default:

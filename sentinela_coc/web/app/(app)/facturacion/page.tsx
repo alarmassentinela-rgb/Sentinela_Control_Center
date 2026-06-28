@@ -6,15 +6,17 @@ import { PaymentRow } from "@/components/PaymentRow";
 import { PaymentSummaryModal } from "@/components/PaymentSummaryModal";
 import { SelectionBar } from "@/components/SelectionBar";
 import { Card } from "@/components/ui/Card";
+import { LoadMore } from "@/components/ui/LoadMore";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Skeleton, SkeletonCard } from "@/components/ui/Skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/States";
+import { usePaged } from "@/hooks/usePaged";
 import { useQuery } from "@/hooks/useQuery";
 import { apiGet } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { formatDate, money } from "@/lib/format";
 import { paymentPreviewTotal } from "@/lib/payments";
-import type { BillingSummary, Invoice, Paged, Payment } from "@/lib/types";
+import type { BillingSummary, Invoice, Payment } from "@/lib/types";
 
 type Tab = "facturas" | "pagos";
 const TAB_KEY = "fact.tab";
@@ -22,17 +24,17 @@ const TAB_KEY = "fact.tab";
 function Metric({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "danger" }) {
   return (
     <div>
-      <p className="text-[11px] text-muted">{label}</p>
-      <p className={cn("text-base font-bold", tone === "danger" ? "text-danger" : "text-ink")}>{value}</p>
-      {sub && <p className="text-[10px] text-muted">{sub}</p>}
+      <p className="text-caption text-muted">{label}</p>
+      <p className={cn("text-body font-bold", tone === "danger" ? "text-danger" : "text-ink")}>{value}</p>
+      {sub && <p className="text-caption text-muted">{sub}</p>}
     </div>
   );
 }
 
 export default function FacturacionPage() {
   const sum = useQuery(() => apiGet<BillingSummary>("/v1/billing/summary"), []);
-  const list = useQuery(() => apiGet<Paged<Invoice>>("/v1/billing/invoices?limit=50"), []);
-  const pays = useQuery(() => apiGet<Paged<Payment>>("/v1/billing/payments?limit=50"), []);
+  const inv = usePaged<Invoice>("/v1/billing/invoices", {}, 20);
+  const pays = usePaged<Payment>("/v1/billing/payments", {}, 20);
 
   const [tab, setTab] = useState<Tab>("facturas");
   useEffect(() => {
@@ -56,11 +58,11 @@ export default function FacturacionPage() {
     });
   }
 
-  const invoices = list.data?.items || [];
+  const invoices = inv.items;
   const selectedInvoices = useMemo(() => invoices.filter((i) => selected.has(i.id)), [invoices, selected]);
   const total = paymentPreviewTotal(selectedInvoices);
   const currency = sum.data?.currency || "MXN";
-  const latestPayment = pays.data?.items?.[0];
+  const latestPayment = pays.items[0];
   const nextDue = sum.data?.upcoming?.[0]?.due_date;
 
   return (
@@ -69,16 +71,16 @@ export default function FacturacionPage() {
 
       {/* Resumen ejecutivo (situación financiera de un vistazo) */}
       {sum.loading ? (
-        <Skeleton className="h-24 w-full rounded-xl2" />
+        <Skeleton className="h-24 w-full rounded-card" />
       ) : sum.error ? (
         <ErrorState message={sum.error} onRetry={sum.reload} />
       ) : (
         sum.data && (
           <Card>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Metric label="Facturas pendientes" value={String(sum.data.open_count)} />
+              <Metric label="Facturas por pagar" value={String(sum.data.open_count)} />
               <Metric
-                label="Importe pendiente"
+                label="Saldo por pagar"
                 value={money(sum.data.total_due, currency)}
                 tone={sum.data.overdue_amount > 0 ? "danger" : undefined}
               />
@@ -94,13 +96,13 @@ export default function FacturacionPage() {
       )}
 
       {/* Selector Facturas | Pagos */}
-      <div className="inline-flex rounded-xl bg-slate-100 p-1 text-sm font-semibold">
+      <div className="inline-flex rounded-control bg-slate-100 p-1 text-aux font-semibold">
         {(["facturas", "pagos"] as Tab[]).map((t) => (
           <button
             key={t}
             type="button"
             onClick={() => changeTab(t)}
-            className={cn("rounded-lg px-4 py-1.5 capitalize transition", tab === t ? "bg-white text-ink shadow-sm" : "text-muted")}
+            className={cn("focus-ring rounded-control px-4 py-1.5 capitalize transition", tab === t ? "bg-white text-ink shadow-card" : "text-muted")}
           >
             {t}
           </button>
@@ -109,41 +111,45 @@ export default function FacturacionPage() {
 
       {tab === "facturas" ? (
         <>
-          {list.loading && (
+          {inv.error && <ErrorState message={inv.error} onRetry={inv.reload} />}
+          {inv.loading && invoices.length === 0 && (
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <SkeletonCard />
               <SkeletonCard />
             </div>
           )}
-          {list.error && <ErrorState message={list.error} onRetry={list.reload} />}
-          {list.data &&
-            (invoices.length ? (
+          {!inv.loading && !inv.error && invoices.length === 0 && <EmptyState icon="🧾" title="Sin facturas todavía" />}
+          {invoices.length > 0 && (
+            <>
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {invoices.map((inv) => (
-                  <InvoiceRow key={inv.id} inv={inv} selected={selected.has(inv.id)} onToggle={toggle} />
+                {invoices.map((i) => (
+                  <InvoiceRow key={i.id} inv={i} selected={selected.has(i.id)} onToggle={toggle} />
                 ))}
               </div>
-            ) : (
-              <EmptyState icon="🧾" title="Sin facturas todavía" />
-            ))}
+              <LoadMore shown={invoices.length} total={inv.total} loading={inv.loading} onMore={inv.loadMore} />
+            </>
+          )}
         </>
       ) : (
         <>
-          {pays.loading && (
+          {pays.error && <ErrorState message={pays.error} onRetry={pays.reload} />}
+          {pays.loading && pays.items.length === 0 && (
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <SkeletonCard />
               <SkeletonCard />
             </div>
           )}
-          {pays.error && <ErrorState message={pays.error} onRetry={pays.reload} />}
-          {pays.data &&
-            (pays.data.items.length ? (
+          {!pays.loading && !pays.error && pays.items.length === 0 && (
+            <EmptyState icon="💳" title="Aún no tienes pagos registrados" />
+          )}
+          {pays.items.length > 0 && (
+            <>
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {pays.data.items.map((p) => <PaymentRow key={p.id} p={p} />)}
+                {pays.items.map((p) => <PaymentRow key={p.id} p={p} />)}
               </div>
-            ) : (
-              <EmptyState icon="💳" title="Aún no tienes pagos registrados" />
-            ))}
+              <LoadMore shown={pays.items.length} total={pays.total} loading={pays.loading} onMore={pays.loadMore} />
+            </>
+          )}
         </>
       )}
 
