@@ -70,9 +70,13 @@ class TestCatalogItem(TransactionCase):
 
     def test_link_master_audits(self):
         it = self._item()
-        # Usar un producto existente (evita NOT-NULL de campos sale/purchase en STAGING).
-        tmpl = self.env["product.template"].search([], limit=1)
-        self.assertTrue(tmpl, "se requiere al menos un product.template")
+        # Crea su propio producto (reproducible en BD limpia sin demo; guarda NOT-NULL sale/purchase).
+        tvals = {"name": "Master Test", "type": "consu"}
+        Tmpl = self.env["product.template"]
+        for w in ("sale_line_warn", "purchase_line_warn"):
+            if w in Tmpl._fields:
+                tvals[w] = "no-message"
+        tmpl = Tmpl.create(tvals)
         it.link_master(tmpl, source="wizard")
         self.assertEqual(it.product_tmpl_id, tmpl)
         log = self.env["catalog.audit.log"].search(
