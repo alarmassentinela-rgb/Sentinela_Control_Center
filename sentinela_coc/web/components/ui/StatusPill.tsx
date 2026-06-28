@@ -10,7 +10,7 @@ const MAP: Record<string, string> = {
 
 export function StatusPill({ status }: { status?: string }) {
   return (
-    <span className={cn("inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold", MAP[status || ""] || "bg-slate-100 text-slate-600")}>
+    <span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-semibold", MAP[status || ""] || "bg-slate-100 text-slate-600")}>
       {statusLabel(status)}
     </span>
   );

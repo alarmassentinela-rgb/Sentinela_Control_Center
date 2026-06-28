@@ -47,7 +47,7 @@ export default function DashboardPage() {
                 <p className="text-lg font-bold text-ink">{money(data.data.billing.total_due, data.data.billing.currency)}</p>
               </div>
               {data.data.billing.overdue_amount > 0 && (
-                <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
+                <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700">
                   Vencido {money(data.data.billing.overdue_amount, data.data.billing.currency)}
                 </span>
               )}
