@@ -1,0 +1,57 @@
+# DESIGN_SYSTEM_COC — Inventario oficial (base para próximos sprints)
+
+Componentes y tokens **oficiales** del Portal COC tras el lote DS del Sprint 1 (web 0.4.0).
+**Regla:** no crear componentes/estilos paralelos. Si algo existe aquí, se reutiliza.
+Los componentes del DS **no conocen el dominio** (solo reciben props).
+
+## Tokens (`tailwind.config.ts` + `globals.css`) — ÚNICA fuente de verdad
+| Categoría | Tokens |
+|---|---|
+| Color | `brand`, `brand-dark`, `ink`, `muted`, `surface`, `ok`, `warn`, `danger` |
+| Tipografía (fontSize) | `hero`(30) · `title`(20) · `subtitle`(18) · `body`(16) · `aux`(14) · `caption`(12, **mínimo**) |
+| Radios | `rounded-pill` · `rounded-control` · `rounded-card` |
+| Sombras | `shadow-card` · `shadow-overlay` |
+| Elevación (z) | `z-nav`(10) · `z-header`(20) · `z-overlay`(30) · `z-modal`(40) |
+| Transición | `duration-base`(150ms) |
+| Foco | `.focus-ring` (focus-visible homogéneo) |
+
+> Prohibido hardcodear color/radio/sombra/spacing/tamaño si existe token. Ningún texto < 12px.
+
+## Componentes UI (`components/ui/`)
+| Componente | Props | Rol |
+|---|---|---|
+| `Button` | variant(primary/secondary/ghost) + HTML button | Botón único (foco + estados) |
+| `Card` | className, children, onClick? | Contenedor; con onClick = accesible por teclado |
+| `Badge` | tone(ok/warn/danger/neutral/info), children | **Único** chip de estado |
+| `StatusPill` | status | Wrapper de Badge (status de servicio → tono) |
+| `StatusIndicator` | tone, size(sm/md/lg/xl), halo?, className | Semáforo SVG (Estado de Tranquilidad, etc.) |
+| `Dialog` | open, onClose, title, children | **Único** modal (Escape, focus-trap, aria) |
+| `FieldLabel` | htmlFor, children | **Única** label de formulario (a11y) |
+| `LoadMore` | shown, total, loading, onMore | Paginación "cargar más" (solo presentacional) |
+| `EmptyState` | icon?, title, hint? | Estado vacío |
+| `ErrorState` | message, onRetry? | Estado de error + reintento |
+| `Skeleton` / `SkeletonCard` | className | Carga |
+| `PageHeader` | title, subtitle?, actions? | Encabezado de pantalla (no en Dashboard) |
+| `icons` | `BellIcon`, `SparklesIcon` | Iconografía SVG del chrome |
+
+## Componentes de aplicación (`components/`)
+`BrandMark` (identidad, única fuente = Odoo) · `AppHeader` · `BottomNav` · `PeaceOfMind` (hero) ·
+`NextActions` · `ServiceCard` · `InvoiceRow` · `PaymentRow` · `ModulesGrid` · `SelectionBar` ·
+`PaymentSummaryModal` (sobre `Dialog`).
+
+## Hooks (`hooks/`)
+| Hook | Firma | Rol |
+|---|---|---|
+| `useQuery` | `(fn, deps) → {data, loading, error, reload}` | Consulta simple |
+| `usePaged` | `(endpoint, params, pageSize) → {items, total, hasMore, loading, error, loadMore, reload}` | **Genérico**: paginación incremental para cualquier listado |
+
+## Glosario (lenguaje oficial)
+- **Estado de cuenta** (fuente única `lib/accountState`): técnico (header) = Activo / Atención requerida / Suspendido; humano (hero) = Todo en orden / Requiere tu atención / Servicio suspendido.
+- **Facturas:** Por pagar · Vencida · Pagada · Saldo por pagar.
+- **Servicios:** Activo · Suspendido · Contrato por firmar · Inactivo.
+
+## Reglas para próximos módulos (IA, Tickets, Soporte, Pagos, Notificaciones, Perfil)
+1. Listados → `usePaged` + `LoadMore`. 2. Modales → `Dialog`. 3. Chips → `Badge`. 4. Labels → `FieldLabel`.
+5. Pantallas con título → `PageHeader`. 6. Vacío/Error/Carga → `EmptyState`/`ErrorState`/`Skeleton`.
+7. Texto → escala tipográfica (sin px sueltos, mínimo 12). 8. Color/radio/sombra/z → tokens.
+9. Todo interactivo con `.focus-ring` y operable por teclado.
