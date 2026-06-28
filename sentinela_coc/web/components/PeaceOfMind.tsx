@@ -23,7 +23,7 @@ export function PeaceOfMind({ status, label }: { status: string; label: string }
         s.ring,
       )}
     >
-      <StatusIndicator tone={s.tone} size="hero" />
+      <StatusIndicator tone={s.tone} size="xl" />
       <div className="flex flex-col gap-0.5">
         <p className="text-[11px] uppercase tracking-wide text-muted lg:text-sm">Estado de tranquilidad</p>
         <p className="text-lg font-bold text-ink lg:text-3xl">{label}</p>

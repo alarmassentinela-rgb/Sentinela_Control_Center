@@ -20,7 +20,7 @@ const SIZE: Record<string, string> = {
   sm: "h-2.5 w-2.5",
   md: "h-5 w-5",
   lg: "h-8 w-8",
-  hero: "h-14 w-14 lg:h-24 lg:w-24",
+  xl: "h-14 w-14 lg:h-24 lg:w-24",
 };
 
 export function StatusIndicator({
