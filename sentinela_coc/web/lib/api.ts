@@ -31,6 +31,16 @@ async function refreshTokens(): Promise<boolean> {
   }
 }
 
+// ÚNICO flujo de recuperación de sesión: ante un 401 sin refresh válido, navegación DURA a
+// /login?expired=1. El cambio de página cancela peticiones en vuelo y descarta la caché en
+// memoria; el Login muestra el aviso de expiración. Guard anti-bucle si ya estamos en /login.
+function redirectToLogin(): boolean {
+  if (typeof window === "undefined") return false;
+  if (window.location.pathname.startsWith("/login")) return false;
+  window.location.assign("/login?expired=1");
+  return true;
+}
+
 async function request(path: string, init: RequestInit = {}, retry = true): Promise<Response> {
   const t = getTokens();
   const headers = new Headers(init.headers || {});
@@ -39,6 +49,9 @@ async function request(path: string, init: RequestInit = {}, retry = true): Prom
   if (res.status === 401 && retry) {
     if (await refreshTokens()) return request(path, init, false);
     clearTokens();
+    // Promesa que nunca resuelve mientras la página navega -> el consumidor NO renderiza
+    // pantalla de error; se queda en carga hasta cambiar a /login (transición directa).
+    if (redirectToLogin()) return new Promise<Response>(() => {});
   }
   return res;
 }

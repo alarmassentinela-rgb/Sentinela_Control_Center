@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 import { BrandMark } from "@/components/BrandMark";
 import { Button } from "@/components/ui/Button";
@@ -16,6 +16,12 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  // El aviso de expiración aparece SOLO cuando se llega por sesión expirada (?expired=1),
+  // nunca en una entrada normal al portal.
+  const [expired, setExpired] = useState(false);
+  useEffect(() => {
+    setExpired(new URLSearchParams(window.location.search).get("expired") === "1");
+  }, []);
 
   async function requestOtp(e: FormEvent) {
     e.preventDefault();
@@ -52,6 +58,12 @@ export default function LoginPage() {
       <div className="mx-auto w-full max-w-sm space-y-6 pb-16">
         {/* Identidad = BrandMark (única fuente: logo de Odoo + título). */}
         <BrandMark layout="login" />
+
+        {expired && (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-800">
+            Tu sesión expiró. Inicia sesión nuevamente para continuar.
+          </p>
+        )}
 
         {step === "phone" ? (
           <form onSubmit={requestOtp} className="space-y-3">
