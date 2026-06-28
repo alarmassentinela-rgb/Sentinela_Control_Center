@@ -2,6 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
+import { BrandMark } from "@/components/BrandMark";
 import { Button } from "@/components/ui/Button";
 import { apiPostPublic } from "@/lib/api";
 import { getDeviceId, setTokens, type Tokens } from "@/lib/auth";
@@ -49,10 +50,10 @@ export default function LoginPage() {
   return (
     <main className="app-shell justify-center px-6">
       <div className="mx-auto w-full max-w-sm space-y-6 pb-16">
-        <div className="text-center">
-          <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand text-2xl text-white">🛡️</div>
-          <h1 className="text-2xl font-bold text-ink">Sentinela</h1>
-          <p className="text-sm text-muted">Centro de Operaciones del Cliente</p>
+        <div className="flex flex-col items-center gap-2 text-center">
+          {/* Misma fuente de marca que el resto del portal (BrandMark -> Odoo). */}
+          <BrandMark size="lg" />
+          <h1 className="text-xl font-bold text-ink">Portal del Cliente</h1>
         </div>
 
         {step === "phone" ? (

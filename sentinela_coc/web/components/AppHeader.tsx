@@ -1,12 +1,10 @@
 "use client";
-import { useEffect, useState } from "react";
-
+import { BrandMark } from "@/components/BrandMark";
 import { BellIcon, SparklesIcon } from "@/components/ui/icons";
 import { useQuery } from "@/hooks/useQuery";
 import { apiGet, apiGetEnvelope } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import { loadTheme } from "@/lib/theme";
-import type { Dashboard, Theme } from "@/lib/types";
+import type { Dashboard } from "@/lib/types";
 
 type Me = { id: number; name: string };
 
@@ -22,13 +20,6 @@ function generalState(d?: Dashboard) {
 export function AppHeader() {
   const me = useQuery(() => apiGet<Me>("/v1/me"), []);
   const dash = useQuery(() => apiGetEnvelope<Dashboard>("/v1/dashboard"), []);
-  const [theme, setTheme] = useState<Theme | null>(null);
-  const [logoFailed, setLogoFailed] = useState(false);
-  useEffect(() => {
-    loadTheme().then(setTheme);
-  }, []);
-
-  const appName = theme?.app_name || "Sentinela";
   const firstName = (me.data?.name || "").split(" ")[0];
   const st = generalState(dash.data?.data);
   const lastRefresh = dash.data?.meta?.last_refresh;
@@ -43,12 +34,7 @@ export function AppHeader() {
           + bloque de cliente cohesivo con el estado destacado + avatar de perfil. */}
       <div className="flex items-center gap-3 px-4 py-1">
         <div className="flex min-w-0 items-center gap-2.5">
-          {theme?.logo_url && !logoFailed ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={theme.logo_url} alt={appName} onError={() => setLogoFailed(true)} className="h-10 w-auto shrink-0 object-contain sm:h-11" />
-          ) : (
-            <span className="shrink-0 text-base font-bold text-ink">{appName}</span>
-          )}
+          <BrandMark size="md" className="shrink-0" />
           <span className="truncate text-base font-bold leading-none tracking-tight text-ink sm:text-lg">Portal del Cliente</span>
         </div>
 
