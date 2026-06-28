@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_catalog_item_user,distributor.catalog.item.user,model_distributor_catalog_item,base.group_user,1,0,0,0
+access_catalog_item_system,distributor.catalog.item.system,model_distributor_catalog_item,base.group_system,1,1,1,1
+access_catalog_cache_user,catalog.cache.entry.user,model_catalog_cache_entry,base.group_user,1,0,0,0
+access_catalog_cache_system,catalog.cache.entry.system,model_catalog_cache_entry,base.group_system,1,1,1,1
