@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="backend_syscom" model="distributor.backend">
+        <field name="name">Syscom</field>
+        <field name="connector_key">syscom</field>
+        <field name="api_url">https://developers.syscom.mx/api/v1</field>
+        <field name="rate_limit">280</field>
+        <field name="timeout">30</field>
+        <field name="image_policy">url</field>
+        <field name="document_policy">url</field>
+        <field name="update_strategy">listing</field>
+    </record>
+</odoo>

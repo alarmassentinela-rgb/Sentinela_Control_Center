@@ -42,6 +42,7 @@ class NormalizedProduct:
     brand: Optional[str] = None
     model: Optional[str] = None
     description: Optional[str] = None
+    attributes: List[str] = field(default_factory=list)   # características/especificaciones
     category_path: List[str] = field(default_factory=list)
     price: NormalizedPrice = field(default_factory=NormalizedPrice)
     stock: NormalizedStock = field(default_factory=NormalizedStock)

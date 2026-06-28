@@ -1,0 +1,60 @@
+{
+ "producto_id": "377",
+ "modelo": "0068O00.5W",
+ "total_existencia": 0,
+ "titulo": "",
+ "marca": "LINKEDPRO BY EPCOM",
+ "garantia": "3 años",
+ "sat_key": "No disponible.",
+ "sat_description": "No disponible.",
+ "img_portada": "",
+ "link_privado": "https://www.productos-info.com/s/syscom/es/13950/f00aa509441cf12af4889c9ac7760294/x/-MX$/0068O00.5W-LINKEDPRO+BY+EPCOM-377.html",
+ "categorias": [],
+ "categorias_producto_todas": [],
+ "pvol": "0",
+ "marca_logo": "https://ftp3.syscom.mx/usuarios/fotos/logotipos/linkedpro_by_epcom.png",
+ "link": "/producto/0068O00.5W-LINKEDPRO-BY-EPCOM-377.html",
+ "descripcion": "<div style='width: 100%; max-width: 1200px; margin: 0 auto; font-family: sans-serif; line-height: 1.6; color: inherit; background-color: transparent;'> <div style='display: flex; flex-wrap: wrap; gap: 30px; margin-bottom: 30px;'> <div style='flex: 1 1 300px; min-width: 280px;'> <h3 style='font-size: 22px; border-bottom: 2px solid currentColor; padding-bottom: 5px; margin-top: 0; color: inherit; opacity: 0.8;'>Características</h3> <ul style='padding-left: 20px; font-size: 15px; color: inherit;'> <li style='margin-bottom: 5px;'><strong>Producto:</strong> RESISTENC. 68 OHMS A .5 W</li> <li style='margin-bottom: 5px;'><strong>Marca:</strong> LINKEDPRO BY EPCOM</li> <li style='margin-bottom: 5px;'><strong>Modelo:</strong> 0068O00.5W</li> </ul> </div> </div> <hr style='border: 0; border-top: 1px solid rgba(150, 150, 150, 0.3); margin: 30px 0;'> </div>",
+ "imagen_360": [],
+ "iconos": [],
+ "peso": "-",
+ "unidad_de_medida": {
+  "codigo_unidad": "1",
+  "nombre": "Pieza",
+  "clave_unidad_sat": "H87"
+ },
+ "alto": "-",
+ "largo": "-",
+ "ancho": "-",
+ "precios": {
+  "precio_1": "0.18",
+  "precio_especial": "0.18",
+  "precio_descuento": "0.11",
+  "precio_map": "0.14",
+  "precio_lista": "0.18"
+ },
+ "existencia": {
+  "nuevo": 0,
+  "asterisco": {
+   "a": 0,
+   "b": 0,
+   "c": 0,
+   "d": 0
+  },
+  "detalle": []
+ },
+ "caracteristicas": [
+  "Resistencia 68Ω 0.5W de precisión",
+  "Tolerancia ±5% para estabilidad eléctrica",
+  "Fabricada para estándares industriales",
+  "Diseño compacto y resistente",
+  "Disipación uniforme de calor",
+  "Compatible con circuitos electrónicos comunes"
+ ],
+ "imagenes": [],
+ "recursos": [],
+ "_fixture_meta": {
+  "tipo": "sin_imagen",
+  "producto_id": 377
+ }
+}

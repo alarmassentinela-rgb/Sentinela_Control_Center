@@ -1,0 +1,165 @@
+{
+ "producto_id": "61107",
+ "modelo": "PS-12-DC-4C",
+ "total_existencia": 500,
+ "titulo": "Fuente de Poder de 4 Salidas de 11 - 15 Vcc / 5 Amper /  Voltaje de Entrada 110- 240 Vac / Fusible Termico PTC Integrado para Protección / Salida de Voltaje Inteligente hasta 3 Amper por Salida",
+ "marca": "EPCOM POWERLINE",
+ "garantia": "3 años",
+ "sat_key": "39121009",
+ "sat_description": "Reguladores el?ctricos o de potencia",
+ "img_portada": "https://ftp3.syscom.mx/usuarios/fotos/kfranco/PS12DC4C/PS12DC4Cdet.jpg",
+ "link_privado": "https://www.productos-info.com/s/syscom/es/13950/f00aa509441cf12af4889c9ac7760294/x/-MX$/PS-12-DC-4C-EPCOM+POWERLINE-61107.html",
+ "categorias": [
+  {
+   "id": "22",
+   "nombre": "Videovigilancia",
+   "nivel": 1
+  },
+  {
+   "id": "208",
+   "nombre": "Energía",
+   "nivel": 2
+  },
+  {
+   "id": "2975",
+   "nombre": "Fuentes de Alimentación",
+   "nivel": 3
+  }
+ ],
+ "categorias_producto_todas": [
+  [
+   {
+    "id": "22",
+    "nombre": "Videovigilancia",
+    "nivel": 1
+   },
+   {
+    "id": "208",
+    "nombre": "Energía",
+    "nivel": 2
+   },
+   {
+    "id": "2975",
+    "nombre": "Fuentes de Alimentación",
+    "nivel": 3
+   }
+  ],
+  [
+   {
+    "id": "22",
+    "nombre": "Videovigilancia",
+    "nivel": 1
+   },
+   {
+    "id": "208",
+    "nombre": "Energía",
+    "nivel": 2
+   },
+   {
+    "id": "3040",
+    "nombre": "CCTV/Acceso/Intrusion",
+    "nivel": 3
+   }
+  ],
+  [
+   {
+    "id": "30",
+    "nombre": "Energía / Herramientas",
+    "nivel": 1
+   },
+   {
+    "id": "66442",
+    "nombre": "Fuentes de Poder",
+    "nivel": 2
+   },
+   {
+    "id": "66443",
+    "nombre": "Fuentes con Distribuidor",
+    "nivel": 3
+   }
+  ]
+ ],
+ "pvol": "0.1485",
+ "marca_logo": "https://ftp3.syscom.mx/usuarios/fotos/logotipos/epcom_powerline.png",
+ "link": "/producto/PS-12-DC-4C-EPCOM-POWERLINE-61107.html",
+ "descripcion": "<div style='width: 100%; max-width: 1200px; margin: 0 auto; font-family: sans-serif; line-height: 1.6; color: inherit; background-color: transparent;'> <!-- Sección de contenido con flex/grid --> <div style='display: flex; flex-wrap: wrap; gap: 30px; margin-bottom: 30px;'> <div style='flex: 1 1 300px; min-width: 280px;'> <p style='margin-top: 0; margin-bottom: 15px; font-size: 16px; color: inherit;'>Todas las cámaras analógicas y TurboHD en SYSCOM soporta 12.5V, para alimentación en larga distancia.</p> <p style='margin-bottom: 15px; font-size: 16px; color: inherit;'><strong>Fuente de Alimentación con inteligencia distribuida puede suministrar hasta 3 Amperes en una salida sin exceder la capacidad máx de 5 Amperes.</strong></p> <p style='margin-bottom: 15px; font-size: 16px; color: inherit;'><strong>Solución practica y sencilla para aplicaciones de cámaras de CCTV.</strong></p> <!-- Sección de características --> <h3 style='font-size: 22px; border-bottom: 2px solid currentColor; padding-bottom: 5px; margin-top: 25px; margin-bottom: 15px; color: inherit; opacity: 0.8;'>Características</h3> <ul style='padding-left: 20px; font-size: 15px; color: inherit;'> <li style='margin-bottom: 5px;'>Voltaje de entrada de 110 a 240 Vca</li> <li style='margin-bottom: 5px;'>Voltaje de salida AJUSTABLE de 11- 15 Vcc</li> <li style='margin-bottom: 5px;'>Sistema de 5A inteligentes (Distribuidos en 4 salidas)</li> <li style='margin-bottom: 5px;'>Fusible térmico PTC integrado de 6A</li> <li style='margin-bottom: 5px;'>Incluye cable de alimentación</li> <li style='margin-bottom: 5px;'>LED indicador de alimentación</li> <li style='margin-bottom: 5px;'>Certificaciones: CE</li> <li style='margin-bottom: 5px;'>Peso: 400 grs</li> <li style='margin-bottom: 5px;'>Dimensiones: 13 cms x 5 cms x 3 cms</li> </ul> <!-- Garantía --> <p style='margin-top: 20px; margin-bottom: 0; font-size: 16px; color: inherit;'><strong>- 1 Año de Garantía</strong></p> </div> </div> <!-- Sección de video --> <div style='margin-bottom: 30px;'> <div style='position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;'> <iframe style='position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;' src='https://www.youtube.com/embed/jJQqy5Z4lkg' allowfullscreen></iframe> </div> </div> </div>",
+ "imagen_360": [
+  "360_GRADOS/EPCOMPOWERLINE/PS12DC4C/2021_06_11_06_31"
+ ],
+ "iconos": [],
+ "peso": "0.39",
+ "unidad_de_medida": {
+  "codigo_unidad": "1",
+  "nombre": "Pieza",
+  "clave_unidad_sat": "H87"
+ },
+ "alto": "5",
+ "largo": "17",
+ "ancho": "10",
+ "precios": {
+  "precio_1": "19.25",
+  "precio_especial": "13.88",
+  "precio_descuento": "8.88",
+  "volumen": {
+   "10": "8.70",
+   "25": "8.43"
+  },
+  "precio_map": "11.10",
+  "precio_lista": "19.25"
+ },
+ "existencia": {
+  "nuevo": 500,
+  "asterisco": {
+   "a": 0,
+   "b": 0,
+   "c": 0,
+   "d": 0
+  },
+  "detalle": []
+ },
+ "caracteristicas": [
+  "Soporte 12.5V para cámaras analógicas y TurboHD",
+  "Salida ajustable 11-15 VCC con 5A inteligente",
+  "3 amperios por salida sin sobrecarga",
+  "Fusible térmico PTC integrado de 6A",
+  "Voltaje entrada universal 110-240 VCA",
+  "Diseño compacto 13x5x3 cm para fácil instalación"
+ ],
+ "imagenes": [
+  {
+   "imagen": "https://ftp3.syscom.mx/usuarios/fotos/BancoFotografiasSyscom/EPCOMPOWERLINE/PS12DC4C/PS12DC4C-AD-1-p.PNG",
+   "orden": "1"
+  },
+  {
+   "imagen": "https://ftp3.syscom.mx/usuarios/fotos/BancoFotografiasSyscom/EPCOMPOWERLINE/PS12DC4C/PS12DC4C-AD-2-p.PNG",
+   "orden": "2"
+  },
+  {
+   "imagen": "https://ftp3.syscom.mx/usuarios/fotos/BancoFotografiasSyscom/EPCOMPOWERLINE/PS12DC4C/PS12DC4C-AD-3-p.PNG",
+   "orden": "3"
+  },
+  {
+   "imagen": "https://ftp3.syscom.mx/usuarios/fotos/BancoFotografiasSyscom/EPCOMPOWERLINE/PS12DC4C/PS12DC4C-AD-4-p.PNG",
+   "orden": "4"
+  },
+  {
+   "imagen": "https://ftp3.syscom.mx/usuarios/fotos/BancoFotografiasSyscom/EPCOMPOWERLINE/PS12DC4C/PS12DC4C-AD-5-p.PNG",
+   "orden": "5"
+  }
+ ],
+ "recursos": [
+  {
+   "recurso": "PS12DC4C%20Guia%20Rapida",
+   "path": "http://ftp3.syscom.mx/usuarios/maguilar/Epcom%20Power%20Line/PS12DC4C/PS12DC4C%20Guia%20Rapida.pdf"
+  },
+  {
+   "recurso": "PS12DC4C%20Hoja%20de%20Datos",
+   "path": "http://ftp3.syscom.mx/usuarios/maguilar/Epcom%20Power%20Line/PS12DC4C/PS12DC4C%20Hoja%20de%20Datos.pdf"
+  }
+ ],
+ "_fixture_meta": {
+  "tipo": "accesorio",
+  "producto_id": "61107",
+  "busqueda": "fuente+12v"
+ }
+}

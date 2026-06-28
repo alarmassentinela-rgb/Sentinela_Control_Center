@@ -1,0 +1,7 @@
+{
+ "_http_status": 200,
+ "_body": "{\"error\":\"product_not_available\"}",
+ "_fixture_meta": {
+  "tipo": "descontinuado_404"
+ }
+}

@@ -1,0 +1,7 @@
+{
+ "error": "product_not_available",
+ "_fixture_meta": {
+  "tipo": "sin_existencia",
+  "producto_id": "211677"
+ }
+}
