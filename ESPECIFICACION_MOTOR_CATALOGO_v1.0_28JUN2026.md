@@ -1,6 +1,7 @@
-# Especificación Oficial — Motor de Catálogo · v1.0 (CONTRATO DE ARQUITECTURA)
+# Especificación Oficial — Motor de Catálogo · **v1.0 LTS** (CONTRATO DE ARQUITECTURA)
 
-**Proyecto estratégico Alea Systems** · 28-jun-2026 · **Estado: propuesto para CONGELAR (freeze v1.0).**
+**Proyecto estratégico Alea Systems** · 28-jun-2026 · **Estado: 🔒 CONGELADA — Catalog Engine Specification v1.0 LTS.**
+El **contrato público permanece estable**. Las mejoras futuras respetan compatibilidad o incrementan la versión según la **Política de Versionado (§15)**, y todo cambio importante requiere un **ADR (§14)**.
 
 > Este documento es la **referencia oficial**. El código **implementa** esta especificación; la especificación **NO depende del código**. Cambios al contrato → nueva versión (ver §7). Detalle de implementación en `BLUEPRINT_*`, `CATALOG_ENGINE_STANDARDS_*`, `D3A_*`, `D3B_*`, `D3D_*`.
 > **Catalog Engine 1.0.0.** Estado construido: D0–D3d (en STAGING). Pendiente: D3c (API), luego conectores adicionales.
@@ -112,6 +113,32 @@ Agregar un distribuidor = módulo `distributor_<slug>` que implementa `Distribut
 - **IA reservada** (`ai_*` → pgvector) sin rediseño.
 - **Caché y conectores** intercambiables; **GraphQL** futuro sobre la misma capa de servicios.
 - **Multi-distribuidor** sin cambios de modelo (probado en vivo con 2º distribuidor).
+
+---
+
+## 14. Filosofía de Evolución (principios permanentes)
+Estos principios rigen TODA decisión futura del Motor de Catálogo:
+1. **No romper compatibilidad pública.** El contrato público (DTO, API `/v1`, eventos, modelos públicos) es estable; lo incompatible va a una versión mayor con deprecación documentada.
+2. **Extender antes que reemplazar.** Se amplía (campos aditivos, nuevos conectores, nuevos endpoints) en lugar de reescribir; se reutiliza lo nativo de Odoo y lo ya construido.
+3. **Medir antes de optimizar.** Ninguna optimización sin evidencia (benchmark/medición); las decisiones se respaldan con datos (ver ADRs).
+4. **No duplicar lógica.** Una sola fuente de verdad por responsabilidad (servicios transporte-agnósticos consumidos por REST/GraphQL/UI; ownership único por dato).
+5. **Todo cambio importante requiere un ADR.** Decisiones de arquitectura documentadas (contexto, opciones, decisión, consecuencias) antes de implementar.
+
+## 15. Política de Versionado (SemVer)
+`MAJOR.MINOR.PATCH`. Aplica, por separado, a **Motor**, **Conectores**, **API** y **Especificación**.
+
+| Componente | PATCH (x.y.**Z**) | MINOR (x.**Y**.0) | MAJOR (**X**.0.0) |
+|---|---|---|---|
+| **Motor** (`ENGINE_VERSION`) | corrección sin cambio de contrato | capacidad nueva compatible (campo aditivo, nuevo servicio) | cambio incompatible de interfaces internas/DTO |
+| **Conector** (`distributor_<x>`) | fix de mapeo/llamadas | soporta más datos/endpoints del proveedor | cambia su `requires_engine` mayor o rompe su contrato |
+| **API** (`/catalog/api/vN`) | fix sin cambio de forma | endpoint/campo nuevo **opcional**, compatible | cambio incompatible → **nueva ruta `/v2`** (la `/v1` se mantiene durante deprecación) |
+| **Especificación** (este doc) | aclaración/corrección editorial | sección/regla nueva compatible | cambio que altera un contrato público |
+
+**Reglas:**
+- Romper el contrato público **nunca** es PATCH ni MINOR.
+- Un conector declara `requires_engine` (ej. `>=1.0,<2.0`); un MAJOR del Motor obliga a revisar conectores.
+- La **API** versiona en la ruta; convivencia de versiones durante el periodo de deprecación anunciado.
+- Cada MINOR/MAJOR del Motor o la API → entrada en el changelog + ADR si cambia arquitectura.
 
 ---
 
