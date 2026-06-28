@@ -6,3 +6,5 @@ access_catalog_cache_system,catalog.cache.entry.system,model_catalog_cache_entry
 access_catalog_policy_user,catalog.sync.policy.user,model_catalog_sync_policy,base.group_user,1,0,0,0
 access_catalog_policy_system,catalog.sync.policy.system,model_catalog_sync_policy,base.group_system,1,1,1,1
 access_catalog_dashboard_user,catalog.dashboard.user,model_catalog_dashboard,base.group_user,1,1,1,1
+access_catalog_api_key_system,catalog.api.key.system,model_catalog_api_key,base.group_system,1,1,1,1
+access_catalog_api_idem_system,catalog.api.idempotency.system,model_catalog_api_idempotency,base.group_system,1,1,1,1

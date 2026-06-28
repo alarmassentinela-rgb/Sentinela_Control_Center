@@ -28,3 +28,11 @@ Código exacto 0.3 ms · texto común 1–2 ms · texto selectivo 64 ms · todo 
 
 ## Pruebas
 `odoo -i product_catalog_engine -d <db> --test-enable --test-tags /product_catalog_engine`
+
+## D3c — Catalog Public Interface (REST v1)
+Interfaz pública en `/catalog/api/v1` (OpenAPI en `/openapi.json`, Swagger en `/docs`). Endpoints:
+`GET /health` (abierto), `GET /products` (búsqueda/filtros/orden/paginación), `GET /products/{ref}`
+(detalle + refresco on-demand), `POST /products/{ref}/promote` (idempotente), `GET /metrics`.
+Auth por API key (`X-API-Key`) + scopes; rate limiting; `Idempotency-Key`; `X-Request-ID`/
+`X-Correlation-ID`; gzip; códigos de error documentados. Lógica en `lib/api_service` (transporte-
+agnóstica → GraphQL futuro). Cliente de ejemplo: `tools/catalog_cli.py`. Ver `D3C_*.md`.
