@@ -1,0 +1,104 @@
+id,default_code,nombre,syscom_id,motivo
+1963,SER-CD,SERVICIO DE CAMBIO DE DOMICILIO,,manual_no_syscom
+1969,,Plan Intercambio 10mb,,manual_no_syscom
+1970,,Plan Intercambio 15mb,,manual_no_syscom
+1971,,Plan Intercambio 30MB/10MB,,manual_no_syscom
+1974,R15MBP36,INTERNET PLAN RENTA 15MB/5MB 36 MESES,,manual_no_syscom
+1977,R30MBP36,INTERNET PLAN RENTA 30MB/15MB,,manual_no_syscom
+1997,,Cable de Red Cat6 1m,,manual_no_syscom
+1998,,Conector RJ45,,manual_no_syscom
+1999,,Soporte para Antena,,manual_no_syscom
+2001,MON8,RASTREO VEHICULAR PLATAFORMA TRACKSOLID ,,manual_no_syscom
+2002,MBASICO-6,MEMBRESIA BASICA DE MONITOREO 24/7 SEMESTRAL,,manual_no_syscom
+2003,MBASICO-12,MEMBRESIA BASICA DE MONITOREO 24/7 ANUAL,,manual_no_syscom
+2004,MESTANDAR-6,MEMBRESIA ESTANDAR MONITOREO 24/7 SEMESTRAL,,manual_no_syscom
+2006,MPREMIUM-6,MEMBRESIA PREMIUM DE MONITOREO 24/7 SEMESTRAL,,manual_no_syscom
+2007,MPREMIUM-12,MEMBRESIA PREMIUM DE MONITOREO 24/7 ANUAL,,manual_no_syscom
+2008,P12M20MB,PLAN INTERNET COMODATO 20MB/7MB ,,manual_no_syscom
+2009,TK-Renta36A,PLAN RENTA A 36 MESES PAGO ANUAL DE EQUIPO DE ALARMA,,manual_no_syscom
+2010,TK-Renta36M,PLAN RENTA A 36 MESES PAGO MENSUAL DE EQUIPO DE ALARMA ,,manual_no_syscom
+2011,TK-Renta36S,PLAN RENTA A 36 MESES PAGO SEMESTRAL DE EQUIPO DE ALARMA,,manual_no_syscom
+2012,DOMINIO,SERVICIO DE NOMBRE DE DOMINIO PAGO ANUAL,,manual_no_syscom
+2013,MESTANDAR-3P,"MEMBRESIA ESTANDAR TRIMESTRAL 24/7  SUC.ROBERTO GUERRA, JAUMAVE, SEXTA, AV. DEL NIÑO, LAURO VILLAR, SENDERO, BRISAS, MIGUEL ALEMAN Y VALLE HERMOSO. ",,manual_no_syscom
+2014,MON1T,Servicio MON1T,,manual_no_syscom
+2015,MBASICO-3,MEMBRESIA BASICA MONITOREO 24/7 TRIMESTRAL,,manual_no_syscom
+2017,,Generic Subscription,,manual_no_syscom
+2018,RECARGO,RECARGO POR PAGO ATRASADO,,manual_no_syscom
+2019,,Reconnection Fee,,manual_no_syscom
+2020,MESTANDAR-3,MEMBRESIA ESTANDAR TRIMESTRAL 24/7 ,,manual_no_syscom
+2021,,Smake,,manual_no_syscom
+2060,,Tracksolid,,manual_no_syscom
+2061,,Tracksolid,,manual_no_syscom
+11678,,instalacion,,manual_no_syscom
+11679,,Instalacion de camara,,manual_no_syscom
+11680,INS-001,Instalacion de Equipo de Control de Asistencia ,,manual_no_syscom
+11682,E100MB,Internet Dedicado Empresarial 100/100 Mb con IP Fija ,,manual_no_syscom
+11684,RMOVIL,Rastreo Móvil Celular,,manual_no_syscom
+11685,SENTICAR-GPS-VEH,GPS Vehicular SentiCar con Paro de Motor,,manual_no_syscom
+11686,SENTICAR-PLAN,Plan de Rastreo SentiCar (mensual),,manual_no_syscom
+11687,SENTICAR-GPS-FLEET,GPS SentiCar para Flotillas (Avanzado),,manual_no_syscom
+11688,SENTICAR-GPS-ASSET,GPS SentiCar para Activos y Carga (Solar IP67),,manual_no_syscom
+17943,MON15,RATREO VEHICULAR PLATAFORMA BASICA SENTICAR,,manual_no_syscom
+17944,MON14-12M,RATREO VEHICULAR PLATAFORMA BASICA SMAKE  ANUAL,,manual_no_syscom
+17945,R10MBSEM,PLAN INTERNET 10MB/3MB SEMESTRAL,,manual_no_syscom
+17946,R30MBSEM,PLAN INTERNET 30MB/15MB SEMESTRAL,,manual_no_syscom
+17947,MON8SEM,RASTREO VEHICULAR PLATAFORMA TRACKSOLID SEMESTRAL,,manual_no_syscom
+17948,R25MBTRI,PLAN INTERNET 25MB/10MB TRIMESTRAL,,manual_no_syscom
+17949,R20MBBIM,PLAN INTERNET 20MB/7MB BIMESTRAL,,manual_no_syscom
+10,MBASICO,MEMBRESIA BASICA DE MONITOREO 24/7 MENSUAL,,movimiento
+11,R30MB,PLAN INTERNET 30MB/15MB,,movimiento
+12,MESTANDAR,MEMBRESIA ESTANDAR MONITOREO 24/7 MENSUAL,,movimiento
+27,E8-TURBO-G2W,Turret TURBOHD 2 Megapixel (1080p) / METÁLICA / Gran Angular 103° / Lente 2.8 mm / IR EXIR 20 Mts / Exterior IP66 / TVI-AHD-CVI-CVBS / dWDR,167224,movimiento
+282,DVR-208G-M1(C),DVR 8 Canales TurboHD + 2 Canales IP / 2 Megapíxel (1080P) Lite / Acusense Lite (Evita Falsas Alarmas) / Audio por Coaxitron / 1 Bahía de Disco Duro / H.265+ / 1 Canal de Audio / Salida de Vídeo Full HD ,224562,movimiento
+313,5834-4,Control remoto tipo llavero de 4 botones con LED / Batería de Larga Duración 3-5 años,36953,movimiento
+322,VISTA48MN02/6160RF,"(2 Años 4GLTEM/5G ILIMITADO INCLUIDO)  Kit Vista48LA con comunicador 4GLTEM/5G MN01, Teclado, Gabinete, Bateria y Transformador",211735,movimiento
+329,6150,Teclado LCD de palabras fijas complatible con paneles de la serie VISTA,142781,movimiento
+344,958,Contacto magnético de uso rudo para piso,9401,movimiento
+359,VISTA48-60RF-MN01,"(2 Años 4GLTEM/5G ILIMITADO INCLUIDO)  Kit Vista48LA con comunicador 4GLTEM/5G MN01, Teclado, Gabinete y Transformador",217382,movimiento
+379,PL-8C-15DC,Fuente de Poder Metálica / Para 8 Cámaras / Ajustables a 12 o 13.5 o 15 Vcc / 8 Amperes / Instalación en Pared.,218066,movimiento
+394,TT101FTURBOZ,"Kit de Transceptores (Baluns) con Terminal PUSH SUPERIOR PIG TAIL en ambos conectores, Resolución 4K , Cable flexible COAXIAL Blindado / COAXITRON / AUDIO POR COAXITRON /Conector 100% COBRE / Calidad PREMIUM",144325,movimiento
+478,LBE-5AC-GEN2,"LiteBeam 2x2 MIMO airMAX AC GEN2 CPE hasta 450 Mbps, 5 GHz (5150 - 5875 MHz) con antena integrada de 23 dBi",95410,movimiento
+480,LBE-M5-23,"LiteBeam airMAX M5 CPE hasta 100 Mbps, 5 GHz (5150 - 5875 MHz) con antena integrada de 23 dBi",77413,movimiento
+577,E50UG,"(Hex Version 2024) Router con 5 Puertos Gigabit Ethernet, 1 Puerto USB / CPU ARM Doble Nucleo/ RAM 512 MB/ Balanceo de Cargas",234803,movimiento
+712,VL103,GPS / Localizador para Vehiculos / 4G LTE CAT1 con Fallback a 2G/ Apagado y encendido de motor remoto / Entrada analogica / Sistema de protección de baterias  / Tamaño super pequeño con IP66 / Robusto,222045,movimiento
+873,PLK12DC8ABK, Fuente de Poder con ajuste de voltaje de 11- 15 Vcc / 10 A / 9 Salidas / Capacidad de Batería de Respaldo / Requiere Batería / Voltaje de Entrada 96-264 Vca,77682,movimiento
+919,PRO-CAT5-EXT-LITE,"Bobina de cable de 305 m, Cat5e, color negro, sin blindar, para aplicaciones de video vigilancia, redes de datos. Uso en intemperie",161291,movimiento
+927,PRO-CAT-5-EXT,"Bobina de cable de 305 m, Cat5e , FTP, blindado, color negro, UL, para aplicaciones en video vigilancia, redes de datos. Uso en Intemperie",65736,movimiento
+977,SF581AGAB,Sirena de 2 tonos 30 W/ Sonido 118 dB / Gabinete IMP30V3 Incluido,210828,movimiento
+993,SF-2033,Contacto magnético para puertas y ventanas color blanco / GAP: 30mm,67596,movimiento
+1029,THC-B129-P,Bala TURBOHD 2 Megapixel (1080p) / Imagen a Color 24/7 / Lente 2.8 mm / ColorVu Lite / Luz Blanca 20 mts / IP66 / Policarbonato,196305,movimiento
+1035,VI-K13P,"Kit de Videoportero Analógico con Pantalla LCD a Color de 7"" / Frente de Calle para Exterior IP65 / Salida de Relevador ",231539,movimiento
+1041,DS-KIS303-P,Kit de Videoportero Analógico de Metal / IP a 4 Hilos con Función de Llamada a App Hik-Connect / Monitor se Conecta a Internet por Cable o WiFi y por 4 Hilos al Frente de Calle  IP65 / Expandible a Mas Equipos ,225886,movimiento
+1059,DVR-108G-M1/T,DVR 8 Canales TurboHD + 2 Canales IP / 2 Megapíxel (1080p) Lite / Acusense Lite (Evita Falsas Alarmas) / Audio Bidireccional y Coaxitron / 1 Bahía de Disco Duro / H.265+ / Salida de Vídeo Full HD,237733,movimiento
+1161,DCD4517RXP,CAMARA DOMO 5MP LENTE 2.8MM | IR20M | POE EXTENDER PUERTO RJ45 ADICIONAL| WDR REAL| INTERIOR,217762,movimiento
+1176,DCD4216RXA, DOMO  2.8MM FULL HD INTERIOR  20M IR  H.265 INTELLIGENT CODEC  1 ALARMA DE ENTRADA,211655,movimiento
+1191,XNF-8010R, Fisheye IP Interior 6 Megapixel / WDR 120dB / IR 15m / PTZ Digital 8X / Video Analíticos Avanzados / Entrada y Salida de Audio y Alarma,144376,movimiento
+1961,SER-RE,SERVICIO DE RECONEXION,,movimiento
+1964,R10MB,PLAN INTERNET 10MB/3MB,,movimiento
+1965,R15MB,PLAN INTERNET 15MB/5MB,,movimiento
+1966,R20MB,PLAN INTERNET 20MB/7MB,,movimiento
+1967,R25MB,PLAN INTERNET 25MB/10MB,,movimiento
+1968,R5MB,PLAN INTERNET 5MB/1MB,,movimiento
+1973,R10MBP36M,INTERNET PLAN RENTA 10MB/3MB 36 MESES,,movimiento
+1975,R20MBP36,INTERNET PLAN RENTA 20MB/7MB 36 MESES,,movimiento
+1976,R25MBP36,INTERNET PLAN RENTA 25MB/10MB 36 MESES,,movimiento
+2000,MPREMIUM,MEMBRESIA PREMIUM DE MONITOREO 24/7 MENSUAL,,movimiento
+2005,MESTANDAR-12,MEMBRESIA ESTANDAR MONITOREO 24/7 ANUAL,,movimiento
+2016,TK-RENTA36M,Servicio TK-RENTA36M,,movimiento
+2028,,DS-PDP18-EG2(P),,movimiento
+2029,,DS-2CE72DF3T-PIRXOS,,movimiento
+2030,WD11PURZ,Disco Duro Purple de 1 TB / 5400 RPM / Optimizado para Soluciones de Videovigilancia / Uso 24-7 / 3 Años de Garantia,220309,movimiento
+2033,WD10EZEX,Disco duro Blue de 1 TB / 7200 RPM / Recomendado para PC / Uso 8-5 / 1 Años de Garantia,144796,movimiento
+2062,,JR52,,movimiento
+2848,SF-MAGN,Magneto para SF2033,190259,movimiento
+2899,DS-PDBG8-EG2,Detector de Ruptura de Cristal Cableado / Interior / 8 Metros de Rango / Ángulo de 120° de Cobertura / Indicador LED,195395,movimiento
+3020,DS-PDP18-EG2(B),Detector PIR Cableado para Interior / Inmunidad a Mascotas / Rango de Detección de 18 mts / Angulo de 85.9° de Cobertura,238913,movimiento
+3317,VISTA48-60RF-MINI2G,"(1 Año datos ILIMITADO INCLUIDO)  Kit Vista48LA con comunicador MINI012G, Teclado, Gabinete y Transformador",217380,movimiento
+4968,LK5.512,"Batería 12 V / 5.5 Ah / UL / Vida útil promedio 5 años / Tecnología AGM / Para uso en equipo electrónico, Alarmas de Intrusión / Incendio/ Control de acceso / Video Vigilancia / Terminales F1 ( Incluye adaptador F",225967,movimiento
+5173,KIT-TARJETA-04,Kit de Control de Acceso con TARJETA para 4 Puertas  / TODO INCLUIDO / Software IVMS4200 incluido,177023,movimiento
+10985,E8-TURBO-G2P/A,AUDIO POR COAXITRON / Domo TURBOHD 2 Megapixel (1080p) / Gran Angular 106° / Lente 2.8 mm / 20 mts IR EXIR / Interior / 4 Tecnologías / dWDR,193446,movimiento
+11201,HL-1080-PS4,(MICRÓFONO Integrado) Kit TurboHD 1080p Lite / DVR 4 canales / Audio por Coaxitron / 4 Cámaras Bala de Policarbonato con Micrófono Integrado,239726,movimiento
+11219,HL28LQKITS-M(B),KIT TurboHD 1080p / DVR 8 canales con H.265+ / 4 Cámaras Bala Metálicas / Fuente de Poder / Accesorios de Instalación,208340,movimiento
+11683,MON14,RATREO VEHICULAR PLATAFORMA BASICA SMAKE ,,movimiento
+11689,,SERV14,,movimiento
+17912,,REST-RED,,movimiento
