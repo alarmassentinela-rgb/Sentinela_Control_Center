@@ -1,5 +1,8 @@
 # Arquitectura del Ecosistema Sentinela (v1.0 — oficial)
 
+> **Vista de CAPACIDADES, subordinada a `ALEA_PLATFORM_MASTER_PLAN.md` (la brújula y única fuente de
+> verdad).** Mismo ecosistema, distinto zoom: este documento detalla las capacidades; el master plan
+> ubica las capas, componentes, contratos y la clasificación estratégica. No es una arquitectura paralela.
 > Arquitectura al servicio de la visión (`producto/PRODUCT_VISION.md`). Diseño, no código.
 > **Primero las CAPACIDADES de negocio; la tecnología es solo un adaptador.**
 > El **COC (Portal del Cliente) es el primer consumidor**, no el centro de la arquitectura.
@@ -42,9 +45,12 @@ Capacidades descritas por su **verbo de negocio** (no por tecnología). 🟢 = *
 | C11 | **Comunicación** | **Conversa** (mensajería bidireccional). | — |
 | C12 | **Agenda** | **Programa** visitas, ventanas y despacho. | — |
 | C13 | **Auditoría** | **Registra** de forma inmutable quién hizo qué. | — |
+| C14 | **Catálogo** | **Consulta** productos/categorías/atributos/precios/disponibilidad/equivalencias/búsqueda; **abstrae a todos los distribuidores** (el consumidor solo "Consulta Catálogo"). | ✅ existe (Catalog Engine v1.0 LTS) |
 
-> **V1 = Identidad · Eventos · Estado · Notificaciones · Pagos · Documentos.** Con esas seis se
-> sostienen el Portal, SentiBot y gran parte del ecosistema. El resto se incorpora conforme evolucione.
+> **V1 = Identidad · Eventos · Estado · Notificaciones · Pagos · Documentos** (capacidades nuevas a
+> construir). **Catálogo (C14) YA existe** (Catalog Engine v1.0 LTS) y el **Portal será su primer
+> consumidor en STAGING** (caso real de validación antes de otras apps). Con esas seis + Catálogo se
+> sostienen el Portal, SentiBot y gran parte del ecosistema; el resto se incorpora conforme evolucione.
 > *(Servicios/Contratos se sigue consumiendo de lo existente (`sentinela_api`) hasta formalizarse como
 > capacidad; no bloquea V1.)*
 
