@@ -75,3 +75,7 @@ Los componentes del DS **no conocen el dominio** (solo reciben props).
 14. **Escalabilidad.** Ningún cambio rompe la compatibilidad con módulos futuros (IA, Soporte, Tickets, Notificaciones, Perfil, Pagos…). Pensar la escalabilidad antes de implementar.
 15. **Única fuente de verdad.** Si un dato/estado/color/texto/token/comportamiento ya tiene origen definido, ese sigue siendo el único lugar donde se administra.
 16. **Autoauditoría antes de cerrar tarea.** Verificar: ¿dupliqué lógica/componentes/estilos? ¿rompí el DS? ¿generé deuda? ¿hay una solución más simple? ¿seguirá siendo válido dentro de un año? Solo si todo es satisfactorio, la tarea está terminada.
+17. **ADR para cambios multi-módulo.** Toda decisión que modifique la arquitectura de más de un módulo se documenta con un ADR **breve**: problema · alternativas evaluadas · decisión · consecuencias. Lo mínimo para entender dentro de un año por qué se decidió así (sin documentación excesiva).
+18. **Verificación de compatibilidad previa.** Antes de cualquier cambio que pueda afectar compatibilidad, verificar explícitamente: APIs · contratos · Design System · módulos futuros. Si alguno pudiera romperse, **detenerse y pedir aprobación antes de escribir código**.
+
+> **Gobernanza CERRADA (18 reglas).** Etapa de diseño de arquitectura concluida. A partir de aquí el enfoque es **producto**: evolucionar una plataforma consolidada generando valor para el cliente y Alarmas Sentinela. No más reglas/refactors/infraestructura salvo defecto real.
