@@ -66,3 +66,12 @@ Los componentes del DS **no conocen el dominio** (solo reciben props).
 7. **Cambios:** todo hallazgo sigue el flujo Análisis de causa raíz → componentes afectados → riesgos → plan de corrección → **aprobación** → implementación en un único lote → regresión solo de lo afectado → evidencia. Sin mejoras estéticas/optimizaciones/refactors por iniciativa propia.
 8. **Excepciones explícitas.** Cualquier excepción al DS se justifica técnicamente y se presenta el análisis **antes** de escribir código. No se permiten excepciones implícitas.
 9. **Arquitectura base CERRADA.** El Portal del Cliente es ahora una plataforma estable: se construye **sobre** ella, no se rediseña. Toda decisión futura debe preservar esta arquitectura y evitar deuda técnica o inconsistencias visuales.
+
+### Principios de ingeniería (permanentes, todo el ciclo de vida del portal)
+10. **Sin duplicación.** Antes de escribir código nuevo, revisar si la funcionalidad ya existe. Nada de lógica duplicada ni componentes equivalentes en lugares distintos.
+11. **Simplicidad primero.** Cada cambio preserva la simplicidad. Si una solución agrega complejidad innecesaria, proponer antes una alternativa más simple.
+12. **Igual o mejor.** Todo cambio deja el código igual o mejor. No se aceptan soluciones que resuelvan hoy generando deuda para el siguiente sprint.
+13. **Regla de tres (sin abstracción prematura).** Patrón repetido ≥3 veces → detenerse y proponer extraerlo al DS o a una utilidad compartida, **solo** tras justificar que el beneficio supera el costo.
+14. **Escalabilidad.** Ningún cambio rompe la compatibilidad con módulos futuros (IA, Soporte, Tickets, Notificaciones, Perfil, Pagos…). Pensar la escalabilidad antes de implementar.
+15. **Única fuente de verdad.** Si un dato/estado/color/texto/token/comportamiento ya tiene origen definido, ese sigue siendo el único lugar donde se administra.
+16. **Autoauditoría antes de cerrar tarea.** Verificar: ¿dupliqué lógica/componentes/estilos? ¿rompí el DS? ¿generé deuda? ¿hay una solución más simple? ¿seguirá siendo válido dentro de un año? Solo si todo es satisfactorio, la tarea está terminada.
