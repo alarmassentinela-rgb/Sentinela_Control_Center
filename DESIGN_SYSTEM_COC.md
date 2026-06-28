@@ -55,3 +55,12 @@ Los componentes del DS **no conocen el dominio** (solo reciben props).
 5. Pantallas con título → `PageHeader`. 6. Vacío/Error/Carga → `EmptyState`/`ErrorState`/`Skeleton`.
 7. Texto → escala tipográfica (sin px sueltos, mínimo 12). 8. Color/radio/sombra/z → tokens.
 9. Todo interactivo con `.focus-ring` y operable por teclado.
+
+## Gobernanza (vigente desde el cierre del Sprint 1)
+1. **Design System CONGELADO.** Sin refactors salvo defecto real en UAT o necesidad técnica claramente justificada. Los módulos nuevos se construyen con lo existente.
+2. **Componentes oficiales = este documento.** Prohibidas implementaciones paralelas. Una variante nueva primero se evalúa: ¿pertenece al DS o es específica del módulo?
+3. **Tokens = única fuente de verdad.** Prohibido hardcodear color/radio/sombra/tipografía/espaciado/transición si existe token.
+4. **Hooks genéricos** (`useQuery`, `usePaged`): no conocen el dominio. La lógica de negocio vive en los módulos.
+5. **Componentes desacoplados:** el DS no conoce facturas/pagos/dashboard/servicios/clientes/IA/tickets. Solo reciben props.
+6. **Módulos futuros** (IA, Soporte, Tickets, Notificaciones, Perfil, Pagos, Historial, Auditoría) reutilizan el DS. Antes de crear un componente, verificar que no exista uno equivalente.
+7. **Cambios:** todo hallazgo sigue el flujo Análisis → causa raíz → propuesta → aprobación → implementación → regresión. Sin mejoras estéticas por iniciativa propia.
