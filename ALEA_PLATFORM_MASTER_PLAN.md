@@ -18,9 +18,10 @@ Complementa la **Filosofía de Evolución** del Catalog Engine (no romper compat
 ```
 Alea Platform
 ├── Core (componentes reutilizables, agnósticos de negocio)
+│   ├── Alea API Gateway          🛠️ PUNTO ÚNICO DE ACCESO  [FastAPI; eleva el BFF del Portal COC]  ← auth/caché/agregación/observabilidad; SIN lógica de negocio
 │   ├── Catalog Engine            ✅ v1.0 LTS (congelado)   [distributor_connector_base + product_catalog_engine + distributor_*]
 │   ├── Membership Engine         ✅ en PROD (congelado)    [sentinela_subscriptions]  (facturación recurrente + provisioning)
-│   └── Public API                ✅/🟡  Catalog Public Interface v1 + ERP API (sentinela_api)
+│   └── Public APIs (tras el Gateway)  ✅/🟡  Catalog Public Interface v1 + ERP API (sentinela_api)
 │
 ├── Business Apps (cara al usuario)
 │   ├── ERP Sentinela             ✅ PROD                   [Odoo 18 + módulos sentinela_*]
@@ -56,8 +57,10 @@ Leyenda: ✅ estable · 🟡 parcial · 🛠️ en desarrollo · 🔜 futuro.
 | **Integrations** | Integrations | Conectores de distribuidores y servicios | ✅ Syscom; resto 🔜 |
 
 ## 3. Contratos de interacción (cómo encajan)
-- **Portal/App → Catalog Engine**: solo por **Catalog Public Interface v1** (API key de servicio; nunca el ORM).
-- **Portal/App → ERP**: por **`sentinela_api`** (auth por cliente) para contratos/membresías/facturas/tickets/OS/dispositivos/eventos.
+- **TODOS los consumidores (Portal, App, IA, integraciones, dashboards, internas) → Alea API Gateway** (punto único de acceso). Ningún consumidor habla directo con un motor ni con Odoo.
+- **Gateway → Catalog Engine**: por **Catalog Public Interface v1** (credencial de servicio; nunca el ORM).
+- **Gateway → ERP**: por **`sentinela_api`** (propaga la auth del cliente) para contratos/membresías/facturas/tickets/OS/dispositivos/eventos.
+- El **Gateway** concentra auth/authz/rate-limit/caché/agregación/observabilidad/seguridad; **nunca** lógica de negocio (esa vive en los motores). Ver `BLUEPRINT_ALEA_API_GATEWAY_28JUN2026.md`.
 - **Catalog Engine ↔ Membership Engine**: independientes; **comparten solo `product.template`**; el Catalog excluye productos propios (planes).
 - **Catalog Engine → Distribuidores**: por **conectores** (`DistributorConnector`); agregar uno no toca el núcleo.
 - **Operations (Monitoring/FSM/GPS)** se relacionan con el cliente por `partner_id` en el ERP.
