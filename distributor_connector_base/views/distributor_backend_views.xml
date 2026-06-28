@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_distributor_backend_list" model="ir.ui.view">
+        <field name="name">distributor.backend.list</field>
+        <field name="model">distributor.backend</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="connector_key"/>
+                <field name="connector_version"/>
+                <field name="connector_compatible" widget="boolean_toggle"/>
+                <field name="sync_enabled" widget="boolean_toggle"/>
+                <field name="rate_limit"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_distributor_backend_form" model="ir.ui.view">
+        <field name="name">distributor.backend.form</field>
+        <field name="model">distributor.backend</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_test_connection" type="object" string="Probar conexión" class="btn-primary"/>
+                    <button name="rotate_credentials" type="object" string="Rotar credenciales"
+                            confirm="¿Rotar credenciales? Se invalidará el token en caché."/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" placeholder="Ej. Syscom"/></h1>
+                    </div>
+                    <group>
+                        <group string="Conector">
+                            <field name="connector_key"/>
+                            <field name="engine_version"/>
+                            <field name="connector_version"/>
+                            <field name="connector_compatible"/>
+                            <field name="partner_id"/>
+                            <field name="currency_id"/>
+                            <field name="api_url"/>
+                            <field name="active"/>
+                            <field name="credential_rotated_on" readonly="1"/>
+                        </group>
+                        <group string="Resiliencia">
+                            <field name="rate_limit"/>
+                            <field name="timeout"/>
+                            <field name="retries"/>
+                            <field name="circuit_failure_threshold"/>
+                            <field name="circuit_recovery_timeout"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Caché (TTL en minutos)">
+                            <field name="cache_ttl_price"/>
+                            <field name="cache_ttl_stock"/>
+                            <field name="cache_ttl_enrichment"/>
+                        </group>
+                        <group string="Políticas / sincronización">
+                            <field name="image_policy"/>
+                            <field name="document_policy"/>
+                            <field name="update_strategy"/>
+                            <field name="sync_enabled"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_distributor_backend" model="ir.actions.act_window">
+        <field name="name">Distribuidores</field>
+        <field name="res_model">distributor.backend</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="view_catalog_run_list" model="ir.ui.view">
+        <field name="name">catalog.run.list</field>
+        <field name="model">catalog.run</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="date_start"/>
+                <field name="backend_id"/>
+                <field name="operation"/>
+                <field name="source"/>
+                <field name="state" widget="badge" decoration-success="state == 'done'" decoration-danger="state == 'error'"/>
+                <field name="duration_ms"/>
+                <field name="api_calls"/>
+                <field name="products_synced"/>
+                <field name="products_promoted"/>
+                <field name="cache_hits"/>
+                <field name="cache_misses"/>
+                <field name="errors"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_catalog_run" model="ir.actions.act_window">
+        <field name="name">Corridas (métricas)</field>
+        <field name="res_model">catalog.run</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="action_catalog_event" model="ir.actions.act_window">
+        <field name="name">Eventos</field>
+        <field name="res_model">catalog.event</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="action_catalog_audit" model="ir.actions.act_window">
+        <field name="name">Auditoría</field>
+        <field name="res_model">catalog.audit.log</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem id="menu_catalog_root" name="Motor de Catálogo" sequence="90"/>
+    <menuitem id="menu_catalog_backends" name="Distribuidores" parent="menu_catalog_root"
+              action="action_distributor_backend" sequence="10"/>
+    <menuitem id="menu_catalog_obs_root" name="Observabilidad" parent="menu_catalog_root" sequence="20"/>
+    <menuitem id="menu_catalog_runs" name="Corridas / Métricas" parent="menu_catalog_obs_root"
+              action="action_catalog_run" sequence="10"/>
+    <menuitem id="menu_catalog_events" name="Eventos" parent="menu_catalog_obs_root"
+              action="action_catalog_event" sequence="20"/>
+    <menuitem id="menu_catalog_audit" name="Auditoría" parent="menu_catalog_obs_root"
+              action="action_catalog_audit" sequence="30"/>
+</odoo>

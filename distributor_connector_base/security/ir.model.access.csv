@@ -1,0 +1,11 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_distributor_backend_user,distributor.backend.user,model_distributor_backend,base.group_user,1,0,0,0
+access_distributor_backend_system,distributor.backend.system,model_distributor_backend,base.group_system,1,1,1,1
+access_catalog_run_user,catalog.run.user,model_catalog_run,base.group_user,1,0,0,0
+access_catalog_run_system,catalog.run.system,model_catalog_run,base.group_system,1,1,1,1
+access_catalog_metric_user,catalog.metric.user,model_catalog_metric,base.group_user,1,0,0,0
+access_catalog_metric_system,catalog.metric.system,model_catalog_metric,base.group_system,1,1,1,1
+access_catalog_audit_user,catalog.audit.log.user,model_catalog_audit_log,base.group_user,1,0,0,0
+access_catalog_audit_system,catalog.audit.log.system,model_catalog_audit_log,base.group_system,1,1,1,1
+access_catalog_event_user,catalog.event.user,model_catalog_event,base.group_user,1,0,0,0
+access_catalog_event_system,catalog.event.system,model_catalog_event,base.group_system,1,1,1,1
