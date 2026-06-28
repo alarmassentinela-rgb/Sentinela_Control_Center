@@ -59,7 +59,7 @@ Ver `SMOKE_TESTS_COC.md` (health, OTP real, /v1/me scoped, métricas).
 
 ## 8. Branding en Odoo (REQUISITO Go-Live)
 La identidad visual del Portal es **Odoo la única fuente de verdad** (la SPA es white-label; sin recompilar por cambios de marca). **Antes del Go-Live** configurar en V18 (`ir.config_parameter`):
-- `sentinela_api.brand_logo_url` → **logo oficial** de Sentinela (URL pública o data URL). *Si no se configura, el header muestra solo el nombre — NUNCA un logo genérico.*
+- `sentinela_api.brand_logo_url` → **logo oficial** de Sentinela. **Preferir SVG** (o PNG transparente de alta resolución, ≥2× el tamaño de despliegue) **con fondo transparente** → nítido en Retina y sin recuadro blanco. *Si no se configura, header/login muestran solo el nombre — NUNCA un logo genérico.* El portal lo consume vía un único componente `BrandMark` (logo + título); no hay branding en el frontend que recompilar.
 - `sentinela_api.brand_name` → nombre del portal (p. ej. "Sentinela").
 - `sentinela_api.brand_primary` → color corporativo.
 - **Favicon** del portal (configurar; pendiente de exponer vía theme en sprint posterior).

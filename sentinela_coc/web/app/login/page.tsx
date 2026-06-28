@@ -50,11 +50,8 @@ export default function LoginPage() {
   return (
     <main className="app-shell justify-center px-6">
       <div className="mx-auto w-full max-w-sm space-y-6 pb-16">
-        <div className="flex flex-col items-center gap-2 text-center">
-          {/* Misma fuente de marca que el resto del portal (BrandMark -> Odoo). */}
-          <BrandMark size="lg" />
-          <h1 className="text-xl font-bold text-ink">Portal del Cliente</h1>
-        </div>
+        {/* Identidad = BrandMark (única fuente: logo de Odoo + título). */}
+        <BrandMark layout="login" />
 
         {step === "phone" ? (
           <form onSubmit={requestOtp} className="space-y-3">

@@ -33,10 +33,7 @@ export function AppHeader() {
           principal alineados como una sola unidad. Derecha: acciones reservadas (visual)
           + bloque de cliente cohesivo con el estado destacado + avatar de perfil. */}
       <div className="flex items-center gap-3 px-4 py-1">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <BrandMark size="md" className="shrink-0" />
-          <span className="truncate text-base font-bold leading-none tracking-tight text-ink sm:text-lg">Portal del Cliente</span>
-        </div>
+        <BrandMark layout="header" />
 
         <div className="ml-auto flex items-center gap-2">
           {/* Acciones reservadas: botones YA presentes (deshabilitados); a futuro solo se
