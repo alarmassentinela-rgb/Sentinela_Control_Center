@@ -63,4 +63,6 @@ Los componentes del DS **no conocen el dominio** (solo reciben props).
 4. **Hooks genéricos** (`useQuery`, `usePaged`): no conocen el dominio. La lógica de negocio vive en los módulos.
 5. **Componentes desacoplados:** el DS no conoce facturas/pagos/dashboard/servicios/clientes/IA/tickets. Solo reciben props.
 6. **Módulos futuros** (IA, Soporte, Tickets, Notificaciones, Perfil, Pagos, Historial, Auditoría) reutilizan el DS. Antes de crear un componente, verificar que no exista uno equivalente.
-7. **Cambios:** todo hallazgo sigue el flujo Análisis → causa raíz → propuesta → aprobación → implementación → regresión. Sin mejoras estéticas por iniciativa propia.
+7. **Cambios:** todo hallazgo sigue el flujo Análisis de causa raíz → componentes afectados → riesgos → plan de corrección → **aprobación** → implementación en un único lote → regresión solo de lo afectado → evidencia. Sin mejoras estéticas/optimizaciones/refactors por iniciativa propia.
+8. **Excepciones explícitas.** Cualquier excepción al DS se justifica técnicamente y se presenta el análisis **antes** de escribir código. No se permiten excepciones implícitas.
+9. **Arquitectura base CERRADA.** El Portal del Cliente es ahora una plataforma estable: se construye **sobre** ella, no se rediseña. Toda decisión futura debe preservar esta arquitectura y evitar deuda técnica o inconsistencias visuales.
