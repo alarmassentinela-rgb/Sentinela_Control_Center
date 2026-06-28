@@ -102,12 +102,15 @@ Los motores quedan en **red interna**; el Gateway es lo único expuesto a Intern
 - **FastAPI** (reutiliza el gateway BFF existente del Portal COC, `api.sentinela.mx`; ya hay contenedor `gateway-*`).
 - Despliegue por contenedores; **STAGING primero**; detrás de TLS (Cloudflare/NPM). Caché Redis opcional.
 
-## 14. Orden de implementación (cuando se autorice; aún sin código)
+## 14. Orden de implementación
+> ⚠️ **Actualizado (28-jun) por la `POLITICA_EVOLUCION_PORTAL`:** el Gateway es **roadmap, NO requisito** para terminar el Portal. **Prioridad = Portal** (incremental, sin rehacer). El Gateway se introduce **cuando aporte valor**; mientras tanto el Portal consume los contratos públicos (Catalog v1 / ERP API) directamente.
+
+**Cuando se decida construir el Gateway** (sin frenar el Portal), por fases en STAGING:
 1. **Gateway base**: esqueleto + auth de consumidor + propagación de IDs + observabilidad + caché.
 2. **Gateway → Catalog v1**: proxy/compose de búsqueda y ficha (filtrando `cost`), con caché por freshness.
 3. **Gateway → ERP API**: datos de cuenta con auth de usuario final.
 4. **Agregación BFF** para las vistas del Portal.
-5. **Portal** consume **únicamente** el Gateway. **App móvil** reutiliza el mismo Gateway.
+5. El Portal **migra incrementalmente** a consumir el Gateway; la **App móvil** lo reutiliza.
 Cada paso: STAGING, entregable + pruebas + reporte.
 
 ## 15. Decisiones (ADR)

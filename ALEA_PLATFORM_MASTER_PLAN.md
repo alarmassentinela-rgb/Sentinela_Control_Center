@@ -57,7 +57,8 @@ Leyenda: ✅ estable · 🟡 parcial · 🛠️ en desarrollo · 🔜 futuro.
 | **Integrations** | Integrations | Conectores de distribuidores y servicios | ✅ Syscom; resto 🔜 |
 
 ## 3. Contratos de interacción (cómo encajan)
-- **TODOS los consumidores (Portal, App, IA, integraciones, dashboards, internas) → Alea API Gateway** (punto único de acceso). Ningún consumidor habla directo con un motor ni con Odoo.
+> **Estado objetivo vs. transición:** el Gateway como front único es el **objetivo**; se adopta **incrementalmente** (ver `POLITICA_EVOLUCION_PORTAL_28JUN2026.md`). **Hoy, prioridad = Portal**: las nuevas features consumen contratos públicos (Catalog v1 / ERP API) directamente; el Gateway se intercala cuando aporte valor, **sin frenar ni rehacer el Portal**.
+- **Objetivo — TODOS los consumidores (Portal, App, IA, integraciones, dashboards, internas) → Alea API Gateway** (punto único de acceso). Ningún consumidor habla directo con un motor ni con Odoo.
 - **Gateway → Catalog Engine**: por **Catalog Public Interface v1** (credencial de servicio; nunca el ORM).
 - **Gateway → ERP**: por **`sentinela_api`** (propaga la auth del cliente) para contratos/membresías/facturas/tickets/OS/dispositivos/eventos.
 - El **Gateway** concentra auth/authz/rate-limit/caché/agregación/observabilidad/seguridad; **nunca** lógica de negocio (esa vive en los motores). Ver `BLUEPRINT_ALEA_API_GATEWAY_28JUN2026.md`.
