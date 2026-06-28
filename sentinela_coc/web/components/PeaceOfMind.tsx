@@ -1,18 +1,20 @@
+import { StatusIndicator, type StatusTone } from "@/components/ui/StatusIndicator";
 import { cn } from "@/lib/cn";
 
 // Elemento CENTRAL del Dashboard: "Estado de Tranquilidad".
 // Composición: columna flex con UN solo gap entre el indicador y el grupo de texto
-// (las dos líneas van agrupadas y juntas). El indicador es un SVG propio (no emoji) ->
-// apariencia IDÉNTICA en Windows/macOS/Android/iPhone y caja con métrica predecible,
-// así la separación no depende del tamaño del icono ni de la tipografía del sistema.
-const STYLE: Record<string, { bg: string; ring: string; dot: string }> = {
-  tranquilo: { bg: "bg-green-50", ring: "ring-green-200", dot: "text-green-500" },
-  atencion: { bg: "bg-amber-50", ring: "ring-amber-200", dot: "text-amber-500" },
-  alerta: { bg: "bg-red-50", ring: "ring-red-200", dot: "text-red-500" },
+// (las dos líneas agrupadas y juntas). El indicador es el componente del Design System
+// <StatusIndicator> (SVG reutilizable, color por tono, tamaño por token) -> apariencia
+// idéntica en todas las plataformas y separación independiente del tamaño del icono.
+// Solo el fondo/anillo de la tarjeta es propio del hero.
+const CARD: Record<string, { bg: string; ring: string; tone: StatusTone }> = {
+  tranquilo: { bg: "bg-green-50", ring: "ring-green-200", tone: "ok" },
+  atencion: { bg: "bg-amber-50", ring: "ring-amber-200", tone: "warn" },
+  alerta: { bg: "bg-red-50", ring: "ring-red-200", tone: "danger" },
 };
 
 export function PeaceOfMind({ status, label }: { status: string; label: string }) {
-  const s = STYLE[status] || STYLE.tranquilo;
+  const s = CARD[status] || CARD.tranquilo;
   return (
     <div
       className={cn(
@@ -21,11 +23,7 @@ export function PeaceOfMind({ status, label }: { status: string; label: string }
         s.ring,
       )}
     >
-      {/* Indicador SVG propio (tamaño/protagonismo por clases; halo + disco). */}
-      <svg viewBox="0 0 24 24" className={cn("h-14 w-14 shrink-0 lg:h-24 lg:w-24", s.dot)} aria-hidden>
-        <circle cx="12" cy="12" r="10.5" fill="currentColor" opacity="0.18" />
-        <circle cx="12" cy="12" r="7.5" fill="currentColor" />
-      </svg>
+      <StatusIndicator tone={s.tone} size="hero" />
       <div className="flex flex-col gap-0.5">
         <p className="text-[11px] uppercase tracking-wide text-muted lg:text-sm">Estado de tranquilidad</p>
         <p className="text-lg font-bold text-ink lg:text-3xl">{label}</p>
