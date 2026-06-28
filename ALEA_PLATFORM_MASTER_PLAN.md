@@ -16,6 +16,7 @@ Principios de plataforma (innegociables):
 - **Las CAPACIDADES se comunican entre capacidades; las APLICACIONES solo orquestan experiencias.** La lógica de negocio vive en las capacidades, nunca en las apps.
 - **Lenguaje de negocio + puertos/adaptadores:** se describe lo que cada capacidad *hace* ("Catálogo consulta", "Eventos publican", "Pagos autorizan"); los proveedores son **adaptadores reemplazables**, no parte del contrato.
 - **Una sola fuente de verdad por dato;** prohibido duplicar lógica. Extender antes que reemplazar. ADR para cambios importantes.
+- **Las capacidades se ganan, no se diseñan por adelantado:** una capacidad se promueve a Core solo cuando **demuestra valor** y una 2ª app necesita lo mismo (regla de oro). Ciclo de vida en `FILOSOFIA_EVOLUCION_PLATAFORMA.md`.
 
 ---
 
