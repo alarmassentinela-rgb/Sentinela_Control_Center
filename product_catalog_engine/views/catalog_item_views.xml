@@ -75,6 +75,23 @@
                             <field name="sync_tier"/>
                         </group>
                     </group>
+                    <group>
+                        <group string="Frescura">
+                            <field name="freshness_status"/>
+                            <field name="sync_source"/>
+                            <field name="price_synced_at"/>
+                            <field name="price_expires_at"/>
+                            <field name="stock_synced_at"/>
+                            <field name="stock_expires_at"/>
+                            <field name="enrichment_synced_at"/>
+                            <field name="enrichment_expires_at"/>
+                        </group>
+                        <group string="Prioridad">
+                            <field name="is_favorite"/>
+                            <field name="hit_count"/>
+                            <field name="last_hit_at"/>
+                        </group>
+                    </group>
                     <group string="Búsqueda">
                         <field name="brand"/>
                         <field name="manufacturer"/>
@@ -97,4 +114,69 @@
     <menuitem id="menu_catalog_index" name="Índice de Catálogo"
               parent="distributor_connector_base.menu_catalog_root"
               action="action_catalog_item" sequence="5"/>
+
+    <!-- ===== Dashboard ===== -->
+    <record id="view_catalog_dashboard_form" model="ir.ui.view">
+        <field name="name">catalog.dashboard.form</field>
+        <field name="model">catalog.dashboard</field>
+        <field name="arch" type="xml">
+            <form string="Estado del Motor de Catálogo">
+                <header>
+                    <button name="action_refresh" type="object" string="Actualizar" class="btn-primary"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group string="Inventario del índice">
+                            <field name="items_indexed"/>
+                            <field name="items_promoted"/>
+                            <field name="items_fresh"/>
+                            <field name="items_expired"/>
+                            <field name="items_never"/>
+                            <field name="tier_summary"/>
+                        </group>
+                        <group string="Operación">
+                            <field name="avg_sync_ms"/>
+                            <field name="runs_error_24h"/>
+                            <field name="events_24h"/>
+                            <field name="cache_entries"/>
+                        </group>
+                    </group>
+                    <group string="Por distribuidor">
+                        <field name="by_distributor" nolabel="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="action_catalog_dashboard" model="ir.actions.act_window">
+        <field name="name">Estado del Motor</field>
+        <field name="res_model">catalog.dashboard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+    <menuitem id="menu_catalog_dashboard" name="Estado del Motor"
+              parent="distributor_connector_base.menu_catalog_root"
+              action="action_catalog_dashboard" sequence="1"/>
+
+    <!-- ===== Políticas de sincronización ===== -->
+    <record id="view_catalog_sync_policy_list" model="ir.ui.view">
+        <field name="name">catalog.sync.policy.list</field>
+        <field name="model">catalog.sync.policy</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="data_type"/>
+                <field name="backend_id"/>
+                <field name="ttl_minutes"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+    <record id="action_catalog_sync_policy" model="ir.actions.act_window">
+        <field name="name">Políticas de Sincronización</field>
+        <field name="res_model">catalog.sync.policy</field>
+        <field name="view_mode">list</field>
+    </record>
+    <menuitem id="menu_catalog_sync_policy" name="Políticas de Sincronización"
+              parent="distributor_connector_base.menu_catalog_root"
+              action="action_catalog_sync_policy" sequence="30"/>
 </odoo>

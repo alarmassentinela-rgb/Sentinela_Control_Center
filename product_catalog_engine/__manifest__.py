@@ -11,6 +11,8 @@
     "depends": ["distributor_connector_base", "product"],
     "data": [
         "security/ir.model.access.csv",
+        "data/sync_policy_data.xml",
+        "data/ir_cron_data.xml",
         "views/catalog_item_views.xml",
     ],
     "installable": True,

@@ -15,8 +15,11 @@ import json
 import logging
 import re
 import time
+from datetime import timedelta
 
 from odoo import api, fields, models
+
+from odoo.addons.distributor_connector_base.lib import events as ev
 
 from ..lib import ownership
 from ..lib import search as search_lib
@@ -92,9 +95,24 @@ class DistributorCatalogItem(models.Model):
         string="Snapshot de campos del proveedor (JSON)", copy=False,
         help="Últimos valores que el proveedor empujó a los campos MIXTOS del maestro; "
              "permite detectar ediciones manuales y respetarlas (no sobrescribir).")
-    fetched_price_at = fields.Datetime(copy=False)
-    fetched_stock_at = fields.Datetime(copy=False)
-    fetched_enrichment_at = fields.Datetime(copy=False)
+    # --- FRESCURA por canal (concepto #1): cuándo se sincronizó y cuándo expira ---
+    price_synced_at = fields.Datetime(copy=False)
+    price_expires_at = fields.Datetime(copy=False, index=True)
+    stock_synced_at = fields.Datetime(copy=False)
+    stock_expires_at = fields.Datetime(copy=False, index=True)
+    enrichment_synced_at = fields.Datetime(copy=False)
+    enrichment_expires_at = fields.Datetime(copy=False, index=True)
+    sync_source = fields.Selection(
+        [("cron", "Cron"), ("api", "API"), ("wizard", "Asistente"), ("user", "Usuario"),
+         ("system", "Sistema")], copy=False, string="Origen últ. sync")
+    freshness_status = fields.Selection(
+        [("never", "Sin sincronizar"), ("fresh", "Vigente"), ("expired", "Expirado")],
+        compute="_compute_freshness_status", string="Frescura")
+
+    # --- Señales de prioridad (concepto #3) ---
+    is_favorite = fields.Boolean(index=True, string="Favorito")
+    hit_count = fields.Integer(default=0, string="Consultas")
+    last_hit_at = fields.Datetime(copy=False)
 
     # ------------------------------------------------------------------
     # RESERVADO PARA IA (principio #7): no se llena hoy, pero el modelo ya lo prevé.
@@ -111,8 +129,10 @@ class DistributorCatalogItem(models.Model):
     # Operación
     # ------------------------------------------------------------------
     sync_tier = fields.Selection(
-        [("0", "Caliente"), ("1", "Activo"), ("2", "Inactivo"), ("3", "Catálogo")],
-        default="3", index=True, string="Prioridad")
+        [("0", "T0 Cotizaciones abiertas"), ("1", "T1 Vendidos recientemente"),
+         ("2", "T2 Favoritos"), ("3", "T3 Consultados frecuentemente"),
+         ("4", "T4 Catálogo frío")],
+        default="4", index=True, string="Prioridad de sync")
     active = fields.Boolean(default=True)
 
     _sql_constraints = [
@@ -189,7 +209,7 @@ class DistributorCatalogItem(models.Model):
         self._sync_mixed_fields(tmpl, source=source)         # MIXTOS, respeta manual
         if self.product_tmpl_id != tmpl:
             self.link_master(tmpl, source=source)            # enlaza + audita
-        self.fetched_enrichment_at = fields.Datetime.now()
+        self._mark_synced("enrichment", source=source)
         return tmpl
 
     def _find_or_create_master(self):
@@ -306,6 +326,169 @@ class DistributorCatalogItem(models.Model):
                        "message": "%d producto(s) maestro(s) generado(s)/actualizado(s)." % len(masters),
                        "type": "success", "sticky": False},
         }
+
+    # ==================================================================
+    # D3d — Scheduler inteligente: frescura, políticas, prioridades, eventos.
+    # ==================================================================
+    CHANNELS = ("price", "stock", "enrichment")
+
+    @api.depends("price_synced_at", "stock_synced_at", "enrichment_synced_at",
+                 "price_expires_at", "stock_expires_at", "enrichment_expires_at")
+    def _compute_freshness_status(self):
+        now = fields.Datetime.now()
+        for r in self:
+            synced = [r.price_synced_at, r.stock_synced_at, r.enrichment_synced_at]
+            if not any(synced):
+                r.freshness_status = "never"
+                continue
+            r.freshness_status = "expired" if any(r._is_due(c, now) for c in self.CHANNELS) else "fresh"
+
+    def _is_due(self, channel, now=None):
+        self.ensure_one()
+        now = now or fields.Datetime.now()
+        synced = self[channel + "_synced_at"]
+        exp = self[channel + "_expires_at"]
+        return (not synced) or (bool(exp) and exp <= now)
+
+    def _ttl_minutes(self, channel):
+        return self.env["catalog.sync.policy"]._ttl(channel, self.backend_id)
+
+    def _mark_synced(self, channel, source="cron"):
+        self.ensure_one()
+        now = fields.Datetime.now()
+        ttl = self._ttl_minutes(channel)
+        self[channel + "_synced_at"] = now
+        self[channel + "_expires_at"] = (now + timedelta(minutes=ttl)) if ttl else False
+        self.sync_source = source
+
+    def _emit(self, event_name, payload=None):
+        self.ensure_one()
+        self.env["catalog.event"].emit(
+            event_name, backend_key=self.backend_id.connector_key or "",
+            payload=dict(payload or {}, item=self.distributor_product_id), source="cron")
+
+    def register_hit(self):
+        """Cuenta una consulta (alimenta la prioridad Tier 3)."""
+        for r in self:
+            r.hit_count += 1
+            r.last_hit_at = fields.Datetime.now()
+
+    # ---- Refresco por canal (NUNCA recorre todo: solo lo vencido + por tier) ----
+    def refresh(self, channels=None, source="cron"):
+        for item in self:
+            item._refresh_one(channels, source)
+
+    def _refresh_one(self, channels, source):
+        self.ensure_one()
+        channels = channels or self.CHANNELS
+        connector = self.backend_id.get_connector()
+        if "price" in channels or "stock" in channels:
+            data = connector.get_price_stock([self.distributor_product_id]) or {}
+            ps = data.get(self.distributor_product_id) or {}
+            if ps and not ps.get("error"):
+                if "price" in channels:
+                    price = ps.get("price") or {}
+                    newp = price.get("cost") if price.get("cost") is not None else price.get("list")
+                    if newp is not None and newp != self.price_cost:
+                        self._emit(ev.EVT_PRICE_CHANGED, {"old": self.price_cost, "new": newp})
+                        self.price_cost = newp
+                    self._mark_synced("price", source)
+                if "stock" in channels:
+                    news = (ps.get("stock") or {}).get("total")
+                    if news is not None and news != self.stock_total:
+                        self._emit(ev.EVT_STOCK_CHANGED, {"old": self.stock_total, "new": news})
+                        self.stock_total = news
+                    self._mark_synced("stock", source)
+        if "enrichment" in channels:
+            np = connector.get_product(self.distributor_product_id)
+            self.description = np.description or self.description
+            self.image_count = len(np.images)
+            self.doc_count = len(np.documents)
+            self.raw_cache = json.dumps(np.to_dict(), ensure_ascii=False, default=str)
+            self._mark_synced("enrichment", source)
+        self._emit(ev.EVT_PRODUCT_REFRESHED, {"channels": list(channels)})
+
+    @api.model
+    def _cron_refresh_channel(self, channel, batch=200):
+        """Refresca SOLO los ítems VENCIDOS de un canal, **priorizados por tier**, en lote.
+        No recorre el catálogo completo: filtra por expiración y ordena por sync_tier."""
+        now = fields.Datetime.now()
+        due = self.search(
+            ["|", (channel + "_expires_at", "=", False), (channel + "_expires_at", "<=", now)],
+            order="sync_tier, " + channel + "_expires_at", limit=batch)
+        run = self.env["catalog.run"].create({"operation": "sync", "source": "cron",
+                                              "message": "refresh:%s" % channel})
+        errors = 0
+        for item in due:
+            try:
+                item._refresh_one([channel], "cron")
+            except Exception as e:  # noqa: BLE001 - un ítem no tumba el lote
+                errors += 1
+                _logger.warning("refresh %s falló para %s: %s", channel, item.distributor_product_id, e)
+                self.env["catalog.event"].sudo().emit(
+                    ev.EVT_DISTRIBUTOR_UNAVAILABLE, backend_key=item.backend_id.connector_key or "",
+                    payload={"item": item.distributor_product_id, "error": str(e)[:120]}, source="cron")
+        run.products_synced = len(due) - errors
+        run.errors = errors
+        run.finish("error" if errors and not (len(due) - errors) else "done")
+        return len(due)
+
+    @api.model
+    def _cron_refresh_price(self):
+        return self._cron_refresh_channel("price")
+
+    @api.model
+    def _cron_refresh_stock(self):
+        return self._cron_refresh_channel("stock")
+
+    @api.model
+    def _cron_refresh_enrichment(self):
+        return self._cron_refresh_channel("enrichment", batch=100)
+
+    @api.model
+    def _cron_recompute_tiers(self):
+        """Recalcula sync_tier desde el uso real. Opera sobre NUESTRO índice (acotado),
+        no sobre el catálogo del distribuidor."""
+        recent = fields.Datetime.subtract(fields.Datetime.now(), days=90)
+        all_items = self.search([])
+        # T4 por defecto
+        all_items.write({"sync_tier": "4"})
+        # T3 consultados frecuentemente
+        self.search([("hit_count", ">=", 5)]).write({"sync_tier": "3"})
+        # T2 favoritos
+        self.search([("is_favorite", "=", True)]).write({"sync_tier": "2"})
+        # productos maestros con movimiento → mapear a sus ítems (si hay ventas/contabilidad)
+        promoted = all_items.filtered("product_tmpl_id")
+        tmpl_ids = promoted.mapped("product_tmpl_id").ids
+        has_sales = "sale.order.line" in self.env and "account.move.line" in self.env
+        if tmpl_ids and has_sales:
+            SOL = self.env["sale.order.line"]
+            AML = self.env["account.move.line"]
+            sold = AML.search([("product_id.product_tmpl_id", "in", tmpl_ids),
+                               ("move_id.state", "=", "posted"), ("date", ">=", recent)])
+            sold_tmpls = sold.mapped("product_id.product_tmpl_id").ids
+            promoted.filtered(lambda i: i.product_tmpl_id.id in sold_tmpls).write({"sync_tier": "1"})
+            open_so = SOL.search([("product_id.product_tmpl_id", "in", tmpl_ids),
+                                  ("state", "in", ("draft", "sent"))])
+            open_tmpls = open_so.mapped("product_id.product_tmpl_id").ids
+            promoted.filtered(lambda i: i.product_tmpl_id.id in open_tmpls).write({"sync_tier": "0"})
+        return True
+
+    @api.model
+    def _cron_detect_quality(self):
+        """Detecta y reporta problemas de frescura: vencidos, sin sincronizar, backlog."""
+        now = fields.Datetime.now()
+        expired = self.search_count(
+            ["|", "|", ("price_expires_at", "<=", now), ("stock_expires_at", "<=", now),
+             ("enrichment_expires_at", "<=", now)])
+        never = self.search_count([("price_synced_at", "=", False),
+                                   ("stock_synced_at", "=", False),
+                                   ("enrichment_synced_at", "=", False)])
+        total = self.search_count([])
+        if total and expired >= max(50, total * 0.5):
+            self.env["catalog.event"].sudo().emit(
+                ev.EVT_CATALOG_EXPIRED, payload={"expired": expired, "total": total}, source="cron")
+        return {"expired": expired, "never": never, "total": total}
 
     # ------------------------------------------------------------------
     # Búsqueda (principio #4) + medición de tiempo (principio #9)

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <!-- Scheduler inteligente: un cron por tipo de dato (políticas de frescura distintas).
+         Cada uno refresca SOLO lo vencido, priorizado por tier (no recorre todo). -->
+
+    <record id="cron_refresh_stock" model="ir.cron">
+        <field name="name">Catálogo: Refrescar existencias (vencidas, por tier)</field>
+        <field name="model_id" ref="model_distributor_catalog_item"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_refresh_stock()</field>
+        <field name="interval_number">30</field>
+        <field name="interval_type">minutes</field>
+        <field name="active" eval="True"/>
+    </record>
+
+    <record id="cron_refresh_price" model="ir.cron">
+        <field name="name">Catálogo: Refrescar precios (vencidos, por tier)</field>
+        <field name="model_id" ref="model_distributor_catalog_item"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_refresh_price()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">hours</field>
+        <field name="active" eval="True"/>
+    </record>
+
+    <record id="cron_refresh_enrichment" model="ir.cron">
+        <field name="name">Catálogo: Refrescar enriquecimiento (vencido, por tier)</field>
+        <field name="model_id" ref="model_distributor_catalog_item"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_refresh_enrichment()</field>
+        <field name="interval_number">6</field>
+        <field name="interval_type">hours</field>
+        <field name="active" eval="True"/>
+    </record>
+
+    <record id="cron_recompute_tiers" model="ir.cron">
+        <field name="name">Catálogo: Recalcular prioridades (tiers) por uso</field>
+        <field name="model_id" ref="model_distributor_catalog_item"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_recompute_tiers()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+        <field name="active" eval="True"/>
+    </record>
+
+    <record id="cron_detect_quality" model="ir.cron">
+        <field name="name">Catálogo: Detectar calidad (vencidos/backlog)</field>
+        <field name="model_id" ref="model_distributor_catalog_item"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_detect_quality()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">hours</field>
+        <field name="active" eval="True"/>
+    </record>
+</odoo>

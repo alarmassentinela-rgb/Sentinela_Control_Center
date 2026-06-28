@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Políticas de sincronización GLOBALES por defecto (configurables en Ajustes). -->
+    <record id="policy_price" model="catalog.sync.policy">
+        <field name="data_type">price</field>
+        <field name="ttl_minutes">1440</field>   <!-- 24 h -->
+    </record>
+    <record id="policy_stock" model="catalog.sync.policy">
+        <field name="data_type">stock</field>
+        <field name="ttl_minutes">30</field>      <!-- 30 min -->
+    </record>
+    <record id="policy_enrichment" model="catalog.sync.policy">
+        <field name="data_type">enrichment</field>
+        <field name="ttl_minutes">43200</field>   <!-- 30 d (imágenes/docs; garantía/descr. 90 d viven aquí) -->
+    </record>
+</odoo>
