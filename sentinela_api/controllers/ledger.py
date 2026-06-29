@@ -42,6 +42,9 @@ class LedgerController(http.Controller):
                 'reference': ms.name or '',
                 'status': ms.payment_state,
                 'service_id': None,
+                # Hechos para el Estado de Cuenta (el Ledger los interpreta, no aqui):
+                'due_date': str(ms.invoice_date_due or ''),
+                'amount_residual': round(ms.amount_residual, 2),
             })
 
         # Pagos entrantes del cliente.
