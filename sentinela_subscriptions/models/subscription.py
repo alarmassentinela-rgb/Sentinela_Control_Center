@@ -901,19 +901,102 @@ class SentinelaSubscription(models.Model):
             except Exception as e:
                 _logger.error(f"BILLING: Falló la generación para grupo {key}: {str(e)}")
 
-    def _billing_period_label(self):
+    def _billing_period_label(self, n_ciclos=1):
         """Etiqueta del periodo para la línea de factura: 'CORRESPONDIENTE AL MES DE <MES> <AÑO>'
         (o rango de meses si el ciclo es multi-mes). La usan la descripción de la línea Y el
-        candado anti-duplicado, así que AMBOS deben llamar a este mismo método para no desincronizar."""
+        candado anti-duplicado, así que AMBOS deben llamar a este mismo método para no desincronizar.
+
+        `n_ciclos` (default 1) = nº de ciclos que cubre el documento. El cron y el candado lo
+        llaman sin argumento (1 ciclo natural); el cobro adelantado global lo llama con N para
+        que la etiqueta abarque los N×intervalo meses prepagados. Con n_ciclos=1 el resultado es
+        idéntico al histórico."""
         self.ensure_one()
         meses = ['', 'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO',
                  'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE']
         nb = self.next_billing_date
-        months = int(self.recurring_interval or 1)
+        months = int(self.recurring_interval or 1) * int(n_ciclos or 1)
         if months <= 1:
             return "CORRESPONDIENTE AL MES DE %s %s" % (meses[nb.month], nb.year)
         period_end = nb + relativedelta(months=months) - timedelta(days=1)
         return "CORRESPONDIENTE DE %s %s A %s %s" % (meses[nb.month], nb.year, meses[period_end.month], period_end.year)
+
+    def _build_group_lines(self, subs_list, n_ciclos=1):
+        """ Fuente ÚNICA de verdad de las LÍNEAS de una factura de grupo. La comparten:
+          - el cron de facturación recurrente (`_billing_generate_invoice`, n_ciclos=1),
+          - el cobro adelantado global (n_ciclos=N).
+        Devuelve la lista de comandos (0,0,{...}) para `invoice_line_ids`.
+
+        Cantidad por sub = qty de UN ciclo × n_ciclos. El avance de `next_billing_date` y el
+        conteo de ciclos NO se infieren de estas líneas: viven explícitos en el account.move
+        (`advance_periods`), para no tener que reconstruir el contexto leyendo la factura.
+        Con n_ciclos=1 produce exactamente las mismas líneas que el cron histórico. """
+        partner = subs_list[0].partner_id
+        method = partner.invoice_grouping_method or 'individual'
+
+        # Cantidad facturada por sub. Alarmas/dominios: price_unit YA es el precio del periodo
+        # completo (productos MBASICO-3/-6/-12, DOMINIO anual) → qty=1. Internet/GPS/Mantenimiento
+        # guardan TARIFA MENSUAL → qty = nº de meses del ciclo. GPS: × nº de equipos activos.
+        # Todo ×n_ciclos para cubrir N ciclos (cobro adelantado).
+        def _line_qty(sub):
+            months = int(sub.recurring_interval or 1)
+            q = 1 if sub.service_type in ('alarm', 'domain') else months
+            if sub.service_type == 'gps':
+                n_dev = max(1, len(sub.gps_device_ids.filtered(lambda d: d.device_state != 'suspended')))
+                q = months * n_dev
+            return q * n_ciclos
+
+        # Periodo: si TODAS las subs comparten el mismo, va UNA sola vez (renglón de nota al final)
+        # y NO se repite en cada línea. Si hubiera periodos distintos (raro), se deja por línea.
+        period_labels = {s._billing_period_label(n_ciclos) for s in subs_list}
+        single_period = list(period_labels)[0] if len(period_labels) == 1 else None
+        # Toggle por cliente: detallar nombres de sucursales en la factura global o solo el conteo.
+        show_branches = getattr(partner, 'invoice_show_branches', True)
+
+        line_cmds = []
+        if method == 'global' and len(subs_list) > 1:
+            # FACTURACIÓN GLOBAL CONSOLIDADA: una línea por (producto, precio, periodo); la cantidad
+            # es el nº de servicios del grupo. Sucursales según el toggle del cliente.
+            groups, order = {}, []
+            for sub in subs_list:
+                key = (sub.product_id.id, round(sub.price_unit, 2), sub._billing_period_label(n_ciclos))
+                if key not in groups:
+                    groups[key] = []
+                    order.append(key)
+                groups[key].append(sub)
+            for key in order:
+                gsubs = groups[key]
+                prod = gsubs[0].product_id
+                if show_branches:
+                    suc_txt = " | Sucursales: %s" % ", ".join((s.service_address_id.name or s.name) for s in gsubs)
+                else:
+                    suc_txt = ""
+                per_txt = "" if single_period else (" - %s" % gsubs[0]._billing_period_label(n_ciclos))
+                desc = "Servicio: %s%s%s" % (prod.name, per_txt, suc_txt)
+                line_cmds.append((0, 0, {
+                    'product_id': prod.id,
+                    'name': desc,
+                    'quantity': sum(_line_qty(s) for s in gsubs),
+                    'price_unit': gsubs[0].price_unit,
+                }))
+        else:
+            for sub in subs_list:
+                dev_suffix = ""
+                if sub.service_type == 'gps':
+                    n_dev = max(1, len(sub.gps_device_ids.filtered(lambda d: d.device_state != 'suspended')))
+                    dev_suffix = f" - {n_dev} equipo(s)"
+                per_txt = "" if single_period else (" - %s" % sub._billing_period_label(n_ciclos))
+                desc = f"Servicio: {sub.product_id.name} - Contrato: {sub.name}{dev_suffix}{per_txt}"
+                line_cmds.append((0, 0, {
+                    'product_id': sub.product_id.id,
+                    'name': desc,
+                    'quantity': _line_qty(sub),
+                    'price_unit': sub.price_unit,
+                }))
+        # Renglón de NOTA con el periodo (una sola vez). Mantiene el periodo visible y permite que
+        # el candado anti-duplicado lo siga encontrando (busca _billing_period_label en las líneas).
+        if single_period:
+            line_cmds.append((0, 0, {'display_type': 'line_note', 'name': "Periodo facturado: %s" % single_period}))
+        return line_cmds
 
     def _billing_generate_invoice(self, subs_list):
         """ Crea y publica UNA factura (account.move) para el grupo de suscripciones dado,
@@ -952,68 +1035,10 @@ class SentinelaSubscription(models.Model):
         first_sub = subs_list[0]
         method = partner.invoice_grouping_method or 'individual'
 
-        # Cantidad facturada por sub. Alarmas/dominios: price_unit YA es el precio del periodo
-        # completo (productos MBASICO-3/-6/-12, DOMINIO anual) → qty=1. Internet/GPS/Mantenimiento
-        # guardan TARIFA MENSUAL → qty = nº de meses del ciclo. GPS: × nº de equipos activos.
-        def _line_qty(sub):
-            months = int(sub.recurring_interval or 1)
-            q = 1 if sub.service_type in ('alarm', 'domain') else months
-            if sub.service_type == 'gps':
-                n_dev = max(1, len(sub.gps_device_ids.filtered(lambda d: d.device_state != 'suspended')))
-                q = months * n_dev
-            return q
-
-        # Periodo: si TODAS las subs comparten el mismo, va UNA sola vez (renglón de nota al final)
-        # y NO se repite en cada línea. Si hubiera periodos distintos (raro), se deja por línea.
-        period_labels = {s._billing_period_label() for s in subs_list}
-        single_period = list(period_labels)[0] if len(period_labels) == 1 else None
-        # Toggle por cliente: detallar nombres de sucursales en la factura global o solo el conteo.
-        show_branches = getattr(partner, 'invoice_show_branches', True)
-
-        line_cmds = []
-        if method == 'global' and len(subs_list) > 1:
-            # FACTURACIÓN GLOBAL CONSOLIDADA: una línea por (producto, precio, periodo); la cantidad
-            # es el nº de servicios del grupo. Sucursales según el toggle del cliente.
-            groups, order = {}, []
-            for sub in subs_list:
-                key = (sub.product_id.id, round(sub.price_unit, 2), sub._billing_period_label())
-                if key not in groups:
-                    groups[key] = []
-                    order.append(key)
-                groups[key].append(sub)
-            for key in order:
-                gsubs = groups[key]
-                prod = gsubs[0].product_id
-                if show_branches:
-                    suc_txt = " | Sucursales: %s" % ", ".join((s.service_address_id.name or s.name) for s in gsubs)
-                else:
-                    suc_txt = ""
-                per_txt = "" if single_period else (" - %s" % gsubs[0]._billing_period_label())
-                desc = "Servicio: %s%s%s" % (prod.name, per_txt, suc_txt)
-                line_cmds.append((0, 0, {
-                    'product_id': prod.id,
-                    'name': desc,
-                    'quantity': sum(_line_qty(s) for s in gsubs),
-                    'price_unit': gsubs[0].price_unit,
-                }))
-        else:
-            for sub in subs_list:
-                dev_suffix = ""
-                if sub.service_type == 'gps':
-                    n_dev = max(1, len(sub.gps_device_ids.filtered(lambda d: d.device_state != 'suspended')))
-                    dev_suffix = f" - {n_dev} equipo(s)"
-                per_txt = "" if single_period else (" - %s" % sub._billing_period_label())
-                desc = f"Servicio: {sub.product_id.name} - Contrato: {sub.name}{dev_suffix}{per_txt}"
-                line_cmds.append((0, 0, {
-                    'product_id': sub.product_id.id,
-                    'name': desc,
-                    'quantity': _line_qty(sub),
-                    'price_unit': sub.price_unit,
-                }))
-        # Renglón de NOTA con el periodo (una sola vez). Mantiene el periodo visible y permite que
-        # el candado anti-duplicado lo siga encontrando (busca _billing_period_label en las líneas).
-        if single_period:
-            line_cmds.append((0, 0, {'display_type': 'line_note', 'name': "Periodo facturado: %s" % single_period}))
+        # Líneas de la factura: fuente ÚNICA de verdad, compartida con el cobro adelantado global
+        # (refactor D1). n_ciclos=1 = ciclo natural del cron. El avance de next_billing_date y el
+        # conteo de ciclos NO se infieren de estas líneas: viven explícitos en el account.move.
+        line_cmds = self._build_group_lines(subs_list, n_ciclos=1)
         move_vals = {
             'move_type': 'out_invoice',
             'partner_id': partner.id,
