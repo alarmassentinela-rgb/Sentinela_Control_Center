@@ -50,5 +50,10 @@ class Settings(BaseSettings):
     wa_cb_cooldown_sec: int = 30
     otp_message_template: str = ""   # vacío = plantilla por defecto del driver
 
+    # Pagos — Stripe (Sprint 2 / Cobranza). Claves por entorno (MODO TEST en dev); NUNCA hardcode.
+    stripe_secret_key: str = ""        # sk_test_... / sk_live_...
+    stripe_webhook_secret: str = ""    # whsec_... (verificación de firma, S2-008)
+    stripe_publishable_key: str = ""   # pk_test_... (informativo; el front usa NEXT_PUBLIC_*)
+
 
 settings = Settings()
