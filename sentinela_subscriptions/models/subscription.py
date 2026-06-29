@@ -4,6 +4,7 @@ from dateutil.relativedelta import relativedelta
 from datetime import date, timedelta
 import calendar
 import base64
+import json
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -2476,7 +2477,32 @@ class AccountMove(models.Model):
              "la factura manualmente en Ventas (ligar la suscripción + facturar el producto del plan).")
     advance_months_applied = fields.Integer(
         string='Meses adelantados aplicados', default=0, copy=False, readonly=True,
-        help="Meses por los que ya se empujó el ciclo. Se usa para revertir exactamente si la factura se cancela.")
+        help="Meses por los que ya se empujó el ciclo (camino LEGACY mono-suscripción). "
+             "Se usa para revertir exactamente si la factura se cancela.")
+    # --- Cobro adelantado GLOBAL (metadatos explícitos; el avance NUNCA se lee de las líneas) ---
+    advance_periods = fields.Integer(
+        string='Ciclos adelantados', default=0, copy=False, readonly=True,
+        help="Nº de CICLOS de cobro que adelanta esta factura (cobro adelantado global). Cada "
+             "suscripción avanza advance_periods × su propio intervalo. Es la ÚNICA fuente del "
+             "avance: el ciclo no se recalcula leyendo las líneas. >0 marca el adelanto global.")
+    advance_detail = fields.Text(
+        string='Detalle de adelanto (snapshot)', copy=False, readonly=True,
+        help="JSON escrito al publicar: por cada suscripción {sub_id, sub, interval, periods, "
+             "months, old_date, new_date}. Permite REVERTIR y AUDITAR la operación exactamente, "
+             "sin reconstruirla desde las líneas de factura.")
+    advance_executed_on = fields.Datetime(
+        string='Adelanto ejecutado el', copy=False, readonly=True,
+        help="Fecha/hora en que se aplicó el avance de ciclo (al publicar la factura).")
+    advance_executed_by = fields.Many2one(
+        'res.users', string='Adelanto ejecutado por', copy=False, readonly=True,
+        help="Usuario que publicó la factura y disparó el avance de ciclo.")
+
+    def _is_global_advance(self):
+        """ True si este movimiento es un cobro adelantado GLOBAL del modelo nuevo, identificado
+        por metadatos explícitos (advance_periods > 0), por oposición al adelanto LEGACY
+        mono-suscripción que calcula meses leyendo las líneas. """
+        self.ensure_one()
+        return bool(self.is_advance_payment and self.advance_periods > 0)
 
     def _advance_subscription(self):
         """ Suscripción cuyo ciclo afecta este movimiento:
@@ -2489,16 +2515,30 @@ class AccountMove(models.Model):
             return self.reversed_entry_id.subscription_id
         return self.subscription_id
 
+    def _advance_subscriptions(self):
+        """ Recordset de TODAS las suscripciones cuyo ciclo afecta este movimiento (M2M
+        `subscription_ids` ∪ Many2one `subscription_id` legacy). Para una nota de crédito que
+        revierte un adelanto, las subs de la factura ORIGINAL. Generaliza `_advance_subscription`
+        (singular) sin romper su contrato. """
+        self.ensure_one()
+        if self.move_type == 'out_refund' and self.reversed_entry_id and self.reversed_entry_id.is_advance_payment:
+            orig = self.reversed_entry_id
+            return orig.subscription_ids | orig.subscription_id
+        return self.subscription_ids | self.subscription_id
+
     def _advance_direction(self):
         """ +1 = empuja el ciclo (factura de adelanto), -1 = lo regresa (nota de crédito de un
-        adelanto), 0 = este movimiento no afecta el ciclo. """
+        adelanto legacy), 0 = este movimiento no afecta el ciclo. Considera tanto el M2M
+        `subscription_ids` (global) como el Many2one `subscription_id` (legacy). """
         self.ensure_one()
-        if self.move_type == 'out_invoice' and self.is_advance_payment and self.subscription_id:
+        has_sub = bool(self.subscription_id or self.subscription_ids)
+        if self.move_type == 'out_invoice' and self.is_advance_payment and has_sub:
             return 1
         if self.move_type == 'out_refund':
-            if self.reversed_entry_id and self.reversed_entry_id.is_advance_payment and self.reversed_entry_id.subscription_id:
+            orig = self.reversed_entry_id
+            if orig and orig.is_advance_payment and (orig.subscription_id or orig.subscription_ids):
                 return -1
-            if self.is_advance_payment and self.subscription_id:
+            if self.is_advance_payment and has_sub:
                 return -1
         return 0
 
@@ -2517,13 +2557,63 @@ class AccountMove(models.Model):
         return months
 
     def _advance_on_post(self):
-        """ Al publicar: factura de adelanto empuja el ciclo; nota de crédito lo regresa.
-        Idempotente vía is_renewal_processed. La nota de crédito nunca regresa más meses de los
-        que aún sigan aplicados en la factura original (soporta crédito parcial y múltiple). """
+        """ Al publicar empuja el ciclo de las suscripciones. Dos caminos:
+        - GLOBAL (advance_periods > 0): cada sub avanza advance_periods × su intervalo. El cuánto
+          sale de METADATOS explícitos, NUNCA de las líneas; se persiste un snapshot (advance_detail)
+          para revertir/auditar sin reconstruir desde la factura.
+        - LEGACY (mono-suscripción): conserva el cálculo histórico por líneas (incluye notas de
+          crédito parciales/múltiples sobre adelantos legacy).
+        Idempotente vía is_renewal_processed: una factura jamás adelanta dos veces aunque
+        action_post se dispare de nuevo. Reversa PARCIAL sobre un adelanto global: PROHIBIDA en V1
+        (la reversa de un global es total = cancelar la factura completa). """
         for move in self:
             direction = move._advance_direction()
             if not direction or move.is_renewal_processed:
                 continue
+
+            # 🚫 V1: ninguna nota de crédito (parcial o total) sobre un adelanto GLOBAL. La reversa
+            # de un global es total y se hace cancelando la factura de adelanto completa.
+            if direction < 0:
+                orig = move.reversed_entry_id
+                if orig and orig._is_global_advance():
+                    raise UserError(_(
+                        "Reversa parcial no soportada en esta versión.\n\n"
+                        "La factura %s es un COBRO ADELANTADO GLOBAL. Para revertirlo, cancela la "
+                        "factura de adelanto COMPLETA (Restablecer a borrador / Cancelar): eso "
+                        "regresa el ciclo de TODAS sus suscripciones. Las notas de crédito sobre "
+                        "adelantos globales no están permitidas en V1."
+                    ) % (orig.name or orig.display_name))
+
+            # --- Camino GLOBAL: avance por metadatos explícitos + snapshot ---
+            if direction > 0 and move._is_global_advance():
+                subs = move._advance_subscriptions()
+                if not subs:
+                    continue
+                detail = []
+                for sub in subs:
+                    months = move.advance_periods * int(sub.recurring_interval or 1)
+                    if months <= 0:
+                        continue
+                    old_date = sub.next_billing_date or fields.Date.today()
+                    new_date = old_date + relativedelta(months=months)
+                    sub.next_billing_date = new_date
+                    detail.append({
+                        'sub_id': sub.id, 'sub': sub.name,
+                        'interval': int(sub.recurring_interval or 1),
+                        'periods': move.advance_periods, 'months': months,
+                        'old_date': str(old_date), 'new_date': str(new_date),
+                    })
+                    sub.message_post(body=_(
+                        "💰 <b>Cobro adelantado global:</b> %s ciclo(s) (%s mes(es)) en %s. "
+                        "Próxima renovación de <b>%s</b> a <b>%s</b>."
+                    ) % (move.advance_periods, months, move.name or 'borrador', old_date, new_date))
+                move.advance_detail = json.dumps(detail, ensure_ascii=False)
+                move.advance_executed_on = fields.Datetime.now()
+                move.advance_executed_by = move.env.user.id
+                move.is_renewal_processed = True
+                continue
+
+            # --- Camino LEGACY (mono-suscripción, basado en líneas) ---
             sub = move._advance_subscription()
             if not sub:
                 continue
@@ -2536,6 +2626,8 @@ class AccountMove(models.Model):
             old_date = sub.next_billing_date or fields.Date.today()
             sub.next_billing_date = old_date + relativedelta(months=direction * months)
             move.advance_months_applied = months
+            move.advance_executed_on = fields.Datetime.now()
+            move.advance_executed_by = move.env.user.id
             move.is_renewal_processed = True
             if direction < 0 and original:
                 original.advance_months_applied -= months
@@ -2551,16 +2643,47 @@ class AccountMove(models.Model):
                 ) % (months, move.name or 'borrador', old_date, sub.next_billing_date))
 
     def _advance_on_unpost(self):
-        """ Al cancelar / regresar a borrador, deshace el efecto que ESTE move había aplicado:
-        - Factura de adelanto: regresa el ciclo los meses que empujó.
-        - Nota de crédito ya aplicada: vuelve a empujar el ciclo y le devuelve los meses a la
-          factura original. """
+        """ Al cancelar / regresar a borrador deshace EXACTAMENTE lo que este move aplicó:
+        - GLOBAL: lee el snapshot (advance_detail) y regresa cada sub los meses que registró.
+          Reversa TOTAL (todas las subs del snapshot), nunca recalcula desde las líneas ni
+          depende del M2M actual (robusto si el grupo cambió después).
+        - LEGACY: regresa el ciclo los meses de advance_months_applied (y, si es nota de crédito,
+          le devuelve los meses a la factura original).
+        Idempotente: solo actúa si is_renewal_processed; lo apaga al terminar, así una segunda
+        cancelación/draft no vuelve a revertir. """
         for move in self:
+            if not move.is_renewal_processed:
+                continue
+
+            # --- Camino GLOBAL: revertir desde el snapshot (reversa TOTAL) ---
+            if move._is_global_advance():
+                try:
+                    detail = json.loads(move.advance_detail or '[]')
+                except (ValueError, TypeError):
+                    detail = []
+                for entry in detail:
+                    sub = move.env['sentinela.subscription'].browse(entry.get('sub_id')).exists()
+                    months = int(entry.get('months') or 0)
+                    if not sub or months <= 0:
+                        continue
+                    old_date = sub.next_billing_date or fields.Date.today()
+                    sub.next_billing_date = old_date - relativedelta(months=months)
+                    sub.message_post(body=_(
+                        "🔄 <b>Adelanto global revertido</b> (%s cancelada/en borrador): se regresan "
+                        "%s mes(es); próxima renovación ahora <b>%s</b>."
+                    ) % (move.name or 'borrador', months, sub.next_billing_date))
+                # Se conservan advance_detail/executed_* como bitácora de auditoría.
+                move.is_renewal_processed = False
+                continue
+
+            # --- Camino LEGACY ---
             direction = move._advance_direction()
-            if not direction or not move.is_renewal_processed:
+            if not direction:
+                move.is_renewal_processed = False
                 continue
             months = move.advance_months_applied
             if months <= 0:
+                move.is_renewal_processed = False
                 continue
             sub = move._advance_subscription()
             if not sub:
