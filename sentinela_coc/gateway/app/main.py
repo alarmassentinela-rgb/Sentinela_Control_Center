@@ -17,6 +17,7 @@ from .db import Base, engine
 from .logging_setup import bind_request_id, configure_logging
 from .routers import auth as auth_router
 from .routers import devices as devices_router
+from .routers import ledger as ledger_router
 from .routers import magic as magic_router
 from .routers import portal as portal_router
 from .routers import providers as providers_router
@@ -87,3 +88,4 @@ app.include_router(magic_router.public)
 app.include_router(magic_router.internal)
 app.include_router(providers_router.router)
 app.include_router(portal_router.router)
+app.include_router(ledger_router.router)

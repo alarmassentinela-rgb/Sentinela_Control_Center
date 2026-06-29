@@ -15,8 +15,10 @@ from .accounting_adapter import (
     PAYMENT,
     NOTE,
 )
+from .service import AccountStatement, Ledger
 
 __all__ = [
     "AccountingAdapter", "OdooAccountingAdapter", "FakeAccountingAdapter",
     "Movement", "AccountingUnavailable", "CHARGE", "PAYMENT", "NOTE",
+    "Ledger", "AccountStatement",
 ]

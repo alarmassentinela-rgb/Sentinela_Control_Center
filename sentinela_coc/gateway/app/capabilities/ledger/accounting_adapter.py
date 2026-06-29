@@ -21,15 +21,22 @@ KINDS = (CHARGE, PAYMENT, NOTE)
 
 @dataclass(frozen=True)
 class Movement:
-    """Movimiento contable normalizado (agnóstico del contable de origen)."""
+    """Movimiento contable normalizado (agnóstico del contable de origen).
+
+    Solo HECHOS contables (sin reglas de negocio). `due_date` y `amount_residual`
+    son hechos que el Ledger (S2-004) usa para calcular el Estado de Cuenta; el
+    adaptador no los interpreta.
+    """
     id: int
     kind: str            # CHARGE | PAYMENT | NOTE
     date: str            # fecha ISO (str) — portable
-    amount: float        # MAGNITUD positiva; el signo lo aplica el Ledger por `kind`
+    amount: float        # MAGNITUD positiva del movimiento
     currency: str
     reference: str
     status: str | None = None
     service_id: int | None = None
+    due_date: str | None = None           # vencimiento (hecho); relevante en cargos/notas
+    amount_residual: float | None = None  # saldo pendiente del movimiento (hecho); None en pagos
 
 
 class AccountingUnavailable(RuntimeError):
@@ -43,6 +50,7 @@ def _to_movement(d: dict) -> Movement:
     kind = d.get("kind")
     if kind not in KINDS:
         raise ValueError("kind desconocido: %r" % kind)
+    ar = d.get("amount_residual")
     return Movement(
         id=int(d["id"]),
         kind=kind,
@@ -52,6 +60,8 @@ def _to_movement(d: dict) -> Movement:
         reference=d.get("reference") or "",
         status=d.get("status"),
         service_id=d.get("service_id"),
+        due_date=d.get("due_date") or None,
+        amount_residual=round(float(ar), 2) if ar is not None else None,
     )
 
 
