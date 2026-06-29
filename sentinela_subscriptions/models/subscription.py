@@ -725,6 +725,19 @@ class SentinelaSubscription(models.Model):
             'context': {'default_subscription_id': self.id},
         }
 
+    def action_cobro_adelantado_global(self):
+        """ Abre el wizard de cobro adelantado GLOBAL del cliente (todas sus suscripciones activas),
+        con preview por suscripción de la fecha de cobro antes/después. """
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Cobro Adelantado Global del Cliente'),
+            'res_model': 'sentinela.subscription.advance.global.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {'default_partner_id': self.partner_id.id},
+        }
+
     def action_view_fsm_orders(self):
         self.ensure_one()
         return {
@@ -921,6 +934,20 @@ class SentinelaSubscription(models.Model):
         period_end = nb + relativedelta(months=months) - timedelta(days=1)
         return "CORRESPONDIENTE DE %s %s A %s %s" % (meses[nb.month], nb.year, meses[period_end.month], period_end.year)
 
+    def _billing_line_qty(self, n_ciclos=1):
+        """ Cantidad a facturar de UNA suscripción para n_ciclos ciclos. Fuente ÚNICA usada por
+        el cron, el cobro adelantado global y el preview del wizard (decisión #7, sin duplicar).
+        Alarmas/dominios: price_unit YA es el precio del periodo completo (productos MBASICO-3/-6/
+        -12, DOMINIO anual) → qty=1 por ciclo. Internet/GPS/Mantenimiento guardan TARIFA MENSUAL →
+        qty = nº de meses del intervalo. GPS: × nº de equipos activos. Todo × n_ciclos. """
+        self.ensure_one()
+        months = int(self.recurring_interval or 1)
+        q = 1 if self.service_type in ('alarm', 'domain') else months
+        if self.service_type == 'gps':
+            n_dev = max(1, len(self.gps_device_ids.filtered(lambda d: d.device_state != 'suspended')))
+            q = months * n_dev
+        return q * n_ciclos
+
     def _build_group_lines(self, subs_list, n_ciclos=1):
         """ Fuente ÚNICA de verdad de las LÍNEAS de una factura de grupo. La comparten:
           - el cron de facturación recurrente (`_billing_generate_invoice`, n_ciclos=1),
@@ -934,18 +961,7 @@ class SentinelaSubscription(models.Model):
         partner = subs_list[0].partner_id
         method = partner.invoice_grouping_method or 'individual'
 
-        # Cantidad facturada por sub. Alarmas/dominios: price_unit YA es el precio del periodo
-        # completo (productos MBASICO-3/-6/-12, DOMINIO anual) → qty=1. Internet/GPS/Mantenimiento
-        # guardan TARIFA MENSUAL → qty = nº de meses del ciclo. GPS: × nº de equipos activos.
-        # Todo ×n_ciclos para cubrir N ciclos (cobro adelantado).
-        def _line_qty(sub):
-            months = int(sub.recurring_interval or 1)
-            q = 1 if sub.service_type in ('alarm', 'domain') else months
-            if sub.service_type == 'gps':
-                n_dev = max(1, len(sub.gps_device_ids.filtered(lambda d: d.device_state != 'suspended')))
-                q = months * n_dev
-            return q * n_ciclos
-
+        # Cantidad por sub = _billing_line_qty (fuente única compartida con el wizard de adelanto).
         # Periodo: si TODAS las subs comparten el mismo, va UNA sola vez (renglón de nota al final)
         # y NO se repite en cada línea. Si hubiera periodos distintos (raro), se deja por línea.
         period_labels = {s._billing_period_label(n_ciclos) for s in subs_list}
@@ -976,7 +992,7 @@ class SentinelaSubscription(models.Model):
                 line_cmds.append((0, 0, {
                     'product_id': prod.id,
                     'name': desc,
-                    'quantity': sum(_line_qty(s) for s in gsubs),
+                    'quantity': sum(s._billing_line_qty(n_ciclos) for s in gsubs),
                     'price_unit': gsubs[0].price_unit,
                 }))
         else:
@@ -990,7 +1006,7 @@ class SentinelaSubscription(models.Model):
                 line_cmds.append((0, 0, {
                     'product_id': sub.product_id.id,
                     'name': desc,
-                    'quantity': _line_qty(sub),
+                    'quantity': sub._billing_line_qty(n_ciclos),
                     'price_unit': sub.price_unit,
                 }))
         # Renglón de NOTA con el periodo (una sola vez). Mantiene el periodo visible y permite que
@@ -2503,6 +2519,38 @@ class AccountMove(models.Model):
         mono-suscripción que calcula meses leyendo las líneas. """
         self.ensure_one()
         return bool(self.is_advance_payment and self.advance_periods > 0)
+
+    @api.model
+    def _check_no_concurrent_global_advance(self, partner, subs):
+        """ Bloqueo de negocio (decisión #5): impide cobros adelantados globales CONCURRENTES sobre
+        las mismas suscripciones de un cliente. Bloquea si ya existe un adelanto global que comparte
+        alguna sub y sigue EN CURSO, es decir:
+          - en borrador (draft, aún sin publicar), o
+          - publicado pero NO liquidado (payment_state ∉ paid/in_payment) → adeudo abierto, pendiente
+            de cobrar o de revertir.
+        Un adelanto ya pagado NO bloquea: el ciclo quedó en la nueva fecha y encadenar otro es válido.
+        Las canceladas se ignoran (state != 'cancel'). """
+        if not subs:
+            return
+        candidates = self.search([
+            ('is_advance_payment', '=', True),
+            ('advance_periods', '>', 0),
+            ('partner_id', '=', partner.id),
+            ('state', 'in', ('draft', 'posted')),
+            ('subscription_ids', 'in', subs.ids),
+        ])
+        blockers = candidates.filtered(
+            lambda m: m.state == 'draft' or m.payment_state not in ('paid', 'in_payment'))
+        if blockers:
+            overlap = (blockers.subscription_ids & subs).mapped('name')
+            raise UserError(_(
+                "Ya hay un cobro adelantado global EN CURSO para %s: %s.\n\n"
+                "Comparte suscripciones con esta operación (%s) y aún no está liquidado. "
+                "No se permiten dos adelantos concurrentes sobre las mismas suscripciones: "
+                "cobra, cancela o revierte el adelanto existente antes de crear otro."
+            ) % (partner.display_name,
+                 ", ".join(blockers.mapped(lambda m: m.name or 'BORRADOR')),
+                 ", ".join(overlap)))
 
     def _advance_subscription(self):
         """ Suscripción cuyo ciclo afecta este movimiento:

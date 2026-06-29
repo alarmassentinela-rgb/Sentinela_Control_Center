@@ -22,6 +22,8 @@
                         invisible="state != 'suspension'"/>
                     <button name="action_cobro_adelantado" string="Cobro Adelantado" type="object" class="btn-info" icon="fa-calendar-plus-o"
                         invisible="state not in ('active', 'suspension')"/>
+                    <button name="action_cobro_adelantado_global" string="Adelanto Global Cliente" type="object" class="btn-info" icon="fa-calendar-check-o"
+                        invisible="state not in ('active', 'suspension')"/>
                     <button name="action_open_extension_wizard" string="Otorgar Prórroga" type="object" class="btn-info"
                         invisible="state != 'suspension' or invoice_count == 0"/>
                     <button name="action_open_close_wizard" string="Baja Definitiva" type="object" class="btn-danger"
