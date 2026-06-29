@@ -163,6 +163,19 @@ class ResPartner(models.Model):
             'context': {'default_partner_id': self.id},
         }
 
+    def action_cobro_adelantado_global(self):
+        """ Abre el wizard de cobro adelantado GLOBAL para este cliente (todas sus suscripciones
+        activas), con preview por suscripción de la fecha de cobro antes/después. """
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Cobro Adelantado Global del Cliente'),
+            'res_model': 'sentinela.subscription.advance.global.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {'default_partner_id': self.id},
+        }
+
     @api.depends('name', 'parent_id.name')
     def _compute_display_name(self):
         if self._context.get('show_only_name'):

@@ -18,6 +18,9 @@
                         <field name="invoice_grouping_method"/>
                         <field name="invoice_show_branches" widget="boolean_toggle"
                                invisible="invoice_grouping_method != 'global'"/>
+                        <button name="action_cobro_adelantado_global" type="object"
+                                string="Cobro Adelantado Global" class="btn-link" icon="fa-calendar-check-o"
+                                help="Adelanta en una sola factura todas las suscripciones activas del cliente."/>
                         <label for="invoice_payment_condition"/>
                         <div class="o_row">
                             <field name="invoice_payment_condition"/>
