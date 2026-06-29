@@ -12,6 +12,9 @@ pyotp>=2.9
 psycopg[binary]>=3.2
 sqlalchemy>=2.0
 
+# Pagos (Sprint 2 / Cobranza) — adaptador Stripe (import perezoso en el adaptador)
+stripe>=9,<13
+
 # Pruebas (WS-7)
 pytest>=8.3
 pytest-asyncio>=0.24
