@@ -55,7 +55,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="app-shell justify-center px-6">
+    <main className="app-shell relative justify-center px-6">
       <div className="mx-auto w-full max-w-sm space-y-6 pb-16">
         {/* Identidad = BrandMark (única fuente: logo de Odoo + título). */}
         <BrandMark layout="login" />
@@ -111,6 +111,13 @@ export default function LoginPage() {
 
         {error && <p className="text-center text-aux text-danger">{error}</p>}
       </div>
+
+      {/* Pie institucional discreto (cosmético, no afecta el centrado ni el login). */}
+      <footer className="absolute inset-x-0 bottom-0 space-y-0.5 px-6 pb-5 text-center text-caption text-muted">
+        <p>Portal del Cliente v1.0</p>
+        <p>© 2026 Alarmas Sentinela</p>
+        <p>Powered by Alea Systems</p>
+      </footer>
     </main>
   );
 }
