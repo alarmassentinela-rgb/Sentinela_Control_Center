@@ -1,0 +1,230 @@
+[
+  {
+    "id": "UAT-01",
+    "title": "Login paso teléfono solicita OTP",
+    "status": "PASS",
+    "detail": "form avanzó a paso código + aviso WhatsApp",
+    "shots": [
+      "UAT-01_login_phone.png",
+      "UAT-01_login_code_step.png"
+    ]
+  },
+  {
+    "id": "UAT-04",
+    "title": "‘Usar otro número’ regresa a paso teléfono",
+    "status": "PASS",
+    "detail": "volvió al input de teléfono",
+    "shots": []
+  },
+  {
+    "id": "UAT-03",
+    "title": "Código incorrecto muestra error amigable",
+    "status": "PASS",
+    "detail": "mensaje de error visible, no avanza",
+    "shots": [
+      "UAT-03_login_wrong_code.png"
+    ]
+  },
+  {
+    "id": "UAT-02",
+    "title": "Código correcto verifica y entra a /dashboard",
+    "status": "PASS",
+    "detail": "OTP 803458 → redirigió a dashboard",
+    "shots": [
+      "UAT-02_login_success_dashboard.png"
+    ]
+  },
+  {
+    "id": "UAT-08",
+    "title": "Dashboard carga (skeleton→data)",
+    "status": "PASS",
+    "detail": "render OK partner 25763",
+    "shots": [
+      "dash_25763.png"
+    ]
+  },
+  {
+    "id": "UAT-27a",
+    "title": "Consola limpia en Dashboard",
+    "status": "PASS",
+    "detail": "sin errores de consola",
+    "shots": [
+      "dash_25763.png"
+    ]
+  },
+  {
+    "id": "UAT-09",
+    "title": "Estado de Tranquilidad coherente (atención)",
+    "status": "PASS",
+    "detail": "texto refleja atención/vencido: true",
+    "shots": []
+  },
+  {
+    "id": "UAT-11",
+    "title": "Saldo por pagar + badge Vencido",
+    "status": "PASS",
+    "detail": "25763 muestra saldo y vencido: true",
+    "shots": []
+  },
+  {
+    "id": "UAT-14",
+    "title": "AppHeader institucional (nombre/cliente/estado)",
+    "status": "PASS",
+    "detail": "header: Portal del Cliente  Hola, MARIO  Cliente #25763 · Actualizado 02:37 p.m.  Atenci",
+    "shots": [
+      "UAT-14_header.png"
+    ]
+  },
+  {
+    "id": "UAT-12",
+    "title": "Próximas acciones presentes/agrupadas",
+    "status": "PASS",
+    "detail": "acciones detectadas: true",
+    "shots": []
+  },
+  {
+    "id": "UAT-13",
+    "title": "Dashboard 3 servicios + ‘Ver todos (N)’",
+    "status": "PASS",
+    "detail": "multiservicio 25295; ver-todos=false",
+    "shots": [
+      "UAT-13_multiservicio.png"
+    ]
+  },
+  {
+    "id": "UAT-10",
+    "title": "Estado ‘tranquilo’ con cliente limpio",
+    "status": "N/A",
+    "detail": "STAGING: subs migradas en suspensión; rama ‘tranquilo’ cubierta por unit test gateway test_dashboard_peace_when_clean",
+    "shots": []
+  },
+  {
+    "id": "UAT-15",
+    "title": "Mis Servicios lista del cliente",
+    "status": "PASS",
+    "detail": "25216 servicios visibles=true",
+    "shots": [
+      "UAT-15_servicios_25216.png"
+    ]
+  },
+  {
+    "id": "UAT-16",
+    "title": "Detalle de un servicio",
+    "status": "PASS",
+    "detail": "servicio 965 muestra ficha: true",
+    "shots": [
+      "UAT-16_servicio_detalle.png"
+    ]
+  },
+  {
+    "id": "UAT-17",
+    "title": "Resumen ejecutivo de Facturación",
+    "status": "PASS",
+    "detail": "métricas visibles: true",
+    "shots": [
+      "UAT-17_facturacion.png"
+    ]
+  },
+  {
+    "id": "UAT-18",
+    "title": "Lista de facturas (+ paginación si aplica)",
+    "status": "PASS",
+    "detail": "facturas listadas=6",
+    "shots": [
+      "UAT-17_facturacion.png"
+    ]
+  },
+  {
+    "id": "UAT-23",
+    "title": "Selección facturas + modal Resumen + Pagar deshabilitado",
+    "status": "PASS",
+    "detail": "modal de pago: true",
+    "shots": [
+      "UAT-23_pago_modal.png"
+    ]
+  },
+  {
+    "id": "UAT-22",
+    "title": "Historial de pagos (tab Pagos)",
+    "status": "PASS",
+    "detail": "tab pagos renderiza",
+    "shots": [
+      "UAT-22_pagos.png"
+    ]
+  },
+  {
+    "id": "UAT-19",
+    "title": "Detalle de factura",
+    "status": "PASS",
+    "detail": "inv 144 ficha: true",
+    "shots": [
+      "UAT-19_factura_detalle.png"
+    ]
+  },
+  {
+    "id": "UAT-20",
+    "title": "Descarga PDF (CFDI) válida",
+    "status": "PASS",
+    "detail": "35613 bytes magic=%PDF",
+    "shots": [
+      "UAT-19_factura_detalle.png"
+    ]
+  },
+  {
+    "id": "UAT-21",
+    "title": "Descarga XML (CFDI) válida",
+    "status": "PASS",
+    "detail": "5520 chars head=<?xml version=\"1.0\" encoding=\"",
+    "shots": [
+      "UAT-21_factura48.png"
+    ]
+  },
+  {
+    "id": "UAT-24",
+    "title": "IDOR: A no ve factura de B (404→error)",
+    "status": "PASS",
+    "detail": "acceso a 143 bloqueado: true",
+    "shots": [
+      "UAT-24_idor.png"
+    ]
+  },
+  {
+    "id": "UAT-26",
+    "title": "Responsive móvil 390 (BottomNav)",
+    "status": "PASS",
+    "detail": "BottomNav presente=true",
+    "shots": [
+      "UAT-26_mobile_390.png"
+    ]
+  },
+  {
+    "id": "UAT-25",
+    "title": "BrandMark (logo Odoo) en login",
+    "status": "PASS",
+    "detail": "marca/logo presente=true",
+    "shots": [
+      "UAT-25_branding_login.png"
+    ]
+  },
+  {
+    "id": "UAT-06",
+    "title": "Logout por UI",
+    "status": "N/A",
+    "detail": "Sprint 1 no expone botón de logout (perfil ‘próximamente’); cierre por expiración/borrado de tokens",
+    "shots": []
+  },
+  {
+    "id": "UAT-05",
+    "title": "Sesión expirada → /login?expired=1",
+    "status": "PENDING",
+    "detail": "se valida aparte (token inválido)",
+    "shots": []
+  },
+  {
+    "id": "UAT-07",
+    "title": "Refresh token rotación",
+    "status": "PENDING",
+    "detail": "se valida aparte (API)",
+    "shots": []
+  }
+]
