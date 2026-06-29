@@ -19,6 +19,7 @@ from .routers import auth as auth_router
 from .routers import devices as devices_router
 from .routers import ledger as ledger_router
 from .routers import magic as magic_router
+from .routers import payments as payments_router
 from .routers import portal as portal_router
 from .routers import providers as providers_router
 from .routers import sessions as sessions_router
@@ -89,3 +90,4 @@ app.include_router(magic_router.internal)
 app.include_router(providers_router.router)
 app.include_router(portal_router.router)
 app.include_router(ledger_router.router)
+app.include_router(payments_router.router)
