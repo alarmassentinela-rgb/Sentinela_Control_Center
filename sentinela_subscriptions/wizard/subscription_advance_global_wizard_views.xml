@@ -22,19 +22,7 @@
                     Cada una avanza <strong>n_ciclos × su propio intervalo</strong>: revisa la columna
                     "Próx. cobro TRAS adelanto" por suscripción antes de confirmar.
                 </div>
-                <field name="line_ids">
-                    <list string="Preview por suscripción" create="false" delete="false">
-                        <field name="currency_id" column_invisible="1"/>
-                        <field name="subscription_id"/>
-                        <field name="plan_name"/>
-                        <field name="interval"/>
-                        <field name="ciclos"/>
-                        <field name="months"/>
-                        <field name="current_date"/>
-                        <field name="projected_date" decoration-bf="1"/>
-                        <field name="amount" widget="monetary" sum="Total"/>
-                    </list>
-                </field>
+                <field name="preview_html" nolabel="1" readonly="1"/>
                 <div class="alert alert-info" role="alert">
                     Se generará UNA <strong>factura BORRADOR consolidada</strong> con todas las
                     suscripciones del cliente. <strong>Al publicarla</strong>, la próxima fecha de cobro
