@@ -15,6 +15,7 @@ from .port import (
     PaymentIntent,
     PaymentResult,
 )
+from .webhook import IGNORED, InvalidWebhookSignature, WebhookEvent
 
 # Mapea el estado de un PaymentIntent de Stripe al vocabulario de negocio.
 _STATUS_MAP = {
@@ -33,7 +34,7 @@ def _map_status(stripe_status: str) -> str:
 
 
 class StripePaymentAdapter(PaymentAdapter):
-    def __init__(self, api_key: str, client=None):
+    def __init__(self, api_key: str, webhook_secret: str = "", client=None):
         if not api_key:
             raise ValueError("falta la clave de Stripe (config COC_STRIPE_SECRET_KEY)")
         if client is None:
@@ -41,6 +42,7 @@ class StripePaymentAdapter(PaymentAdapter):
             client = stripe
         self._client = client
         self._api_key = api_key
+        self._webhook_secret = webhook_secret
 
     def authorize(self, intent: PaymentIntent) -> PaymentResult:
         try:
@@ -66,6 +68,27 @@ class StripePaymentAdapter(PaymentAdapter):
     def refund(self, provider_ref: str, amount: float | None = None) -> PaymentResult:
         # Reembolso fuera de alcance del Sprint 2 (interfaz cumplida; sin implementación).
         raise NotImplementedError("refund fuera de alcance del Sprint 2")
+
+    def parse_webhook(self, payload: bytes, signature: str) -> WebhookEvent:
+        """Verifica la firma del webhook de Stripe y lo traduce a un WebhookEvent de
+        DOMINIO. Lanza InvalidWebhookSignature (dominio) si la firma no es válida — sin
+        filtrar tipos/excepciones del SDK."""
+        try:
+            event = self._client.Webhook.construct_event(payload, signature, self._webhook_secret)
+        except Exception as e:   # noqa: BLE001 — cualquier fallo de verificación → dominio
+            raise InvalidWebhookSignature(str(e) or "invalid_signature")
+        etype = event["type"]
+        obj = event["data"]["object"]
+        ev_id = event["id"]
+        pid = obj.get("id")
+        if etype == "payment_intent.succeeded":
+            return WebhookEvent(ev_id, CONFIRMED, pid)
+        if etype == "payment_intent.payment_failed":
+            err = obj.get("last_payment_error") or {}
+            return WebhookEvent(ev_id, REJECTED, pid, reason=err.get("message") or "payment_failed")
+        if etype == "payment_intent.processing":
+            return WebhookEvent(ev_id, PROCESSING, pid)
+        return WebhookEvent(ev_id, IGNORED, pid)
 
 
 def _reason(exc: Exception) -> str:

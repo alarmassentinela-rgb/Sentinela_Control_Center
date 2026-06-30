@@ -32,7 +32,7 @@ class StartPaymentIn(BaseModel):
 def get_payment_adapter():
     """Adaptador de pago activo (Stripe en prod). Inyectable/override en pruebas."""
     from ..capabilities.payments.stripe_adapter import StripePaymentAdapter
-    return StripePaymentAdapter(settings.stripe_secret_key)
+    return StripePaymentAdapter(settings.stripe_secret_key, webhook_secret=settings.stripe_webhook_secret)
 
 
 def _meta(request: Request) -> dict:
