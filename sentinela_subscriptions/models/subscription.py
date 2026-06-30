@@ -1897,9 +1897,14 @@ class SentinelaSubscription(models.Model):
 
                 existing = secrets.get(name=sub.pppoe_user)
                 if existing:
+                    # NO reescribir el password de un secret existente: es lo que
+                    # autentica el CPE en campo y puede no coincidir con el valor
+                    # guardado en Odoo (datos heredados de la migración Argus, p.ej.
+                    # cta0002 quedó '.cta0002' sin el punto final). Pisarlo aquí
+                    # tumbaba al cliente al reactivarse (la sesión se reinicia abajo).
+                    # La reactivación solo debe tocar perfil/estado.
                     secrets.set(
                         id=existing[0]['id'],
-                        password=sub.pppoe_password or '',
                         profile=profile_name,
                         disabled='false',
                         comment=f'Odoo SUB/{sub.name}'
