@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="COC Sentinela — Gateway API",
-    version="0.3.2",
+    version="0.4.0",
     description=(
         "Backend-for-Frontend del Centro de Operaciones del Cliente. Identidad "
         "(OTP + sesiones cortas) en el gateway; autorización en Odoo (record rules)."
