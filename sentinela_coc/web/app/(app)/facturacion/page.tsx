@@ -16,7 +16,7 @@ import { apiGet } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { formatDate, money } from "@/lib/format";
 import { paymentPreviewTotal } from "@/lib/payments";
-import type { BillingSummary, Invoice, Payment } from "@/lib/types";
+import type { AccountStatement, Invoice, Payment } from "@/lib/types";
 
 type Tab = "facturas" | "pagos";
 const TAB_KEY = "fact.tab";
@@ -32,7 +32,8 @@ function Metric({ label, value, sub, tone }: { label: string; value: string; sub
 }
 
 export default function FacturacionPage() {
-  const sum = useQuery(() => apiGet<BillingSummary>("/v1/billing/summary"), []);
+  // Estado de Cuenta desde el Ledger (única fuente del saldo/vencido/por vencer).
+  const sum = useQuery(() => apiGet<AccountStatement>("/v1/ledger/statement"), []);
   const inv = usePaged<Invoice>("/v1/billing/invoices", {}, 20);
   const pays = usePaged<Payment>("/v1/billing/payments", {}, 20);
 
@@ -63,7 +64,6 @@ export default function FacturacionPage() {
   const total = paymentPreviewTotal(selectedInvoices);
   const currency = sum.data?.currency || "MXN";
   const latestPayment = pays.items[0];
-  const nextDue = sum.data?.upcoming?.[0]?.due_date;
 
   return (
     <div className="space-y-3 px-4 pb-24">
@@ -78,13 +78,17 @@ export default function FacturacionPage() {
         sum.data && (
           <Card>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Metric label="Facturas por pagar" value={String(sum.data.open_count)} />
               <Metric
                 label="Saldo por pagar"
-                value={money(sum.data.total_due, currency)}
-                tone={sum.data.overdue_amount > 0 ? "danger" : undefined}
+                value={money(sum.data.balance, currency)}
+                tone={sum.data.overdue > 0 ? "danger" : undefined}
               />
-              <Metric label="Próximo vencimiento" value={nextDue ? formatDate(nextDue) : "—"} />
+              <Metric
+                label="Vencido"
+                value={money(sum.data.overdue, currency)}
+                tone={sum.data.overdue > 0 ? "danger" : undefined}
+              />
+              <Metric label="Por vencer" value={money(sum.data.upcoming, currency)} />
               <Metric
                 label="Último pago"
                 value={latestPayment ? money(latestPayment.amount, latestPayment.currency) : "—"}
@@ -162,6 +166,12 @@ export default function FacturacionPage() {
         total={total}
         currency={currency}
         onClose={() => setShowSummary(false)}
+        onPaid={() => {
+          setSelected(new Set());
+          sum.reload();
+          inv.reload();
+          pays.reload();
+        }}
       />
     </div>
   );
