@@ -3,10 +3,11 @@ name: deploy-modulo
 description: >-
   Despliega un módulo sentinela_* (o golfbookvip / aleasystem.io) al servidor
   de producción 192.168.3.2. Úsalo cuando se editó código de un addon y hay que
-  aplicarlo en el server. Encadena rsync (local→server) → docker -u en STAGING →
-  docker -u en V18 → verificación. El server NO es git working tree: sin rsync,
-  el `-u` corre código viejo. Para crear el commit/tag/push antes de desplegar,
-  usa primero la skill release-modulo.
+  aplicarlo en el server. Encadena rsync (local→server) → docker -u en STAGING
+  (`Sentinela_STAGING`) → docker -u en PROD (`Sentinela_V18`) → reinicio del
+  contenedor web → verificación. El server NO es git working tree: sin rsync,
+  el `-u` corre código viejo; sin reinicio, el worker vivo corre el Python viejo.
+  Para crear el commit/tag/push antes de desplegar, usa primero la skill release-modulo.
 ---
 
 # Deploy de un módulo a producción
@@ -21,10 +22,17 @@ filesystem ni git. El cambio NO existe en producción hasta que se hace `rsync`.
 | Local | `/mnt/c/Users/dell/DellCli/<modulo>/` |
 | Server addons | `egarza@192.168.3.2:/home/egarza/odoo18-migration/addons/<modulo>/` |
 | SSH | `ssh egarza@192.168.3.2` (puerto 2222 + llave ya en `~/.ssh/config`) |
-| Container web | `odoo18-migration-web-1` |
-| Container db | `odoo18-migration-db-1` |
+| Container web PROD | `odoo18-migration-web-1` (sirve `Sentinela_V18`, puerto host :8070) |
+| Container web LAB | `odoo-lab` (sirve `Sentinela_STAGING` por navegador `http://192.168.3.2:8075`) |
+| Container db | `odoo18-migration-db-1` (postgres; tiene AMBAS DBs: `Sentinela_V18` y `Sentinela_STAGING`) |
 | DB staging | `Sentinela_STAGING` (validar SIEMPRE primero) |
-| DB prod | `Sentinela_V18` (100+ clientes) |
+| DB prod | `Sentinela_V18` (100+ clientes) — el nombre real lleva el prefijo, NO es solo "V18" |
+
+> **Dos contenedores web, un postgres.** `odoo18-migration-web-1` es PROD; `odoo-lab`
+> es el lab que ves en el navegador `:8075`. El `-u` se corre con `docker exec
+> odoo18-migration-web-1 odoo -u ... -d <DB>` (ese binario alcanza ambas DBs). Pero el
+> worker que RENDERIZA el lab en el navegador es `odoo-lab`: si validas STAGING por GUI,
+> reinicia **`odoo-lab`** (no `odoo18-migration-web-1`) para que recargue el Python.
 
 > Si el módulo es `golfbookvip` (`/opt/golfbookvip/`) o `aleasystem.io`
 > (`/opt/aleasystem.io/`): NO es flujo Odoo. Tras rsync, el deploy es
@@ -35,9 +43,12 @@ filesystem ni git. El cambio NO existe en producción hasta que se hace `rsync`.
 
 ### 0. Saber qué se cambió
 - `git status` / `git diff --stat` para confirmar módulo y archivos.
-- ¿El cambio agrega/elimina **campos Python** (`fields.*`), modifica **controllers**
-  o cambia código importado al arranque? → marca que habrá que **reiniciar el container web**
-  (paso 4). Cambios solo de vistas/datos XML/CSV no lo requieren.
+- ¿El cambio toca **cualquier código Python** — campos (`fields.*`), **métodos nuevos**,
+  **modelos/wizards nuevos**, controllers, o cualquier `.py` importado al arranque? → habrá
+  que **reiniciar el contenedor web** (paso 4/5). El `-u` actualiza el esquema/registro en la
+  DB, pero el proceso Odoo VIVO conserva el Python que importó al arrancar: un método/modelo
+  nuevo da `AttributeError`/`OwlError` hasta el reinicio. Solo vistas/datos XML/CSV no lo
+  requieren (basta el `-u`). **En la duda, reinicia.**
 
 ### 1. ⚠️ Antes de sobreescribir: ¿el server tiene algo más nuevo?
 El flujo correcto es repo→server, pero **históricamente no siempre se respetó**
@@ -80,18 +91,44 @@ ssh egarza@192.168.3.2 "grep -c '<simbolo_nuevo>' /home/egarza/odoo18-migration/
 ssh egarza@192.168.3.2 "sudo docker exec odoo18-migration-web-1 \
   odoo -u <modulo> -d Sentinela_STAGING --stop-after-init"
 ```
-Revisar el output por tracebacks. Si agregaste/quitaste campos Python o tocaste
-controllers, además reiniciar el container (el `-u` actualiza la DB pero NO recarga
-el Python del proceso vivo → `OwlError: field is undefined`):
+Revisar el output por tracebacks. El `-u` se corre SIEMPRE con `odoo18-migration-web-1`
+(ese binario alcanza la DB de staging). Si tocaste Python (paso 0), reinicia el contenedor
+que vas a validar:
 ```bash
-ssh egarza@192.168.3.2 "sudo docker restart odoo18-migration-web-1"
+# Si validas STAGING por NAVEGADOR (http://192.168.3.2:8075) → reinicia el LAB:
+ssh egarza@192.168.3.2 "sudo docker restart odoo-lab"
+# (el -u actualiza la DB pero el worker del lab conserva el Python viejo →
+#  AttributeError 'método no existe' / OwlError hasta el reinicio)
 ```
+⚠️ Trampa real: el `-u` lo corres en `odoo18-migration-web-1`, pero quien renderiza el
+navegador del lab es `odoo-lab`. Reiniciar el contenedor equivocado = "sigue igual".
+Confirma que reinició de verdad: `docker ps --filter name=odoo-lab` debe decir "Up X seconds".
 
-### 5. Solo si STAGING quedó limpio: actualizar PROD (V18)
+### 5. Solo si STAGING quedó limpio: actualizar PROD (`Sentinela_V18`)
+**5a. Respaldo previo** (no negociable en prod):
+```bash
+ssh egarza@192.168.3.2 "sudo docker exec odoo18-migration-db-1 \
+  pg_dump -U odoo -Fc -d Sentinela_V18 -f /tmp/Sentinela_V18_pre_<feature>_<fecha>.dump && \
+  sudo docker cp odoo18-migration-db-1:/tmp/Sentinela_V18_pre_<feature>_<fecha>.dump /home/egarza/"
+```
+**5b. Pre-flight del lock conocido** (`product_template`): si `base_unit_count` quedó
+`NOT NULL` (drift de migración) o hay conexiones `idle in transaction` (zombie Syscom),
+el `-u` se cuelga/falla. Limpiar ANTES:
+```bash
+# base_unit_count debe ser nullable:
+ssh egarza@192.168.3.2 "sudo docker exec odoo18-migration-db-1 psql -U odoo -d Sentinela_V18 \
+  -c \"ALTER TABLE product_template ALTER COLUMN base_unit_count DROP NOT NULL;\""
+# matar idle-in-transaction si los hubiera (ver reference_deploy_lock_product_template)
+```
+**5c. `-u` en prod:**
 ```bash
 ssh egarza@192.168.3.2 "sudo docker exec odoo18-migration-web-1 \
   odoo -u <modulo> -d Sentinela_V18 --stop-after-init"
-# + restart si aplica (paso 4)
+```
+**5d. Reiniciar el web de PROD** si tocaste Python (paso 0). Aquí el contenedor es
+`odoo18-migration-web-1` (PROD lo sirve él, NO `odoo-lab`). Es un corte breve (~10-20s):
+```bash
+ssh egarza@192.168.3.2 "sudo docker restart odoo18-migration-web-1"
 ```
 
 ### 6. Verificar versión cargada y reportar
@@ -107,6 +144,11 @@ el rsync no llegó (server vio el manifest viejo).
 ## Salvaguardas (no negociables)
 - **Nunca** saltar el rsync. El `-u` sin rsync corre código viejo y la versión no avanza.
 - **Siempre** `-c` en rsync.
-- **Siempre** STAGING antes que V18.
-- **Reiniciar el container web** tras cambios de campos Python / controllers.
+- **Siempre** STAGING antes que `Sentinela_V18`.
+- **Respaldo previo** (`pg_dump`) antes de cualquier `-u` en `Sentinela_V18`.
+- **Reiniciar el contenedor web tras CUALQUIER cambio de Python** (campos, métodos, modelos/
+  wizards nuevos, controllers). El `-u` actualiza la DB; el worker vivo NO recarga el Python.
+  Contenedor correcto: `odoo-lab` para el lab por navegador (:8075), `odoo18-migration-web-1`
+  para prod. Verifica el reinicio real ("Up X seconds"). En la duda, reinicia.
+- El nombre de la DB de prod es **`Sentinela_V18`** (no "V18" a secas).
 - Antes de sobreescribir módulos sensibles, comparar contra el server (no vaya a estar más nuevo).
