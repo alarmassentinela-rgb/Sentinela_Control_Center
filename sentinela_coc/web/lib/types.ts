@@ -53,6 +53,14 @@ export interface BillingSummary {
   upcoming: Invoice[];
 }
 
+// Estado de Cuenta servido por el Ledger (GET /v1/ledger/statement).
+export interface AccountStatement {
+  currency: string;
+  balance: number;   // saldo por pagar
+  overdue: number;   // vencido
+  upcoming: number;  // por vencer
+}
+
 export type ActionType =
   | "payment_overdue"
   | "invoice_due"
