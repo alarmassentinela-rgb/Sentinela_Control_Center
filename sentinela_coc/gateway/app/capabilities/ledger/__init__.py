@@ -15,10 +15,12 @@ from .accounting_adapter import (
     PAYMENT,
     NOTE,
 )
+from .indicators import Indicators, LedgerIndicators
 from .service import AccountStatement, Ledger, PaymentReconciliation
 
 __all__ = [
     "AccountingAdapter", "OdooAccountingAdapter", "FakeAccountingAdapter",
     "Movement", "AccountingUnavailable", "CHARGE", "PAYMENT", "NOTE",
     "Ledger", "AccountStatement", "PaymentReconciliation",
+    "Indicators", "LedgerIndicators",
 ]

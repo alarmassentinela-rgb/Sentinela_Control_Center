@@ -7,7 +7,12 @@ en el Ledger (única fuente). Solo lectura. Envoltura {data, meta} como el resto
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from .. import deps
-from ..capabilities.ledger import AccountingUnavailable, Ledger, OdooAccountingAdapter
+from ..capabilities.ledger import (
+    AccountingUnavailable,
+    Ledger,
+    LedgerIndicators,
+    OdooAccountingAdapter,
+)
 from ..clock import utcnow
 
 router = APIRouter(prefix="/v1", tags=["ledger"])
@@ -25,6 +30,25 @@ def statement(request: Request, service_id: int | None = None,
         raise HTTPException(status_code=502, detail="accounting_unavailable")
     return {
         "data": st.as_dict(),
+        "meta": {
+            "server_time": utcnow().isoformat() + "Z",
+            "request_id": getattr(request.state, "request_id", None)
+            or request.headers.get("x-request-id") or "-",
+        },
+    }
+
+
+@router.get("/ledger/indicators", summary="Indicadores MVP (cobrado hoy/cartera/pendientes)")
+def indicators(request: Request, sess=Depends(deps.current_session), odoo=Depends(deps.get_odoo_client)):
+    adapter = OdooAccountingAdapter(odoo, sess.odoo_session_id)
+    try:
+        ind = LedgerIndicators(adapter).compute(today=utcnow().date())
+    except AccountingUnavailable as e:
+        if e.status in (301, 302, 303, 401):
+            raise HTTPException(status_code=401, detail="session_expired")
+        raise HTTPException(status_code=502, detail="accounting_unavailable")
+    return {
+        "data": ind.as_dict(),
         "meta": {
             "server_time": utcnow().isoformat() + "Z",
             "request_id": getattr(request.state, "request_id", None)
