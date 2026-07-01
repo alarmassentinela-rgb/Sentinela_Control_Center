@@ -37,3 +37,4 @@ access_patrol_unit_manager,patrol.unit.manager,model_sentinela_patrol_unit,group
 access_fsm_raffle_draw_wizard_mgr,fsm.raffle.draw.wizard.mgr,model_sentinela_fsm_raffle_draw_wizard,group_fsm_manager,1,1,1,1
 access_fsm_schedule_wizard_user,fsm.schedule.wizard.user,model_sentinela_fsm_schedule_wizard,group_fsm_user,1,1,1,1
 access_fsm_schedule_wizard_mgr,fsm.schedule.wizard.mgr,model_sentinela_fsm_schedule_wizard,group_fsm_manager,1,1,1,1
+access_subscription_fsm_user,subscription.fsm.user.read,sentinela_subscriptions.model_sentinela_subscription,group_fsm_user,1,0,0,0
