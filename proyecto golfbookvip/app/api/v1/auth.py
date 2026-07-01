@@ -1,7 +1,9 @@
-from fastapi import APIRouter, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Request, status, BackgroundTasks
 from sqlalchemy import select
 from jose import JWTError
 from datetime import datetime, timezone
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.core.deps import DB
 from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token, decode_token, create_reset_token, verify_reset_token
@@ -10,16 +12,20 @@ from app.models.handicap import PlayerStats
 from app.models.club import Club, ClubMember
 from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest, ForgotPasswordRequest, ResetPasswordRequest
 from app.services.notifications import notify_user
-from app.services.email_templates import tpl_welcome_to_club
+from app.services.email_templates import tpl_password_reset, tpl_welcome_to_club
+from app.services.mailer import send_email
 from app.services.telegram_templates import tg_welcome_to_club
 import base64
 from datetime import date
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address, storage_uri="memory://")
+RESET_MESSAGE = "Si el email está registrado, te enviamos un enlace de restablecimiento."
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-async def register(data: RegisterRequest, background_tasks: BackgroundTasks, db: DB):
+@limiter.limit("10/minute")
+async def register(request: Request, data: RegisterRequest, background_tasks: BackgroundTasks, db: DB):
     # Verificar duplicados
     existing = await db.execute(
         select(User).where((User.email == data.email) | (User.username == data.username))
@@ -91,7 +97,8 @@ async def register(data: RegisterRequest, background_tasks: BackgroundTasks, db:
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(data: LoginRequest, db: DB):
+@limiter.limit("5/minute")
+async def login(request: Request, data: LoginRequest, db: DB):
     result = await db.execute(select(User).where(User.email == data.email, User.is_active == True))
     user = result.scalar_one_or_none()
 
@@ -125,16 +132,18 @@ async def refresh_token(data: RefreshRequest, db: DB):
 
 
 @router.post("/forgot-password")
-async def forgot_password(data: ForgotPasswordRequest, db: DB):
-    """Generate a password reset token. Returns the token directly (email SMTP not configured yet)."""
+@limiter.limit("5/minute")
+async def forgot_password(request: Request, data: ForgotPasswordRequest, background_tasks: BackgroundTasks, db: DB):
+    """Send a password reset link without leaking account existence."""
     result = await db.execute(select(User).where(User.email == data.email, User.is_active == True))
     user = result.scalar_one_or_none()
-    if not user:
-        # Don't reveal whether email exists — but since no SMTP, show generic message
-        return {"token": None, "message": "Si el email está registrado, copia el enlace de restablecimiento."}
-    token = create_reset_token(str(user.id), user.password_hash)
-    # TODO: send via email when SMTP is configured. For now the frontend displays the link.
-    return {"token": token, "message": "Enlace generado correctamente"}
+    if user:
+        token = create_reset_token(str(user.id), user.password_hash)
+        reset_url = f"https://golfbookvip.com/es/auth/reset-password?token={token}"
+        user_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email
+        subject, html = tpl_password_reset(user_name, reset_url)
+        background_tasks.add_task(send_email, user.email, subject, html)
+    return {"message": RESET_MESSAGE}
 
 
 @router.post("/reset-password")

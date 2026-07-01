@@ -131,6 +131,20 @@ def tpl_welcome_to_club(user_name: str, club_name: str, panel_url: str,
     return subject, _shell(subject, body)
 
 
+def tpl_password_reset(user_name: str, reset_url: str) -> tuple[str, str]:
+    subject = "Restablece tu contraseña de GolfBookVIP"
+    body = f"""
+      <h2>Hola {user_name},</h2>
+      <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta.</p>
+      <div class="box">
+        <p style="margin:0">Usa el siguiente botón para crear una contraseña nueva:</p>
+      </div>
+      <p><a class="btn" href="{reset_url}">Restablecer contraseña</a></p>
+      <p class="muted">Si no solicitaste este cambio, puedes ignorar este correo.</p>
+    """
+    return subject, _shell(subject, body)
+
+
 def tpl_tee_time_reminder(user_name: str, club_name: str, slot_date: str,
                             slot_time: str, hours_until: int, panel_url: str) -> tuple[str, str]:
     when = "en 24 horas" if hours_until >= 12 else "en 1 hora"

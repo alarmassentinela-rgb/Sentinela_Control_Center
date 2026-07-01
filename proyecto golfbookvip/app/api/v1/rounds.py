@@ -22,6 +22,32 @@ from app.services.notifications import push as notify
 router = APIRouter()
 
 
+async def require_round_creator(db, round_id: uuid.UUID, user: User) -> Round:
+    round_ = await db.scalar(select(Round).where(Round.id == round_id))
+    if not round_:
+        raise HTTPException(status_code=404, detail="Jugada no encontrada")
+    if str(round_.created_by) != str(user.id) and not getattr(user, "is_superadmin", False):
+        raise HTTPException(status_code=403, detail="Solo el creador puede realizar esta acción")
+    return round_
+
+
+async def require_round_viewer(db, round_id: uuid.UUID, user: User) -> Round:
+    round_ = await db.scalar(select(Round).where(Round.id == round_id))
+    if not round_:
+        raise HTTPException(status_code=404, detail="Jugada no encontrada")
+    if str(round_.created_by) == str(user.id) or getattr(user, "is_superadmin", False):
+        return round_
+    player = await db.scalar(
+        select(RoundPlayer).where(
+            RoundPlayer.round_id == round_id,
+            RoundPlayer.user_id == user.id,
+        )
+    )
+    if not player:
+        raise HTTPException(status_code=403, detail="No tienes acceso a esta jugada")
+    return round_
+
+
 @router.get("")
 async def list_my_rounds(current_user: CurrentUser, db: DB):
     result = await db.execute(
@@ -60,6 +86,7 @@ async def list_my_rounds(current_user: CurrentUser, db: DB):
 
 @router.get("/{round_id}/players")
 async def get_round_players(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
+    await require_round_viewer(db, round_id, current_user)
     result = await db.execute(
         select(RoundPlayer, User)
         .join(User, User.id == RoundPlayer.user_id)
@@ -134,7 +161,8 @@ async def set_my_bet_opt(round_id: uuid.UUID, in_bet: bool, current_user: Curren
 
 
 @router.get("/{round_id}/bet-config")
-async def get_bet_config(round_id: uuid.UUID, db: DB):
+async def get_bet_config(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
+    await require_round_viewer(db, round_id, current_user)
     result = await db.execute(select(RoundBetConfig).where(RoundBetConfig.round_id == round_id))
     cfg = result.scalar_one_or_none()
     if not cfg:
@@ -161,9 +189,11 @@ async def get_bet_config(round_id: uuid.UUID, db: DB):
 
 
 @router.get("/{round_id}/skins")
-async def get_skins(round_id: uuid.UUID, db: DB):
+async def get_skins(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
     """Calcula el estado de skines hoyo por hoyo con carry-overs."""
     from app.models.score import Score
+
+    await require_round_viewer(db, round_id, current_user)
 
     # Obtener config de apuesta
     cfg_result = await db.execute(select(RoundBetConfig).where(RoundBetConfig.round_id == round_id))
@@ -303,11 +333,8 @@ async def create_round(data: RoundCreate, current_user: CurrentUser, db: DB):
 
 
 @router.get("/{round_id}", response_model=RoundOut)
-async def get_round(round_id: uuid.UUID, db: DB):
-    result = await db.execute(select(Round).where(Round.id == round_id))
-    round_ = result.scalar_one_or_none()
-    if not round_:
-        raise HTTPException(status_code=404, detail="Jugada no encontrada")
+async def get_round(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
+    round_ = await require_round_viewer(db, round_id, current_user)
     return round_
 
 
@@ -388,6 +415,7 @@ async def set_bet_config(round_id: uuid.UUID, data: BetConfigCreate, current_use
 
 @router.post("/{round_id}/invite/{user_id}")
 async def invite_player(round_id: uuid.UUID, user_id: uuid.UUID, current_user: CurrentUser, db: DB):
+    round_ = await require_round_creator(db, round_id, current_user)
     existing = await db.execute(
         select(RoundPlayer).where(RoundPlayer.round_id == round_id, RoundPlayer.user_id == user_id)
     )
@@ -397,8 +425,6 @@ async def invite_player(round_id: uuid.UUID, user_id: uuid.UUID, current_user: C
     # Fetch user handicap and course for CH calculation
     user_res = await db.execute(select(User).where(User.id == user_id))
     invited_user = user_res.scalar_one_or_none()
-    round_res = await db.execute(select(Round).where(Round.id == round_id))
-    round_ = round_res.scalar_one_or_none()
     course_ch = None
     if round_ and round_.course_id and invited_user:
         c_res = await db.execute(select(Course).where(Course.id == round_.course_id))
@@ -978,7 +1004,8 @@ async def reset_round(
 
 
 @router.get("/{round_id}/scoreboard")
-async def get_scoreboard(round_id: uuid.UUID, db: DB):
+async def get_scoreboard(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
+    await require_round_viewer(db, round_id, current_user)
     players_result = await db.execute(
         select(RoundPlayer, User)
         .join(User, User.id == RoundPlayer.user_id)
@@ -1045,14 +1072,14 @@ async def get_balances(round_id: uuid.UUID, current_user: CurrentUser, db: DB, l
     - 3-putt: el penalizado paga al resto
     - Skins con carry-over en empate (gross o net según config)
     """
+    round_ = await require_round_viewer(db, round_id, current_user)
+
     # Validar lang
     lang = "en" if lang == "en" else "es"
     result = await balances_svc.compute_balances(str(round_id), db, lang=lang)
 
     # Detectar rol del visualizador
-    round_res = await db.execute(select(Round).where(Round.id == round_id))
-    round_ = round_res.scalar_one_or_none()
-    is_creator = bool(round_ and str(round_.created_by) == str(current_user.id))
+    is_creator = str(round_.created_by) == str(current_user.id)
     is_superadmin = bool(getattr(current_user, "is_superadmin", False))
     can_see_all = is_creator or is_superadmin
 
@@ -1272,10 +1299,7 @@ def _balanced_assignment(rps: list, num_teams: int) -> tuple:
 @router.get("/{round_id}/teams")
 async def get_teams(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
     """Returns team assignments. Non-creators only see teams once published."""
-    round_result = await db.execute(select(Round).where(Round.id == round_id))
-    round_ = round_result.scalar_one_or_none()
-    if not round_:
-        raise HTTPException(status_code=404, detail="Jugada no encontrada")
+    round_ = await require_round_viewer(db, round_id, current_user)
 
     is_creator = str(round_.created_by) == str(current_user.id)
     published = round_.teams_published
@@ -1827,16 +1851,13 @@ def _compute_matchup_state(
 
 
 @router.get("/{round_id}/matchups")
-async def get_matchups(round_id: uuid.UUID, db: DB):
+async def get_matchups(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
     """
     Returns head-to-head matchups for Match Play format.
     Players are paired by match_order (same value across teams = matchup).
-    Public endpoint — no auth required.
+    Requires viewer access.
     """
-    round_result = await db.execute(select(Round).where(Round.id == round_id))
-    round_ = round_result.scalar_one_or_none()
-    if not round_:
-        raise HTTPException(status_code=404, detail="Jugada no encontrada")
+    round_ = await require_round_viewer(db, round_id, current_user)
 
     players_result = await db.execute(
         select(RoundPlayer, User)
@@ -1980,6 +2001,7 @@ async def get_matchups(round_id: uuid.UUID, db: DB):
 @router.get("/{round_id}/tee-groups")
 async def get_tee_groups(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
     """Returns tee group assignments for the round."""
+    await require_round_viewer(db, round_id, current_user)
     result = await db.execute(
         select(RoundPlayer, User)
         .join(User, User.id == RoundPlayer.user_id)
@@ -2204,6 +2226,7 @@ async def validate_scorecard(round_id: uuid.UUID, current_user: CurrentUser, db:
 async def get_conflicts(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
     """Returns all unresolved score conflicts for this round."""
     from app.models.score import Score as ScoreModel
+    await require_round_viewer(db, round_id, current_user)
     result = await db.execute(
         select(ScoreModel, User)
         .join(User, User.id == ScoreModel.user_id)
@@ -2451,10 +2474,7 @@ async def get_live_scoreboard(invite_code: str, db: DB):
 @router.get("/{round_id}/match-scores")
 async def get_match_scores(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
     """Hole-by-hole team match play results (requires published teams)."""
-    round_result = await db.execute(select(Round).where(Round.id == round_id))
-    round_ = round_result.scalar_one_or_none()
-    if not round_:
-        raise HTTPException(status_code=404, detail="Jugada no encontrada")
+    round_ = await require_round_viewer(db, round_id, current_user)
 
     if not round_.teams_published:
         return {"has_teams": False, "teams": [], "hole_results": []}
@@ -2533,10 +2553,7 @@ async def get_match_scores(round_id: uuid.UUID, current_user: CurrentUser, db: D
 @router.get("/{round_id}/florida-scores")
 async def get_florida_scores(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
     """Florida best-ball: team score = best net per hole. Lowest total net wins."""
-    round_result = await db.execute(select(Round).where(Round.id == round_id))
-    round_ = round_result.scalar_one_or_none()
-    if not round_:
-        raise HTTPException(status_code=404, detail="Jugada no encontrada")
+    round_ = await require_round_viewer(db, round_id, current_user)
 
     if not round_.teams_published:
         return {"has_teams": False, "teams": [], "hole_results": [], "holes_to_play": round_.holes_to_play}
@@ -2623,19 +2640,16 @@ async def get_florida_scores(round_id: uuid.UUID, current_user: CurrentUser, db:
 
 
 @router.get("/{round_id}/team-points")
-async def get_team_points(round_id: uuid.UUID, db: DB):
+async def get_team_points(round_id: uuid.UUID, current_user: CurrentUser, db: DB):
     """Medal Play por equipos: puntos por posición NET dentro de cada grupo de salida.
 
     1°=+2, 2°=+1, último=-1 (siempre), resto=0. Empates por tarjeta (countback) en net.
-    Suma por equipo → Campeón por Equipos. Público (sin auth), como el scoreboard en vivo.
+    Suma por equipo → Campeón por Equipos.
     Requiere equipos publicados (teams_published) y grupos de salida (tee_group) asignados.
     """
     from app.services import team_points as tp_svc
 
-    round_result = await db.execute(select(Round).where(Round.id == round_id))
-    round_ = round_result.scalar_one_or_none()
-    if not round_:
-        raise HTTPException(status_code=404, detail="Jugada no encontrada")
+    round_ = await require_round_viewer(db, round_id, current_user)
 
     if not round_.teams_published:
         return {"has_teams": False, "has_groups": False, "groups": [], "teams": [],

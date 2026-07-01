@@ -297,6 +297,7 @@ async def leave_club(club_id: uuid.UUID, current_user: CurrentUser, db: DB):
 
 @router.get("/{club_id}/members")
 async def get_club_members(club_id: uuid.UUID, current_user: CurrentUser, db: DB):
+    await _require_club_role(db, club_id, current_user, "staff")
     result = await db.execute(
         select(ClubMember, User)
         .join(User, User.id == ClubMember.user_id)
