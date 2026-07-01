@@ -65,7 +65,8 @@ def start_payment(body: StartPaymentIn, request: Request,
         amount=recon.amount, currency=recon.currency,
         reference=",".join(str(i) for i in body.invoice_ids),
         idempotency_key=idempotency_key,
-        metadata={"partner_id": sess.partner_id, "invoice_ids": body.invoice_ids},
+        metadata={"partner_id": sess.partner_id,
+                  "invoice_ids": ",".join(str(i) for i in body.invoice_ids)},
     )
     result = PaymentEngine(adapter).authorize(intent)
 
