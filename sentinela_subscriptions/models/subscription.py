@@ -2089,7 +2089,8 @@ class SentinelaSubscription(models.Model):
             'sentinela.senticar_reconcile_autoheal', 'True') not in ('False', '0', 'false')
         now = fields.Datetime.now()
         res = {'checked': 0, 'healed': 0, 'drift': 0, 'error': 0, 'grouped': 0, 'matched_ids': set()}
-        group_cache = {}  # partner_id -> group_id (evita recrear/leer por cada equipo)
+        group_cache = {}     # partner_id -> group_id (evita recrear/leer por cada equipo)
+        subtree_cache = {}   # group_id -> {grupo + sub-grupos} (para respetar la organización del cliente)
         for dev in devices:
             if dev.gps_platform != 'senticar':
                 continue
@@ -2134,11 +2135,18 @@ class SentinelaSubscription(models.Model):
                 if pid not in group_cache:
                     group_cache[pid] = svc.ensure_client_group(sub.partner_id) or 0
                 gid = group_cache[pid]
-                if gid and tdev.get('groupId') != gid:
-                    if svc.assign_device_to_group(tdev['id'], gid):
-                        if sub.partner_id.senticar_user_id:
-                            svc.share_group(sub.partner_id.senticar_user_id, gid)
-                        res['grouped'] += 1
+                if gid:
+                    # RESPETAR sub-grupos del cliente: solo re-agrupar si el equipo se salió del
+                    # ÁRBOL del cliente (su grupo o cualquier sub-grupo anidado). Así el cliente
+                    # puede organizar su flota en sub-grupos (Bombas, Trailers, Pipas…) y la
+                    # reconciliación NO los aplana; solo jala equipos que quedaron fuera del árbol.
+                    if gid not in subtree_cache:
+                        subtree_cache[gid] = svc.group_descendants(gid)
+                    if tdev.get('groupId') not in subtree_cache[gid]:
+                        if svc.assign_device_to_group(tdev['id'], gid):
+                            if sub.partner_id.senticar_user_id:
+                                svc.share_group(sub.partner_id.senticar_user_id, gid)
+                            res['grouped'] += 1
         return res
 
     def action_rotate_portal_link(self):

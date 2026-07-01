@@ -167,6 +167,25 @@ class SenticarService(models.AbstractModel):
         return r2 is not None and r2.status_code == 200
 
     @api.model
+    def group_descendants(self, root_id, groups=None):
+        """Devuelve {root_id} + TODOS los sub-grupos anidados bajo él (recursivo). Lo usa la
+        reconciliación para RESPETAR la organización interna del cliente: si el cliente sub-agrupa
+        su flota (Bombas, Trailers, Pipas…) bajo su grupo, el reconcile no debe aplanarla —solo
+        re-agrupar equipos que se salieron del árbol del cliente. `groups` opcional para no releer."""
+        if not root_id:
+            return set()
+        if groups is None:
+            r = self._req('GET', '/api/groups', params={'all': 'true'})
+            groups = r.json() if (r is not None and r.status_code == 200) else []
+        out, changed = {root_id}, True
+        while changed:
+            changed = False
+            for g in groups:
+                if g.get('groupId') in out and g['id'] not in out:
+                    out.add(g['id']); changed = True
+        return out
+
+    @api.model
     def _distributor_user_chain(self, partner):
         """IDs de usuario Traccar de los distribuidores ARRIBA de `partner` (cadena 'cuelga de').
         Crea el usuario del distribuidor si hace falta (para poder compartirle). En Traccar la
