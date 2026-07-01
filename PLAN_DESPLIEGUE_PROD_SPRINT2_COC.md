@@ -87,3 +87,8 @@ En STAGING se usó Stripe **test** + Stripe CLI (sin exponer el gateway). En Pro
 - Abrir backlog Sprint 3 (OBS-2 + usuario técnico que sustituya `SUPERUSER_ID` en `apply`).
 
 > **No se ejecuta ningún paso sin tu autorización + ventana. Este plan, el checklist, la estrategia de rollback y las release notes se entregan para tu revisión previa.**
+
+---
+
+## 8. Lecciones aprendidas (para futuras liberaciones)
+- **INC-V1-01 — reemplazo de un addon en PROD requiere `sudo` (o limpiar `__pycache__`):** al desplegar `sentinela_api`, Odoo (que corre como **root** dentro del contenedor) deja archivos `.pyc` en `__pycache__` propiedad de root. Un `rm -rf`/rsync del módulo ejecutado como el usuario `egarza` **falla con "Permission denied"** en esos `.pyc`; con `set -e` el script aborta dejando el directorio a medio reemplazar. **Regla para el Paso A:** hacer el reemplazo del árbol del addon con `sudo` (`sudo rm -rf <addon>` + `sudo tar/rsync` + `sudo chown -R egarza:egarza <addon>`), o limpiar primero `find <addon> -name __pycache__ -exec sudo rm -rf {} +`. **Mitigación de seguridad:** producción **no se reinicia** hasta después del reemplazo+`-u`, por lo que un fallo en este paso NO impacta a usuarios (el proceso vivo sigue con el código anterior en RAM); ante un directorio a medio reemplazar, **remediar el disco a un estado consistente antes de cualquier restart**.
