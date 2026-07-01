@@ -2,16 +2,20 @@
 import { useState } from "react";
 
 import { Button } from "./ui/Button";
+import { CardPaymentForm } from "./CardPaymentForm";
 import { Dialog } from "./ui/Dialog";
 import { formatDate, money } from "@/lib/format";
 import { startPayment, type PaymentStatus } from "@/lib/payments";
 import type { Invoice } from "@/lib/types";
 
-// Resumen + pago en línea (S2-014). Invoca startPayment() real y maneja los 3 estados
-// del negocio. La SPA no conoce el proveedor: solo muestra confirmado/en proceso/rechazado.
+// Resumen + pago en línea (S2-014). startPayment() crea el PaymentIntent (Gateway) y
+// devuelve el client_secret; el cliente confirma con tarjeta EN PÁGINA (Stripe Elements)
+// y la SPA muestra confirmado/en proceso/rechazado. La SPA no conoce el proveedor salvo
+// por Stripe.js para capturar la tarjeta.
 type View =
   | { kind: "summary" }
   | { kind: "loading" }
+  | { kind: "card"; clientSecret: string }
   | { kind: "result"; status: PaymentStatus }
   | { kind: "error"; message: string };
 
@@ -69,9 +73,24 @@ export function PaymentSummaryModal({
       setView({ kind: "error", message: res.error });
       return;
     }
-    setView({ kind: "result", status: res.status });
+    const clientSecret = res.client_action?.client_secret;
+    if (res.status === "rejected" || !clientSecret) {
+      // El Gateway no pudo iniciar el cobro (o no hay secreto de cliente para confirmar).
+      setView(
+        res.status === "rejected"
+          ? { kind: "result", status: "rejected" }
+          : { kind: "error", message: "No pudimos iniciar el pago. Intenta de nuevo." },
+      );
+      return;
+    }
+    // PaymentIntent creado: pedir la tarjeta y confirmar EN PÁGINA.
+    setView({ kind: "card", clientSecret });
+  }
+
+  function onConfirmResult(status: PaymentStatus) {
+    setView({ kind: "result", status });
     // Confirmado o en proceso: el Estado de Cuenta (Ledger) puede haber cambiado.
-    if (res.status !== "rejected") onPaid?.();
+    if (status !== "rejected") onPaid?.();
   }
 
   return (
@@ -93,6 +112,17 @@ export function PaymentSummaryModal({
         <span>{money(shownTotal, currency)}</span>
       </div>
 
+      {view.kind === "card" && (
+        <div className="pt-1">
+          <CardPaymentForm
+            clientSecret={view.clientSecret}
+            amount={shownTotal}
+            currency={currency}
+            onResult={onConfirmResult}
+          />
+        </div>
+      )}
+
       {view.kind === "result" && (
         <div className={`rounded-control border p-3 text-aux ${RESULT_UX[view.status].tone}`} role="status">
           <p className="font-semibold">{RESULT_UX[view.status].title}</p>
@@ -105,7 +135,7 @@ export function PaymentSummaryModal({
         </p>
       )}
 
-      {view.kind === "result" && view.status !== "rejected" ? (
+      {view.kind === "card" ? null : view.kind === "result" && view.status !== "rejected" ? (
         <Button className="mt-3 w-full" onClick={close}>
           Listo
         </Button>

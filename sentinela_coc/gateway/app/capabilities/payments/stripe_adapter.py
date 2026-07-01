@@ -49,6 +49,10 @@ class StripePaymentAdapter(PaymentAdapter):
             pi = self._client.PaymentIntent.create(
                 amount=int(round(intent.amount * 100)),     # Stripe usa la unidad mínima (centavos)
                 currency=intent.currency.lower(),
+                # Confirmación EN PÁGINA (tarjeta, sin redirect): el cliente confirma desde
+                # la SPA con Stripe.js usando client_secret; 3DS se resuelve in-page. Sin
+                # esto, confirmar exige return_url y habilita métodos con redirect.
+                automatic_payment_methods={"enabled": True, "allow_redirects": "never"},
                 metadata=dict(intent.metadata, reference=intent.reference),
                 idempotency_key=intent.idempotency_key,     # la provee el caso de uso; aquí solo se propaga
                 api_key=self._api_key,                      # clave por configuración
