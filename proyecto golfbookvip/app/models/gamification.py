@@ -19,7 +19,7 @@ class Badge(Base):
     icon_url: Mapped[Optional[str]] = mapped_column(String(500))
     category: Mapped[Optional[str]] = mapped_column(String(50))
     criteria: Mapped[Optional[dict]] = mapped_column(JSONB)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=True)
 
 
 class PlayerBadge(Base):
@@ -27,7 +27,7 @@ class PlayerBadge(Base):
     __table_args__ = (UniqueConstraint("user_id", "badge_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
-    badge_id: Mapped[int] = mapped_column(Integer, ForeignKey("badges.id"))
+    user_id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    badge_id: Mapped[int] = mapped_column(Integer, ForeignKey("badges.id"), nullable=True)
     round_id: Mapped[Optional[uuid.UUID]] = mapped_column(pgUUID(as_uuid=True), ForeignKey("rounds.id", ondelete="SET NULL"))
     earned_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now())

@@ -23,7 +23,7 @@ class SubscriptionPlan(Base):
     max_groups: Mapped[Optional[int]] = mapped_column(Integer)
     max_rounds_history: Mapped[Optional[int]] = mapped_column(Integer)
     features: Mapped[Optional[dict]] = mapped_column(JSONB)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now())
 
 
@@ -34,7 +34,7 @@ class PlanFeature(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     plan_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("subscription_plans.id"))
     feature_key: Mapped[str] = mapped_column(String(100), nullable=False)
-    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=True)
 
 
 class UserSubscription(Base):

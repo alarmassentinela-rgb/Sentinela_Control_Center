@@ -26,13 +26,13 @@ class Club(Base):
     website: Mapped[Optional[str]] = mapped_column(String(300))
     instagram: Mapped[Optional[str]] = mapped_column(String(200))
     facebook: Mapped[Optional[str]] = mapped_column(String(200))
-    currency: Mapped[str] = mapped_column(String(10), default="USD")
-    timezone: Mapped[str] = mapped_column(String(100), default="America/Mexico_City")
+    currency: Mapped[str] = mapped_column(String(10), default="USD", nullable=True)
+    timezone: Mapped[str] = mapped_column(String(100), default="America/Mexico_City", nullable=True)
     plan_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("subscription_plans.id"))
     plan_expires_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
     stripe_customer_id: Mapped[Optional[str]] = mapped_column(String(200))
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=True)
+    is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=True)
     # ─── Política de acceso (Clubs SaaS Fase 4 — Híbrido) ──────────────────
     access_type: Mapped[str] = mapped_column(String(20), default="private")  # private|semi_private|public
     allow_guests: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -53,10 +53,10 @@ class ClubStaff(Base):
     __table_args__ = (UniqueConstraint("club_id", "user_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    club_id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), ForeignKey("clubs.id", ondelete="CASCADE"))
-    user_id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
+    club_id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), ForeignKey("clubs.id", ondelete="CASCADE"), nullable=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     role: Mapped[Optional[str]] = mapped_column(String(30))
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=True)
     joined_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now())
 
 
@@ -64,13 +64,13 @@ class MembershipType(Base):
     __tablename__ = "membership_types"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    club_id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), ForeignKey("clubs.id", ondelete="CASCADE"))
+    club_id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), ForeignKey("clubs.id", ondelete="CASCADE"), nullable=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text)
-    monthly_fee: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
-    yearly_fee: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
+    monthly_fee: Mapped[float] = mapped_column(Numeric(10, 2), default=0, nullable=True)
+    yearly_fee: Mapped[float] = mapped_column(Numeric(10, 2), default=0, nullable=True)
     benefits: Mapped[Optional[dict]] = mapped_column(JSONB)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now())
 
 
@@ -79,11 +79,11 @@ class ClubMember(Base):
     __table_args__ = (UniqueConstraint("club_id", "user_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    club_id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), ForeignKey("clubs.id", ondelete="CASCADE"))
-    user_id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
+    club_id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), ForeignKey("clubs.id", ondelete="CASCADE"), nullable=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     membership_type_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("membership_types.id"))
     member_number: Mapped[Optional[str]] = mapped_column(String(50))
-    status: Mapped[str] = mapped_column(String(20), default="active")
+    status: Mapped[str] = mapped_column(String(20), default="active", nullable=True)
     joined_at: Mapped[date] = mapped_column(Date, nullable=False)
     expires_at: Mapped[Optional[date]] = mapped_column(Date)
     notes: Mapped[Optional[str]] = mapped_column(Text)
@@ -96,11 +96,11 @@ class MemberAccount(Base):
     __table_args__ = (UniqueConstraint("club_id", "user_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    club_id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), ForeignKey("clubs.id"))
-    user_id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), ForeignKey("users.id"))
-    balance: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
-    credit_limit: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    club_id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), ForeignKey("clubs.id"), nullable=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    balance: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=True)
+    credit_limit: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now())
 
 
@@ -108,7 +108,7 @@ class AccountTransaction(Base):
     __tablename__ = "account_transactions"
 
     id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    account_id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), ForeignKey("member_accounts.id"))
+    account_id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), ForeignKey("member_accounts.id"), nullable=True)
     type: Mapped[Optional[str]] = mapped_column(String(30))
     amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     balance_after: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)

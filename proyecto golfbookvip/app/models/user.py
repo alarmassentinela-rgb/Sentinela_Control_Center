@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, date
 from typing import Optional
-from sqlalchemy import String, Boolean, Integer, Date, Numeric, ForeignKey, UniqueConstraint
+from sqlalchemy import String, Boolean, Integer, Date, Numeric, ForeignKey, UniqueConstraint, Index, text
 from sqlalchemy.dialects.postgresql import UUID as pgUUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -11,6 +11,11 @@ from app.models.base import Base
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        Index("idx_users_email", "email"),
+        Index("idx_users_username", "username"),
+        Index("idx_users_telegram_chat", "telegram_chat_id", postgresql_where=text("telegram_chat_id IS NOT NULL")),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
@@ -28,15 +33,17 @@ class User(Base):
     initial_handicap: Mapped[Optional[float]] = mapped_column(Numeric(4, 1))
     handicap_index: Mapped[Optional[float]] = mapped_column(Numeric(4, 1))
     handicap_last_updated: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
-    handicap_rounds_count: Mapped[int] = mapped_column(Integer, default=0)
+    handicap_rounds_count: Mapped[int] = mapped_column(Integer, default=0, nullable=True)
     # Suscripción
     plan_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("subscription_plans.id"))
     plan_expires_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
     # Estado
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
-    email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
-    is_superadmin: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=True)
+    is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=True)
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=True)
+    is_superadmin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=True)
+    is_lifetime_member: Mapped[Optional[bool]] = mapped_column(Boolean, server_default=text("false"))
+    founder_member_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
     notify_email: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     notify_inapp: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     notify_telegram: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -52,8 +59,8 @@ class PushToken(Base):
     __table_args__ = (UniqueConstraint("user_id", "token"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
+    user_id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     token: Mapped[str] = mapped_column(String(500), nullable=False)
     platform: Mapped[Optional[str]] = mapped_column(String(20))
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now())

@@ -5,9 +5,5 @@
 
 -- Extensiones necesarias
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "postgis";   -- Coordenadas GPS
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";   -- Búsqueda de texto
 CREATE EXTENSION IF NOT EXISTS "unaccent";  -- Búsqueda sin acentos
-
--- Configuración de zona horaria
-SET timezone = 'UTC';

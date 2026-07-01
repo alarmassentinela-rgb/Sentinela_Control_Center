@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Boolean, Text, ForeignKey
+from sqlalchemy import String, Boolean, Text, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import JSONB, UUID as pgUUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -13,11 +13,14 @@ class Notification(Base):
     __tablename__ = "notifications"
 
     id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
+    user_id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     type: Mapped[Optional[str]] = mapped_column(String(50))
     title: Mapped[Optional[str]] = mapped_column(String(300))
     body: Mapped[Optional[str]] = mapped_column(Text)
     data: Mapped[Optional[dict]] = mapped_column(JSONB)
-    is_read: Mapped[bool] = mapped_column(Boolean, default=False)
-    is_sent_push: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=True)
+    is_sent_push: Mapped[bool] = mapped_column(Boolean, default=False, nullable=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now())
+
+
+Index("idx_notifications_user", Notification.user_id, Notification.is_read, Notification.created_at.desc())
