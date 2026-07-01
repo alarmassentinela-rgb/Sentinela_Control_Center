@@ -9,7 +9,7 @@ pagadas (conciliación anti doble-pago con depósito OXXO/banco).
 NO calcula reglas de negocio de Cobranza: solo ejecuta la escritura contable y
 reporta hechos. La verificación viva es S2-015 (STAGING Sprint 1 congelado).
 """
-from odoo import http
+from odoo import SUPERUSER_ID, http
 from odoo.http import request
 
 SECRET_HEADER = 'X-COC-Secret'
@@ -31,7 +31,12 @@ class CocInternalPayments(http.Controller):
         if not partner_id or not invoice_ids or not external_ref:
             return {'ok': False, 'error': 'bad_request'}
 
-        env = request.env
+        # UAT-002 (Sprint 2, decisión controlada): account.payment.register.
+        # action_create_payments() NO honra el flag su de .sudo() para la escritura de
+        # account.move, por lo que el usuario público (uid 4) provoca AccessError. Se
+        # ejecuta como SUPERUSER_ID por no existir un usuario técnico con permisos de
+        # contabilidad. Sprint 3 (backlog): sustituir por un usuario técnico dedicado.
+        env = request.env(user=SUPERUSER_ID)
         Move = env['account.move'].sudo()
         Payment = env['account.payment'].sudo()
 

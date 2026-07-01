@@ -31,3 +31,9 @@ Backlog de mejoras/refactors **diferidos** (no bloquean Go-Live). Se revisa al i
 - **Búsqueda/filtro de facturas** por mes/folio para clientes con cientos de documentos (complemento de la paginación "Cargar más").
 - Señal de entrega de OTP sin romper la neutralidad del mensaje.
 - Distinguir OTP expirado vs inválido (B2, diferido por decisión de producto).
+
+## [Sprint 3 · deuda técnica · UAT-002] Sustituir SUPERUSER_ID en /coc/internal/payments/apply
+- **Origen:** UAT-002 del Sprint 2 (aplicación de pago). El posteo contable via `account.payment.register.action_create_payments()` no honra el flag `su` de `.sudo()` → el usuario público (uid 4) provoca `AccessError` en `account.move`.
+- **Decisión controlada Sprint 2:** ejecutar el bloque con `SUPERUSER_ID` (no existía usuario técnico con permisos de contabilidad; no se autorizó crear usuarios en el release).
+- **Objetivo Sprint 3:** sustituir `SUPERUSER_ID` por un **usuario técnico dedicado** (interno, share=False, con solo los permisos de contabilidad necesarios) o mecanismo equivalente, para restaurar la evaluación de ACLs (su=False) en el endpoint interno.
+- **Archivo:** `sentinela_api/controllers/payments.py` (método `apply`).

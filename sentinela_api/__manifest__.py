@@ -1,6 +1,6 @@
 {
     'name': 'Sentinela API (Portal COC)',
-    'version': '18.0.0.3.0',
+    'version': '18.0.0.3.1',
     'category': 'Sentinela/Portal',
     'summary': 'Capa REST/JSON del Centro de Operaciones del Cliente (COC). '
                'Serializa y expone los modulos sentinela_* al portal web y a la app movil. '
