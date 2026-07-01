@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, ArrowRight, Loader2, Plus, X, Check, Building2, CreditCard, Users, FileCheck2, Flag } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 import CsvPadronImport, { ParsedRow } from '@/components/clubs/CsvPadronImport'
 
@@ -57,7 +57,7 @@ export default function NewClubWizardPage() {
   const [submitLog, setSubmitLog] = useState<string[]>([])
 
   useEffect(() => {
-    if (!localStorage.getItem('access_token')) { router.push(`/${locale}/auth/login`); return }
+    if (!isAuthed()) { router.push(`/${locale}/auth/login`); return }
     api.get('/admin/clubs/plans')
       .then(r => setPlans(r.data))
       .catch((e: unknown) => {

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Building2, Users, Shield, Crown, Mail, Phone, MapPin, Globe, Loader2, X, Calendar, AlertCircle, Clock, DollarSign, Settings, Lock } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 interface ClubDashboard {
@@ -52,7 +52,7 @@ export default function ClubPanelPage() {
   const [showStaff, setShowStaff] = useState(false)
 
   useEffect(() => {
-    if (!localStorage.getItem('access_token')) { router.push(`/${locale}/auth/login`); return }
+    if (!isAuthed()) { router.push(`/${locale}/auth/login`); return }
     const load = async () => {
       try {
         const [dashRes, staffRes] = await Promise.all([

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Flag, ArrowLeft, Users, MapPin, Phone, Mail, UserPlus, UserMinus, Loader2, TrendingUp, Crown } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 interface Club {
@@ -43,7 +43,7 @@ export default function ClubDetailPage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!localStorage.getItem('access_token')) { router.push(`/${locale}/auth/login`); return }
+    if (!isAuthed()) { router.push(`/${locale}/auth/login`); return }
     Promise.all([
       api.get(`/clubs/${id}`),
       api.get(`/clubs/${id}/members`),

@@ -1,7 +1,8 @@
 """
 WebSocket endpoint: scoring en tiempo real y modo espectador.
 
-Conectar:  ws://host/api/v1/ws/rounds/{round_id}?token=<access_token>
+Conectar:  ws://host/api/v1/ws/rounds/{round_id}
+Primer mensaje requerido: {"action":"auth","token":"<access_token>"}
 Mensajes entrantes (jugador):
   {"action": "ping"}
   {"action": "score", "hole": 5, "gross": 4, "putts": 2}
@@ -12,16 +13,15 @@ Mensajes salientes:
   {"event": "pong"}
   {"event": "error", "detail": "..."}
 """
+import asyncio
 import json
 import uuid
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 from jose import JWTError
 
-from app.core.config import settings
 from app.core.security import decode_token
 from app.core.database import AsyncSessionLocal
-from app.models.user import User
 from app.models.round import Round, RoundPlayer, RoundSpectator
 from app.services.ws_manager import manager
 
@@ -43,8 +43,24 @@ async def _authenticate(token: str) -> str | None:
 async def round_ws(
     ws: WebSocket,
     round_id: uuid.UUID,
-    token: str = Query(...),
 ):
+    await ws.accept()
+    try:
+        raw_auth = await asyncio.wait_for(ws.receive_text(), timeout=10)
+        auth_msg = json.loads(raw_auth)
+    except (asyncio.TimeoutError, json.JSONDecodeError):
+        await ws.close(code=4001, reason="Auth requerida")
+        return
+
+    if auth_msg.get("action") != "auth":
+        await ws.close(code=4001, reason="Auth requerida")
+        return
+
+    token = auth_msg.get("token")
+    if not token:
+        await ws.close(code=4001, reason="Token inválido")
+        return
+
     user_id = await _authenticate(token)
     if not user_id:
         await ws.close(code=4001, reason="Token inválido")
@@ -80,7 +96,7 @@ async def round_ws(
                 db.add(RoundSpectator(round_id=round_id, user_id=user_id))
                 await db.commit()
 
-    await manager.connect(str(round_id), ws)
+    await manager.connect(str(round_id), ws, accept=False)
     await manager.send_to(ws, {"event": "connected", "round_id": str(round_id), "role": role})
 
     try:

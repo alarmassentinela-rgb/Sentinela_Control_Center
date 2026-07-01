@@ -8,7 +8,7 @@ import {
   Crown, ChevronDown, ChevronUp, Crosshair, Circle,
   Bell, Mail, Send, Check, Copy, Info
 } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 import AleaCredit from '@/components/layout/AleaCredit'
 
@@ -206,7 +206,7 @@ export default function ProfilePage() {
   const [tgCopied, setTgCopied] = useState(false)
 
   useEffect(() => {
-    if (!localStorage.getItem('access_token')) { router.push(`/${locale}/auth/login`); return }
+    if (!isAuthed()) { router.push(`/${locale}/auth/login`); return }
     Promise.all([
       api.get('/users/me'),
       api.get('/users/me/handicap-history').catch(() => ({ data: [] })),

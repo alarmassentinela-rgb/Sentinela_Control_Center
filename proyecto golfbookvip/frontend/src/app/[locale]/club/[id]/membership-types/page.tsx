@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Plus, CreditCard, Loader2, X, Edit2, Trash2, AlertCircle, Power } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 interface MembershipType {
@@ -59,7 +59,7 @@ export default function MembershipTypesPage() {
   }
 
   useEffect(() => {
-    if (!localStorage.getItem('access_token')) { router.push(`/${locale}/auth/login`); return }
+    if (!isAuthed()) { router.push(`/${locale}/auth/login`); return }
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [includeInactive])

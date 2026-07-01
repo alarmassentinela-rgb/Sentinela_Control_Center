@@ -4,7 +4,7 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Plus, Users, Loader2, Search, X, Edit2, UserMinus, Mail, Hash, Calendar, CreditCard, AlertCircle, DollarSign, Link2, QrCode, Copy, Check, Upload } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
-import { api } from '@/lib/api'
+import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 import CsvPadronImport from '@/components/clubs/CsvPadronImport'
 
@@ -130,7 +130,7 @@ export default function ClubMembersPage() {
   }
 
   useEffect(() => {
-    if (!localStorage.getItem('access_token')) { router.push(`/${locale}/auth/login`); return }
+    if (!isAuthed()) { router.push(`/${locale}/auth/login`); return }
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter, typeFilter])

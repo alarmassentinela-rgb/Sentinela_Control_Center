@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Play, CheckCircle2, MapPin, UserPlus, Flag } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 interface FeedPlayer {
@@ -53,7 +53,7 @@ export default function FeedPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token')
+    const token = isAuthed()
     if (!token) { router.push(`/${locale}/auth/login`); return }
     api.get('/users/me/feed')
       .then(r => setFeed(r.data))

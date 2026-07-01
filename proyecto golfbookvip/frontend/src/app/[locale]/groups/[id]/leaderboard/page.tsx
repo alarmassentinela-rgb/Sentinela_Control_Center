@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Trophy, Medal, Flag } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 interface Row {
@@ -33,7 +33,7 @@ export default function GroupLeaderboardPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token')
+    const token = isAuthed()
     if (!token) { router.push(`/${locale}/auth/login`); return }
     Promise.all([
       api.get(`/groups/${groupId}`),

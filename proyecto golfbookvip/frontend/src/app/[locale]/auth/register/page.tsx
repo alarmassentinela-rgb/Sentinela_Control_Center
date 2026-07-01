@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Flag, Eye, EyeOff, Loader2, Info, Crown } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, setAuth } from '@/lib/api'
 import { useT, useLocale } from '@/components/DictionaryProvider'
 import AleaCredit from '@/components/layout/AleaCredit'
 
@@ -77,7 +77,7 @@ function RegisterForm() {
         email: form.email,
         password: form.password,
       })
-      localStorage.setItem('access_token', loginRes.data.access_token)
+      setAuth(loginRes.data.access_token)
 
       // Si el registro vinculó automáticamente a un club (vía club_code), priorizar esa redirección
       const joinedClubId = regRes.data?.joined_club_id as string | undefined

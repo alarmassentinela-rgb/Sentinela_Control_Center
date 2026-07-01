@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Printer, ArrowLeft, Flag, Loader2 } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -339,7 +339,7 @@ export default function TeeCardsPage() {
   const [view, setView] = useState<'cards' | 'master'>('cards')
 
   useEffect(() => {
-    if (!localStorage.getItem('access_token')) { router.push(`/${locale}/auth/login`); return }
+    if (!isAuthed()) { router.push(`/${locale}/auth/login`); return }
     const load = async () => {
       try {
         const rRes = await api.get(`/rounds/${id}`)

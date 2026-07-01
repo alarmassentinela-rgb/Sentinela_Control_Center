@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Flag, ArrowLeft, MapPin, Star, Loader2, Hash, Edit2 } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 interface Hole {
@@ -42,7 +42,7 @@ export default function CourseDetailPage() {
   const [canEdit, setCanEdit] = useState(false)
 
   useEffect(() => {
-    if (!localStorage.getItem('access_token')) { router.push(`/${locale}/auth/login`); return }
+    if (!isAuthed()) { router.push(`/${locale}/auth/login`); return }
     Promise.all([api.get(`/courses/${id}`), api.get('/users/me')])
       .then(([cRes, meRes]) => {
         setCourse(cRes.data)

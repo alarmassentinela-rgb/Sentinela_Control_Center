@@ -8,7 +8,7 @@ import {
   ToggleLeft, ToggleRight, Loader2, RefreshCw, ShieldCheck,
   Activity, Hash, Pencil, KeyRound, Copy, Check, X, Building2,
 } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -195,7 +195,7 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    if (!localStorage.getItem('access_token')) { router.push(`/${locale}/auth/login`); return }
+    if (!isAuthed()) { router.push(`/${locale}/auth/login`); return }
     const init = async () => {
       try {
         await loadOverview()

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Plus, Building2, Loader2, Search, Power, Edit2, Crown, MapPin, Mail, Phone, X, Users, UserPlus, UserMinus } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 interface Club {
@@ -68,7 +68,7 @@ export default function AdminClubsPage() {
   }
 
   useEffect(() => {
-    if (!localStorage.getItem('access_token')) { router.push(`/${locale}/auth/login`); return }
+    if (!isAuthed()) { router.push(`/${locale}/auth/login`); return }
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [includeInactive])

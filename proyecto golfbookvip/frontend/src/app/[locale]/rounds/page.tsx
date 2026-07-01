@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Flag, ArrowLeft, Plus, Loader2, MapPin, Calendar, CheckCircle2, Play, Clock } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 interface Round {
@@ -35,7 +35,7 @@ export default function RoundsPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!localStorage.getItem('access_token')) { router.push(`/${locale}/auth/login`); return }
+    if (!isAuthed()) { router.push(`/${locale}/auth/login`); return }
     api.get('/rounds').then(r => setRounds(r.data)).finally(() => setLoading(false))
   }, [])
 

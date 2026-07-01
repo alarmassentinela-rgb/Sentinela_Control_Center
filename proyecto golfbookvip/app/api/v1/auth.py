@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request, status, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Request, Response, status, BackgroundTasks
 from sqlalchemy import select
 from jose import JWTError
 from datetime import datetime, timezone
@@ -6,6 +6,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from app.core.deps import DB
+from app.core.config import settings
 from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token, decode_token, create_reset_token, verify_reset_token
 from app.models.user import User
 from app.models.handicap import PlayerStats
@@ -23,9 +24,30 @@ limiter = Limiter(key_func=get_remote_address, storage_uri="memory://")
 RESET_MESSAGE = "Si el email está registrado, te enviamos un enlace de restablecimiento."
 
 
+def _set_refresh_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key=settings.REFRESH_COOKIE_NAME,
+        value=token,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE,
+        domain=(settings.COOKIE_DOMAIN or None),
+        path="/api/v1/auth",
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+    )
+
+
+def _clear_refresh_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=settings.REFRESH_COOKIE_NAME,
+        domain=(settings.COOKIE_DOMAIN or None),
+        path="/api/v1/auth",
+    )
+
+
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("10/minute")
-async def register(request: Request, data: RegisterRequest, background_tasks: BackgroundTasks, db: DB):
+async def register(request: Request, response: Response, data: RegisterRequest, background_tasks: BackgroundTasks, db: DB):
     # Verificar duplicados
     existing = await db.execute(
         select(User).where((User.email == data.email) | (User.username == data.username))
@@ -90,6 +112,7 @@ async def register(request: Request, data: RegisterRequest, background_tasks: Ba
 
     access = create_access_token(str(user.id))
     refresh = create_refresh_token(str(user.id))
+    _set_refresh_cookie(response, refresh)
     return TokenResponse(
         access_token=access, refresh_token=refresh,
         joined_club_id=joined_club_id, joined_club_name=joined_club_name,
@@ -98,7 +121,7 @@ async def register(request: Request, data: RegisterRequest, background_tasks: Ba
 
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("5/minute")
-async def login(request: Request, data: LoginRequest, db: DB):
+async def login(request: Request, response: Response, data: LoginRequest, db: DB):
     result = await db.execute(select(User).where(User.email == data.email, User.is_active == True))
     user = result.scalar_one_or_none()
 
@@ -109,13 +132,17 @@ async def login(request: Request, data: LoginRequest, db: DB):
 
     access = create_access_token(str(user.id))
     refresh = create_refresh_token(str(user.id))
+    _set_refresh_cookie(response, refresh)
     return TokenResponse(access_token=access, refresh_token=refresh)
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh_token(data: RefreshRequest, db: DB):
+async def refresh_token(request: Request, response: Response, db: DB, data: RefreshRequest | None = None):
+    refresh = request.cookies.get(settings.REFRESH_COOKIE_NAME) or (data.refresh_token if data else None)
+    if not refresh:
+        raise HTTPException(status_code=401, detail="Token inválido")
     try:
-        payload = decode_token(data.refresh_token)
+        payload = decode_token(refresh)
         if payload.get("type") != "refresh":
             raise HTTPException(status_code=401, detail="Token inválido")
         user_id = payload.get("sub")
@@ -128,7 +155,14 @@ async def refresh_token(data: RefreshRequest, db: DB):
 
     access = create_access_token(user_id)
     new_refresh = create_refresh_token(user_id)
+    _set_refresh_cookie(response, new_refresh)
     return TokenResponse(access_token=access, refresh_token=new_refresh)
+
+
+@router.post("/logout")
+async def logout(response: Response):
+    _clear_refresh_cookie(response)
+    return {"message": "ok"}
 
 
 @router.post("/forgot-password")

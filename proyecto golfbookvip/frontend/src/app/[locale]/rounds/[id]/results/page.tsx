@@ -3,7 +3,7 @@ import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Printer, ArrowLeft, Loader2, Trophy } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -848,7 +848,7 @@ function ResultsContent() {
   const [view, setView] = useState<'master' | 'cards'>('master')
 
   useEffect(() => {
-    if (!localStorage.getItem('access_token')) { router.push(`/${locale}/auth/login`); return }
+    if (!isAuthed()) { router.push(`/${locale}/auth/login`); return }
     const load = async () => {
       try {
         const rRes = await api.get(`/rounds/${id}`)

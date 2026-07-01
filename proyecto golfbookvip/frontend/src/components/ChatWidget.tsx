@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { usePathname } from 'next/navigation'
 import { MessageCircle, X, Send, Loader2, Bot, User, Trash2 } from 'lucide-react'
+import { getAccessToken, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 interface Message {
@@ -68,7 +69,7 @@ export default function ChatWidget() {
     const text = input.trim()
     if (!text || loading) return
 
-    const token = localStorage.getItem('access_token')
+    const token = getAccessToken()
     if (!token) return
 
     setInput('')
@@ -172,7 +173,7 @@ export default function ChatWidget() {
     abortRef.current?.abort()
   }
 
-  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+  const token = typeof window !== 'undefined' ? isAuthed() : null
   if (!token) return null
 
   return (

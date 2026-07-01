@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Flag, Loader2, MapPin, Users, Radio, RefreshCw, Trophy, Minus, ChevronDown, ChevronUp, Wifi, WifiOff, ArrowLeft, LayoutDashboard, Swords, CheckCircle2 } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, getAccessToken, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -219,10 +219,11 @@ export default function LiveScoreboardPage() {
     if (wsRef.current) wsRef.current.close()
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.golfbookvip.com'
     const wsBase = apiUrl.replace(/^https/, 'wss').replace(/^http(?!s)/, 'ws')
-    const ws = new WebSocket(`${wsBase}/api/v1/ws/rounds/${roundId}?token=${token}`)
+    const ws = new WebSocket(`${wsBase}/api/v1/ws/rounds/${roundId}`)
     wsRef.current = ws
 
     ws.onopen = () => {
+      ws.send(JSON.stringify({ action: 'auth', token }))
       setWsStatus('connected')
       pingRef.current = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ action: 'ping' }))
@@ -243,10 +244,11 @@ export default function LiveScoreboardPage() {
 
   // Initial load + setup
   useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
-    setIsLoggedIn(!!token)
+    const authed = isAuthed()
+    setIsLoggedIn(authed)
     fetchData().then((d) => {
       if (!d) return
+      const token = getAccessToken()
       if (token && d.round.status === 'active') {
         connectWs(d.round.id, token)
       }

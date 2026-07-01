@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Flag, Loader2, MapPin, Calendar, Users, CheckCircle2, LogIn, UserPlus, Crown, Trophy } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 interface RoundInfo {
@@ -51,7 +51,7 @@ export default function JoinRoundPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token')
+    const token = isAuthed()
     setIsLoggedIn(!!token)
 
     api.get(`/rounds/join/${code}`)

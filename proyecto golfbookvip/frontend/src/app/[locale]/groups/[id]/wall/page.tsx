@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Heart, MessageCircle, Trash2, Send, Loader2, MessagesSquare, ImagePlus, X } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 interface Author { user_id: string; username: string; first_name: string; last_name: string }
@@ -73,7 +73,7 @@ export default function GroupWallPage() {
   }, [groupId])
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token')
+    const token = isAuthed()
     if (!token) { router.push(`/${locale}/auth/login`); return }
     load().catch(() => router.push(`/${locale}/groups/${groupId}`)).finally(() => setLoading(false))
   }, [groupId, locale, router, load])

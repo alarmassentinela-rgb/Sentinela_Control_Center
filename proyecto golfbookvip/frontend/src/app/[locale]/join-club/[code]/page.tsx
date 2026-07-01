@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Flag, Loader2, MapPin, Users, CheckCircle2, LogIn, UserPlus, Building2 } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 interface ClubJoinInfo {
@@ -30,7 +30,7 @@ export default function JoinClubPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token')
+    const token = isAuthed()
     setIsLoggedIn(!!token)
 
     api.get(`/clubs/by-code/${code}`)

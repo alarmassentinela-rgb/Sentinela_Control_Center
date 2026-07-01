@@ -3,7 +3,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Eye, Wifi, WifiOff, RefreshCw } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, getAccessToken, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 interface HoleInfo {
@@ -107,8 +107,7 @@ export default function SpectatePage() {
   }, [])
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token')
-    if (!token) {
+    if (!isAuthed()) {
       router.push(`/${locale}/auth/login?redirect=${encodeURIComponent(window.location.pathname)}`)
       return
     }
@@ -136,12 +135,17 @@ export default function SpectatePage() {
         }
 
         // Connect WS
+        const token = getAccessToken()
+        if (!token) return
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.golfbookvip.com'
         const wsBase = apiUrl.replace(/^https/, 'wss').replace(/^http(?!s)/, 'ws')
-        const ws = new WebSocket(`${wsBase}/api/v1/ws/rounds/${roundId}?token=${token}`)
+        const ws = new WebSocket(`${wsBase}/api/v1/ws/rounds/${roundId}`)
         wsRef.current = ws
 
-        ws.onopen = () => setWsStatus('connected')
+        ws.onopen = () => {
+          ws.send(JSON.stringify({ action: 'auth', token }))
+          setWsStatus('connected')
+        }
         ws.onclose = () => setWsStatus('disconnected')
         ws.onerror = () => setWsStatus('disconnected')
 
@@ -182,13 +186,16 @@ export default function SpectatePage() {
   const reconnect = () => {
     wsRef.current?.close()
     setWsStatus('connecting')
-    const token = localStorage.getItem('access_token')
+    const token = getAccessToken()
     if (!token || !round) return
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.golfbookvip.com'
     const wsBase = apiUrl.replace(/^https/, 'wss').replace(/^http(?!s)/, 'ws')
-    const ws = new WebSocket(`${wsBase}/api/v1/ws/rounds/${roundId}?token=${token}`)
+    const ws = new WebSocket(`${wsBase}/api/v1/ws/rounds/${roundId}`)
     wsRef.current = ws
-    ws.onopen = () => setWsStatus('connected')
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ action: 'auth', token }))
+      setWsStatus('connected')
+    }
     ws.onclose = () => setWsStatus('disconnected')
     ws.onerror = () => setWsStatus('disconnected')
     ws.onmessage = (e) => {

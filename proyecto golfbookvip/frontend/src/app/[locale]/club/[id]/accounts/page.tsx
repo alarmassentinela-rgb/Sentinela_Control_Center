@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, DollarSign, Loader2, Search, TrendingDown, TrendingUp, AlertCircle, ChevronRight } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 interface AccountSummary {
@@ -49,7 +49,7 @@ export default function AccountsListPage() {
   }
 
   useEffect(() => {
-    if (!localStorage.getItem('access_token')) { router.push(`/${locale}/auth/login`); return }
+    if (!isAuthed()) { router.push(`/${locale}/auth/login`); return }
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onlyDebtors])

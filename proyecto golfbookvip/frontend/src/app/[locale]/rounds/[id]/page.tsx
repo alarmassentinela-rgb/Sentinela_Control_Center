@@ -4,7 +4,7 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Flag, ArrowLeft, Play, MapPin, Calendar, Loader2, CheckCircle2, Copy, Check, QrCode, DollarSign, ChevronDown, ChevronUp, Save, Edit2, X, Info, Trash2, Users, Shuffle, Radio, Eye, EyeOff, Send, Swords, ArrowUp, ArrowDown, Layers, AlertTriangle, RotateCcw, Plus, Minus, UserPlus } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
-import { api } from '@/lib/api'
+import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 interface Round {
@@ -2061,7 +2061,7 @@ export default function RoundDetailPage() {
   }
 
   useEffect(() => {
-    if (!localStorage.getItem('access_token')) { router.push(`/${locale}/auth/login`); return }
+    if (!isAuthed()) { router.push(`/${locale}/auth/login`); return }
     load().finally(() => setLoading(false))
   }, [id])
 

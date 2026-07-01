@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Flag, ArrowLeft, Plus, Search, MapPin, Star, Loader2 } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 interface Course {
@@ -26,7 +26,7 @@ export default function CoursesPage() {
   const lbl = (es: string, en: string) => locale === 'es' ? es : en
 
   useEffect(() => {
-    if (!localStorage.getItem('access_token')) { router.push(`/${locale}/auth/login`); return }
+    if (!isAuthed()) { router.push(`/${locale}/auth/login`); return }
     fetchCourses()
   }, [])
 

@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Minus, Plus, RotateCcw, Table2, Pencil, Trophy, AlertTriangle, Users, X, Crosshair } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, getAccessToken, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 interface Hole {
@@ -627,7 +627,7 @@ export default function PlayRoundPage() {
   const pingRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
-    if (!localStorage.getItem('access_token')) { router.push(`/${locale}/auth/login`); return }
+    if (!isAuthed()) { router.push(`/${locale}/auth/login`); return }
     Promise.all([api.get(`/rounds/${id}`), api.get(`/rounds/${id}/players`), api.get('/users/me')]).then(async ([rRes, playersRes, meRes]) => {
       const round = rRes.data
       setHolesTotal(round.holes_to_play)
@@ -726,12 +726,15 @@ export default function PlayRoundPage() {
       }
 
       // WebSocket — eventos de conflicto y resolución
-      const token = localStorage.getItem('access_token')
+      const token = getAccessToken()
       if (token) {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.golfbookvip.com'
         const wsBase = apiUrl.replace(/^https/, 'wss').replace(/^http(?!s)/, 'ws')
-        const ws = new WebSocket(`${wsBase}/api/v1/ws/rounds/${id}?token=${token}`)
+        const ws = new WebSocket(`${wsBase}/api/v1/ws/rounds/${id}`)
         wsRef.current = ws
+        ws.onopen = () => {
+          ws.send(JSON.stringify({ action: 'auth', token }))
+        }
         ws.onmessage = async (e) => {
           try {
             const msg = JSON.parse(e.data)

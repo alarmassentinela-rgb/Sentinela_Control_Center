@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { CheckCircle2, AlertTriangle, Loader2, Flag, ArrowLeft, Trophy } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 interface Score {
@@ -44,7 +44,7 @@ export default function ValidatePage() {
   const [allPlayers, setAllPlayers] = useState<PlayerInfo[]>([])
 
   useEffect(() => {
-    if (!localStorage.getItem('access_token')) { router.push(`/${locale}/auth/login`); return }
+    if (!isAuthed()) { router.push(`/${locale}/auth/login`); return }
     const load = async () => {
       try {
         const [rRes, meRes] = await Promise.all([api.get(`/rounds/${id}`), api.get('/users/me')])

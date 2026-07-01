@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Search, UserPlus, UserMinus, Loader2, Users } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 interface UserResult {
@@ -28,7 +28,7 @@ export default function SocialPage() {
   const [searchDone, setSearchDone] = useState(false)
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token')
+    const token = isAuthed()
     if (!token) { router.push(`/${locale}/auth/login`); return }
     api.get('/users/me/following')
       .then(r => {

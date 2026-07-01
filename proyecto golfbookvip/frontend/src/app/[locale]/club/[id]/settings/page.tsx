@@ -4,7 +4,7 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Settings, Loader2, AlertCircle, Lock, Unlock, Globe, Users, Calendar, CreditCard, CheckCircle2, Info, Link2, QrCode, Copy, Check, RotateCw, Mail } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
-import { api } from '@/lib/api'
+import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 interface ClubSettings {
@@ -138,7 +138,7 @@ export default function ClubSettingsPage() {
   }
 
   useEffect(() => {
-    if (!localStorage.getItem('access_token')) { router.push(`/${locale}/auth/login`); return }
+    if (!isAuthed()) { router.push(`/${locale}/auth/login`); return }
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

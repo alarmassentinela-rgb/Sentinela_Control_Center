@@ -1,7 +1,6 @@
 'use client'
 import Link from 'next/link'
 import { useState, Suspense } from 'react'
-import { useRouter } from 'next/navigation'
 import { Flag, Loader2, ArrowLeft, Mail } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
@@ -9,28 +8,24 @@ import AleaCredit from '@/components/layout/AleaCredit'
 
 function ForgotPasswordForm() {
   const locale = useLocale()
-  const router = useRouter()
   const lbl = (es: string, en: string) => locale === 'es' ? es : en
 
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
+    setMessage('')
     try {
       const res = await api.post('/auth/forgot-password', { email })
-      if (res.data.token) {
-        // Redirect directly to reset page with the token (no SMTP configured yet)
-        router.push(`/${locale}/auth/reset-password?token=${encodeURIComponent(res.data.token)}`)
-      } else {
-        setError(lbl(
-          'No encontramos una cuenta con ese email.',
-          'No account found with that email.'
-        ))
-      }
+      setMessage(res.data?.message ?? lbl(
+        'Si el email está registrado, te enviamos un enlace de restablecimiento.',
+        'If the email is registered, we sent you a reset link.'
+      ))
     } catch {
       setError(lbl('Error al procesar la solicitud', 'Error processing request'))
     } finally {
@@ -78,6 +73,11 @@ function ForgotPasswordForm() {
             {error && (
               <p className="text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
                 {error}
+              </p>
+            )}
+            {message && (
+              <p className="text-sm text-emerald-300 bg-emerald-400/10 border border-emerald-400/20 rounded-lg px-3 py-2">
+                {message}
               </p>
             )}
 

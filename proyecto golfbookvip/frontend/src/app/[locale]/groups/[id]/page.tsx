@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Copy, Check, Users, Lock, Globe, Crown, Shield, UserMinus, Trash2, LogOut, Loader2, Flag, Plus, ChevronRight, Trophy, MessagesSquare } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 interface Member {
@@ -68,7 +68,7 @@ export default function GroupDetailPage() {
   const [actionLoading, setActionLoading] = useState(false)
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token')
+    const token = isAuthed()
     if (!token) { router.push(`/${locale}/auth/login`); return }
     Promise.all([
       api.get(`/groups/${groupId}`),

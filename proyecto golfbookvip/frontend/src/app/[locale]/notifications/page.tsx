@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Bell, UserPlus, Play, CheckCircle2, TrendingDown, TrendingUp, CheckCheck, Calendar, CalendarX, Building2 } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 interface Notif {
@@ -65,7 +65,7 @@ export default function NotificationsPage() {
   const [markingAll, setMarkingAll] = useState(false)
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token')
+    const token = isAuthed()
     if (!token) { router.push(`/${locale}/auth/login`); return }
     api.get('/notifications')
       .then(r => setNotifs(r.data))

@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation'
 import { locales, type Locale, getDictionary } from '@/lib/i18n'
 import { DictionaryProvider } from '@/components/DictionaryProvider'
 import BackgroundProvider from '@/components/BackgroundProvider'
+import AuthBootstrap from '@/components/AuthBootstrap'
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration'
 import ChatWidget from '@/components/ChatWidget'
 import SunModeToggle from '@/components/SunModeToggle'
@@ -66,6 +67,7 @@ export default async function LocaleLayout({
           {`try{if(localStorage.getItem('gbv-sun-mode')==='1'){document.documentElement.setAttribute('data-theme','sun')}}catch(e){}`}
         </Script>
         <DictionaryProvider dict={dict} locale={locale as Locale}>
+          <AuthBootstrap />
           <BackgroundProvider>
             {children}
           </BackgroundProvider>

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Plus, Users, Lock, Globe, ChevronRight, Loader2, X } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 
 interface GroupItem {
@@ -34,7 +34,7 @@ export default function GroupsPage() {
   const [createError, setCreateError] = useState('')
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token')
+    const token = isAuthed()
     if (!token) { router.push(`/${locale}/auth/login`); return }
     api.get('/groups')
       .then(r => setGroups(r.data))

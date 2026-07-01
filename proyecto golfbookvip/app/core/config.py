@@ -22,8 +22,12 @@ class Settings(BaseSettings):
     # JWT
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+    REFRESH_COOKIE_NAME: str = "gbv_refresh"
+    COOKIE_SECURE: bool = True
+    COOKIE_DOMAIN: str = ""
+    COOKIE_SAMESITE: str = "lax"
 
     # Stripe
     STRIPE_SECRET_KEY: str = ""

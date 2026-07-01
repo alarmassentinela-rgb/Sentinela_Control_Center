@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Flag, LogOut, User, TrendingUp, Calendar, BarChart2, Settings, MapPin, Users, ChevronRight, Play, Clock, CheckCircle2, UserPlus, Rss, Bell, ShieldCheck, Building2, HelpCircle } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, isAuthed, clearAuth } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 import AleaCredit from '@/components/layout/AleaCredit'
 
@@ -48,7 +48,7 @@ export default function DashboardPage() {
   const [staffClubs, setStaffClubs] = useState<{ club_id: string; club_name: string; club_slug: string; role: string }[]>([])
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token')
+    const token = isAuthed()
     if (!token) { router.push(`/${locale}/auth/login`); return }
     Promise.all([
       api.get('/users/me'),
@@ -66,12 +66,13 @@ export default function DashboardPage() {
         setUnreadNotifs(notifRes.data.count ?? 0)
         setStaffClubs(staffRes.data || [])
       })
-      .catch(() => { localStorage.removeItem('access_token'); router.push(`/${locale}/auth/login`) })
+      .catch(() => { clearAuth(); router.push(`/${locale}/auth/login`) })
       .finally(() => setLoading(false))
   }, [locale, router])
 
-  const logout = () => {
-    localStorage.removeItem('access_token')
+  const logout = async () => {
+    await api.post('/auth/logout').catch(() => {})
+    clearAuth()
     router.push(`/${locale}/auth/login`)
   }
 

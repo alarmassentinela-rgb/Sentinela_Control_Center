@@ -17,8 +17,9 @@ class RoundConnectionManager:
             self._rooms[round_id] = set()
         return self._rooms[round_id]
 
-    async def connect(self, round_id: str, ws: WebSocket) -> None:
-        await ws.accept()
+    async def connect(self, round_id: str, ws: WebSocket, accept: bool = True) -> None:
+        if accept:
+            await ws.accept()
         self._get_room(round_id).add(ws)
 
     def disconnect(self, round_id: str, ws: WebSocket) -> None:
