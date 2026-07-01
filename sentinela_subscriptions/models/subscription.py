@@ -937,15 +937,17 @@ class SentinelaSubscription(models.Model):
     def _billing_line_qty(self, n_ciclos=1):
         """ Cantidad a facturar de UNA suscripción para n_ciclos ciclos. Fuente ÚNICA usada por
         el cron, el cobro adelantado global y el preview del wizard (decisión #7, sin duplicar).
-        Alarmas/dominios: price_unit YA es el precio del periodo completo (productos MBASICO-3/-6/
-        -12, DOMINIO anual) → qty=1 por ciclo. Internet/GPS/Mantenimiento guardan TARIFA MENSUAL →
-        qty = nº de meses del intervalo. GPS: × nº de equipos activos. Todo × n_ciclos. """
+        CONVENCIÓN (Opción B, 1-jul-2026): `price_unit` SIEMPRE es el precio del PERIODO COMPLETO
+        del ciclo (no mensual), para TODOS los tipos (alarma/dominio/internet/GPS/mantenimiento).
+        Por eso la cantidad NO se multiplica por los meses del intervalo: qty = 1 por ciclo — el
+        único multiplicador legítimo es el nº de equipos (GPS), que sí son unidades contables.
+        El periodo queda reflejado en la etiqueta y el avance de next_billing, NO en la cantidad.
+        Todo × n_ciclos (cobro adelantado global). """
         self.ensure_one()
-        months = int(self.recurring_interval or 1)
-        q = 1 if self.service_type in ('alarm', 'domain') else months
+        q = 1
         if self.service_type == 'gps':
             n_dev = max(1, len(self.gps_device_ids.filtered(lambda d: d.device_state != 'suspended')))
-            q = months * n_dev
+            q = n_dev
         return q * n_ciclos
 
     def _build_group_lines(self, subs_list, n_ciclos=1):
@@ -990,7 +992,11 @@ class SentinelaSubscription(models.Model):
                 per_txt = "" if single_period else (" - %s" % gsubs[0]._billing_period_label(n_ciclos))
                 desc = "Servicio: %s%s%s" % (prod.name, per_txt, suc_txt)
                 line_cmds.append((0, 0, {
-                    'product_id': prod.id,
+                    # `product_id` de la sub es product.template → la línea de factura exige la
+                    # VARIANTE (product.product). Usar .id de la plantilla solo "funciona" cuando
+                    # coinciden los ids (migración legacy); con productos nuevos falla → factura en
+                    # ceros. Resolver siempre a la variante principal.
+                    'product_id': prod.product_variant_id.id,
                     'name': desc,
                     'quantity': sum(s._billing_line_qty(n_ciclos) for s in gsubs),
                     'price_unit': gsubs[0].price_unit,
@@ -1004,7 +1010,8 @@ class SentinelaSubscription(models.Model):
                 per_txt = "" if single_period else (" - %s" % sub._billing_period_label(n_ciclos))
                 desc = f"Servicio: {sub.product_id.name} - Contrato: {sub.name}{dev_suffix}{per_txt}"
                 line_cmds.append((0, 0, {
-                    'product_id': sub.product_id.id,
+                    # Ver nota arriba: resolver la plantilla a su variante (product.product).
+                    'product_id': sub.product_id.product_variant_id.id,
                     'name': desc,
                     'quantity': sub._billing_line_qty(n_ciclos),
                     'price_unit': sub.price_unit,
