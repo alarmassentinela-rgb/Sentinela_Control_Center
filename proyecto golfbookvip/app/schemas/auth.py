@@ -38,6 +38,7 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     joined_club_id: str | None = None
     joined_club_name: str | None = None
+    club_join_warning: str | None = None
 
 
 class RefreshRequest(BaseModel):

@@ -16,6 +16,7 @@ from app.services.notifications import notify_user
 from app.services.email_templates import tpl_password_reset, tpl_welcome_to_club
 from app.services.mailer import send_email
 from app.services.telegram_templates import tg_welcome_to_club
+from app.services.plans import enforce_club_member_limit
 import base64
 from datetime import date
 
@@ -75,39 +76,49 @@ async def register(request: Request, response: Response, data: RegisterRequest, 
     # Si el registro viene con club_code, vincular como ClubMember (escenario A — v1.16.0)
     joined_club_id: str | None = None
     joined_club_name: str | None = None
+    club_join_warning: str | None = None
     if data.club_code:
         code = data.club_code.strip().upper()
         club_res = await db.execute(select(Club).where(Club.invite_code == code, Club.is_active == True))
         club = club_res.scalar_one_or_none()
         if club:
-            member = ClubMember(
-                club_id=club.id,
-                user_id=user.id,
-                membership_type_id=club.default_membership_type_id,
-                joined_at=date.today(),
-                status="active",
-                onboarding_source="invite_link",
-            )
-            db.add(member)
-            joined_club_id = str(club.id)
-            joined_club_name = club.name
-            # Notificación bienvenida (v1.20.0 + v1.21.0). Nota: Telegram aún no está
-            # vinculado en este momento (el usuario acaba de registrarse), pero el
-            # template se pasa por si en el futuro lo vincula y aún tiene la notification.
-            panel_url = f"https://golfbookvip.com/es/club/{club.id}"
-            invite_link = f"https://golfbookvip.com/es/join-club/{club.invite_code}" if club.invite_code else None
-            user_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email
-            subject, html = tpl_welcome_to_club(user_name, club.name, panel_url, invite_link)
-            tg_text = tg_welcome_to_club(user_name, club.name, panel_url, invite_link)
-            await notify_user(
-                db, user.id, "welcome_club",
-                f"Bienvenido a {club.name}",
-                "Te registraste a través del link de invitación. Visita tu panel del club.",
-                data={"club_id": str(club.id)},
-                email_subject=subject, email_html=html,
-                telegram_text=tg_text,
-                background_tasks=background_tasks,
-            )
+            try:
+                await enforce_club_member_limit(db, club)
+            except HTTPException as exc:
+                if exc.status_code != 402:
+                    raise
+                club_join_warning = "No se pudo vincular el club: límite de socios del plan alcanzado."
+            else:
+                member = ClubMember(
+                    club_id=club.id,
+                    user_id=user.id,
+                    membership_type_id=club.default_membership_type_id,
+                    joined_at=date.today(),
+                    status="active",
+                    onboarding_source="invite_link",
+                )
+                db.add(member)
+                joined_club_id = str(club.id)
+                joined_club_name = club.name
+                # Notificación bienvenida (v1.20.0 + v1.21.0). Nota: Telegram aún no está
+                # vinculado en este momento (el usuario acaba de registrarse), pero el
+                # template se pasa por si en el futuro lo vincula y aún tiene la notification.
+                panel_url = f"https://golfbookvip.com/es/club/{club.id}"
+                invite_link = f"https://golfbookvip.com/es/join-club/{club.invite_code}" if club.invite_code else None
+                user_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email
+                subject, html = tpl_welcome_to_club(user_name, club.name, panel_url, invite_link)
+                tg_text = tg_welcome_to_club(user_name, club.name, panel_url, invite_link)
+                await notify_user(
+                    db, user.id, "welcome_club",
+                    f"Bienvenido a {club.name}",
+                    "Te registraste a través del link de invitación. Visita tu panel del club.",
+                    data={"club_id": str(club.id)},
+                    email_subject=subject, email_html=html,
+                    telegram_text=tg_text,
+                    background_tasks=background_tasks,
+                )
+        else:
+            club_join_warning = "Código de club inválido."
         # Si el código es inválido, registramos al usuario sin fallar; el frontend muestra warning
 
     access = create_access_token(str(user.id))
@@ -116,6 +127,7 @@ async def register(request: Request, response: Response, data: RegisterRequest, 
     return TokenResponse(
         access_token=access, refresh_token=refresh,
         joined_club_id=joined_club_id, joined_club_name=joined_club_name,
+        club_join_warning=club_join_warning,
     )
 
 

@@ -18,6 +18,7 @@ from app.services import handicap as hcp_svc
 from app.services import balances as balances_svc
 from app.services.ws_manager import manager
 from app.services.notifications import push as notify
+from app.services.plans import get_user_plan
 
 router = APIRouter()
 
@@ -50,14 +51,17 @@ async def require_round_viewer(db, round_id: uuid.UUID, user: User) -> Round:
 
 @router.get("")
 async def list_my_rounds(current_user: CurrentUser, db: DB):
-    result = await db.execute(
+    plan = await get_user_plan(db, current_user)
+    query = (
         select(Round, Course)
         .join(RoundPlayer, RoundPlayer.round_id == Round.id)
         .outerjoin(Course, Course.id == Round.course_id)
         .where(RoundPlayer.user_id == current_user.id)
         .order_by(Round.scheduled_at.desc())
-        .limit(50)
     )
+    if plan.max_rounds_history is not None:
+        query = query.limit(plan.max_rounds_history)
+    result = await db.execute(query)
     rows = result.all()
     out = []
     for round_, course in rows:

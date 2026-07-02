@@ -15,6 +15,7 @@ from app.models.course import Course
 from app.models.score import Score
 from app.models.social import Post, PostComment, PostMedia, Reaction
 from app.core.config import settings
+from app.services.plans import enforce_user_group_limit
 
 router = APIRouter()
 
@@ -98,6 +99,8 @@ async def list_my_groups(current_user: CurrentUser, db: DB):
 
 @router.post("", status_code=201)
 async def create_group(data: GroupCreate, current_user: CurrentUser, db: DB):
+    await enforce_user_group_limit(db, current_user)
+
     code = _gen_code()
     for _ in range(5):
         existing = await db.scalar(select(Group).where(Group.invite_code == code))

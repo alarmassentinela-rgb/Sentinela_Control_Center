@@ -20,6 +20,7 @@ from app.services.email_templates import (
 from app.services.telegram_templates import (
     tg_booking_confirmed, tg_booking_cancelled, tg_welcome_to_club, tg_tee_time_reminder,
 )
+from app.services.plans import enforce_club_member_limit, usage_for_club
 
 
 # ─── Helpers de permisos por rol (Clubs SaaS Fase 1) ───────────────────────
@@ -50,6 +51,23 @@ async def _require_club_role(db, club_id: uuid.UUID, user: User, min_role: str) 
     if ROLE_HIERARCHY.get(role, 0) < ROLE_HIERARCHY.get(min_role, 99):
         raise HTTPException(status_code=403, detail=f"Requiere rol mínimo: {min_role}")
     return role
+
+
+async def _require_club_member_or_staff(db, club_id: uuid.UUID, user: User) -> None:
+    if user.is_superadmin:
+        return
+    role = await _get_club_role(db, club_id, user)
+    if role:
+        return
+    member = await db.scalar(
+        select(ClubMember).where(
+            ClubMember.club_id == club_id,
+            ClubMember.user_id == user.id,
+            ClubMember.status == "active",
+        )
+    )
+    if not member:
+        raise HTTPException(status_code=403, detail="No tienes acceso a este club")
 
 router = APIRouter()
 
@@ -112,6 +130,7 @@ async def join_club_by_invite_code(payload: JoinByCodePayload, background_tasks:
     member = existing.scalar_one_or_none()
     if member:
         if member.status != "active":
+            await enforce_club_member_limit(db, club)
             member.status = "active"
             await db.flush()
         return {
@@ -120,6 +139,7 @@ async def join_club_by_invite_code(payload: JoinByCodePayload, background_tasks:
             "member_id": str(member.id),
             "already_member": True,
         }
+    await enforce_club_member_limit(db, club)
     member = ClubMember(
         club_id=club.id,
         user_id=current_user.id,
@@ -267,10 +287,20 @@ async def get_club(club_id: uuid.UUID, db: DB):
     return _club_out(club, count_res.scalar() or 0)
 
 
+@router.get("/{club_id}/plan")
+async def get_club_plan_usage(club_id: uuid.UUID, current_user: CurrentUser, db: DB):
+    await _require_club_member_or_staff(db, club_id, current_user)
+    club = await db.scalar(select(Club).where(Club.id == club_id, Club.is_active == True))
+    if not club:
+        raise HTTPException(status_code=404, detail="Club no encontrado")
+    return await usage_for_club(db, club)
+
+
 @router.post("/{club_id}/join")
 async def join_club(club_id: uuid.UUID, current_user: CurrentUser, db: DB):
     result = await db.execute(select(Club).where(Club.id == club_id, Club.is_active == True))
-    if not result.scalar_one_or_none():
+    club = result.scalar_one_or_none()
+    if not club:
         raise HTTPException(status_code=404, detail="Club no encontrado")
 
     existing = await db.execute(
@@ -279,6 +309,7 @@ async def join_club(club_id: uuid.UUID, current_user: CurrentUser, db: DB):
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Ya eres miembro de este club")
 
+    await enforce_club_member_limit(db, club)
     member = ClubMember(club_id=club_id, user_id=current_user.id, status="active", joined_at=date.today())
     db.add(member)
     return {"message": "Te has unido al club"}
@@ -661,6 +692,9 @@ async def add_member_to_padron(club_id: uuid.UUID, payload: MemberAddPayload,
                                 current_user: CurrentUser, db: DB):
     """Agrega un usuario al padrón. Requiere manager+ del club."""
     await _require_club_role(db, club_id, current_user, "manager")
+    club_obj = await db.scalar(select(Club).where(Club.id == club_id, Club.is_active == True))
+    if not club_obj:
+        raise HTTPException(status_code=404, detail="Club no encontrado")
     # buscar al user
     user = None
     if payload.user_id:
@@ -683,6 +717,7 @@ async def add_member_to_padron(club_id: uuid.UUID, payload: MemberAddPayload,
         if member.status == "active":
             raise HTTPException(status_code=409, detail="Este usuario ya es miembro activo")
         # reactivar si estaba inactivo
+        await enforce_club_member_limit(db, club_obj)
         member.status = "active"
         if payload.membership_type_id is not None:
             member.membership_type_id = payload.membership_type_id
@@ -705,12 +740,11 @@ async def add_member_to_padron(club_id: uuid.UUID, payload: MemberAddPayload,
             notes=payload.notes,
             status="active",
         )
+        await enforce_club_member_limit(db, club_obj)
         db.add(member)
     await db.flush()
 
     # Notificación de bienvenida (v1.20.0 + v1.21.0)
-    club_res = await db.execute(select(Club).where(Club.id == club_id))
-    club_obj = club_res.scalar_one_or_none()
     if club_obj:
         panel_url = f"https://golfbookvip.com/es/club/{club_obj.id}"
         invite_link = f"https://golfbookvip.com/es/join-club/{club_obj.invite_code}" if club_obj.invite_code else None
@@ -851,6 +885,7 @@ async def import_padron(club_id: uuid.UUID, payload: PadronImportPayload,
                     errors.append({"row_index": idx, "email": email_norm, "error": "ya es socio activo"})
                     continue
             # reactivar inactivo/suspendido
+            await enforce_club_member_limit(db, club)
             existing.status = "active"
             if mt_id is not None:
                 existing.membership_type_id = mt_id
@@ -865,6 +900,7 @@ async def import_padron(club_id: uuid.UUID, payload: PadronImportPayload,
             existing.onboarding_source = "manual_import"
             reactivated.append({"row_index": idx, "email": email_norm, "user_id": str(user.id)})
         else:
+            await enforce_club_member_limit(db, club)
             new_member = ClubMember(
                 club_id=club_id,
                 user_id=user.id,

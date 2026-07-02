@@ -10,6 +10,7 @@ from app.models.user import User
 from app.models.handicap import PlayerStats, HandicapHistory
 from app.models.group import UserFollow
 from app.schemas.user import UserOut, UserUpdate, HandicapInit
+from app.services.plans import usage_for_user
 
 router = APIRouter()
 
@@ -55,6 +56,11 @@ async def lookup_users_batch(payload: LookupBatchPayload, current_user: CurrentU
 @router.get("/me", response_model=UserOut)
 async def get_me(current_user: CurrentUser):
     return current_user
+
+
+@router.get("/me/plan")
+async def get_my_plan(current_user: CurrentUser, db: DB):
+    return await usage_for_user(db, current_user)
 
 
 @router.patch("/me", response_model=UserOut)

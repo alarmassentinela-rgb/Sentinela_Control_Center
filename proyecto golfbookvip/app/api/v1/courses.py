@@ -6,6 +6,7 @@ import uuid
 
 from app.core.deps import CurrentUser, DB
 from app.models.course import Course, CourseHole
+from app.services.plans import enforce_club_course_limit
 
 router = APIRouter()
 
@@ -125,6 +126,9 @@ async def list_courses(db: DB, search: Optional[str] = None):
 
 @router.post("")
 async def create_course(data: CourseCreate, current_user: CurrentUser, db: DB):
+    if data.club_id is not None:
+        await enforce_club_course_limit(db, data.club_id)
+
     course = Course(**data.model_dump(), created_by=current_user.id)
     db.add(course)
     await db.flush()

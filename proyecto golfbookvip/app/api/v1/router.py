@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1 import auth, users, clubs, courses, rounds, scores_ws, stripe_webhook, groups, notifications, chat, admin, telegram, uploads
+from app.api.v1 import auth, users, clubs, courses, rounds, scores_ws, stripe_webhook, groups, notifications, chat, admin, telegram, uploads, billing
 
 api_router = APIRouter()
 
@@ -16,3 +16,4 @@ api_router.include_router(stripe_webhook.router,   prefix="/stripe",        tags
 api_router.include_router(admin.router,            prefix="/admin",         tags=["admin"])
 api_router.include_router(telegram.router,         prefix="/telegram",      tags=["telegram"])
 api_router.include_router(uploads.router,          prefix="/uploads",       tags=["uploads"])
+api_router.include_router(billing.router,          prefix="/billing",       tags=["billing"])
