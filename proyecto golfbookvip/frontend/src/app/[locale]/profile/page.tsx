@@ -6,7 +6,7 @@ import {
   Flag, ArrowLeft, TrendingUp, Edit2, Save, X, Loader2,
   Award, Target, BarChart2, Star, AlertCircle, CheckCircle2,
   Crown, ChevronDown, ChevronUp, Crosshair, Circle,
-  Bell, Mail, Send, Check, Copy, Info
+  Bell, Mail, Send, Check, Copy, Info, CreditCard
 } from 'lucide-react'
 import { api, isAuthed } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
@@ -802,6 +802,22 @@ export default function ProfilePage() {
               </p>
             </div>
             <ChevronDown size={16} className="text-emerald-400 -rotate-90 flex-shrink-0" />
+          </div>
+        </Link>
+
+        <Link href={`/${locale}/billing`}
+          className="block bg-zinc-900 border border-zinc-800 hover:border-emerald-500/40 rounded-2xl px-5 py-4 transition-colors">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center flex-shrink-0">
+              <CreditCard size={20} className="text-emerald-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-white text-sm">{lbl('Planes y facturación', 'Plans and billing')}</p>
+              <p className="text-xs text-zinc-500 truncate">
+                {lbl('Uso actual, límites y upgrades de plan', 'Current usage, limits and plan upgrades')}
+              </p>
+            </div>
+            <ChevronDown size={16} className="text-zinc-500 -rotate-90 flex-shrink-0" />
           </div>
         </Link>
 

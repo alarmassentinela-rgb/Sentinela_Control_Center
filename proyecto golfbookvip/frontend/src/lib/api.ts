@@ -60,6 +60,16 @@ function redirectToLogin() {
   window.location.href = `/${locale}/auth/login`
 }
 
+function redirectToBilling(resource?: string) {
+  if (typeof window === 'undefined') return
+  const localeMatch = window.location.pathname.match(/^\/(es|en)/)
+  const locale = localeMatch ? localeMatch[1] : 'es'
+  const params = resource ? `?limit=${encodeURIComponent(resource)}` : ''
+  if (!window.location.pathname.includes('/billing')) {
+    window.location.href = `/${locale}/billing${params}`
+  }
+}
+
 api.interceptors.request.use((config) => {
   if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`
   return config
@@ -71,6 +81,11 @@ api.interceptors.response.use(
     const original = err.config as RetryConfig | undefined
     const url = original?.url ?? ''
     const isRefresh = url.includes('/auth/refresh')
+    const data = err.response?.data as { detail?: { code?: string; resource?: string } } | undefined
+    if (err.response?.status === 402 && data?.detail?.code === 'plan_limit') {
+      redirectToBilling(data.detail.resource)
+      return Promise.reject(err)
+    }
     if (err.response?.status === 401 && original && !original._retry && !isRefresh) {
       original._retry = true
       const refreshed = await refreshAccessToken()

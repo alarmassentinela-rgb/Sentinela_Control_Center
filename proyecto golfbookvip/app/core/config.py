@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "production"
     DEBUG: bool = False
     BASE_URL: str = "https://api.golfbookvip.com"
+    FRONTEND_URL: str = "https://golfbookvip.com"
 
     # Database
     DATABASE_URL: str

@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Menu, X, Flag } from 'lucide-react'
+import { CreditCard, Menu, X, Flag } from 'lucide-react'
 import { useState } from 'react'
 import { useT, useLocale } from '@/components/DictionaryProvider'
 
@@ -18,6 +18,7 @@ export default function Navbar() {
   const links = [
     { href: `/${locale}#features`, label: t('features') },
     { href: `/${locale}#about`, label: t('about') },
+    { href: `/${locale}/billing`, label: locale === 'es' ? 'Planes' : 'Plans' },
   ]
 
   return (
@@ -68,6 +69,10 @@ export default function Navbar() {
           ))}
           <hr className="border-zinc-800" />
           <Link href={`/${locale}/auth/login`} className="text-sm text-zinc-300">{t('login')}</Link>
+          <Link href={`/${locale}/billing`} className="text-sm text-zinc-300 flex items-center gap-2">
+            <CreditCard size={15} />
+            {locale === 'es' ? 'Planes/Facturación' : 'Plans/Billing'}
+          </Link>
           <Link href={`/${locale}/auth/register`}
             className="text-sm font-semibold bg-emerald-500 text-white px-4 py-2 rounded-full text-center">
             {t('register')}
