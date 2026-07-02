@@ -198,8 +198,18 @@ export default function BillingPage() {
             <h2 className="font-semibold text-white">{lbl('Opciones de upgrade', 'Upgrade options')}</h2>
           </div>
           {selectedPlans.length === 0 ? (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-sm text-zinc-500">
-              {lbl('No hay upgrades disponibles para este alcance.', 'No upgrades available for this scope.')}
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center">
+              <CheckCircle2 size={28} className="text-emerald-400 mx-auto mb-3" />
+              <p className="text-sm text-white font-medium">
+                {(activeUsage?.plan?.price_monthly || 0) > 0
+                  ? lbl('Ya estás en el plan más completo disponible.', "You're already on the most complete plan available.")
+                  : lbl('No hay upgrades disponibles para este alcance.', 'No upgrades available for this scope.')}
+              </p>
+              {!clubId && (
+                <p className="text-xs text-zinc-500 mt-2">
+                  {lbl('¿Administras un club? Abre el club para gestionar su plan.', 'Manage a club? Open the club to manage its plan.')}
+                </p>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

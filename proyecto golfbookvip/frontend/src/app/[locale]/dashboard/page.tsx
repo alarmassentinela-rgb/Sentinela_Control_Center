@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Flag, LogOut, User, TrendingUp, Calendar, BarChart2, Settings, MapPin, Users, ChevronRight, Play, Clock, CheckCircle2, UserPlus, Rss, Bell, ShieldCheck, Building2, HelpCircle } from 'lucide-react'
+import { Flag, LogOut, User, TrendingUp, Calendar, BarChart2, Settings, MapPin, Users, ChevronRight, Play, Clock, CheckCircle2, UserPlus, Rss, Bell, ShieldCheck, Building2, HelpCircle, CreditCard } from 'lucide-react'
 import { api, isAuthed, clearAuth } from '@/lib/api'
 import { useLocale } from '@/components/DictionaryProvider'
 import AleaCredit from '@/components/layout/AleaCredit'
@@ -122,6 +122,11 @@ export default function DashboardPage() {
                   {unreadNotifs > 9 ? '9+' : unreadNotifs}
                 </span>
               )}
+            </Link>
+            <Link href={`/${locale}/billing`}
+              className="flex items-center gap-2 text-sm text-zinc-400 hover:text-white transition-colors">
+              <CreditCard size={16} />
+              {locale === 'es' ? 'Planes' : 'Plans'}
             </Link>
             <Link href={`/${locale}/profile`}
               className="flex items-center gap-2 text-sm text-zinc-400 hover:text-white transition-colors">
