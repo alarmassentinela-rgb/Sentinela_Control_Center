@@ -46,6 +46,30 @@ def _clear_refresh_cookie(response: Response) -> None:
     )
 
 
+# Flag de sesión NO sensible (Path=/) para el gate SSR del middleware del frontend.
+# NO es la credencial (esa es gbv_refresh, httpOnly, scoped a /api/v1/auth); es solo un "hay sesión"
+# legible por el middleware y por JS. La auth real la sigue haciendo el backend por request (Bearer).
+def _set_auth_cookie(response: Response) -> None:
+    response.set_cookie(
+        key="gbv_authed",
+        value="1",
+        httponly=False,
+        secure=settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE,
+        domain=(settings.COOKIE_DOMAIN or None),
+        path="/",
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+    )
+
+
+def _clear_auth_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key="gbv_authed",
+        domain=(settings.COOKIE_DOMAIN or None),
+        path="/",
+    )
+
+
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("10/minute")
 async def register(request: Request, response: Response, data: RegisterRequest, background_tasks: BackgroundTasks, db: DB):
@@ -124,6 +148,7 @@ async def register(request: Request, response: Response, data: RegisterRequest, 
     access = create_access_token(str(user.id))
     refresh = create_refresh_token(str(user.id))
     _set_refresh_cookie(response, refresh)
+    _set_auth_cookie(response)
     return TokenResponse(
         access_token=access, refresh_token=refresh,
         joined_club_id=joined_club_id, joined_club_name=joined_club_name,
@@ -145,6 +170,7 @@ async def login(request: Request, response: Response, data: LoginRequest, db: DB
     access = create_access_token(str(user.id))
     refresh = create_refresh_token(str(user.id))
     _set_refresh_cookie(response, refresh)
+    _set_auth_cookie(response)
     return TokenResponse(access_token=access, refresh_token=refresh)
 
 
@@ -168,12 +194,14 @@ async def refresh_token(request: Request, response: Response, db: DB, data: Refr
     access = create_access_token(user_id)
     new_refresh = create_refresh_token(user_id)
     _set_refresh_cookie(response, new_refresh)
+    _set_auth_cookie(response)
     return TokenResponse(access_token=access, refresh_token=new_refresh)
 
 
 @router.post("/logout")
 async def logout(response: Response):
     _clear_refresh_cookie(response)
+    _clear_auth_cookie(response)
     return {"message": "ok"}
 
 

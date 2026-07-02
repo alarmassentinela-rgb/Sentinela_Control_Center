@@ -8,10 +8,22 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL(`/${defaultLocale}${pathname}`, request.url))
   }
 
-  // La protección de rutas se hace en cliente (isAuthed) + backend (auth por request).
-  // NO se hace gate SSR por cookie aquí: la cookie de refresh (gbv_refresh) está scoped a
-  // Path=/api/v1/auth y NO es visible para el middleware del frontend, por lo que un gate
-  // basado en su presencia rebota al login en bucle incluso con sesión válida.
+  const locale = locales.find((l) => pathname === `/${l}` || pathname.startsWith(`/${l}/`)) ?? defaultLocale
+  const pathWithoutLocale = pathname === `/${locale}` ? '/' : pathname.slice(`/${locale}`.length)
+  const isPublic =
+    pathWithoutLocale === '/' ||
+    pathWithoutLocale.startsWith('/auth') ||
+    pathWithoutLocale.startsWith('/join') ||
+    pathWithoutLocale.startsWith('/join-club') ||
+    pathWithoutLocale.startsWith('/live')
+
+  // Gate SSR: usa el flag NO sensible `gbv_authed` (Path=/), que SÍ es visible para el middleware.
+  // NO usar `gbv_refresh` (Path=/api/v1/auth): no llega aquí y rebota al login en bucle.
+  // Es un primer filtro; la auth real la impone el backend por request (Bearer) + los guards de cliente.
+  if (!isPublic && !request.cookies.get('gbv_authed')) {
+    return NextResponse.redirect(new URL(`/${locale}/auth/login`, request.url))
+  }
+
   return NextResponse.next()
 }
 

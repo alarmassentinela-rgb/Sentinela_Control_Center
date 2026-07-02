@@ -20,7 +20,13 @@ export function setAuth(token: string) {
 
 export function clearAuth() {
   accessToken = null
-  if (typeof window !== 'undefined') localStorage.removeItem('gbv_authed')
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('gbv_authed')
+    // Expira el cookie de gate SSR en cliente (defensa para refresh fallido; el logout normal
+    // ya lo limpia server-side). Se intenta host-only y con el dominio de golfbookvip.
+    document.cookie = 'gbv_authed=; Max-Age=0; path=/'
+    document.cookie = 'gbv_authed=; Max-Age=0; path=/; domain=.golfbookvip.com'
+  }
 }
 
 export function isAuthed(): boolean {
