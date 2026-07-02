@@ -12,7 +12,7 @@ from app.models.event import ClubEvent, EventRegistration
 from app.models.tee_time import TeeTimeSlot, TeeTimeBooking, TeeTimeBookingPlayer
 from app.models.social import Post, PostMedia, PostComment, Reaction
 from app.models.notification import Notification
-from app.models.payment import Invoice
+from app.models.payment import Invoice, ProcessedStripeEvent
 from app.models.telegram import TelegramLinkToken
 
 __all__ = [
@@ -30,6 +30,6 @@ __all__ = [
     "TeeTimeSlot", "TeeTimeBooking", "TeeTimeBookingPlayer",
     "Post", "PostMedia", "PostComment", "Reaction",
     "Notification",
-    "Invoice",
+    "Invoice", "ProcessedStripeEvent",
     "TelegramLinkToken",
 ]

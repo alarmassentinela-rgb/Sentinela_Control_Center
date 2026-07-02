@@ -12,13 +12,15 @@ Eventos manejados:
 import stripe
 from fastapi import APIRouter, Request, HTTPException, Header
 from sqlalchemy import select, update
+from sqlalchemy.dialects.postgresql import insert
 from typing import Optional
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.models.subscription import UserSubscription, ClubSubscription
-from app.models.payment import Invoice
+from app.models.payment import Invoice, ProcessedStripeEvent
 from app.models.user import User
 from app.models.club import Club
 
@@ -44,8 +46,19 @@ async def stripe_webhook(
         raise HTTPException(status_code=400, detail="Payload inválido")
 
     async with AsyncSessionLocal() as db:
+        event_id = event.get("id")
         event_type = event["type"]
         data = event["data"]["object"]
+        if event_id:
+            inserted_event = await db.execute(
+                insert(ProcessedStripeEvent)
+                .values(event_id=event_id)
+                .on_conflict_do_nothing(index_elements=["event_id"])
+                .returning(ProcessedStripeEvent.event_id)
+            )
+            if inserted_event.scalar_one_or_none() is None:
+                await db.rollback()
+                return {"status": "duplicate", "event": event_type}
 
         # ── payment_intent.succeeded ─────────────────────────────────
         if event_type == "payment_intent.succeeded":
@@ -79,18 +92,31 @@ async def _handle_payment_intent_succeeded(db, pi: dict):
     metadata = pi.get("metadata", {})
     user_id = metadata.get("user_id")
     club_id = metadata.get("club_id")
+    amount = (Decimal(pi["amount"]) / Decimal(100)).quantize(Decimal("0.01"))
+    description = metadata.get("description") or f"Pago GolfBookVIP · PaymentIntent {pi.get('id')}"
 
-    invoice = Invoice(
+    db.add(Invoice(
         user_id=user_id,
         club_id=club_id,
-        stripe_invoice_id=pi.get("id"),
-        amount=pi["amount"] / 100,
+        stripe_invoice_id=None,
+        amount=amount,
         currency=pi.get("currency", "usd").upper(),
         status="paid",
-        description=metadata.get("description", "Pago GolfBookVIP"),
+        description=description,
         paid_at=datetime.now(timezone.utc),
-    )
-    db.add(invoice)
+    ))
+
+
+async def _insert_invoice_if_new(db, values: dict) -> None:
+    stripe_invoice_id = values.get("stripe_invoice_id")
+    if stripe_invoice_id:
+        await db.execute(
+            insert(Invoice)
+            .values(**values)
+            .on_conflict_do_nothing(index_elements=["stripe_invoice_id"])
+        )
+        return
+    db.add(Invoice(**values))
 
 
 async def _handle_subscription_updated(db, sub: dict):
@@ -160,7 +186,6 @@ async def _handle_invoice_paid(db, inv: dict):
     """Registra la factura pagada y actualiza la suscripción."""
     stripe_sub_id = inv.get("subscription")
     stripe_inv_id = inv.get("id")
-    customer_id = inv.get("customer")
 
     # Buscar a quién pertenece
     user_id = club_id = None
@@ -172,18 +197,26 @@ async def _handle_invoice_paid(db, inv: dict):
         if sub:
             user_id = sub.user_id
             sub.status = "active"
+        else:
+            result = await db.execute(
+                select(ClubSubscription).where(ClubSubscription.stripe_sub_id == stripe_sub_id)
+            )
+            club_sub = result.scalar_one_or_none()
+            if club_sub:
+                club_id = club_sub.club_id
+                club_sub.status = "active"
 
-    invoice = Invoice(
+    amount = (Decimal(inv["amount_paid"]) / Decimal(100)).quantize(Decimal("0.01"))
+    await _insert_invoice_if_new(db, dict(
         user_id=user_id,
         club_id=club_id,
         stripe_invoice_id=stripe_inv_id,
-        amount=inv["amount_paid"] / 100,
+        amount=amount,
         currency=inv.get("currency", "usd").upper(),
         status="paid",
         description=f"Suscripción GolfBookVIP — {inv.get('period_start', '')}",
         paid_at=datetime.now(timezone.utc),
-    )
-    db.add(invoice)
+    ))
 
 
 async def _handle_invoice_payment_failed(db, inv: dict):

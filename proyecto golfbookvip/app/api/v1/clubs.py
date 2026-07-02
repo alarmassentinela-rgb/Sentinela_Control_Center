@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException, status, BackgroundTasks
 from sqlalchemy import select, func, text, or_
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, condecimal
 from typing import Optional
 import uuid
 import re
 import secrets
+from decimal import Decimal
 from datetime import date, datetime, time as time_cls, timedelta, timezone
 
 from app.core.deps import CurrentUser, DB
@@ -1558,13 +1559,23 @@ async def _post_booking_fees(db, booking: TeeTimeBooking, slot: TeeTimeSlot,
             return f"{u.first_name or ''} {u.last_name or ''}".strip() or u.email or "(sin nombre)"
         return p.guest_name or "(sin nombre)"
 
-    total_charged = 0.0
+    total_charged = Decimal("0.00")
     tx_count = 0
-    by_payer: dict[str, float] = {}
+    by_payer: dict[str, Decimal] = {}
 
     for p in players:
-        fee = float(p.fee_amount or 0)
+        fee = Decimal(str(p.fee_amount or 0)).quantize(Decimal("0.01"))
         if fee <= 0:
+            continue
+
+        existing_tx = await db.scalar(
+            select(AccountTransaction).where(
+                AccountTransaction.reference_type == "tee_time_booking_player",
+                AccountTransaction.reference_id == p.id,
+                AccountTransaction.type == "green_fee",
+            )
+        )
+        if existing_tx:
             continue
 
         payer_id: Optional[uuid.UUID] = None
@@ -1599,9 +1610,13 @@ async def _post_booking_fees(db, booking: TeeTimeBooking, slot: TeeTimeSlot,
         total_charged += fee
         tx_count += 1
         key = str(payer_id)
-        by_payer[key] = by_payer.get(key, 0.0) + fee
+        by_payer[key] = by_payer.get(key, Decimal("0.00")) + fee
 
-    return {"total_charged": total_charged, "transactions_count": tx_count, "by_payer": by_payer}
+    return {
+        "total_charged": float(total_charged),
+        "transactions_count": tx_count,
+        "by_payer": {payer_id: float(total) for payer_id, total in by_payer.items()},
+    }
 
 
 async def _refund_booking_fees(db, booking: TeeTimeBooking, current_user: User) -> dict:
@@ -1637,7 +1652,7 @@ async def _refund_booking_fees(db, booking: TeeTimeBooking, current_user: User) 
     )
     refunded_player_ids = {rid for (rid,) in refunds_res.all()}
 
-    refunded_total = 0.0
+    refunded_total = Decimal("0.00")
     refund_count = 0
     for ch in charges:
         if ch.reference_id in refunded_player_ids:
@@ -1647,7 +1662,7 @@ async def _refund_booking_fees(db, booking: TeeTimeBooking, current_user: User) 
         acc = acc_res.scalar_one_or_none()
         if not acc:
             continue
-        amount = float(ch.amount or 0)
+        amount = Decimal(str(ch.amount or 0)).quantize(Decimal("0.01"))
         original_desc = ch.description or "green fee"
         desc = f"Refund por cancelación · {original_desc}"
         await _apply_transaction(
@@ -1658,7 +1673,7 @@ async def _refund_booking_fees(db, booking: TeeTimeBooking, current_user: User) 
         refunded_total += amount
         refund_count += 1
 
-    return {"refunded_total": refunded_total, "refund_count": refund_count}
+    return {"refunded_total": float(refunded_total), "refund_count": refund_count}
 
 
 @router.delete("/{club_id}/tee-times/bookings/{booking_id}")
@@ -1865,7 +1880,7 @@ CREDIT_TYPES = {"payment", "credit", "refund", "bet_win"}
 
 
 class ChargePayload(BaseModel):
-    amount: float = Field(..., gt=0)
+    amount: condecimal(max_digits=12, decimal_places=2, gt=0)
     type: str = "charge"
     description: Optional[str] = None
     reference_type: Optional[str] = None
@@ -1873,13 +1888,13 @@ class ChargePayload(BaseModel):
 
 
 class PaymentPayload(BaseModel):
-    amount: float = Field(..., gt=0)
+    amount: condecimal(max_digits=12, decimal_places=2, gt=0)
     method: Optional[str] = None  # cash / card / transfer / etc.
     description: Optional[str] = None
 
 
 class AdjustmentPayload(BaseModel):
-    amount: float  # con signo
+    amount: condecimal(max_digits=12, decimal_places=2)  # con signo
     description: str = Field(..., min_length=1)
 
 
@@ -2011,7 +2026,7 @@ async def list_transactions(club_id: uuid.UUID, user_id: uuid.UUID,
     ]
 
 
-async def _apply_transaction(db, acc: MemberAccount, type_: str, amount: float,
+async def _apply_transaction(db, acc: MemberAccount, type_: str, amount: Decimal,
                               description: str, current_user: User,
                               reference_id: Optional[str] = None,
                               reference_type: Optional[str] = None,
@@ -2022,21 +2037,31 @@ async def _apply_transaction(db, acc: MemberAccount, type_: str, amount: float,
     (usado por auto-cobro de green fees de v1.18: el booking ya está confirmado y el cargo
     es derivado, no debe rechazarse aunque la cuenta no tenga línea de crédito).
     """
+    locked = await db.execute(
+        select(MemberAccount)
+        .where(MemberAccount.id == acc.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    acc = locked.scalar_one()
+    amount_dec = Decimal(str(amount)).quantize(Decimal("0.01"))
+
     # decidir signo aplicado al balance
     if type_ in CREDIT_TYPES:
-        delta = abs(amount)
+        delta = abs(amount_dec)
     elif type_ in CHARGE_TYPES:
-        delta = -abs(amount)
+        delta = -abs(amount_dec)
     elif type_ == "other":
-        delta = amount  # con signo
+        delta = amount_dec  # con signo
     else:
         raise HTTPException(status_code=422, detail=f"Tipo desconocido: {type_}")
 
-    new_balance = float(acc.balance or 0) + delta
+    current_balance = Decimal(str(acc.balance or 0)).quantize(Decimal("0.01"))
+    new_balance = (current_balance + delta).quantize(Decimal("0.01"))
 
     # validar credit_limit si el balance va a quedar negativo
     if enforce_credit_limit and new_balance < 0:
-        max_debt = -float(acc.credit_limit or 0)
+        max_debt = -Decimal(str(acc.credit_limit or 0)).quantize(Decimal("0.01"))
         if new_balance < max_debt:
             raise HTTPException(
                 status_code=409,
@@ -2047,7 +2072,7 @@ async def _apply_transaction(db, acc: MemberAccount, type_: str, amount: float,
     tx = AccountTransaction(
         account_id=acc.id,
         type=type_,
-        amount=abs(amount) if type_ != "other" else amount,
+        amount=abs(amount_dec) if type_ != "other" else amount_dec,
         balance_after=new_balance,
         description=description,
         reference_id=uuid.UUID(reference_id) if reference_id else None,
@@ -2115,13 +2140,13 @@ async def register_adjustment(club_id: uuid.UUID, user_id: uuid.UUID, payload: A
 
 @router.patch("/{club_id}/accounts/{user_id}/credit-limit")
 async def set_credit_limit(club_id: uuid.UUID, user_id: uuid.UUID,
-                            credit_limit: float, current_user: CurrentUser, db: DB):
+                            credit_limit: Decimal, current_user: CurrentUser, db: DB):
     """Cambiar límite de crédito. Requiere admin+ del club."""
     await _require_club_role(db, club_id, current_user, "admin")
     if credit_limit < 0:
         raise HTTPException(status_code=422, detail="credit_limit debe ser >= 0")
     acc = await _get_or_create_account(db, club_id, user_id)
-    acc.credit_limit = credit_limit
+    acc.credit_limit = Decimal(str(credit_limit)).quantize(Decimal("0.01"))
     await db.flush()
     return {"account_id": str(acc.id), "credit_limit": float(acc.credit_limit)}
 
