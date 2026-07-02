@@ -100,6 +100,7 @@ class MemberAccount(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(pgUUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     balance: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=True)
     credit_limit: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=True)
+    currency: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now())
 
@@ -112,6 +113,7 @@ class AccountTransaction(Base):
     type: Mapped[Optional[str]] = mapped_column(String(30))
     amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     balance_after: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    currency: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     description: Mapped[Optional[str]] = mapped_column(String(500))
     reference_id: Mapped[Optional[uuid.UUID]] = mapped_column(pgUUID(as_uuid=True))
     reference_type: Mapped[Optional[str]] = mapped_column(String(50))

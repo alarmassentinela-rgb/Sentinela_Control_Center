@@ -1940,8 +1940,13 @@ async def _get_or_create_account(db, club_id: uuid.UUID, user_id: uuid.UUID) -> 
     ))
     acc = res.scalar_one_or_none()
     if acc:
+        if not acc.currency:
+            club = await db.scalar(select(Club).where(Club.id == club_id))
+            acc.currency = (club.currency if club and club.currency else "USD")
         return acc
-    acc = MemberAccount(club_id=club_id, user_id=user_id, balance=0, credit_limit=0, is_active=True)
+    club = await db.scalar(select(Club).where(Club.id == club_id))
+    currency = club.currency if club and club.currency else "USD"
+    acc = MemberAccount(club_id=club_id, user_id=user_id, balance=0, credit_limit=0, currency=currency, is_active=True)
     db.add(acc)
     await db.flush()
     return acc
@@ -2110,6 +2115,7 @@ async def _apply_transaction(db, acc: MemberAccount, type_: str, amount: Decimal
         type=type_,
         amount=abs(amount_dec) if type_ != "other" else amount_dec,
         balance_after=new_balance,
+        currency=acc.currency,
         description=description,
         reference_id=uuid.UUID(reference_id) if reference_id else None,
         reference_type=reference_type,
